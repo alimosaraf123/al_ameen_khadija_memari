@@ -22,7 +22,7 @@ import {
   clearGuardianBiometricToken,
   getGuardianBiometricToken,
 } from '../lib/guardianDevice';
-import { Field, Button, Card, Muted } from '../components/ui';
+import { Field, Button, Muted } from '../components/ui';
 
 type TabName = 'home' | 'result' | 'details' | 'documents' | 'settings';
 
@@ -317,13 +317,24 @@ export default function Guardian() {
 
   return (
     <SafeAreaView style={styles.page}>
+      <View style={styles.brandHeader}>
+        <Image
+          source={require('../../assets/images/al-ameen-logo.jpg')}
+          style={styles.brandLogo}
+          resizeMode="contain"
+          accessibilityLabel="Al-Ameen Mission Academy Memari logo"
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.brandName}>Al-Ameen Mission Academy Memari</Text>
+        </View>
+      </View>
       {/* STUDENT HEADER */}
       <View style={styles.studentHeader}>
         {photoUrl ? (
           <Image source={{ uri: photoUrl }} style={styles.photo} />
         ) : (
           <View style={styles.photoPlaceholder}>
-            <Text style={styles.photoText}>PHOTO</Text>
+            <Text style={styles.photoText}>{String(s?.student_name || 'S').trim().charAt(0).toUpperCase()}</Text>
           </View>
         )}
 
@@ -331,7 +342,7 @@ export default function Guardian() {
           <Text style={styles.studentName}>{s?.student_name || '-'}</Text>
           <Text style={styles.studentMeta}>Reg: {s?.registration_no || '-'}</Text>
           <Text style={styles.studentMeta}>
-            Class: {s?.class_name || '-'} {'   '} Roll: {s?.roll_no || '-'}
+            Class: {s?.class_name || '-'}
           </Text>
           {!!s?.room_id && (
             <Text style={styles.studentMeta}>Room: {s.room_id}</Text>
@@ -379,12 +390,12 @@ export default function Guardian() {
             <Text style={styles.heading}>Notifications</Text>
 
             {notices.length === 0 ? (
-              <Card>
+              <Card tone="notice">
                 <Muted>No new notification.</Muted>
               </Card>
             ) : (
               notices.slice(0, 5).map((notice: any, index: number) => (
-                <Card key={notice.id || index}>
+                <Card key={notice.id || index} tone="notice">
                   <Text style={styles.noticeTitle}>
                     {notice.title || notice.notice_title || 'Notice'}
                   </Text>
@@ -407,7 +418,7 @@ export default function Guardian() {
             {/* MONTHLY FEES */}
             <Text style={styles.heading}>Monthly Fees</Text>
 
-            <Card>
+            <Card tone="fees">
               {monthlyFeeLoading ? (
                 <Text style={styles.settingsHelp}>Checking Monthly Fee Due...</Text>
               ) : monthlyFeeError ? (
@@ -577,7 +588,6 @@ export default function Guardian() {
               <Info label="Registration No" value={s.registration_no} />
               <Info label="Student Name" value={s.student_name} />
               <Info label="Class" value={s.class_name} />
-              <Info label="Roll" value={s.roll_no} />
               <Info label="Admission No" value={s.admission_no} />
               <Info
                 label="Date of Birth"
@@ -787,11 +797,24 @@ function Tab({
 }) {
   return (
     <TouchableOpacity
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
       style={[styles.tab, active && styles.tabActive]}
       onPress={onPress}
     >
       <Text style={[styles.tabText, active && styles.tabTextActive]}>{title}</Text>
     </TouchableOpacity>
+  );
+}
+
+function Card({ children, tone = 'default' }: {
+  children: React.ReactNode;
+  tone?: 'default' | 'notice' | 'fees';
+}) {
+  return (
+    <View style={[styles.card, tone === 'notice' && styles.noticeCard, tone === 'fees' && styles.feesCard]}>
+      {children}
+    </View>
   );
 }
 
@@ -807,9 +830,19 @@ function Info({ label, value }: { label: string; value: any }) {
 }
 
 const styles = StyleSheet.create({
+  brandHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    backgroundColor: '#ffffff',
+  },
+  brandLogo: { width: 54, height: 56 },
+  brandName: { color: '#166534', fontSize: 17, fontWeight: '800' },
   page: {
     flex: 1,
-    backgroundColor: '#f3f6f9',
+    backgroundColor: '#f4f3ff',
   },
 
   loadingPage: {
@@ -819,70 +852,73 @@ const styles = StyleSheet.create({
   },
 
   studentHeader: {
-    backgroundColor: '#fff',
+    backgroundColor: '#4338ca',
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
+    padding: 22,
     gap: 13,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e9ee',
+    borderBottomLeftRadius: 26,
+    borderBottomRightRadius: 26,
   },
 
   photo: {
     width: 78,
     height: 78,
-    borderRadius: 10,
+    borderRadius: 24,
+    borderWidth: 3,
+    borderColor: '#c7d2fe',
     backgroundColor: '#e9edf2',
   },
 
   photoPlaceholder: {
     width: 78,
     height: 78,
-    borderRadius: 10,
-    backgroundColor: '#e9edf2',
+    borderRadius: 24,
+    backgroundColor: '#e0e7ff',
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   photoText: {
-    color: '#667085',
+    color: '#4338ca',
     fontWeight: '700',
-    fontSize: 12,
+    fontSize: 32,
   },
 
   studentName: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#172b4d',
+    color: '#ffffff',
   },
 
   studentMeta: {
     marginTop: 3,
-    color: '#667085',
+    color: '#e0e7ff',
     fontWeight: '600',
   },
 
   tabBar: {
-    maxHeight: 54,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e9ee',
+    maxHeight: 66,
+    flexGrow: 0,
+    backgroundColor: '#f4f3ff',
   },
 
   tabContent: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     alignItems: 'center',
   },
 
   tab: {
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 15,
     marginHorizontal: 2,
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
   },
 
   tabActive: {
-    borderBottomWidth: 3,
-    borderBottomColor: '#1565c0',
+    backgroundColor: '#4338ca',
   },
 
   tabText: {
@@ -891,7 +927,7 @@ const styles = StyleSheet.create({
   },
 
   tabTextActive: {
-    color: '#1565c0',
+    color: '#ffffff',
     fontWeight: '900',
   },
 
@@ -899,6 +935,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 15,
     marginHorizontal: 2,
+    borderRadius: 14,
+    backgroundColor: '#ffe4e6',
   },
 
   logoutTabText: {
@@ -907,8 +945,11 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    padding: 14,
+    padding: 18,
     paddingBottom: 70,
+    width: '100%',
+    maxWidth: 960,
+    alignSelf: 'center',
   },
 
   heading: {
@@ -939,7 +980,7 @@ const styles = StyleSheet.create({
 
   dateText: {
     marginTop: 5,
-    color: '#98a2b3',
+    color: '#64748b',
     fontSize: 12,
   },
 
@@ -1001,7 +1042,7 @@ const styles = StyleSheet.create({
   },
 
   primaryLink: {
-    backgroundColor: '#1565c0',
+    backgroundColor: '#047857',
     padding: 13,
     borderRadius: 9,
     marginTop: 10,
@@ -1015,27 +1056,30 @@ const styles = StyleSheet.create({
 
   secondaryLink: {
     borderWidth: 1,
-    borderColor: '#1565c0',
+    borderColor: '#c4b5fd',
+    backgroundColor: '#ede9fe',
     padding: 13,
     borderRadius: 9,
     marginTop: 10,
   },
 
   secondaryLinkText: {
-    color: '#1565c0',
+    color: '#5b21b6',
     textAlign: 'center',
     fontWeight: '800',
   },
 
   fundBalanceBox: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 18,
+    backgroundColor: '#d1fae5',
+    borderWidth: 1,
+    borderColor: '#6ee7b7',
+    borderRadius: 22,
+    padding: 26,
     alignItems: 'center',
   },
 
   fundLabel: {
-    color: '#667085',
+    color: '#065f46',
     fontWeight: '700',
   },
 
@@ -1046,7 +1090,7 @@ const styles = StyleSheet.create({
   },
 
   fundStatus: {
-    color: '#667085',
+    color: '#065f46',
     marginTop: 5,
   },
 
@@ -1067,6 +1111,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
     marginBottom: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#14b8a6',
   },
 
   transactionTop: {
@@ -1132,4 +1178,7 @@ const styles = StyleSheet.create({
     color: '#667085',
     marginBottom: 12,
   },
+  card: { backgroundColor: '#ffffff', borderRadius: 18, padding: 18, marginBottom: 12, borderWidth: 1, borderColor: '#e0e7ff' },
+  noticeCard: { backgroundColor: '#fffbeb', borderColor: '#fde68a', borderLeftWidth: 4, borderLeftColor: '#f59e0b' },
+  feesCard: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
 });
