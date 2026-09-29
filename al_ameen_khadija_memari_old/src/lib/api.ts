@@ -7,7 +7,9 @@ const MOBILE_API =
 
 export const API_BASE =
   Platform.OS === 'web'
-    ? 'http://localhost:3000'
+    ? (typeof window !== 'undefined'
+        ? `${window.location.protocol}//${window.location.hostname}:3000`
+        : 'http://localhost:3000')
     : MOBILE_API;
 
 export async function api(

@@ -89,15 +89,22 @@ export default function Guardian() {
       setStudent(firstStudent);
       const studentId = firstStudent.id;
 
-      const [profileResult, childResult, depositResult] = await Promise.all([
+      const [profileResult, childResult, depositResult] = await Promise.allSettled([
         api(`/api/guardians/student/${studentId}/profile`),
         api(`/api/guardians/student/${studentId}`),
         api(`/api/guardians/student/${studentId}/deposit-fund`),
       ]);
 
-      setProfile(profileResult);
-      setChildData(childResult);
-      setDepositData(depositResult);
+      setProfile(profileResult.status === 'fulfilled' ? profileResult.value : null);
+      setChildData(childResult.status === 'fulfilled' ? childResult.value : null);
+      setDepositData(depositResult.status === 'fulfilled' ? depositResult.value : null);
+
+      const failed = [profileResult, childResult, depositResult].find(
+        (result) => result.status === 'rejected'
+      );
+      if (failed?.status === 'rejected') {
+        Alert.alert('Some information could not be loaded', failed.reason?.message || 'Please try again.');
+      }
 
       loadMonthlyFeeDue(studentId);
     } catch (e: any) {
@@ -308,7 +315,7 @@ export default function Guardian() {
     );
   }
 
-  const s = profile?.student || childData?.student || student;
+  const s = { ...student, ...childData?.student, ...profile?.student };
   const netBalance = Number(depositData?.summary?.net_balance || 0);
   const notices = childData?.notices || [];
   const marks = childData?.marks || [];
@@ -498,12 +505,13 @@ export default function Guardian() {
                     : styles.zero,
                 ]}
               >
-                {netBalance > 0 ? '+ ' : netBalance < 0 ? '- ' : ''}₹
-                {Math.abs(netBalance).toFixed(2)}
+                {depositData
+                  ? `${netBalance > 0 ? '+ ' : netBalance < 0 ? '- ' : ''}₹${Math.abs(netBalance).toFixed(2)}`
+                  : 'তথ্য পাওয়া যায়নি'}
               </Text>
 
               <Text style={styles.fundStatus}>
-                {netBalance > 0
+                {!depositData ? 'Fund-এর তথ্য লোড করা যায়নি' : netBalance > 0
                   ? 'Fund-এ টাকা জমা আছে'
                   : netBalance < 0
                   ? 'Fund-এ Due / ঘাটতি আছে'
@@ -515,7 +523,7 @@ export default function Guardian() {
 
             {!depositData?.transactions?.length ? (
               <Card>
-                <Muted>No transaction yet.</Muted>
+                <Muted>{depositData ? 'No transaction yet.' : 'Transaction information unavailable.'}</Muted>
               </Card>
             ) : (
               depositData.transactions.slice(0, 10).map((item: any) => (
@@ -591,12 +599,33 @@ export default function Guardian() {
               <Info label="Admission No" value={s.admission_no} />
               <Info
                 label="Date of Birth"
-                value={s.date_of_birth ? String(s.date_of_birth).slice(0, 10) : null}
+                value={formatProfileDate(s.date_of_birth)}
               />
               <Info label="Gender" value={s.gender} />
               <Info label="Blood Group" value={s.blood_group} />
               <Info label="Mobile" value={s.mobile_number} />
               <Info label="WhatsApp" value={s.whatsapp_number} />
+              <Info label="Email" value={s.email} />
+              <Info label="Aadhaar No" value={s.aadhaar_no} />
+              <Info label="Caste" value={s.caste_name} />
+              <Info label="Disability" value={s.is_handicapped} />
+              <Info label="Orphan" value={s.is_orphan} />
+            </Card>
+
+            <Text style={styles.subHeading}>Admission & Education</Text>
+            <Card>
+              <Info label="Admission Date" value={formatProfileDate(s.admission_date)} />
+              <Info label="Session From" value={s.session_from} />
+              <Info label="Session To" value={s.session_to} />
+              <Info label="Student Type" value={s.student_type} />
+              <Info label="Room" value={s.room_id} />
+              <Info label="Monthly Fees" value={s.monthly_fees} />
+              <Info label="School" value={s.admitted_school_name} />
+              <Info label="Stream" value={s.stream} />
+              <Info label="Previous Branch" value={s.previous_branch_name} />
+              <Info label="Banglar Shiksha ID" value={s.banglarshiksha_id} />
+              <Info label="Kanyashree ID" value={s.kanyashree_id} />
+              <Info label="Aikyashree ID" value={s.aikyashree_id} />
             </Card>
 
             <Text style={styles.subHeading}>Father</Text>
@@ -605,6 +634,8 @@ export default function Guardian() {
               <Info label="Mobile" value={s.father_mobile} />
               <Info label="Occupation" value={s.father_occupation} />
               <Info label="Qualification" value={s.father_qualification} />
+              <Info label="Aadhaar No" value={s.father_aadhaar_no} />
+              <Info label="Annual Income" value={s.father_annual_income} />
             </Card>
 
             <Text style={styles.subHeading}>Mother</Text>
@@ -613,6 +644,51 @@ export default function Guardian() {
               <Info label="Mobile" value={s.mother_mobile} />
               <Info label="Occupation" value={s.mother_occupation} />
               <Info label="Qualification" value={s.mother_qualification} />
+              <Info label="Aadhaar No" value={s.mother_aadhaar_no} />
+              <Info label="Annual Income" value={s.mother_annual_income} />
+            </Card>
+
+            <Text style={styles.subHeading}>Guardian & Contact</Text>
+            <Card>
+              <Info label="Guardian Name" value={s.guardian_name} />
+              <Info label="Guardian Mobile" value={s.guardian_mobile} />
+              <Info label="Alternate Mobile" value={s.alternate_mobile} />
+            </Card>
+
+            <Text style={styles.subHeading}>Present Address</Text>
+            <Card>
+              <Info label="Address" value={s.address} />
+              <AddressDetails data={{
+                village: s.present_village || s.village,
+                post_office: s.present_post_office || s.post_office,
+                police_station: s.present_police_station || s.police_station,
+                district: s.present_district || s.district,
+                pin_code: s.present_pin_code || s.pin_code,
+                block: s.present_block,
+                state: s.present_state,
+              }} />
+            </Card>
+
+            <Text style={styles.subHeading}>Permanent Address</Text>
+            <Card>
+              <AddressDetails data={{
+                village: s.permanent_village,
+                post_office: s.permanent_post_office,
+                police_station: s.permanent_police_station,
+                district: s.permanent_district,
+                pin_code: s.permanent_pin_code,
+                block: s.permanent_block,
+                state: s.permanent_state,
+              }} />
+            </Card>
+
+            <Text style={styles.subHeading}>Bank Details</Text>
+            <Card>
+              <Info label="Account No" value={s.bank_account_no} />
+              <Info label="Bank" value={s.bank_name} />
+              <Info label="IFSC Code" value={s.bank_ifsc_code} />
+              <Info label="Branch" value={s.bank_branch_name} />
+              <Info label="Branch Address" value={s.bank_branch_address} />
             </Card>
 
             <Text style={styles.subHeading}>Visitor 1</Text>
@@ -620,6 +696,8 @@ export default function Guardian() {
               <Info label="Name" value={profile?.visitor1?.visitor_name} />
               <Info label="Relation" value={profile?.visitor1?.relation} />
               <Info label="Mobile" value={profile?.visitor1?.mobile_number} />
+              <Info label="Email" value={profile?.visitor1?.email} />
+              <AddressDetails data={profile?.visitor1} />
             </Card>
 
             <Text style={styles.subHeading}>Visitor 2</Text>
@@ -627,6 +705,8 @@ export default function Guardian() {
               <Info label="Name" value={profile?.visitor2?.visitor_name} />
               <Info label="Relation" value={profile?.visitor2?.relation} />
               <Info label="Mobile" value={profile?.visitor2?.mobile_number} />
+              <Info label="Email" value={profile?.visitor2?.email} />
+              <AddressDetails data={profile?.visitor2} />
             </Card>
           </>
         )}
@@ -818,12 +898,34 @@ function Card({ children, tone = 'default' }: {
   );
 }
 
+function formatProfileDate(value: unknown) {
+  if (!value) return null;
+  const date = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return date ? `${date[3]}-${date[2]}-${date[1]}` : String(value);
+}
+
+function AddressDetails({ data }: { data: any }) {
+  return <>
+    <Info label="Village" value={data?.village} />
+    <Info label="Post Office" value={data?.post_office} />
+    <Info label="Police Station" value={data?.police_station} />
+    <Info label="Block" value={data?.block} />
+    <Info label="District" value={data?.district} />
+    <Info label="State" value={data?.state} />
+    <Info label="PIN Code" value={data?.pin_code} />
+  </>;
+}
+
 function Info({ label, value }: { label: string; value: any }) {
+  if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) {
+    return null;
+  }
+
   return (
     <View style={styles.infoRow}>
       <Text style={styles.infoLabel}>{label}</Text>
       <Text style={styles.infoValue}>
-        {value === null || value === undefined || value === '' ? '-' : String(value)}
+        {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}
       </Text>
     </View>
   );

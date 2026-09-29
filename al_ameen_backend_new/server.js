@@ -16,6 +16,7 @@ app.get('/db-test',async(req,res)=>{try{const r=await pool.query('SELECT NOW() s
 app.use('/api',require('./src/routes/auth'));
 app.use('/api/rooms',require('./src/routes/rooms'));
 app.use('/api/students',require('./src/routes/students'));
+app.use('/api/student-transfer',require('./src/routes/studentTransfer').createTransferRouter(pool));
 app.use('/api/teachers',require('./src/routes/teachers'));
 app.use('/api/guardians',require('./src/routes/guardians'));
 app.use('/api/attendance',require('./src/routes/attendance'));

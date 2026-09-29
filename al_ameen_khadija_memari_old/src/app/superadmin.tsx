@@ -19,6 +19,7 @@ import {
 import {
   clearSession,
 } from '../lib/auth';
+import AcademyHeader from '../components/AcademyHeader';
 
 
 const menus: any[] = [
@@ -31,8 +32,6 @@ const menus: any[] = [
 
   ['Rooms', '/rooms'],
 
-  ['Attendance', '/attendance'],
-
   ['Student Behaviour', '/behavior'],
 
   ['Room Problems', '/problems'],
@@ -40,12 +39,6 @@ const menus: any[] = [
   ['Routine', '/routines'],
 
   ['Notice', '/notices'],
-
-  ['Marks & Result', '/marks'],
-
-  ['Documents', '/documents'],
-
-  ['Dues', '/dues'],
 
   ['Student Deposit Fund', '/deposit-fund'],
 
@@ -76,11 +69,7 @@ export default function Dashboard() {
         }
       >
 
-        <Text
-          style={s.title}
-        >
-          Al-Ameen Mission
-        </Text>
+        <AcademyHeader />
 
 
         <Text
