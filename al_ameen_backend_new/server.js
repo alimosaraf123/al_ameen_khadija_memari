@@ -21,6 +21,7 @@ app.use('/api/teachers',require('./src/routes/teachers'));
 app.use('/api/guardians',require('./src/routes/guardians'));
 app.use('/api/attendance',require('./src/routes/attendance'));
 app.use('/api/behavior',require('./src/routes/behavior'));
+app.use('/api/illness',require('./src/routes/illness'));
 app.use('/api/problems',require('./src/routes/problems'));
 app.use('/api/notices',require('./src/routes/notices'));
 app.use('/api/routines',require('./src/routes/routines'));

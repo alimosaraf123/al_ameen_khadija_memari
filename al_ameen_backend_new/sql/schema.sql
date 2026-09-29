@@ -223,3 +223,16 @@ CREATE TABLE IF NOT EXISTS attendance_change_logs (
 
 CREATE INDEX IF NOT EXISTS idx_attendance_submissions_room_date ON attendance_submissions(room_id,attendance_date DESC);
 CREATE INDEX IF NOT EXISTS idx_attendance_change_logs_submission ON attendance_change_logs(submission_id,changed_at DESC);
+CREATE TABLE IF NOT EXISTS mark_entry_batches (
+  id BIGSERIAL PRIMARY KEY,
+  exam_id BIGINT UNIQUE NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
+  subject_id BIGINT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  class_name VARCHAR(50) NOT NULL,
+  full_marks NUMERIC(8,2) NOT NULL,
+  entered_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  locked BOOLEAN NOT NULL DEFAULT TRUE,
+  updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_mark_entry_batches_date ON mark_entry_batches(submitted_at DESC);

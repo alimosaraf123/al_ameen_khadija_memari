@@ -10,6 +10,7 @@ const items: any[] = [
   ['Evening Room Attendance', '/attendance', '#157347'],
   ['Room Problems', '/problems', '#c56a14'],
   ['Student Behaviour', '/behavior', '#754bbd'],
+  ['Student Illness / Problem', '/illness', '#c05a18'],
   ['Marks Entry', '/marks', '#2369b3'],
   ['Routine', '/routines', '#39758e'],
   ['Notice', '/notices', '#9a3d67'],
