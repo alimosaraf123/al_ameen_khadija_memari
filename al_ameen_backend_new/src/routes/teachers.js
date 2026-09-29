@@ -17,7 +17,20 @@ router.get('/me', auth, allow('teacher'), asyncHandler(async(req,res)=>{const re
 
 router.get('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res)=>{
   const result = await pool.query(`
-    SELECT t.*, u.login_id, u.full_name, u.is_active AS user_active
+    SELECT t.*, u.login_id, u.full_name, u.is_active AS user_active,
+      COALESCE((
+        SELECT json_agg(DISTINCT subject_name)
+        FROM (
+          SELECT trim(s.subject_name) AS subject_name
+          FROM terminal_exam_subjects tes
+          JOIN subjects s ON s.id=tes.subject_id
+          WHERE tes.teacher_id=t.id
+          UNION
+          SELECT trim(value) AS subject_name
+          FROM regexp_split_to_table(COALESCE(t.subject,''), '[,;/]+') value
+          WHERE trim(value)<>''
+        ) assigned
+      ), '[]'::json) AS assigned_subjects
     FROM teachers t
     LEFT JOIN users u ON u.id=t.user_id
     ORDER BY t.name
