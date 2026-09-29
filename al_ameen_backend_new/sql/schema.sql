@@ -200,3 +200,26 @@ CREATE INDEX IF NOT EXISTS idx_student_marks_student ON student_marks(student_id
 CREATE INDEX IF NOT EXISTS idx_student_documents_student ON student_documents(student_id);
 CREATE INDEX IF NOT EXISTS idx_student_dues_student ON student_dues(student_id);
 CREATE INDEX IF NOT EXISTS idx_notice_targets_notice ON notice_targets(notice_id);
+
+CREATE TABLE IF NOT EXISTS attendance_submissions (
+  id BIGSERIAL PRIMARY KEY,
+  room_id BIGINT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  attendance_date DATE NOT NULL,
+  submitted_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(room_id,attendance_date)
+);
+
+CREATE TABLE IF NOT EXISTS attendance_change_logs (
+  id BIGSERIAL PRIMARY KEY,
+  submission_id BIGINT NOT NULL REFERENCES attendance_submissions(id) ON DELETE CASCADE,
+  changed_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  action VARCHAR(20) NOT NULL CHECK(action IN ('submitted','updated')),
+  snapshot JSONB NOT NULL,
+  changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_attendance_submissions_room_date ON attendance_submissions(room_id,attendance_date DESC);
+CREATE INDEX IF NOT EXISTS idx_attendance_change_logs_submission ON attendance_change_logs(submission_id,changed_at DESC);

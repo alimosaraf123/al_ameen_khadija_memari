@@ -32,6 +32,10 @@ const menus: any[] = [
 
   ['Rooms', '/rooms'],
 
+  ['Teacher Room Assignment', '/room-assignments'],
+
+  ['Evening Room Attendance', '/attendance'],
+
   ['Student Behaviour', '/behavior'],
 
   ['Room Problems', '/problems'],
