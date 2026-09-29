@@ -253,3 +253,17 @@ CREATE TABLE IF NOT EXISTS terminal_marks (
  student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE, obtained_marks NUMERIC(8,2), remarks TEXT,
  entered_by BIGINT REFERENCES users(id), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(exam_subject_id,student_id)
 );
+
+CREATE TABLE IF NOT EXISTS routine_manager_grids (
+ id BIGSERIAL PRIMARY KEY,
+ group_name VARCHAR(20) NOT NULL CHECK(group_name IN ('v_x','xi_xii','coaching')),
+ routine_date DATE NOT NULL,
+ routine_kind VARCHAR(30) NOT NULL DEFAULT 'daily',
+ grid_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+ is_master BOOLEAN NOT NULL DEFAULT FALSE,
+ is_published BOOLEAN NOT NULL DEFAULT TRUE,
+ created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ UNIQUE(group_name,routine_date,routine_kind)
+);
+CREATE INDEX IF NOT EXISTS idx_routine_manager_group_date ON routine_manager_grids(group_name,routine_date DESC);
