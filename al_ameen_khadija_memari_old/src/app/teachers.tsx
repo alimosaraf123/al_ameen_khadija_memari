@@ -18,6 +18,7 @@ export default function Teachers() {
   const [form, setForm] = useState<any>(emptyForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -45,22 +46,47 @@ export default function Teachers() {
     catch (error: any) { Alert.alert('Photo upload', error.message); }
   };
 
-  const add = async () => {
+  const saveTeacher = async () => {
     if (!form.staff_id.trim() || !form.name.trim()) {
       Alert.alert('Required', 'Staff ID and name are required.');
       return;
     }
     setSaving(true);
     try {
-      const data = await api('/api/teachers', { method: 'POST', body: JSON.stringify(form) });
+      if (editingId) {
+        await api('/api/teachers/' + editingId, { method: 'PUT', body: JSON.stringify(form) });
+        Alert.alert('Updated', 'Teacher data updated successfully.');
+      } else {
+        const data = await api('/api/teachers', { method: 'POST', body: JSON.stringify(form) });
+        Alert.alert('Teacher Added', 'User ID: ' + data.credentials.login_id + String.fromCharCode(10) + 'Password: ' + data.credentials.initial_password);
+      }
       setForm(emptyForm);
+      setEditingId(null);
       await load();
-      Alert.alert('Teacher Added', `User ID: ${data.credentials.login_id}\nPassword: ${data.credentials.initial_password}`);
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {
       setSaving(false);
     }
+  };
+
+  const startEdit = (teacher: any) => {
+    setEditingId(Number(teacher.id));
+    setForm({
+      staff_id: teacher.staff_id || '', name: teacher.name || '', mobile: teacher.mobile || '',
+      whatsapp: teacher.whatsapp || '', gender: teacher.gender || '', joining_date: String(teacher.joining_date || '').slice(0,10),
+      subject: teacher.subject || '', login_id: teacher.login_id || '', password: '',
+    });
+  };
+
+  const toggleStatus = async (teacher: any) => {
+    try {
+      await api('/api/teachers/' + teacher.id + '/status', {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: teacher.user_active === false }),
+      });
+      await load();
+    } catch (error: any) { Alert.alert('Status', error.message); }
   };
 
   return (
@@ -71,7 +97,7 @@ export default function Teachers() {
         <Text style={s.help}>Default User ID is the first part of the name. Default password is the Staff ID.</Text>
 
         <View style={s.formCard}>
-          <Text style={s.sectionTitle}>Add Teacher</Text>
+          <Text style={s.sectionTitle}>{editingId ? 'Update Teacher' : 'Add Teacher'}</Text>
           <View style={s.formGrid}>
             <Field placeholder="Staff ID *" value={form.staff_id} onChangeText={(value: string) => set('staff_id', value)} style={s.field} />
             <Field placeholder="Full name *" value={form.name} onChangeText={(value: string) => set('name', value)} style={s.field} />
@@ -83,7 +109,8 @@ export default function Teachers() {
             <Field placeholder="User ID (auto if blank)" value={form.login_id} onChangeText={(value: string) => set('login_id', value)} autoCapitalize="none" style={s.field} />
             <Field placeholder="Password (Staff ID if blank)" value={form.password} onChangeText={(value: string) => set('password', value)} secureTextEntry style={s.field} />
           </View>
-          <Button title={saving ? 'Saving...' : 'Add Teacher'} onPress={add} />
+          <Button title={saving ? 'Saving...' : editingId ? 'Update Teacher' : 'Add Teacher'} onPress={saveTeacher} />
+          {editingId && <TouchableOpacity onPress={() => { setEditingId(null); setForm(emptyForm); }} style={s.cancelButton}><Text style={s.cancelText}>Cancel Edit</Text></TouchableOpacity>}
         </View>
 
         <Text style={s.sectionTitle}>Teacher List ({list.length})</Text>
@@ -96,7 +123,11 @@ export default function Teachers() {
                 <Text style={s.meta}>Staff ID: {teacher.staff_id} · User ID: {teacher.login_id || 'Not created'}</Text>
                 <Text style={s.meta}>{teacher.gender || '-'} · {teacher.mobile || '-'} · WhatsApp {teacher.whatsapp || '-'}</Text>
               </View>
-              <View><TouchableOpacity onPress={()=>uploadPhoto(teacher)} style={s.photoButton}><Text style={s.photoButtonText}>Upload Photo</Text></TouchableOpacity><View style={[s.status, teacher.user_active === false && s.inactive]}><Text style={s.statusText}>{teacher.user_active === false ? 'Inactive' : 'Active'}</Text></View></View>
+              <View style={s.teacherActions}>
+                <TouchableOpacity onPress={()=>startEdit(teacher)} style={s.editButton}><Text style={s.photoButtonText}>Edit</Text></TouchableOpacity>
+                <TouchableOpacity onPress={()=>uploadPhoto(teacher)} style={s.photoButton}><Text style={s.photoButtonText}>Photo</Text></TouchableOpacity>
+                <TouchableOpacity onPress={()=>toggleStatus(teacher)} style={[s.status, teacher.user_active === false && s.inactive]}><Text style={s.statusText}>{teacher.user_active === false ? 'Inactive' : 'Active'}</Text></TouchableOpacity>
+              </View>
             </View>
           </Card>
         ))}
@@ -121,6 +152,6 @@ const s = StyleSheet.create({
   teacherInfo: { flex: 1 }, teacherName: { fontSize: 16, fontWeight: '900', color: '#233a2e' },
   meta: { color: '#687970', marginTop: 3, fontSize: 12 },
   status: { backgroundColor: '#21834f', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 6 },
-  photoButton:{backgroundColor:'#1764a5',paddingHorizontal:9,paddingVertical:6,borderRadius:6,marginBottom:5},photoButtonText:{color:'#fff',fontSize:11,fontWeight:'800'},
+  teacherActions:{gap:5},editButton:{backgroundColor:'#d68a00',paddingHorizontal:9,paddingVertical:6,borderRadius:6},photoButton:{backgroundColor:'#1764a5',paddingHorizontal:9,paddingVertical:6,borderRadius:6},cancelButton:{borderWidth:1,borderColor:'#64748b',padding:11,borderRadius:8,marginTop:7},cancelText:{textAlign:'center',fontWeight:'800'},photoButtonText:{color:'#fff',fontSize:11,fontWeight:'800'},
   inactive: { backgroundColor: '#b23442' }, statusText: { color: '#fff', fontSize: 11, fontWeight: '800' },
 });

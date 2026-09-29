@@ -94,6 +94,38 @@ router.post('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res
 }));
 
 
+router.put('/:id', auth, allow('super_admin','admin'), asyncHandler(async (req,res) => {
+  const body=req.body||{};
+  const current=await pool.query('SELECT t.*,u.login_id,u.id AS login_user_id,u.is_active AS user_active FROM teachers t LEFT JOIN users u ON u.id=t.user_id WHERE t.id=$1',[req.params.id]);
+  if(!current.rowCount)return res.status(404).json({success:false,message:'Teacher not found'});
+  const old=current.rows[0];
+  const staffId=String(body.staff_id??old.staff_id).trim();
+  const name=String(body.name??old.name).trim();
+  if(!staffId||!name)return res.status(400).json({success:false,message:'Staff ID and name are required'});
+  const active=body.is_active===undefined ? old.user_active!==false : body.is_active!==false;
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const teacher=await client.query(
+      'UPDATE teachers SET staff_id=$1,name=$2,mobile=$3,whatsapp=$4,gender=$5,joining_date=$6,subject=$7,is_active=$8 WHERE id=$9 RETURNING *',
+      [staffId,name,body.mobile||null,body.whatsapp||null,body.gender||null,body.joining_date||null,body.subject||null,active,req.params.id]
+    );
+    if(old.login_user_id){
+      const loginId=String(body.login_id??old.login_id).trim().toLowerCase();
+      await client.query('UPDATE users SET full_name=$1,login_id=$2,is_active=$3 WHERE id=$4',[name,loginId,active,old.login_user_id]);
+      if(body.password)await client.query('UPDATE users SET password_hash=$1 WHERE id=$2',[await bcrypt.hash(String(body.password),12),old.login_user_id]);
+    }
+    await client.query('COMMIT');
+    res.json({success:true,teacher:teacher.rows[0]});
+  }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+}));
+
+router.patch('/:id/status', auth, allow('super_admin','admin'), asyncHandler(async(req,res)=>{
+ const active=req.body?.is_active!==false,client=await pool.connect();
+ try{await client.query('BEGIN');const result=await client.query('UPDATE teachers SET is_active=$1 WHERE id=$2 RETURNING *',[active,req.params.id]);if(!result.rowCount){await client.query('ROLLBACK');return res.status(404).json({success:false,message:'Teacher not found'});}if(result.rows[0].user_id)await client.query('UPDATE users SET is_active=$1 WHERE id=$2',[active,result.rows[0].user_id]);if(!active)await client.query('UPDATE teacher_room_assignments SET is_active=FALSE WHERE teacher_id=$1',[req.params.id]);await client.query('COMMIT');res.json({success:true,teacher:result.rows[0]});}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+}));
+
+
 const photoUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:8*1024*1024}}).single('photo');
 router.post('/:id/photo',auth,allow('super_admin','admin'),(req,res,next)=>photoUpload(req,res,error=>error?res.status(400).json({success:false,message:'Photo must be under 8 MB'}):next()),asyncHandler(async(req,res)=>{
  if(!req.file||!req.file.mimetype.startsWith('image/'))return res.status(400).json({success:false,message:'Choose an image file'});

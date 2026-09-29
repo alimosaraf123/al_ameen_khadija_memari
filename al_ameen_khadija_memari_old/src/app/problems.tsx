@@ -98,12 +98,12 @@ export default function Problems() {
         <View style={s.formCard}>
           <Text style={s.sectionTitle}>New Problem Report</Text>
           <Text style={s.label}>Room Number</Text>
-          <Select
+          {rooms.length === 1 ? <View style={s.fixedRoom}><Text style={s.fixedRoomText}>Room {roomNumber}</Text></View> : <Select
             label="Room number"
             value={roomNumber}
             onChange={setRoomNumber}
             options={[{ value: '', label: 'Select room' }, ...rooms.map((room) => ({ value: String(room.room_name), label: String(room.room_name) }))]}
-          />
+          />}
           <View style={s.space} />
           <Text style={s.label}>Problem Type</Text>
           <Select
@@ -183,6 +183,7 @@ const s = StyleSheet.create({
   help: { color: '#607085', lineHeight: 20, marginTop: 4, marginBottom: 16 },
   formCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#dce4ee' },
   sectionTitle: { fontSize: 18, fontWeight: '900', color: '#203b5b', marginBottom: 10 },
+  fixedRoom:{backgroundColor:'#eaf2fb',borderWidth:1,borderColor:'#bed2e8',borderRadius:8,padding:12},fixedRoomText:{fontWeight:'900',color:'#18538d'},
   label: { color: '#465b72', fontWeight: '700', marginBottom: 6 }, space: { height: 10 },
   detailsInput: { minHeight: 86, textAlignVertical: 'top' },
   reportButton: { backgroundColor: '#1565c0', padding: 14, borderRadius: 10 }, reportText: { color: '#fff', textAlign: 'center', fontWeight: '900', fontSize: 16 },

@@ -61,6 +61,7 @@ export default function Attendance() {
         const onlyRoom = String(roomList[0].room_name);
         setRoomNumber(onlyRoom);
         await loadHistory(onlyRoom);
+        await loadAttendance(onlyRoom, localDate());
       } else {
         await loadHistory('');
       }
@@ -74,19 +75,19 @@ export default function Attendance() {
     void getUser<any>().then(user => setCanManage(['admin','super_admin'].includes(user?.role)));
   }, []);
 
-  const loadAttendance = async () => {
-    if (!roomNumber) {
+  const loadAttendance = async (selectedRoom = roomNumber, selectedDate = date) => {
+    if (!selectedRoom) {
       Alert.alert('Required', 'Select a room number first.');
       return;
     }
     setLoading(true);
     try {
-      const data = await api(`/api/attendance/room/${encodeURIComponent(roomNumber)}?date=${encodeURIComponent(date)}`);
+      const data = await api('/api/attendance/room/' + encodeURIComponent(selectedRoom) + '?date=' + encodeURIComponent(selectedDate));
       setStudents(data.students || []);
       setSubmission(data.submission || null);
       setLoaded(true);
       setSearch('');
-      await loadHistory(roomNumber);
+      await loadHistory(selectedRoom);
     } catch (error: any) {
       setLoaded(false);
       Alert.alert('Error', error.message);
@@ -97,10 +98,11 @@ export default function Attendance() {
 
   const selectRoom = (value: string) => {
     setRoomNumber(value);
+    setDate(localDate());
     setStudents([]);
     setSubmission(null);
     setLoaded(false);
-    loadHistory(value);
+    if (value) void loadAttendance(value, localDate());
   };
 
   const toggle = (studentId: number) => {
@@ -160,21 +162,19 @@ export default function Attendance() {
           <View style={s.controlRow}>
             <View style={s.controlField}>
               <Text style={s.label}>Room Number</Text>
-              <Select
+              {rooms.length === 1 ? <View style={s.fixedField}><Text style={s.fixedText}>Room {roomNumber}</Text></View> : <Select
                 label="Room number"
                 value={roomNumber}
                 onChange={selectRoom}
                 options={[{ value: '', label: 'Select room' }, ...rooms.map((room) => ({ value: String(room.room_name), label: String(room.room_name) }))]}
-              />
+              />}
             </View>
             <View style={s.controlField}>
               <Text style={s.label}>Attendance Date</Text>
-              <TextInput value={date} onChangeText={(value) => { setDate(value); setLoaded(false); }} placeholder="YYYY-MM-DD" style={s.input} />
+              <View style={s.fixedField}><Text style={s.fixedText}>{date.split('-').reverse().join('/')}</Text></View>
             </View>
           </View>
-          <TouchableOpacity onPress={loadAttendance} disabled={loading} style={[s.loadButton, loading && s.disabled]}>
-            <Text style={s.buttonText}>{loading ? 'Loading...' : 'Load Room Students'}</Text>
-          </TouchableOpacity>
+          {loading && <ActivityIndicator color="#1565c0" style={{ marginTop: 12 }} />}
           {!rooms.length && <Text style={s.warning}>No room is assigned to this account. Ask an Admin to assign a room first.</Text>}
         </View>
 
@@ -241,6 +241,7 @@ const s = StyleSheet.create({
   controlRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   controlField: { flex: 1, minWidth: 220 },
   label: { color: '#40564b', fontWeight: '700', marginBottom: 6 },
+  fixedField:{backgroundColor:'#eef4f0',borderWidth:1,borderColor:'#cbd5cf',borderRadius:7,padding:11,minHeight:42},fixedText:{fontWeight:'800',color:'#244536'},
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5cf', borderRadius: 7, padding: 11, minHeight: 42 },
   loadButton: { backgroundColor: '#1565c0', borderRadius: 9, padding: 13, marginTop: 14 },
   buttonText: { color: '#fff', textAlign: 'center', fontWeight: '800' },

@@ -89,43 +89,7 @@ export default function Rooms() {
     setDesc(room.description || '');
   };
 
-  const deleteRoom = (room: any) => {
-    Alert.alert(
-      'Delete Room',
-      `Are you sure you want to delete "${room.room_name}"?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await api(`/api/rooms/${room.id}`, {
-                method: 'DELETE',
-              });
 
-              if (editingId === room.id) {
-                clearForm();
-              }
-
-              await load();
-
-              Alert.alert(
-                'Deleted',
-                'Room deleted successfully'
-              );
-
-            } catch (e: any) {
-              Alert.alert('Error', e.message);
-            }
-          },
-        },
-      ]
-    );
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -191,14 +155,7 @@ export default function Rooms() {
                 </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => deleteRoom(room)}
-              >
-                <Text style={styles.actionText}>
-                  Delete
-                </Text>
-              </TouchableOpacity>
+
 
             </View>
 
