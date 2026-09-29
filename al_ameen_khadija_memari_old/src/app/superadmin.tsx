@@ -42,6 +42,8 @@ const menus: any[] = [
 
   ['Weekly Test Marks', '/marks'],
 
+  ['Terminal Exam', '/terminal-exams'],
+
   ['Room Problems', '/problems'],
 
   ['Routine', '/routines'],

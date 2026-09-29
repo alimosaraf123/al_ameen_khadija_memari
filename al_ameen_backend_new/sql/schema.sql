@@ -236,3 +236,20 @@ CREATE TABLE IF NOT EXISTS mark_entry_batches (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_mark_entry_batches_date ON mark_entry_batches(submitted_at DESC);
+
+CREATE TABLE IF NOT EXISTS terminal_exams (
+ id BIGSERIAL PRIMARY KEY, exam_name VARCHAR(150) NOT NULL, class_name VARCHAR(50) NOT NULL,
+ session_name VARCHAR(50), status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK(status IN ('open','ready','published')),
+ created_by BIGINT REFERENCES users(id) ON DELETE SET NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), published_at TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS terminal_exam_subjects (
+ id BIGSERIAL PRIMARY KEY, terminal_exam_id BIGINT NOT NULL REFERENCES terminal_exams(id) ON DELETE CASCADE,
+ subject_id BIGINT NOT NULL REFERENCES subjects(id), teacher_id BIGINT REFERENCES teachers(id),
+ full_marks NUMERIC(8,2) NOT NULL, exam_date DATE, status VARCHAR(20) NOT NULL DEFAULT 'assigned' CHECK(status IN ('assigned','submitted')),
+ submitted_at TIMESTAMPTZ, UNIQUE(terminal_exam_id,subject_id)
+);
+CREATE TABLE IF NOT EXISTS terminal_marks (
+ id BIGSERIAL PRIMARY KEY, exam_subject_id BIGINT NOT NULL REFERENCES terminal_exam_subjects(id) ON DELETE CASCADE,
+ student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE, obtained_marks NUMERIC(8,2), remarks TEXT,
+ entered_by BIGINT REFERENCES users(id), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(exam_subject_id,student_id)
+);

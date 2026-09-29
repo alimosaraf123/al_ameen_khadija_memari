@@ -9,7 +9,7 @@ import {clearSession,getUser} from '../lib/auth';
 const items:any[]=[
  ['Evening Room Attendance','/attendance','#157347'],['Room Problems','/problems','#c56a14'],
  ['Student Behaviour','/behavior','#754bbd'],['Student Illness / Problem','/illness','#c05a18'],
- ['Marks Entry','/marks','#2369b3'],['Class Results','/class-results','#16856b'],
+ ['Marks Entry','/marks','#2369b3'],['Terminal Exam','/terminal-exams','#7b4ba5'],['Class Results','/class-results','#16856b'],
  ['Teacher Login Security','/teacher-security','#4d596b'],
 ];
 function greeting(){const h=new Date().getHours();return h<12?'Good morning':h<17?'Good afternoon':'Good evening';}
