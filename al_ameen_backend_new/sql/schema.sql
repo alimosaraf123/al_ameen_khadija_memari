@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS notices (
 CREATE TABLE IF NOT EXISTS notice_targets (
   id BIGSERIAL PRIMARY KEY,
   notice_id BIGINT NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
-  target_type VARCHAR(30) NOT NULL CHECK(target_type IN ('all','class','room','student','guardian')),
+  target_type VARCHAR(30) NOT NULL CHECK(target_type IN ('all','class','room','student','guardian','role')),
   target_value VARCHAR(100)
 );
 

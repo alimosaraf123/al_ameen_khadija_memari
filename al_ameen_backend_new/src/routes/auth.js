@@ -70,7 +70,7 @@ router.post(
     if (!ok) {
       return res.status(401).json({
         success: false,
-        message: 'User ID or password is incorrect',
+        message: 'Wrong password',
       });
     }
 

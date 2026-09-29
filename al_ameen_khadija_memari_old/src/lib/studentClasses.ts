@@ -1,5 +1,5 @@
 export const STUDENT_CLASSES = [
-  'Nursary', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X',
+  'V', 'VI', 'VII', 'VIII', 'IX', 'X',
   'XI-Sc.', 'XII-Sc.',
 ];
 export function isVisibleStudentClass(value: string) {

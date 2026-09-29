@@ -1,16 +1,13 @@
 import React,{useEffect,useState} from 'react';
-import {ScrollView,Text,Alert,View} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import {api} from '../lib/api';
-import {getUser} from '../lib/auth';
-import {Field,Button,Card,H1,Muted} from '../components/ui';
+import {ScrollView,Text,Alert,View} from 'react-native';import {SafeAreaView} from 'react-native-safe-area-context';
+import {api} from '../lib/api';import {getUser} from '../lib/auth';import {Field,Button,Card,H1,Muted} from '../components/ui';
+import {Select} from '../components/StudentDirectory';import {STUDENT_CLASSES} from '../lib/studentClasses';
 export default function Notices(){
- const [list,setList]=useState<any[]>([]),[title,setTitle]=useState(''),[text,setText]=useState(''),[type,setType]=useState(''),[canPublish,setCanPublish]=useState(false);
+ const [list,setList]=useState<any[]>([]),[title,setTitle]=useState(''),[text,setText]=useState(''),[type,setType]=useState(''),[audience,setAudience]=useState('all'),[className,setClassName]=useState(''),[canPublish,setCanPublish]=useState(false);
  const load=async()=>{try{const d=await api('/api/notices');setList(d.notices||[]);}catch(e:any){Alert.alert('Error',e.message);}};
  useEffect(()=>{void load();void getUser<any>().then(u=>setCanPublish(['admin','super_admin'].includes(u?.role)));},[]);
- const add=async()=>{if(!title.trim())return Alert.alert('Required','Enter a title.');try{await api('/api/notices',{method:'POST',body:JSON.stringify({title,notice_text:text,notice_type:type,targets:[{target_type:'all'}]})});setTitle('');setText('');setType('');await load();Alert.alert('Published','Notice published successfully.');}catch(e:any){Alert.alert('Error',e.message);}};
+ const add=async()=>{if(!title.trim())return Alert.alert('Required','Enter a title.');if(audience==='class'&&!className)return Alert.alert('Required','Select a class.');const target=audience==='all'?{target_type:'all'}:audience==='teacher'?{target_type:'role',target_value:'teacher'}:audience==='guardian'?{target_type:'role',target_value:'guardian'}:{target_type:'class',target_value:className};try{await api('/api/notices',{method:'POST',body:JSON.stringify({title,notice_text:text,notice_type:type,targets:[target]})});setTitle('');setText('');setType('');await load();Alert.alert('Published','Notice published successfully.');}catch(e:any){Alert.alert('Error',e.message);}};
  return <SafeAreaView style={{flex:1,backgroundColor:'#f3f6f9'}}><ScrollView contentContainerStyle={{padding:16,maxWidth:900,width:'100%',alignSelf:'center'}}><H1>Notices</H1>
- {canPublish?<View><Field placeholder="Notice type (Visiting Day/Holiday/Result...)" value={type} onChangeText={setType}/><Field placeholder="Title" value={title} onChangeText={setTitle}/><Field placeholder="Notice" value={text} onChangeText={setText} multiline/><Button title="Publish Notice" onPress={add}/></View>:<Card><Muted>Notices are view only for teachers.</Muted></Card>}
- {list.length===0?<Card><Muted>No active notice.</Muted></Card>:list.map(x=><Card key={x.id}><Text style={{fontWeight:'800',fontSize:16}}>{x.title}</Text><Text style={{color:'#6b7280',marginVertical:4}}>{x.notice_type||'Notice'} · {String(x.published_at||'').slice(0,10)}</Text><Text>{x.notice_text||''}</Text></Card>)}
- </ScrollView></SafeAreaView>;
+ {canPublish?<View><Select label="Audience" value={audience} onChange={setAudience} options={[{value:'all',label:'1. All'},{value:'teacher',label:'2. Only Teachers'},{value:'guardian',label:'3. Only All Guardians'},{value:'class',label:'4. Class Wise'}]}/>{audience==='class'&&<Select label="Class" value={className} onChange={setClassName} options={[{value:'',label:'Select class'},...STUDENT_CLASSES.map(v=>({value:v,label:v}))]}/>}<Field placeholder="Notice type (Visiting Day/Holiday/Result...)" value={type} onChangeText={setType}/><Field placeholder="Title" value={title} onChangeText={setTitle}/><Field placeholder="Notice" value={text} onChangeText={setText} multiline/><Button title="Publish Notice" onPress={add}/></View>:<Card><Muted>Notices are view only for teachers.</Muted></Card>}
+ {list.length===0?<Card><Muted>No active notice.</Muted></Card>:list.map(x=><Card key={x.id}><Text style={{fontWeight:'800',fontSize:16}}>{x.title}</Text><Text style={{color:'#6b7280',marginVertical:4}}>{x.notice_type||'Notice'} · {String(x.published_at||'').slice(0,10)}</Text><Text>{x.notice_text||''}</Text></Card>)}</ScrollView></SafeAreaView>;
 }

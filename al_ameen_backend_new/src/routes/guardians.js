@@ -1373,18 +1373,18 @@ router.get(
 
           pool.query(
             `
-            SELECT n.*
-
-            FROM notices n
-
-            WHERE
-              n.is_active=TRUE
-
-            ORDER BY
-              n.published_at DESC
-
-            LIMIT 50
-            `
+            SELECT DISTINCT n.* FROM notices n
+            JOIN notice_targets nt ON nt.notice_id=n.id
+            WHERE n.is_active=TRUE AND (
+              nt.target_type='all'
+              OR (nt.target_type='role' AND nt.target_value='guardian')
+              OR (nt.target_type='class' AND nt.target_value=(SELECT class_name FROM students WHERE id=$1))
+              OR (nt.target_type='student' AND nt.target_value=$1::text)
+              OR (nt.target_type='guardian' AND nt.target_value IN (SELECT gp.id::text FROM guardian_profiles gp WHERE gp.user_id=$2))
+            )
+            ORDER BY n.published_at DESC LIMIT 50
+            `,
+            [studentId, req.user.userId]
           ),
 
         ]);

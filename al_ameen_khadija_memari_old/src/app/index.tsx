@@ -58,6 +58,9 @@ export default function Login() {
   const [busy, setBusy] =
     useState(false);
 
+  const [showPassword, setShowPassword] =
+    useState(false);
+
 
   // GUARDIAN QUICK LOGIN
   const [
@@ -825,12 +828,15 @@ export default function Login() {
 
             <Field
               value={password}
-              onChangeText={
-                setPassword
-              }
+              onChangeText={setPassword}
               placeholder="Password"
-              secureTextEntry
+              secureTextEntry={!showPassword}
+              returnKeyType="done"
+              onSubmitEditing={login}
             />
+            <TouchableOpacity onPress={() => setShowPassword(value => !value)} style={{alignSelf:'flex-end',marginTop:-8,marginBottom:12,padding:5}}>
+              <Text style={{color:'#1764a5',fontWeight:'800'}}>{showPassword ? 'Hide password' : 'View password'}</Text>
+            </TouchableOpacity>
 
 
             <Button
