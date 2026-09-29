@@ -49,3 +49,5 @@ CLOUDINARY_API_SECRET=your_api_secret
 ~~~
 
 Keep the API secret only on the backend. Existing local upload records remain readable for backward compatibility, while every new upload uses a Cloudinary HTTPS URL.
+
+To migrate any remaining legacy local files safely, run npm run migrate:cloudinary. The command is resumable and deletes a local file only after its database URL is updated.
