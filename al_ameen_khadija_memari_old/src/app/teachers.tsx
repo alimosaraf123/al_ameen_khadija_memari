@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AcademyHeader from '../components/AcademyHeader';
 import { Select } from '../components/StudentDirectory';
 import { Button, Card, Field } from '../components/ui';
-import { api } from '../lib/api';
+import { api, API_BASE } from '../lib/api';
 
 const emptyForm = {
   staff_id: '', name: '', mobile: '', whatsapp: '', gender: '', joining_date: '',
@@ -35,6 +36,14 @@ export default function Teachers() {
   }, []);
 
   const set = (key: string, value: string) => setForm((current: any) => ({ ...current, [key]: value }));
+  const uploadPhoto = async (teacher: any) => {
+    const picked = await DocumentPicker.getDocumentAsync({ type: 'image/*', copyToCacheDirectory: true });
+    if (picked.canceled) return;
+    const file: any = picked.assets[0], form = new FormData();
+    if (file.file) form.append('photo', file.file); else form.append('photo', { uri: file.uri, name: file.name || 'teacher.jpg', type: file.mimeType || 'image/jpeg' } as any);
+    try { await api('/api/teachers/' + teacher.id + '/photo', { method: 'POST', body: form }); await load(); Alert.alert('Updated', 'Teacher photo compressed and uploaded.'); }
+    catch (error: any) { Alert.alert('Photo upload', error.message); }
+  };
 
   const add = async () => {
     if (!form.staff_id.trim() || !form.name.trim()) {
@@ -81,13 +90,13 @@ export default function Teachers() {
         {loading ? <ActivityIndicator size="large" color="#1565c0" /> : list.map((teacher) => (
           <Card key={teacher.id}>
             <View style={s.teacherRow}>
-              <View style={s.avatar}><Text style={s.avatarText}>{String(teacher.name || '?').charAt(0)}</Text></View>
+              {teacher.photo_url?<Image source={{uri:/^https?:/.test(teacher.photo_url)?teacher.photo_url:API_BASE+teacher.photo_url}} style={s.avatar}/>:<View style={s.avatar}><Text style={s.avatarText}>{String(teacher.name || '?').charAt(0)}</Text></View>}
               <View style={s.teacherInfo}>
                 <Text style={s.teacherName}>{teacher.name}</Text>
                 <Text style={s.meta}>Staff ID: {teacher.staff_id} · User ID: {teacher.login_id || 'Not created'}</Text>
                 <Text style={s.meta}>{teacher.gender || '-'} · {teacher.mobile || '-'} · WhatsApp {teacher.whatsapp || '-'}</Text>
               </View>
-              <View style={[s.status, teacher.user_active === false && s.inactive]}><Text style={s.statusText}>{teacher.user_active === false ? 'Inactive' : 'Active'}</Text></View>
+              <View><TouchableOpacity onPress={()=>uploadPhoto(teacher)} style={s.photoButton}><Text style={s.photoButtonText}>Upload Photo</Text></TouchableOpacity><View style={[s.status, teacher.user_active === false && s.inactive]}><Text style={s.statusText}>{teacher.user_active === false ? 'Inactive' : 'Active'}</Text></View></View>
             </View>
           </Card>
         ))}
@@ -112,5 +121,6 @@ const s = StyleSheet.create({
   teacherInfo: { flex: 1 }, teacherName: { fontSize: 16, fontWeight: '900', color: '#233a2e' },
   meta: { color: '#687970', marginTop: 3, fontSize: 12 },
   status: { backgroundColor: '#21834f', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 6 },
+  photoButton:{backgroundColor:'#1764a5',paddingHorizontal:9,paddingVertical:6,borderRadius:6,marginBottom:5},photoButtonText:{color:'#fff',fontSize:11,fontWeight:'800'},
   inactive: { backgroundColor: '#b23442' }, statusText: { color: '#fff', fontSize: 11, fontWeight: '800' },
 });

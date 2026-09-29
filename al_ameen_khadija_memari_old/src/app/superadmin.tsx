@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 import {
   ScrollView,
@@ -20,6 +20,7 @@ import {
   clearSession,
 } from '../lib/auth';
 import AcademyHeader from '../components/AcademyHeader';
+import { api } from '../lib/api';
 
 
 const menus: any[] = [
@@ -58,6 +59,10 @@ const menus: any[] = [
 
 
 export default function Dashboard() {
+  const [unread,setUnread]=useState(0);
+  const loadCounter=async()=>{try{const d=await api('/api/notices/admin-counter');setUnread(d.unread||0);}catch{}};
+  useEffect(()=>{void loadCounter();const timer=setInterval(loadCounter,30000);return()=>clearInterval(timer);},[]);
+  const openNotifications=async()=>{try{await api('/api/notices/read-all',{method:'POST'});setUnread(0);}finally{router.push('/notices');}};
 
   const logout =
     async () => {
@@ -89,6 +94,7 @@ export default function Dashboard() {
         >
           Super Admin Dashboard
         </Text>
+        <TouchableOpacity onPress={openNotifications} style={s.notification}><Text style={s.notificationText}>🔔 Admin Notifications</Text>{unread>0&&<View style={s.badge}><Text style={s.badgeText}>{unread>99?'99+':unread}</Text></View>}</TouchableOpacity>
 
 
         <View

@@ -267,3 +267,10 @@ CREATE TABLE IF NOT EXISTS routine_manager_grids (
  UNIQUE(group_name,routine_date,routine_kind)
 );
 CREATE INDEX IF NOT EXISTS idx_routine_manager_group_date ON routine_manager_grids(group_name,routine_date DESC);
+
+CREATE TABLE IF NOT EXISTS notification_reads (
+ user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ notice_id BIGINT NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
+ read_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ PRIMARY KEY(user_id,notice_id)
+);
