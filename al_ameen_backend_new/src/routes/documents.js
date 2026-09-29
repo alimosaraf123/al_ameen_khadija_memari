@@ -3,132 +3,70 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const sharp = require('sharp');
-const crypto = require('crypto');
-
 const pool = require('../db');
 const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
-
+const { uploadBuffer, deleteCloudinaryUrl, cloudinaryAsset, extensionFromUrl } = require('../utils/cloudStorage');
 const router = express.Router();
+const uploadDir = path.join(__dirname, '../../uploads');
 
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf';
+    cb(allowed ? null : new Error('Only image and PDF files are allowed'), allowed);
+  },
+});
 
-// ========================================
-// UPLOAD FOLDER
-// ========================================
+function getPhysicalPath(fileUrl) {
+  if (!fileUrl || /^https?:\/\//i.test(fileUrl)) return null;
+  return path.join(uploadDir, path.basename(fileUrl));
+}
 
-const uploadDir = path.join(
-  __dirname,
-  '../../uploads'
-);
+async function removeStoredFile(fileUrl) {
+  if (!fileUrl) return;
+  if (cloudinaryAsset(fileUrl)) {
+    await deleteCloudinaryUrl(fileUrl).catch(error => console.error('CLOUDINARY DELETE ERROR:', error.message));
+    return;
+  }
+  const physicalPath = getPhysicalPath(fileUrl);
+  if (physicalPath && fs.existsSync(physicalPath)) {
+    await fs.promises.unlink(physicalPath).catch(error => console.error('FILE DELETE ERROR:', error.message));
+  }
+}
 
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, {
-    recursive: true,
+async function uploadDocumentFile(file, folder = 'al-ameen/student-documents') {
+  if (file.mimetype.startsWith('image/')) {
+    const compressed = await sharp(file.buffer, { failOn: 'error' }).rotate()
+      .resize({ width: 1800, height: 1800, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 82, effort: 4 }).toBuffer();
+    return uploadBuffer(compressed, { folder, resourceType: 'image', format: 'webp' });
+  }
+  return uploadBuffer(file.buffer, {
+    folder,
+    resourceType: 'raw',
+    extension: path.extname(file.originalname) || '.pdf',
   });
 }
 
-
-// ========================================
-// MULTER
-// ========================================
-
-const storage = multer.diskStorage({
-
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-
-  filename: (req, file, cb) => {
-
-    const ext =
-      path.extname(file.originalname);
-
-    const filename =
-      Date.now() +
-      '-' +
-      Math.random()
-        .toString(36)
-        .slice(2) +
-      ext;
-
-    cb(null, filename);
-  },
-
-});
-
-
-const upload = multer({
-
-  storage,
-
-  limits: {
-    fileSize: 10 * 1024 * 1024,
-  },
-
-  fileFilter: (req, file, cb) => {
-
-    const allowed =
-      file.mimetype.startsWith('image/') ||
-      file.mimetype === 'application/pdf';
-
-    if (!allowed) {
-      return cb(
-        new Error(
-          'Only image and PDF files are allowed'
-        )
-      );
-    }
-
-    cb(null, true);
-  },
-
-});
-
-
-// ========================================
-// HELPER
-// ========================================
-
-function getPhysicalPath(fileUrl) {
-
-  if (!fileUrl) {
-    return null;
+async function sendStoredFile(res, document, download = false) {
+  const fileUrl = document.file_url;
+  const safeTitle = (document.document_title || document.document_type || 'document').replace(/[\/:*?"<>|]/g, '_');
+  if (/^https?:\/\//i.test(fileUrl)) {
+    const response = await fetch(fileUrl);
+    if (!response.ok) return res.status(404).json({ success: false, message: 'Document file not found' });
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+    const extension = extensionFromUrl(fileUrl, contentType.includes('pdf') ? '.pdf' : '');
+    res.set('Content-Type', contentType);
+    if (download) res.set('Content-Disposition', 'attachment; filename="' + safeTitle + extension + '"');
+    return res.send(buffer);
   }
-
-  const filename =
-    path.basename(fileUrl);
-
-  return path.join(
-    uploadDir,
-    filename
-  );
+  const physicalPath = getPhysicalPath(fileUrl);
+  if (!physicalPath || !fs.existsSync(physicalPath)) return res.status(404).json({ success: false, message: 'Document file not found' });
+  return download ? res.download(physicalPath, safeTitle + path.extname(physicalPath)) : res.sendFile(physicalPath);
 }
-
-
-function removePhysicalFile(fileUrl) {
-
-  try {
-
-    const physicalPath =
-      getPhysicalPath(fileUrl);
-
-    if (
-      physicalPath &&
-      fs.existsSync(physicalPath)
-    ) {
-      fs.unlinkSync(physicalPath);
-    }
-
-  } catch (error) {
-
-    console.error(
-      'FILE DELETE ERROR:',
-      error
-    );
-
-  }
-}
-
 
 // ========================================
 // GET STUDENT DOCUMENTS
@@ -171,256 +109,50 @@ router.get(
 // UPLOAD NEW DOCUMENT
 // ========================================
 
-router.post(
-  '/student/:id',
-
-  auth,
-
-  allow(
-    'super_admin',
-    'admin'
-  ),
-
-  upload.single('file'),
-
-  asyncHandler(async (req, res) => {
-
-    if (!req.file) {
-
-      return res.status(400).json({
-        success: false,
-        message: 'File required',
-      });
-
-    }
-
-    const studentId =
-      req.params.id;
-
-    const documentType =
-      req.body.document_type ||
-      'other';
-
-
-    // Same type already uploaded?
-    const oldDocument =
-      await pool.query(
-        `
-        SELECT id
-        FROM student_documents
-        WHERE student_id=$1
-        AND document_type=$2
-        LIMIT 1
-        `,
-        [
-          studentId,
-          documentType,
-        ]
-      );
-
-
-    if (
-      oldDocument.rowCount > 0 &&
-      documentType !== 'other'
-    ) {
-
-      // Newly uploaded unnecessary file remove
-      removePhysicalFile(
-        `/uploads/${req.file.filename}`
-      );
-
-      return res.status(409).json({
-        success: false,
-        message:
-          'This document already exists. Please use Change / Replace.',
-        document_id:
-          oldDocument.rows[0].id,
-      });
-
-    }
-
-
-    const fileUrl =
-      `/uploads/${req.file.filename}`;
-
-
-    const result =
-      await pool.query(
-        `
-        INSERT INTO student_documents
-        (
-          student_id,
-          document_type,
-          document_title,
-          file_url,
-          guardian_visible,
-          guardian_download_allowed,
-          uploaded_by
-        )
-
-        VALUES
-        (
-          $1,$2,$3,$4,$5,$6,$7
-        )
-
-        RETURNING *
-        `,
-        [
-          studentId,
-
-          documentType,
-
-          req.body.document_title ||
-            req.file.originalname,
-
-          fileUrl,
-
-          req.body.guardian_visible
-            !== 'false',
-
-          req.body
-            .guardian_download_allowed
-            !== 'false',
-
-          req.user.userId,
-        ]
-      );
-
-
-    res.status(201).json({
-      success: true,
-      message:
-        'Document uploaded successfully',
-      document:
-        result.rows[0],
-    });
-
-  })
-);
+router.post('/student/:id', auth, allow('super_admin', 'admin'), upload.single('file'), asyncHandler(async (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, message: 'File required' });
+  const studentId = req.params.id;
+  const documentType = req.body.document_type || 'other';
+  const oldDocument = await pool.query('SELECT id FROM student_documents WHERE student_id=$1 AND document_type=$2 LIMIT 1', [studentId, documentType]);
+  if (oldDocument.rowCount > 0 && documentType !== 'other') {
+    return res.status(409).json({ success: false, message: 'This document already exists. Please use Change / Replace.', document_id: oldDocument.rows[0].id });
+  }
+  const uploaded = await uploadDocumentFile(req.file);
+  try {
+    const result = await pool.query(
+      'INSERT INTO student_documents (student_id,document_type,document_title,file_url,guardian_visible,guardian_download_allowed,uploaded_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+      [studentId, documentType, req.body.document_title || req.file.originalname, uploaded.url, req.body.guardian_visible !== 'false', req.body.guardian_download_allowed !== 'false', req.user.userId]
+    );
+    res.status(201).json({ success: true, message: 'Document uploaded successfully', document: result.rows[0] });
+  } catch (error) {
+    await deleteCloudinaryUrl(uploaded.url).catch(() => {});
+    throw error;
+  }
+}));
 
 
 // ========================================
 // CHANGE / REPLACE FILE
 // ========================================
 
-router.post(
-  '/:documentId/replace',
-
-  auth,
-
-  allow(
-    'super_admin',
-    'admin'
-  ),
-
-  upload.single('file'),
-
-  asyncHandler(async (req, res) => {
-
-    if (!req.file) {
-
-      return res.status(400).json({
-        success: false,
-        message:
-          'Please select a new file',
-      });
-
-    }
-
-
-    const oldResult =
-      await pool.query(
-        `
-        SELECT *
-        FROM student_documents
-        WHERE id=$1
-        `,
-        [req.params.documentId]
-      );
-
-
-    if (!oldResult.rowCount) {
-
-      removePhysicalFile(
-        `/uploads/${req.file.filename}`
-      );
-
-      return res.status(404).json({
-        success: false,
-        message:
-          'Document not found',
-      });
-
-    }
-
-
-    const oldDocument =
-      oldResult.rows[0];
-
-    const newFileUrl =
-      `/uploads/${req.file.filename}`;
-
-
-    try {
-
-      const result =
-        await pool.query(
-          `
-          UPDATE student_documents
-
-          SET
-            file_url=$1,
-            document_title=$2,
-            uploaded_by=$3,
-            uploaded_at=NOW()
-
-          WHERE id=$4
-
-          RETURNING *
-          `,
-          [
-            newFileUrl,
-
-            req.body.document_title ||
-              oldDocument.document_title ||
-              req.file.originalname,
-
-            req.user.userId,
-
-            req.params.documentId,
-          ]
-        );
-
-
-      // DB update successful হলে
-      // old physical file remove
-      removePhysicalFile(
-        oldDocument.file_url
-      );
-
-
-      res.json({
-        success: true,
-        message:
-          'Document replaced successfully',
-        document:
-          result.rows[0],
-      });
-
-
-    } catch (error) {
-
-      // DB update fail হলে
-      // new file remove
-      removePhysicalFile(
-        newFileUrl
-      );
-
-      throw error;
-    }
-
-  })
-);
+router.post('/:documentId/replace', auth, allow('super_admin', 'admin'), upload.single('file'), asyncHandler(async (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, message: 'Please select a new file' });
+  const oldResult = await pool.query('SELECT * FROM student_documents WHERE id=$1', [req.params.documentId]);
+  if (!oldResult.rowCount) return res.status(404).json({ success: false, message: 'Document not found' });
+  const oldDocument = oldResult.rows[0];
+  const uploaded = await uploadDocumentFile(req.file);
+  try {
+    const result = await pool.query(
+      'UPDATE student_documents SET file_url=$1,document_title=$2,uploaded_by=$3,uploaded_at=NOW() WHERE id=$4 RETURNING *',
+      [uploaded.url, req.body.document_title || oldDocument.document_title || req.file.originalname, req.user.userId, req.params.documentId]
+    );
+    await removeStoredFile(oldDocument.file_url);
+    res.json({ success: true, message: 'Document replaced successfully', document: result.rows[0] });
+  } catch (error) {
+    await deleteCloudinaryUrl(uploaded.url).catch(() => {});
+    throw error;
+  }
+}));
 
 
 // ========================================
@@ -525,161 +257,20 @@ router.put(
 
 
 // ========================================
-// VIEW FILE
+// VIEW / DOWNLOAD FILE
 // ========================================
 
-router.get(
-  '/:documentId/file',
+router.get('/:documentId/file', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
+  const result = await pool.query('SELECT * FROM student_documents WHERE id=$1', [req.params.documentId]);
+  if (!result.rowCount) return res.status(404).json({ success: false, message: 'Document not found' });
+  return sendStoredFile(res, result.rows[0], false);
+}));
 
-  auth,
-
-  allow(
-    'super_admin',
-    'admin'
-  ),
-
-  asyncHandler(async (req, res) => {
-
-    const result =
-      await pool.query(
-        `
-        SELECT *
-        FROM student_documents
-        WHERE id=$1
-        `,
-        [req.params.documentId]
-      );
-
-
-    if (!result.rowCount) {
-
-      return res.status(404).json({
-        success: false,
-        message:
-          'Document not found',
-      });
-
-    }
-
-
-    const document =
-      result.rows[0];
-
-    const physicalPath =
-      getPhysicalPath(
-        document.file_url
-      );
-
-
-    if (
-      !physicalPath ||
-      !fs.existsSync(physicalPath)
-    ) {
-
-      return res.status(404).json({
-        success: false,
-        message:
-          'Document file not found',
-      });
-
-    }
-
-
-    res.sendFile(
-      physicalPath
-    );
-
-  })
-);
-
-
-// ========================================
-// DOWNLOAD FILE
-// ========================================
-
-router.get(
-  '/:documentId/download',
-
-  auth,
-
-  allow(
-    'super_admin',
-    'admin'
-  ),
-
-  asyncHandler(async (req, res) => {
-
-    const result =
-      await pool.query(
-        `
-        SELECT *
-        FROM student_documents
-        WHERE id=$1
-        `,
-        [req.params.documentId]
-      );
-
-
-    if (!result.rowCount) {
-
-      return res.status(404).json({
-        success: false,
-        message:
-          'Document not found',
-      });
-
-    }
-
-
-    const document =
-      result.rows[0];
-
-    const physicalPath =
-      getPhysicalPath(
-        document.file_url
-      );
-
-
-    if (
-      !physicalPath ||
-      !fs.existsSync(physicalPath)
-    ) {
-
-      return res.status(404).json({
-        success: false,
-        message:
-          'Document file not found',
-      });
-
-    }
-
-
-    const ext =
-      path.extname(
-        physicalPath
-      );
-
-
-    const downloadName =
-      (
-        document.document_title ||
-        document.document_type ||
-        'document'
-      )
-        .replace(
-          /[\\/:*?"<>|]/g,
-          '_'
-        ) +
-      ext;
-
-
-    res.download(
-      physicalPath,
-      downloadName
-    );
-
-  })
-);
+router.get('/:documentId/download', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
+  const result = await pool.query('SELECT * FROM student_documents WHERE id=$1', [req.params.documentId]);
+  if (!result.rowCount) return res.status(404).json({ success: false, message: 'Document not found' });
+  return sendStoredFile(res, result.rows[0], true);
+}));
 
 
 // ========================================
@@ -733,9 +324,7 @@ router.delete(
     );
 
 
-    removePhysicalFile(
-      oldDocument.file_url
-    );
+    await removeStoredFile(oldDocument.file_url);
 
 
     res.json({
@@ -771,15 +360,16 @@ router.post('/legacy-import',auth,allow('super_admin','admin'),asyncHandler(asyn
  if(!email||!password||!registration||!className)return res.status(400).json({success:false,message:'Legacy login, registration, session and class are required'});
  const student=(await pool.query('SELECT id FROM students WHERE LOWER(registration_no)=LOWER($1) LIMIT 1',[registration])).rows[0];if(!student)return res.status(404).json({success:false,message:'Local student not found'});
  const cookie=await legacyLogin(email,password,!!req.body.force_logout_all);let page=await legacyRequest('bulkDocumentDownload.php',{},cookie),html=await page.response.text();const csrf=(html.match(/csrf_token:\s*["']([^"']+)/i)||[])[1];if(!csrf)throw new Error('Legacy document token not found');
- const directory=path.join(uploadDir,'legacy');await fs.promises.mkdir(directory,{recursive:true});let imported=0,skipped=0,missing=0;
+ let imported=0,skipped=0,missing=0;
  for(const [legacyType,documentType,title] of LEGACY_TYPES){
   const body=new URLSearchParams({session,selectClass:className,selectSex:'all',statselect:'active',selectedValue:legacyType,csrf_token:csrf});
   const listing=await legacyRequest('ajax/bulkDocumentDownload_ajax.php',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body},cookie),listingHtml=await listing.response.text();
   const paths=[...listingHtml.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)].map(m=>m[1]);const source=paths.find(v=>v.split('/').includes(registration)||path.basename(v).startsWith(registration+'_'));
   if(!source){missing++;continue}const exists=await pool.query('SELECT 1 FROM student_documents WHERE student_id=$1 AND document_type=$2',[student.id,documentType]);if(exists.rowCount){skipped++;continue}
-  const file=await legacyRequest(source,{},cookie);if(!file.response.ok)throw new Error('Could not download '+title);const input=Buffer.from(await file.response.arrayBuffer()),filename=crypto.randomUUID()+'.webp';
-  await sharp(input).rotate().resize({width:1800,height:1800,fit:'inside',withoutEnlargement:true}).webp({quality:82}).toFile(path.join(directory,filename));
-  await pool.query('INSERT INTO student_documents(student_id,document_type,document_title,file_url,uploaded_by) VALUES($1,$2,$3,$4,$5)',[student.id,documentType,title,'/uploads/legacy/'+filename,req.user.userId]);imported++;
+  const file=await legacyRequest(source,{},cookie);if(!file.response.ok)throw new Error('Could not download '+title);const input=Buffer.from(await file.response.arrayBuffer());
+  const uploaded=await uploadDocumentFile({buffer:input,mimetype:file.response.headers.get('content-type')||'image/jpeg',originalname:path.basename(source)||title+'.jpg'},'al-ameen/legacy-documents');
+  try{await pool.query('INSERT INTO student_documents(student_id,document_type,document_title,file_url,uploaded_by) VALUES($1,$2,$3,$4,$5)',[student.id,documentType,title,uploaded.url,req.user.userId]);imported++;}
+  catch(error){await deleteCloudinaryUrl(uploaded.url).catch(()=>{});throw error;}
  }
  res.json({success:true,imported,skipped,missing,total:LEGACY_TYPES.length});
 }));

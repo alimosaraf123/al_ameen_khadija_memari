@@ -30,6 +30,26 @@ function getPhysicalPath(fileUrl) {
 }
 
 
+async function sendGuardianDocument(res, document, download = false) {
+  const fileUrl = document.file_url;
+  const safeTitle = (document.document_title || document.document_type || 'document').replace(/[\/:*?"<>|]/g, '_');
+  if (/^https?:\/\//i.test(fileUrl)) {
+    const response = await fetch(fileUrl);
+    if (!response.ok) return res.status(404).json({ success: false, message: 'Document file not found' });
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+    let extension = '';
+    try { extension = path.extname(new URL(fileUrl).pathname); } catch {}
+    res.set('Content-Type', contentType);
+    if (download) res.set('Content-Disposition', 'attachment; filename="' + safeTitle + extension + '"');
+    return res.send(buffer);
+  }
+  const physicalPath = getPhysicalPath(fileUrl);
+  if (!physicalPath || !fs.existsSync(physicalPath)) return res.status(404).json({ success: false, message: 'Document file not found' });
+  return download ? res.download(physicalPath, safeTitle + path.extname(physicalPath)) : res.sendFile(physicalPath);
+}
+
+
 function generateGuardianPassword(
   length = 8
 ) {
@@ -1549,38 +1569,7 @@ router.get(
       const document =
         result.rows[0];
 
-
-      const physicalPath =
-        getPhysicalPath(
-          document.file_url
-        );
-
-
-      if (
-        !physicalPath
-        ||
-        !fs.existsSync(
-          physicalPath
-        )
-      ) {
-
-        return res
-          .status(404)
-          .json({
-
-            success: false,
-
-            message:
-              'Document file not found',
-
-          });
-
-      }
-
-
-      res.sendFile(
-        physicalPath
-      );
+      return sendGuardianDocument(res, document, false);
 
     }
   )
@@ -1683,68 +1672,7 @@ router.get(
       const document =
         result.rows[0];
 
-
-      const physicalPath =
-        getPhysicalPath(
-          document.file_url
-        );
-
-
-      if (
-        !physicalPath
-        ||
-        !fs.existsSync(
-          physicalPath
-        )
-      ) {
-
-        return res
-          .status(404)
-          .json({
-
-            success: false,
-
-            message:
-              'Document file not found',
-
-          });
-
-      }
-
-
-      const extension =
-        path.extname(
-          physicalPath
-        );
-
-
-      const downloadName =
-        (
-          document
-            .document_title
-
-          ||
-
-          document
-            .document_type
-
-          ||
-
-          'document'
-        )
-
-          .replace(
-            /[\\/:*?"<>|]/g,
-            '_'
-          )
-
-        + extension;
-
-
-      res.download(
-        physicalPath,
-        downloadName
-      );
+      return sendGuardianDocument(res, document, true);
 
     }
   )

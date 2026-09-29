@@ -30,6 +30,6 @@ app.use('/api/terminal-exams',require('./src/routes/terminalExams'));
 app.use('/api/dues',require('./src/routes/dues'));
 app.use('/api/documents',require('./src/routes/documents'));
 
-app.use((err,req,res,next)=>{console.error(err);res.status(500).json({success:false,message:'Server error',error:process.env.NODE_ENV==='development'?err.message:undefined});});
+app.use((err,req,res,next)=>{console.error(err);if(err.code==='CLOUDINARY_NOT_CONFIGURED')return res.status(503).json({success:false,message:err.message});res.status(500).json({success:false,message:'Server error',error:process.env.NODE_ENV==='development'?err.message:undefined});});
 
 app.listen(PORT,'0.0.0.0',()=>console.log(`Server running on http://localhost:${PORT}`));

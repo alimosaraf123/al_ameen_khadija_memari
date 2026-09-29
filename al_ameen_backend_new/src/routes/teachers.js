@@ -1,5 +1,5 @@
 const express = require('express');
-const multer=require('multer');const sharp=require('sharp');const fs=require('fs/promises');const path=require('path');const {randomUUID}=require('crypto');
+const multer=require('multer');const sharp=require('sharp');const {uploadBuffer,deleteCloudinaryUrl}=require('../utils/cloudStorage');
 const bcrypt = require('bcryptjs');
 const pool = require('../db');
 const { auth, allow } = require('../middleware/auth');
@@ -97,10 +97,15 @@ router.post('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res
 const photoUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:8*1024*1024}}).single('photo');
 router.post('/:id/photo',auth,allow('super_admin','admin'),(req,res,next)=>photoUpload(req,res,error=>error?res.status(400).json({success:false,message:'Photo must be under 8 MB'}):next()),asyncHandler(async(req,res)=>{
  if(!req.file||!req.file.mimetype.startsWith('image/'))return res.status(400).json({success:false,message:'Choose an image file'});
- const directory=path.join(__dirname,'../../uploads/teachers');await fs.mkdir(directory,{recursive:true});
- const filename=randomUUID()+'.webp';await sharp(req.file.buffer).rotate().resize(480,480,{fit:'cover',position:'attention'}).webp({quality:78}).toFile(path.join(directory,filename));
- const photoUrl='/uploads/teachers/'+filename,result=await pool.query('UPDATE teachers SET photo_url=$1 WHERE id=$2 RETURNING *',[photoUrl,req.params.id]);
- if(!result.rowCount){await fs.unlink(path.join(directory,filename)).catch(()=>{});return res.status(404).json({success:false,message:'Teacher not found'});}
- res.json({success:true,teacher:result.rows[0]});
+ const current=await pool.query('SELECT photo_url FROM teachers WHERE id=$1',[req.params.id]);
+ if(!current.rowCount)return res.status(404).json({success:false,message:'Teacher not found'});
+ const compressed=await sharp(req.file.buffer).rotate().resize(480,480,{fit:'cover',position:'attention'}).webp({quality:78,effort:4}).toBuffer();
+ const uploaded=await uploadBuffer(compressed,{folder:'al-ameen/teacher-photos',publicId:'teacher-'+req.params.id+'-'+Date.now(),resourceType:'image',format:'webp'});
+ try{
+  const result=await pool.query('UPDATE teachers SET photo_url=$1 WHERE id=$2 RETURNING *',[uploaded.url,req.params.id]);
+  await deleteCloudinaryUrl(current.rows[0].photo_url).catch(()=>{});
+  res.json({success:true,teacher:result.rows[0]});
+ }catch(error){await deleteCloudinaryUrl(uploaded.url).catch(()=>{});throw error;}
 }));
+
 module.exports = router;

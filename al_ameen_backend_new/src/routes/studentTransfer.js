@@ -2,15 +2,13 @@
 const express = require('express');
 const multer = require('multer');
 const sharp = require('sharp');
-const fs = require('fs/promises');
-const path = require('path');
-const { randomUUID } = require('crypto');
+const { uploadBuffer, deleteCloudinaryUrl } = require('../utils/cloudStorage');
 const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
 const { studentFields } = require('../utils/studentData');
 const { parseWorkbook, makeWorkbook, photoRegistration, photoExtension } = require('../utils/studentTransfer');
 
-function createTransferRouter(pool, photoDirectory = path.join(__dirname, '../../uploads/student-photos')) {
+function createTransferRouter(pool) {
   const router = express.Router();
   router.use(auth, allow('super_admin', 'admin'));
   const excelUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 2 } }).single('file');
@@ -104,10 +102,9 @@ function createTransferRouter(pool, photoDirectory = path.join(__dirname, '../..
 
   router.post('/photos', upload(photoUpload), asyncHandler(async (req, res) => {
     if (!req.files?.length) return res.status(400).json({ success: false, message: 'Choose at least one photo' });
-    await fs.mkdir(photoDirectory, { recursive: true });
     const results = [], seen = new Set();
     for (const file of req.files) {
-      let diskPath;
+      let uploaded = null;
       try {
         const registration = photoRegistration(file.originalname);
         const key = registration.toLowerCase();
@@ -121,25 +118,24 @@ function createTransferRouter(pool, photoDirectory = path.join(__dirname, '../..
           .resize({ width: 800, height: 800, fit: 'inside', withoutEnlargement: true })
           .webp({ quality: 78, effort: 4 })
           .toBuffer();
-        const filename = randomUUID() + '.webp';
-        diskPath = path.join(photoDirectory, filename);
-        await fs.writeFile(diskPath, compressed, { flag: 'wx' });
-        const photoUrl = '/uploads/student-photos/' + filename;
-        const result = await pool.query('UPDATE students SET photo_url=$1, updated_at=NOW() WHERE id=$2 RETURNING id', [photoUrl, match.rows[0].id]);
+        uploaded = await uploadBuffer(compressed, {
+          folder: 'al-ameen/student-photos',
+          publicId: registration + '-' + Date.now(),
+          resourceType: 'image',
+          format: 'webp',
+        });
+        const result = await pool.query('UPDATE students SET photo_url=$1, updated_at=NOW() WHERE id=$2 RETURNING id', [uploaded.url, match.rows[0].id]);
         if (!result.rowCount) throw new Error('Student no longer exists');
-        const oldUrl = String(match.rows[0].photo_url || '');
-        if (oldUrl.startsWith('/uploads/student-photos/')) {
-          const oldPath = path.resolve(photoDirectory, path.basename(oldUrl));
-          if (oldPath !== diskPath && path.dirname(oldPath) === path.resolve(photoDirectory)) await fs.unlink(oldPath).catch(() => {});
-        }
-        results.push({ file: file.originalname, registration_no: registration, success: true, original_bytes: file.size, compressed_bytes: compressed.length });
+        await deleteCloudinaryUrl(match.rows[0].photo_url).catch(() => {});
+        results.push({ file: file.originalname, registration_no: registration, success: true, original_bytes: file.size, compressed_bytes: uploaded.bytes });
       } catch (error) {
-        if (diskPath) await fs.unlink(diskPath).catch(() => {});
+        if (uploaded?.url) await deleteCloudinaryUrl(uploaded.url).catch(() => {});
         results.push({ file: file.originalname, success: false, message: error.message });
       }
     }
     res.json({ success: true, uploaded: results.filter(item => item.success).length, failed: results.filter(item => !item.success).length, results });
   }));
+
   return router;
 }
 module.exports = { createTransferRouter };

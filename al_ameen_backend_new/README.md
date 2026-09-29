@@ -34,3 +34,18 @@ Node.js + Express + Neon PostgreSQL backend for the Al-Ameen Khadija Memari mobi
 - Marks under `/api/marks`
 - Dues under `/api/dues`
 - Documents under `/api/documents`
+
+
+## Cloudinary storage
+
+All new student documents, legacy imports, student photos, teacher photos, and notice images are uploaded to Cloudinary. Images are resized and compressed to WebP in memory before upload; no temporary image is written to the server disk. PDFs are streamed from memory to Cloudinary as raw files.
+
+Set these deployment environment variables:
+
+~~~env
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+~~~
+
+Keep the API secret only on the backend. Existing local upload records remain readable for backward compatibility, while every new upload uses a Cloudinary HTTPS URL.
