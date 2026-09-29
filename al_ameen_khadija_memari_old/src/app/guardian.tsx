@@ -560,6 +560,7 @@ export default function Guardian() {
         {tab === 'result' && (
           <>
             <Text style={styles.heading}>Published Result</Text>
+            <TouchableOpacity style={{backgroundColor:'#1764a5',padding:12,borderRadius:9,marginBottom:12}} onPress={()=>router.push('/class-results')}><Text style={{color:'#fff',fontWeight:'900',textAlign:'center'}}>View Full Class Results</Text></TouchableOpacity>
 
             {marks.length === 0 ? (
               <Card>
