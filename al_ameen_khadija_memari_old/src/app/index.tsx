@@ -58,6 +58,9 @@ export default function Login() {
   const [busy, setBusy] =
     useState(false);
 
+  const [loginError, setLoginError] =
+    useState('');
+
   const [showPassword, setShowPassword] =
     useState(false);
 
@@ -181,6 +184,7 @@ export default function Login() {
       }
 
 
+      setLoginError('');
       setBusy(true);
 
 
@@ -292,10 +296,15 @@ export default function Login() {
 
       } catch (e: any) {
 
+        const message =
+          e.message ||
+          'Unable to login';
+
+        setLoginError(message);
+
         Alert.alert(
           'Login Failed',
-          e.message ||
-          'Unable to login'
+          message
         );
 
 
@@ -850,6 +859,25 @@ export default function Login() {
               onPress={login}
 
             />
+
+            {!!loginError && (
+              <Text
+                accessibilityRole="alert"
+                style={{
+                  color: '#b4232f',
+                  backgroundColor: '#ffe8eb',
+                  borderWidth: 1,
+                  borderColor: '#efabb2',
+                  borderRadius: 8,
+                  padding: 10,
+                  marginTop: 10,
+                  textAlign: 'center',
+                  fontWeight: '800',
+                }}
+              >
+                {loginError}
+              </Text>
+            )}
 
 
             {guardianLoginId && (
