@@ -5,28 +5,76 @@ const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
 const router = express.Router();
 
+function firstNameLogin(name) {
+  return String(name || '')
+    .trim()
+    .split(/\s+/)[0]
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
 router.get('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res)=>{
-  const r=await pool.query(`SELECT t.*, u.login_id, u.full_name, u.is_active AS user_active FROM teachers t LEFT JOIN users u ON u.id=t.user_id ORDER BY t.name`);
-  res.json({success:true, teachers:r.rows});
+  const result = await pool.query(`
+    SELECT t.*, u.login_id, u.full_name, u.is_active AS user_active
+    FROM teachers t
+    LEFT JOIN users u ON u.id=t.user_id
+    ORDER BY t.name
+  `);
+  res.json({success:true, teachers:result.rows});
 }));
 
 router.post('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res)=>{
-  const b=req.body;
-  const client=await pool.connect();
+  const body = req.body || {};
+  const staffId = String(body.staff_id || '').trim();
+  const name = String(body.name || '').trim();
+  if (!staffId || !name) return res.status(400).json({success:false,message:'Staff ID and name are required'});
+
+  const requestedLogin = String(body.login_id || '').trim().toLowerCase();
+  const baseLogin = requestedLogin || firstNameLogin(name);
+  if (!baseLogin) return res.status(400).json({success:false,message:'A valid User ID could not be created from the name'});
+
+  let loginId = baseLogin;
+  const existingLogin = await pool.query('SELECT id FROM users WHERE login_id=$1', [loginId]);
+  if (existingLogin.rowCount) {
+    if (requestedLogin) return res.status(409).json({success:false,message:'This User ID is already in use'});
+    loginId = `${baseLogin}${staffId.replace(/[^a-z0-9]/gi, '').toLowerCase()}`;
+    const suffixedLogin = await pool.query('SELECT id FROM users WHERE login_id=$1', [loginId]);
+    if (suffixedLogin.rowCount) return res.status(409).json({success:false,message:'A unique User ID could not be created. Enter one manually.'});
+  }
+
+  const initialPassword = String(body.password || staffId);
+  const hash = await bcrypt.hash(initialPassword, 12);
+  const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    let userId=null;
-    if (b.login_id && b.password) {
-      const hash=await bcrypt.hash(b.password,12);
-      const u=await client.query(`INSERT INTO users(login_id,password_hash,full_name,role) VALUES($1,$2,$3,'teacher') RETURNING id`,[b.login_id,hash,b.name]);
-      userId=u.rows[0].id;
-    }
-    const t=await client.query(`INSERT INTO teachers(user_id,staff_id,name,designation,subject,mobile,email,address,date_of_birth,joining_date,qualification,photo_url)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-      [userId,b.staff_id,b.name,b.designation||null,b.subject||null,b.mobile||null,b.email||null,b.address||null,b.date_of_birth||null,b.joining_date||null,b.qualification||null,b.photo_url||null]);
+    const user = await client.query(`
+      INSERT INTO users(login_id,password_hash,full_name,role)
+      VALUES($1,$2,$3,'teacher') RETURNING id
+    `, [loginId, hash, name]);
+    const teacher = await client.query(`
+      INSERT INTO teachers(
+        user_id,staff_id,name,designation,subject,mobile,whatsapp,gender,email,address,
+        date_of_birth,joining_date,qualification,photo_url
+      ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+      RETURNING *
+    `, [
+      user.rows[0].id, staffId, name, body.designation || null, body.subject || null,
+      body.mobile || null, body.whatsapp || null, body.gender || null, body.email || null,
+      body.address || null, body.date_of_birth || null, body.joining_date || null,
+      body.qualification || null, body.photo_url || null,
+    ]);
     await client.query('COMMIT');
-    res.status(201).json({success:true, teacher:t.rows[0]});
-  } catch(e){await client.query('ROLLBACK'); throw e;} finally {client.release();}
+    res.status(201).json({
+      success:true,
+      teacher:{...teacher.rows[0], login_id:loginId},
+      credentials:{login_id:loginId, initial_password:initialPassword},
+    });
+  } catch(error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }));
 
-module.exports=router;
+module.exports = router;
