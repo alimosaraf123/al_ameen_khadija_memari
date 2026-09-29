@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AcademyHeader from '../components/AcademyHeader';
 import { Select } from '../components/StudentDirectory';
 import { API_BASE, api } from '../lib/api';
+import { getUser } from '../lib/auth';
 
 function localDate() {
   const now = new Date();
@@ -39,6 +40,7 @@ export default function Attendance() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [canManage, setCanManage] = useState(false);
 
   const loadHistory = async (selectedRoom = roomNumber) => {
     try {
@@ -68,7 +70,8 @@ export default function Attendance() {
   };
 
   useEffect(() => {
-    loadRooms();
+    void loadRooms();
+    void getUser<any>().then(user => setCanManage(['admin','super_admin'].includes(user?.role)));
   }, []);
 
   const loadAttendance = async () => {
@@ -135,6 +138,8 @@ export default function Attendance() {
     }
   };
 
+  const editHistory=async(item:any)=>{setRoomNumber(String(item.room_name));setDate(String(item.attendance_date).slice(0,10));setLoading(true);try{const data=await api(`/api/attendance/room/${encodeURIComponent(item.room_name)}?date=${String(item.attendance_date).slice(0,10)}`);setStudents(data.students||[]);setSubmission(data.submission||null);setLoaded(true);setSearch('');}catch(error:any){Alert.alert('Error',error.message);}finally{setLoading(false);}};
+  const deleteHistory=(item:any)=>Alert.alert('Delete attendance','Delete this room attendance permanently?',[{text:'Cancel',style:'cancel'},{text:'Delete',style:'destructive',onPress:async()=>{try{await api(`/api/attendance/submissions/${item.id}`,{method:'DELETE'});if(submission?.id===item.id){setLoaded(false);setStudents([]);setSubmission(null);}await loadHistory(roomNumber);Alert.alert('Deleted','Attendance deleted successfully.');}catch(error:any){Alert.alert('Error',error.message);}}}]);
   const present = students.filter((student) => student.status === 'present').length;
   const absent = students.length - present;
   const visibleStudents = useMemo(() => {
@@ -219,7 +224,7 @@ export default function Attendance() {
         {history.length === 0 ? <Text style={s.noHistory}>No submitted attendance found.</Text> : history.map((item) => (
           <View key={item.id} style={s.historyCard}>
             <View><Text style={s.historyTitle}>Room {item.room_name} · {String(item.attendance_date).slice(0, 10)}</Text><Text style={s.historyMeta}>{item.last_updated_by_name || item.submitted_by_name || 'User'}</Text></View>
-            <View style={s.historyCounts}><Text style={s.greenText}>{item.present} P</Text><Text style={s.redText}>{item.absent} A</Text></View>
+            <View style={s.historyCounts}><Text style={s.greenText}>{item.present} P</Text><Text style={s.redText}>{item.absent} A</Text><TouchableOpacity onPress={()=>editHistory(item)} style={s.historyButton}><Text style={s.historyButtonText}>{canManage?'View / Edit':'View Absent'}</Text></TouchableOpacity>{canManage&&<TouchableOpacity onPress={()=>deleteHistory(item)} style={s.deleteButton}><Text style={s.deleteButtonText}>Delete</Text></TouchableOpacity>}</View>
           </View>
         ))}
       </ScrollView>
@@ -265,5 +270,5 @@ const s = StyleSheet.create({
   noHistory: { backgroundColor: '#fff', padding: 18, borderRadius: 10, color: '#697870' },
   historyCard: { backgroundColor: '#fff', borderRadius: 12, padding: 13, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   historyTitle: { fontWeight: '800', color: '#233b30' }, historyMeta: { color: '#718078', fontSize: 12, marginTop: 3 },
-  historyCounts: { flexDirection: 'row', gap: 10 }, greenText: { color: '#167844', fontWeight: '900' }, redText: { color: '#c12c3a', fontWeight: '900' },
+  historyCounts: { flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }, historyButton:{backgroundColor:'#dcecff',paddingHorizontal:9,paddingVertical:7,borderRadius:7},historyButtonText:{color:'#15538e',fontWeight:'800',fontSize:12},deleteButton:{backgroundColor:'#ffe0e3',paddingHorizontal:9,paddingVertical:7,borderRadius:7},deleteButtonText:{color:'#b32635',fontWeight:'800',fontSize:12}, greenText: { color: '#167844', fontWeight: '900' }, redText: { color: '#c12c3a', fontWeight: '900' },
 });

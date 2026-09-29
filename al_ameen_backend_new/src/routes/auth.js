@@ -273,7 +273,7 @@ router.post(
 
   auth,
 
-  allow('guardian'),
+  allow('guardian','teacher'),
 
   asyncHandler(async (req, res) => {
 
@@ -556,7 +556,7 @@ router.post(
 
   auth,
 
-  allow('guardian'),
+  allow('guardian','teacher'),
 
   asyncHandler(async (req, res) => {
 

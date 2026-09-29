@@ -88,7 +88,7 @@ export default function Marks() {
     </>}
 
     <Text style={s.sectionTitle}>Submitted Weekly Tests ({tests.length})</Text>
-    {tests.map(test=><View key={test.id} style={s.testCard}><View style={{flex:1}}><Text style={s.testTitle}>{test.exam_name} · {test.class_name}</Text><Text style={s.meta}>{test.subject_name} · Full {test.full_marks} · {String(test.exam_date).slice(0,10)}</Text><Text style={s.meta}>{test.student_count} students · By {test.entered_by_name||'User'}</Text></View>{canManage&&<TouchableOpacity onPress={()=>publish(test)} style={[s.viewButton,test.is_published&&{backgroundColor:'#dff3e5'}]}><Text style={s.viewText}>{test.is_published?'Unpublish':'Publish'}</Text></TouchableOpacity>}<TouchableOpacity onPress={()=>openTest(test.id)} style={s.viewButton}><Text style={s.viewText}>{canManage?'Edit':'View'}</Text></TouchableOpacity></View>)}
+    {tests.map(test=><View key={test.id} style={s.testCard}><View style={{flex:1}}><Text style={s.testTitle}>{test.exam_name} · {test.class_name}</Text><Text style={s.meta}>{test.subject_name} · Full {test.full_marks} · {String(test.exam_date).slice(0,10)}</Text><Text style={s.meta}>{test.student_count} students · By {test.entered_by_name||'User'}</Text></View>{canManage&&<TouchableOpacity onPress={()=>publish(test)} style={[s.viewButton,test.is_published&&{backgroundColor:'#dff3e5'}]}><Text style={s.viewText}>{test.is_published?'Published ✓':'Publish'}</Text></TouchableOpacity>}<TouchableOpacity onPress={()=>openTest(test.id)} style={s.viewButton}><Text style={s.viewText}>{canManage?'Edit':'View'}</Text></TouchableOpacity></View>)}
     {loading&&<ActivityIndicator color="#1d5fa7" style={{margin:15}}/>}
   </ScrollView></SafeAreaView>;
 }

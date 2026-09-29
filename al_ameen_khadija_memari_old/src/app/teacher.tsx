@@ -15,6 +15,7 @@ const items: any[] = [
   ['Class Results', '/class-results', '#16856b'],
   ['Routine', '/routines', '#39758e'],
   ['Notice', '/notices', '#9a3d67'],
+  ['Teacher Login Security', '/teacher-security', '#4d596b'],
 ];
 
 export default function Teacher() {

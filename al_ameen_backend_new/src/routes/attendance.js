@@ -202,4 +202,6 @@ router.post('/batch', auth, allow('super_admin','admin','teacher'), asyncHandler
   }
 }));
 
+router.delete('/submissions/:id', auth, allow('super_admin','admin'), asyncHandler(async(req,res)=>{const client=await pool.connect();try{await client.query('BEGIN');const sub=(await client.query('SELECT * FROM attendance_submissions WHERE id=$1 FOR UPDATE',[req.params.id])).rows[0];if(!sub){await client.query('ROLLBACK');return res.status(404).json({success:false,message:'Attendance submission not found'});}await client.query('DELETE FROM attendance WHERE room_id=$1 AND attendance_date=$2',[sub.room_id,sub.attendance_date]);await client.query('DELETE FROM attendance_change_logs WHERE submission_id=$1',[sub.id]);await client.query('DELETE FROM attendance_submissions WHERE id=$1',[sub.id]);await client.query('COMMIT');res.json({success:true,message:'Attendance deleted'});}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}}));
+
 module.exports = router;
