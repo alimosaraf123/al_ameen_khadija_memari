@@ -1,6 +1,7 @@
 
 const express = require('express');
 const multer = require('multer');
+const sharp = require('sharp');
 const fs = require('fs/promises');
 const path = require('path');
 const { randomUUID } = require('crypto');
@@ -112,16 +113,26 @@ function createTransferRouter(pool, photoDirectory = path.join(__dirname, '../..
         const key = registration.toLowerCase();
         if (seen.has(key)) throw new Error('Duplicate photo for this registration number');
         seen.add(key);
-        const extension = photoExtension(file.buffer);
-        const match = await pool.query('SELECT id FROM students WHERE lower(registration_no)=lower($1)', [registration]);
+        photoExtension(file.buffer);
+        const match = await pool.query('SELECT id,photo_url FROM students WHERE lower(registration_no)=lower($1)', [registration]);
         if (match.rows.length !== 1) throw new Error(match.rows.length ? 'Multiple students match this registration number' : 'Registration number not found');
-        const filename = randomUUID() + extension;
+        const compressed = await sharp(file.buffer, { failOn: 'error' })
+          .rotate()
+          .resize({ width: 800, height: 800, fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 78, effort: 4 })
+          .toBuffer();
+        const filename = randomUUID() + '.webp';
         diskPath = path.join(photoDirectory, filename);
-        await fs.writeFile(diskPath, file.buffer, { flag: 'wx' });
+        await fs.writeFile(diskPath, compressed, { flag: 'wx' });
         const photoUrl = '/uploads/student-photos/' + filename;
         const result = await pool.query('UPDATE students SET photo_url=$1, updated_at=NOW() WHERE id=$2 RETURNING id', [photoUrl, match.rows[0].id]);
         if (!result.rowCount) throw new Error('Student no longer exists');
-        results.push({ file: file.originalname, registration_no: registration, success: true });
+        const oldUrl = String(match.rows[0].photo_url || '');
+        if (oldUrl.startsWith('/uploads/student-photos/')) {
+          const oldPath = path.resolve(photoDirectory, path.basename(oldUrl));
+          if (oldPath !== diskPath && path.dirname(oldPath) === path.resolve(photoDirectory)) await fs.unlink(oldPath).catch(() => {});
+        }
+        results.push({ file: file.originalname, registration_no: registration, success: true, original_bytes: file.size, compressed_bytes: compressed.length });
       } catch (error) {
         if (diskPath) await fs.unlink(diskPath).catch(() => {});
         results.push({ file: file.originalname, success: false, message: error.message });
