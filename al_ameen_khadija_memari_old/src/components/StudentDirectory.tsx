@@ -5,16 +5,19 @@ import { STUDENT_CLASSES, isVisibleStudentClass } from '../lib/studentClasses';
 import { filterStudents, sessionYears, normalizeStudentClass } from '../lib/studentDirectory';
 
 type Option = { value: string; label: string };
-export function Select({ label, value, options, onChange }: { label: string; value: string; options: Option[]; onChange: (value: string) => void }) {
+export function Select({ label, value, options, onChange, searchable=false }: { label: string; value: string; options: Option[]; onChange: (value: string) => void; searchable?: boolean }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const visibleOptions = searchable && query ? options.filter(option => option.label.toLowerCase().includes(query.toLowerCase())) : options;
   return <>
-    <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${label}: ${options.find(o => o.value === value)?.label || value}`} onPress={() => setOpen(true)} style={s.select}>
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${label}: ${options.find(o => o.value === value)?.label || value}`} onPress={() => { setQuery(''); setOpen(true); }} style={s.select}>
       <Text style={s.selectText}>{options.find(o => o.value === value)?.label || value}  ▾</Text>
     </TouchableOpacity>
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
       <View style={s.overlay}><Pressable accessibilityRole="button" accessibilityLabel="Close dropdown" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} onPress={() => setOpen(false)} /><View style={s.selectPanel}>
         <Text style={s.panelTitle}>{label}</Text>
-        <ScrollView>{options.map(option => <TouchableOpacity key={option.value} accessibilityRole="button" accessibilityState={{ selected: value === option.value }} style={[s.option, value === option.value && s.selected]} onPress={() => { onChange(option.value); setOpen(false); }}>
+        {searchable && <TextInput autoFocus value={query} onChangeText={setQuery} placeholder="Type teacher name..." style={s.search} />}
+        <ScrollView keyboardShouldPersistTaps="handled">{visibleOptions.map(option => <TouchableOpacity key={option.value} accessibilityRole="button" accessibilityState={{ selected: value === option.value }} style={[s.option, value === option.value && s.selected]} onPress={() => { onChange(option.value); setOpen(false); }}>
           <Text>{option.label}{value === option.value ? '  ✓' : ''}</Text>
         </TouchableOpacity>)}</ScrollView>
 

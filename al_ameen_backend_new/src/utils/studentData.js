@@ -129,6 +129,11 @@ function normalizeValue(field, value) {
 
   const text = String(value).trim();
 
+  if (field === 'class_name') {
+    const canonical = { vi: 'VI', vii: 'VII', viii: 'VIII' };
+    return canonical[text.toLowerCase()] || (text === '' ? null : text);
+  }
+
   return text === '' ? null : text;
 }
 
