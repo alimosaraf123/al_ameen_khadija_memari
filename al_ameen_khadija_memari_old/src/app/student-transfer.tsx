@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -58,7 +59,9 @@ export default function StudentTransfer() {
       setMessage('Excel download started.');
     } else {
       const token = await getToken();
-      const target = FileSystem.cacheDirectory + Date.now() + '-' + name;
+      const downloadDirectory = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+      if (!downloadDirectory) throw new Error('A writable download folder is unavailable on this device.');
+      const target = downloadDirectory + Date.now() + '-' + name;
       const result = await FileSystem.downloadAsync(API_BASE + '/api/student-transfer' + endpoint, target, { headers: { Authorization: 'Bearer ' + token } });
       if (result.status !== 200) { await FileSystem.deleteAsync(target, { idempotent: true }); throw new Error('Download failed. Please sign in again or retry.'); }
       if (!await Sharing.isAvailableAsync()) throw new Error('File sharing is unavailable on this device.');
@@ -117,6 +120,7 @@ export default function StudentTransfer() {
 
   return <SafeAreaView style={s.page}><ScrollView contentContainerStyle={s.content}>
     <AcademyHeader />
+    <TouchableOpacity accessibilityRole="button" onPress={() => router.replace('/students')} style={s.backButton}><Text style={s.backText}>← Back to Students</Text></TouchableOpacity>
     <Text style={s.title}>Student Excel & Bulk Photos</Text>
     {!!busy && <View style={s.notice}><ActivityIndicator /><Text>{busy}</Text></View>}
     {!!error && <Text accessibilityRole="alert" style={s.error}>{error}</Text>}
@@ -148,6 +152,8 @@ export default function StudentTransfer() {
 }
 const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: '#f3f6f9' }, content: { padding: 16, paddingBottom: 60, width: '100%', maxWidth: 960, alignSelf: 'center' },
+  backButton: { alignSelf: 'flex-start', backgroundColor: '#e2e8f0', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, marginBottom: 12 },
+  backText: { color: '#163451', fontWeight: '700' },
   title: { fontSize: 23, fontWeight: '800', color: '#163451', marginBottom: 18 }, card: { backgroundColor: '#fff', padding: 18, borderRadius: 14, marginBottom: 16, borderWidth: 1, borderColor: '#dde5ed' },
   heading: { fontSize: 18, fontWeight: '700', marginBottom: 10 }, help: { color: '#475569', lineHeight: 23, marginBottom: 14 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, button: { padding: 14, minHeight: 46, backgroundColor: '#1565c0', borderRadius: 8, marginVertical: 6 }, buttonText: { color: '#fff', textAlign: 'center', fontWeight: '700' }, disabled: { opacity: 0.45 },

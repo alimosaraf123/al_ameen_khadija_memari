@@ -1,11 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
 import AcademyHeader from '../components/AcademyHeader';
-import { API_BASE } from '../lib/api';
-import { getToken } from '../lib/auth';
 import {
   ScrollView,
   Text,
@@ -166,18 +160,6 @@ const asText = (value: any) =>
 const asDate = (value: any) =>
   value ? String(value).slice(0, 10) : '';
 
-type TransferAsset = DocumentPicker.DocumentPickerAsset;
-const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-async function appendUploadFile(form: FormData, field: string, file: TransferAsset) {
-  if (Platform.OS === 'web') { const blob = file.file || await (await fetch(file.uri)).blob(); form.append(field, blob, file.name); }
-  else form.append(field, { uri: file.uri, name: file.name, type: file.mimeType || 'application/octet-stream' } as any);
-}
-async function transferRequest(path: string, body?: FormData) {
-  const token = await getToken();
-  const response = await fetch(`${API_BASE}/api/student-transfer${path}`, { method: body ? 'POST' : 'GET', headers: { Authorization: `Bearer ${token}` }, ...(body ? { body } : {}) });
-  if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.message || `Request failed (${response.status})`); }
-  return response;
-}
 export default function Students() {
   const [students, setStudents] = useState<any[]>([]);
   const [rooms, setRooms] = useState<any[]>([]);
@@ -187,13 +169,7 @@ export default function Students() {
   const [screen, setScreen] = useState<'details' | 'entry'>('details');
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState('');
-  const [transferBusy, setTransferBusy] = useState('');
-  const [transferMessage, setTransferMessage] = useState('');
-  const [transferError, setTransferError] = useState('');
-  const [excelFile, setExcelFile] = useState<TransferAsset | null>(null);
-  const [excelPreview, setExcelPreview] = useState<any>(null);
-  const [photoFiles, setPhotoFiles] = useState<TransferAsset[]>([]);
-  const [photoResults, setPhotoResults] = useState<any[]>([]);
+
 
   const [form, setForm] = useState<any>({ ...EMPTY_FORM });
   const [visitor1, setVisitor1] = useState<any>({ ...EMPTY_VISITOR });
@@ -235,57 +211,6 @@ export default function Students() {
     loadRooms();
   }, []);
 
-  const runTransfer = async (label: string, action: () => Promise<void>) => {
-    setTransferBusy(label); setTransferError(''); setTransferMessage('');
-    try { await action(); } catch (error: any) { setTransferError(error.message || 'Operation failed'); }
-    finally { setTransferBusy(''); }
-  };
-  const downloadStudentsExcel = (template: boolean) => runTransfer('Preparing Excel...', async () => {
-    const suffix = template ? '?template=true' : ''; const fileName = template ? 'student-template.xlsx' : 'students.xlsx';
-    if (Platform.OS === 'web') {
-      const response = await transferRequest('/excel' + suffix); const url = URL.createObjectURL(await response.blob());
-      const link = document.createElement('a'); link.href = url; link.download = fileName; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
-    } else {
-      const token = await getToken(); const target = (FileSystem.cacheDirectory || FileSystem.documentDirectory || "") + Date.now() + '-' + fileName;
-      const result = await FileSystem.downloadAsync(`${API_BASE}/api/student-transfer/excel${suffix}`, target, { headers: { Authorization: 'Bearer ' + token } });
-      if (result.status !== 200) throw new Error('Excel download failed. Please retry.');
-      if (!await Sharing.isAvailableAsync()) throw new Error('File sharing is unavailable on this device.');
-      await Sharing.shareAsync(result.uri, { mimeType: XLSX_MIME, UTI: 'org.openxmlformats.spreadsheetml.sheet' });
-    }
-    setTransferMessage(template ? 'Excel template downloaded.' : 'Student Excel downloaded.');
-  });
-  const chooseStudentsExcel = () => runTransfer('Checking Excel...', async () => {
-    const result = await DocumentPicker.getDocumentAsync({ type: [XLSX_MIME, 'application/octet-stream'], copyToCacheDirectory: true }); if (result.canceled) return;
-    const file = result.assets[0]; if (!/\.xlsx$/i.test(file.name)) throw new Error('Select an .xlsx Excel workbook.');
-    if (file.size && file.size > 10 * 1024 * 1024) throw new Error('Excel file must be under 10 MB.');
-    const form = new FormData(); await appendUploadFile(form, 'file', file); const preview = await (await transferRequest('/excel/preview', form)).json();
-    setExcelFile(file); setExcelPreview(preview);
-  });
-  const importStudentsExcel = () => runTransfer('Importing students...', async () => {
-    if (!excelFile || !excelPreview || excelPreview.errors.length) return;
-    const form = new FormData(); await appendUploadFile(form, 'file', excelFile); const result = await (await transferRequest('/excel/import', form)).json();
-    setTransferMessage(`Import complete: ${result.created} added, ${result.updated} updated.`); setExcelFile(null); setExcelPreview(null); await loadStudents();
-  });
-  const chooseStudentPhotos = () => runTransfer('Selecting photos...', async () => {
-    const result = await DocumentPicker.getDocumentAsync({ type: ['image/jpeg', 'image/png', 'image/webp'], multiple: true, copyToCacheDirectory: true }); if (result.canceled) return;
-    if (result.assets.length > 100) throw new Error('Select up to 100 photos at a time.'); const seen = new Set<string>();
-    for (const file of result.assets) {
-      if (!/\.(jpe?g|png|webp)$/i.test(file.name)) throw new Error(`${file.name}: use JPG, PNG or WebP.`);
-      if (file.size && file.size > 5 * 1024 * 1024) throw new Error(`${file.name}: photo exceeds 5 MB.`);
-      const registration = file.name.replace(/\.[^.]+$/, '').trim().toLowerCase(); if (!registration || seen.has(registration)) throw new Error(`Missing or duplicate registration number: ${file.name}`); seen.add(registration);
-    }
-    setPhotoFiles(result.assets); setPhotoResults([]);
-  });
-  const uploadStudentPhotos = () => runTransfer('Uploading photos...', async () => {
-    const results: any[] = []; setPhotoResults([]);
-    for (let start = 0; start < photoFiles.length; start += 10) {
-      const batch = photoFiles.slice(start, start + 10); setTransferBusy(`Uploading ${start + 1}-${Math.min(start + 10, photoFiles.length)} of ${photoFiles.length} photos...`);
-      const form = new FormData(); for (const file of batch) await appendUploadFile(form, 'photos', file);
-      const data = await (await transferRequest('/photos', form)).json(); results.push(...data.results); setPhotoResults([...results]);
-    }
-    const uploaded = results.filter(result => result.success).length; setTransferMessage(`${uploaded} photos uploaded; ${results.length - uploaded} failed.`); setPhotoFiles([]); await loadStudents();
-  });
-  const transferButton = (title: string, onPress: () => void, disabled = false) => <TouchableOpacity accessibilityRole="button" accessibilityState={{ disabled: !!transferBusy || disabled }} disabled={!!transferBusy || disabled} onPress={onPress} style={[styles.transferButton, (!!transferBusy || disabled) && styles.transferButtonDisabled]}><Text style={styles.transferButtonText}>{title}</Text></TouchableOpacity>;
   const clearForm = () => {
     setEditingId(null);
     setForm({ ...EMPTY_FORM });
@@ -607,29 +532,19 @@ export default function Students() {
           <H1>Students</H1>
           <Button title="Student Menu" onPress={() => setMenuOpen(true)} />
         </View>
-        <View style={styles.transferCard}>
-          <Text style={styles.transferTitle}>Student Data Excel</Text>
-          <Text style={styles.transferHelp}>Download student records or a template. Upload an Excel file to preview changes before importing.</Text>
-          <View style={styles.transferActions}>{transferButton('Download Students (.xlsx)', () => downloadStudentsExcel(false))}{transferButton('Download Template', () => downloadStudentsExcel(true))}{transferButton('Choose Excel & Preview', chooseStudentsExcel)}</View>
-          {excelPreview && <View style={styles.transferPreview}><Text style={styles.transferHelp}>{excelFile?.name}: {excelPreview.created} new, {excelPreview.updated} to update, {excelPreview.errors.length} errors</Text>{excelPreview.errors.map((item: any, index: number) => <Text key={index} style={styles.transferError}>Row {item.row || '�'}: {item.message}</Text>)}{transferButton(`Import ${excelPreview.total} Students`, importStudentsExcel, !!excelPreview.errors.length)}</View>}
-        </View>
-<View style={styles.transferCard}>
-          <Text style={styles.transferTitle}>Bulk Student Photos</Text>
-          <Text style={styles.transferHelp}>Name each JPG, PNG or WebP image with the student's registration number, such as 75276.jpg. Up to 100 photos can be selected; they upload in batches of 10.</Text>
-          {transferButton('Choose Photos', chooseStudentPhotos)}
-          {!!photoFiles.length && <><Text style={styles.transferHelp}>{photoFiles.length} selected: {photoFiles.map(file => file.name).join(', ')}</Text>{transferButton(`Upload ${photoFiles.length} Photos`, uploadStudentPhotos)}</>}
-          {photoResults.map((result, index) => <Text key={index} style={result.success ? styles.transferSuccess : styles.transferError}>{result.file}: {result.success ? 'Uploaded' : result.message}</Text>)}
-        </View>
-        {!!transferBusy && <View style={styles.transferNotice}><ActivityIndicator /><Text>{transferBusy}</Text></View>}
-        {!!transferError && <Text accessibilityRole="alert" style={styles.transferError}>{transferError}</Text>}
-        {!!transferMessage && <Text accessibilityRole="alert" style={styles.transferSuccess}>{transferMessage}</Text>}
         <StudentDirectory students={students} loading={listLoading} error={listError} onRefresh={loadStudents} onEdit={startEdit} onDeactivate={deleteStudent} />
       </ScrollView>
       <StudentMenu visible={menuOpen} onClose={() => setMenuOpen(false)} onSelect={key => {
         setMenuOpen(false);
         if (key === 'entry') { clearForm(); setScreen('entry'); }
+        if (key === 'details') setScreen('details');
         if (key === 'behavior') router.push('/behavior');
+        if (key === 'attendance') router.push('/attendance');
+        if (key === 'marks') router.push('/marks');
+        if (key === 'documents') router.push('/documents');
+        if (key === 'dues') router.push('/dues');
         if (key === 'passwords') router.push('/guardians');
+        if (key === 'data') router.push('/student-transfer');
       }} />
     </SafeAreaView>;
   }
@@ -641,6 +556,7 @@ export default function Students() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
+        <AcademyHeader />
         <Button title="← Back to Student Details" onPress={() => { clearForm(); setScreen('details'); }} />
         <H1>{editingId !== null ? 'Edit Student' : 'Student Entry'}</H1>
 
@@ -918,17 +834,6 @@ export default function Students() {
 }
 
 const styles = StyleSheet.create({
-  transferCard: { backgroundColor: '#fff', padding: 16, borderRadius: 12, marginBottom: 14, borderWidth: 1, borderColor: '#dce4eb' },
-  transferTitle: { fontSize: 17, fontWeight: '800', color: '#163451', marginBottom: 8 },
-  transferHelp: { color: '#475569', lineHeight: 21, marginBottom: 10 },
-  transferActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  transferButton: { paddingVertical: 11, paddingHorizontal: 14, minHeight: 42, backgroundColor: '#1565c0', borderRadius: 8, marginVertical: 4 },
-  transferButtonText: { color: '#fff', textAlign: 'center', fontWeight: '700' },
-  transferButtonDisabled: { opacity: 0.45 },
-  transferPreview: { backgroundColor: '#eff6ff', padding: 12, marginTop: 10, borderRadius: 9 },
-  transferNotice: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: '#dbeafe', marginBottom: 10 },
-  transferError: { color: '#b91c1c', marginVertical: 6, lineHeight: 20 },
-  transferSuccess: { color: '#166534', marginVertical: 6, lineHeight: 20 },
   container: {
     flex: 1,
     backgroundColor: '#f3f6f9',

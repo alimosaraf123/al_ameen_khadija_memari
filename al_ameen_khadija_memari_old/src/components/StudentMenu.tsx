@@ -3,10 +3,13 @@ import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'rea
 
 const options = [
   ['entry', 'Entry'], ['details', 'Details'], ['forms', 'Form & I-Card'], ['behavior', 'Behavior'],
+  ['attendance', 'Attendance'], ['marks', 'Marksheet'], ['documents', 'Documents'], ['dues', 'Dues'],
   ['promotion', 'Promotion'], ['verification', 'Verification'], ['passwords', 'Passwords'],
-  ['tc', 'T.C'], ['reactivation', 'Re-Activation Request'], ['transfer', 'Transfer'],
+  ['data', 'Excel & Bulk Photos'], ['tc', 'T.C'], ['reactivation', 'Re-Activation Request'], ['transfer', 'Transfer'],
 ];
-const enabled = new Set(['entry', 'details', 'behavior', 'passwords']);
+const enabled = new Set([
+  'entry', 'details', 'behavior', 'attendance', 'marks', 'documents', 'dues', 'passwords', 'data',
+]);
 
 export default function StudentMenu({ visible, onClose, onSelect }: { visible: boolean; onClose: () => void; onSelect: (key: string) => void }) {
   return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>

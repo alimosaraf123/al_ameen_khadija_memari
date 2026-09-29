@@ -89,7 +89,7 @@ function createTransferRouter(pool, photoDirectory = path.join(__dirname, '../..
       res.json({ success: true, ...summary, errors: [] });
     } catch (error) {
       await client.query('ROLLBACK');
-      let reason = 'Check this row�s values and database requirements.';
+      let reason = "Check this row's values and database requirements.";
       if (error.code === '22001') reason = `Value is too long${error.column ? ' for ' + error.column : ''}.`;
       else if (error.code === '23505') reason = 'Registration number already exists.';
       else if (error.code === '23503') reason = 'Room number or another linked record does not exist.';
