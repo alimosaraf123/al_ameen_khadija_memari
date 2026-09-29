@@ -63,7 +63,9 @@ router.post('/', auth, allow('super_admin','admin','teacher'), asyncHandler(asyn
     INSERT INTO room_problem_reports(room_id,problem_type,details,reported_by)
     VALUES($1,$2,$3,$4) RETURNING *
   `, [room.id, problemType, details || null, req.user.userId]);
-  res.status(201).json({ success: true, problem: result.rows[0] });
+  const notice=await pool.query(`INSERT INTO notices(title,notice_text,notice_type,published_by) VALUES('Room problem',$1,'urgent',$2) RETURNING id`,[`Room ${room.room_name}: ${problemType}${details ? ' - '+details : ''}`,req.user.userId]);
+  await pool.query(`INSERT INTO notice_targets(notice_id,target_type,target_value) VALUES($1,'role','admin')`,[notice.rows[0].id]);
+  res.status(201).json({ success: true, problem: result.rows[0], notification_sent:true });
 }));
 
 router.patch('/:id/status', auth, allow('super_admin','admin'), asyncHandler(async (req, res) => {

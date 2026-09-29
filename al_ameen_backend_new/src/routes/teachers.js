@@ -13,6 +13,8 @@ function firstNameLogin(name) {
     .replace(/[^a-z0-9]/g, '');
 }
 
+router.get('/me', auth, allow('teacher'), asyncHandler(async(req,res)=>{const result=await pool.query(`SELECT t.*,u.full_name,u.login_id FROM teachers t JOIN users u ON u.id=t.user_id WHERE t.user_id=$1 LIMIT 1`,[req.user.userId]);if(!result.rowCount)return res.status(404).json({success:false,message:'Teacher profile not found'});res.json({success:true,teacher:result.rows[0]});}));
+
 router.get('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res)=>{
   const result = await pool.query(`
     SELECT t.*, u.login_id, u.full_name, u.is_active AS user_active

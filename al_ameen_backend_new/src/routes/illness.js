@@ -41,7 +41,9 @@ router.post('/', auth, allow('super_admin','admin','teacher'), asyncHandler(asyn
     INSERT INTO illness_records(student_id,record_date,illness_details,action_taken,reported_by)
     VALUES($1,COALESCE($2,CURRENT_DATE),$3,$4,$5) RETURNING *
   `,[student.rows[0].id,req.body.record_date||null,details,req.body.action_taken||null,req.user.userId]);
-  res.status(201).json({success:true,record:result.rows[0]});
+  const notice=await pool.query(`INSERT INTO notices(title,notice_text,notice_type,published_by) VALUES('Student illness / problem',$1,'urgent',$2) RETURNING id`,[`Reg. ${registrationNo}: ${details}`,req.user.userId]);
+  await pool.query(`INSERT INTO notice_targets(notice_id,target_type,target_value) VALUES($1,'role','admin')`,[notice.rows[0].id]);
+  res.status(201).json({success:true,record:result.rows[0],notification_sent:true});
 }));
 
 module.exports = router;
