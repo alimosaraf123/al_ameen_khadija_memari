@@ -11,13 +11,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as DocumentPicker from 'expo-document-picker';
+import { File as ExpoFile } from 'expo-file-system';
+import { fetch as expoFetch } from 'expo/fetch';
 import { router } from 'expo-router';
 import StudentDirectory, { Select } from '../components/StudentDirectory';
 import { STUDENT_CLASSES, isVisibleStudentClass } from '../lib/studentClasses';
 import StudentMenu from '../components/StudentMenu';
 import { normalizeStudentClass } from '../lib/studentDirectory';
 
-import { api } from '../lib/api';
+import { api, API_BASE } from '../lib/api';
+import { getToken } from '../lib/auth';
 import {
   Field,
   Button,
@@ -25,6 +29,21 @@ import {
 } from '../components/ui';
 
 const StudentFormContext = React.createContext<any>(null);
+
+const STUDENT_DOCUMENT_TYPES = [
+  { key: 'birth_certificate', label: 'Date of Birth Certificate' },
+  { key: 'aadhaar', label: 'Aadhaar Card' },
+  { key: 'mp_admit', label: 'MP Admit' },
+  { key: 'mp_marksheet', label: 'MP Marksheet' },
+  { key: 'bank_passbook', label: 'Bank Passbook' },
+  { key: 'obc_certificate', label: 'OBC Certificate' },
+  { key: 'ph_certificate', label: 'PH Certificate' },
+  { key: 'xi_registration', label: 'XI Registration' },
+  { key: 'hs_admit', label: 'HS Admit' },
+  { key: 'hs_marksheet', label: 'HS Marksheet' },
+  { key: 'hs_certificate', label: 'HS Certificate' },
+  { key: 'admission_slip', label: 'Admission Slip' },
+];
 
 const LabeledField = ({
   label,
@@ -169,6 +188,8 @@ export default function Students() {
   const [screen, setScreen] = useState<'details' | 'entry'>('details');
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState('');
+  const [entryDocuments, setEntryDocuments] = useState<Record<string, any>>({});
+  const [saving, setSaving] = useState(false);
 
 
   const [form, setForm] = useState<any>({ ...EMPTY_FORM });
@@ -216,6 +237,75 @@ export default function Students() {
     setForm({ ...EMPTY_FORM });
     setVisitor1({ ...EMPTY_VISITOR });
     setVisitor2({ ...EMPTY_VISITOR });
+    setEntryDocuments({});
+  };
+
+  const chooseEntryDocument = async (documentType: string) => {
+    const picked = await DocumentPicker.getDocumentAsync({
+      type: ['image/*', 'application/pdf'],
+      multiple: false,
+      copyToCacheDirectory: true,
+    });
+    if (picked.canceled) return;
+    setEntryDocuments((old) => ({ ...old, [documentType]: picked.assets[0] }));
+  };
+
+  const appendEntryFile = async (fd: FormData, asset: any) => {
+    if (Platform.OS === 'web') {
+      if (asset.file) {
+        fd.append('file', asset.file, asset.name);
+        return;
+      }
+      const response = await fetch(asset.uri);
+      fd.append('file', await response.blob(), asset.name);
+      return;
+    }
+    const nativeFile = new ExpoFile(asset.uri);
+    fd.append('file', nativeFile as any);
+  };
+
+  const uploadEntryDocuments = async (studentId: number) => {
+    const selections = Object.entries(entryDocuments);
+    if (!selections.length) return 0;
+
+    const current = await api('/api/documents/student/' + studentId);
+    const existingDocuments = current.documents || [];
+    const token = await getToken();
+
+    for (const [documentType, asset] of selections) {
+      const selectedAsset: any = asset;
+      const definition = STUDENT_DOCUMENT_TYPES.find((item) => item.key === documentType);
+      const existing = existingDocuments.find((item: any) => item.document_type === documentType);
+      const fd = new FormData();
+      fd.append('document_title', definition?.label || selectedAsset.name);
+      if (!existing) {
+        fd.append('document_type', documentType);
+        fd.append('guardian_visible', 'true');
+        fd.append('guardian_download_allowed', 'true');
+      }
+      await appendEntryFile(fd, selectedAsset);
+
+      const url = existing
+        ? API_BASE + '/api/documents/' + existing.id + '/replace'
+        : API_BASE + '/api/documents/student/' + studentId;
+      const request = {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token },
+        body: fd,
+      };
+      const response = Platform.OS === 'web'
+        ? await fetch(url, request as any)
+        : await expoFetch(url, request as any);
+      if (!response.ok) {
+        let message = 'Document upload failed';
+        try {
+          const data: any = await response.json();
+          message = data.message || message;
+        } catch {}
+        throw new Error(message);
+      }
+    }
+    return selections.length;
   };
 
   const choice = (
@@ -235,6 +325,7 @@ export default function Students() {
   );
 
   const saveStudent = async () => {
+    if (saving) return;
     if (!form.registration_no.trim()) {
       Alert.alert('Required', 'Registration Number is required');
       return;
@@ -245,25 +336,19 @@ export default function Students() {
       return;
     }
 
-    const normalizedRegistration = form.registration_no
-      .trim()
-      .toLowerCase();
-
+    const normalizedRegistration = form.registration_no.trim().toLowerCase();
     const duplicateRegistration = students.some((student) =>
       student.id !== editingId &&
-      String(student.registration_no || '')
-        .trim()
-        .toLowerCase() === normalizedRegistration
+      String(student.registration_no || '').trim().toLowerCase() === normalizedRegistration
     );
 
     if (duplicateRegistration) {
-      Alert.alert(
-        'Duplicate Registration',
-        'This Registration Number already exists.'
-      );
+      Alert.alert('Duplicate Registration', 'This Registration Number already exists.');
       return;
     }
 
+    setSaving(true);
+    let studentSaved = false;
     try {
       const { room_number, ...studentFields } = form;
       const selectedRoom = rooms.find((room) => String(room.room_name) === String(room_number));
@@ -275,25 +360,42 @@ export default function Students() {
         visitor2,
       };
 
+      let studentId: number;
       if (editingId !== null) {
-        await api(`/api/students/${editingId}`, {
+        await api('/api/students/' + editingId, {
           method: 'PUT',
           body: JSON.stringify(body),
         });
-        Alert.alert('Success', 'Student updated successfully');
+        studentId = Number(editingId);
       } else {
-        await api('/api/students', {
+        const created = await api('/api/students', {
           method: 'POST',
           body: JSON.stringify(body),
         });
-        Alert.alert('Success', 'Student added successfully');
+        studentId = Number(created.student.id);
       }
+      studentSaved = true;
+
+      const uploaded = await uploadEntryDocuments(studentId);
+      Alert.alert(
+        'Success',
+        (editingId !== null ? 'Student updated successfully' : 'Student added successfully') +
+          (uploaded ? ' with ' + uploaded + ' document(s).' : '.')
+      );
 
       clearForm();
       setScreen('details');
       await loadStudents();
     } catch (e: any) {
-      Alert.alert('Error', e.message);
+      Alert.alert(
+        studentSaved ? 'Student saved' : 'Error',
+        studentSaved
+          ? 'Student data was saved, but document upload failed: ' + e.message
+          : e.message
+      );
+      if (studentSaved) await loadStudents();
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -807,6 +909,48 @@ export default function Students() {
         {renderVisitor(1, 'Visitor-1 Information', visitor1)}
         {renderVisitor(2, 'Visitor-2 Information', visitor2)}
 
+        <SectionTitle>Student Documents (Optional)</SectionTitle>
+        <Text style={styles.documentHint}>
+          Select an image or PDF. It will upload when the student is saved.
+        </Text>
+        <View style={styles.documentGrid}>
+          {STUDENT_DOCUMENT_TYPES.map((item) => {
+            const selected = entryDocuments[item.key];
+            return (
+              <View key={item.key} style={styles.documentRow}>
+                <View style={styles.documentTextArea}>
+                  <Text style={styles.documentLabel}>{item.label}</Text>
+                  <Text numberOfLines={1} style={styles.documentFileName}>
+                    {selected ? selected.name : 'No file selected'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.documentButton}
+                  onPress={() => chooseEntryDocument(item.key)}
+                  disabled={saving}
+                >
+                  <Text style={styles.documentButtonText}>
+                    {selected ? 'Change' : 'Choose'}
+                  </Text>
+                </TouchableOpacity>
+                {selected && (
+                  <TouchableOpacity
+                    style={styles.documentRemove}
+                    onPress={() => setEntryDocuments((old) => {
+                      const next = { ...old };
+                      delete next[item.key];
+                      return next;
+                    })}
+                    disabled={saving}
+                  >
+                    <Text style={styles.documentRemoveText}>Remove</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          })}
+        </View>
+
         <View style={styles.saveArea}>
           <Button
             title={
@@ -815,7 +959,11 @@ export default function Students() {
                 : 'Add Student'
             }
             onPress={saveStudent}
+            disabled={saving}
           />
+          {saving && (
+            <Text style={styles.savingText}>Saving student and documents...</Text>
+          )}
 
           {editingId !== null && (
             <TouchableOpacity
@@ -963,6 +1111,75 @@ const styles = StyleSheet.create({
 
   saveArea: {
     marginTop: 24,
+  },
+
+  documentHint: {
+    color: '#546e7a',
+    marginBottom: 10,
+  },
+
+  documentGrid: {
+    gap: 8,
+  },
+
+  documentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#d7e0e7',
+    borderRadius: 9,
+    padding: 10,
+    backgroundColor: '#fff',
+  },
+
+  documentTextArea: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  documentLabel: {
+    fontWeight: '700',
+    color: '#263238',
+  },
+
+  documentFileName: {
+    color: '#607d8b',
+    fontSize: 12,
+    marginTop: 3,
+  },
+
+  documentButton: {
+    backgroundColor: '#1565c0',
+    borderRadius: 7,
+    paddingVertical: 8,
+    paddingHorizontal: 11,
+  },
+
+  documentButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+
+  documentRemove: {
+    borderWidth: 1,
+    borderColor: '#c62828',
+    borderRadius: 7,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+  },
+
+  documentRemoveText: {
+    color: '#c62828',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+
+  savingText: {
+    textAlign: 'center',
+    color: '#1565c0',
+    fontWeight: '700',
+    marginTop: 8,
   },
 
   cancel: {
