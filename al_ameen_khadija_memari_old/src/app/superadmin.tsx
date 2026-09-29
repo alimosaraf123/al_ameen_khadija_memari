@@ -44,6 +44,8 @@ const menus: any[] = [
 
   ['Terminal Exam', '/terminal-exams'],
 
+  ['Published Results', '/class-results'],
+
   ['Room Problems', '/problems'],
 
   ['Routine', '/routines'],
