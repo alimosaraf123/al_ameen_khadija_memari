@@ -251,6 +251,10 @@ export default function Documents() {
   const [studentLoading, setStudentLoading] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [otherTitle, setOtherTitle] = useState('');
+  const [legacyEmail,setLegacyEmail]=useState('');
+  const [legacyPassword,setLegacyPassword]=useState('');
+  const [legacySession,setLegacySession]=useState(String(new Date().getFullYear()));
+  const [legacyBusy,setLegacyBusy]=useState(false);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [previewTitle, setPreviewTitle] = useState('');
   const [previewObjectUrl, setPreviewObjectUrl] =
@@ -1073,6 +1077,14 @@ export default function Documents() {
     </View>
   );
 
+  const importLegacyDocuments=async()=>{
+    if(!selectedStudent||!legacyEmail.trim()||!legacyPassword)return Alert.alert('Required','Enter the legacy Office login ID and password.');
+    setLegacyBusy(true);
+    try{
+      const d=await api('/api/documents/legacy-import',{method:'POST',body:JSON.stringify({email:legacyEmail.trim(),password:legacyPassword,session:legacySession,registration_no:selectedStudent.registration_no,class_name:String(selectedStudent.class_name||'').toLowerCase().replace(/.$/,'').replace(/s+/g,''),force_logout_all:true})});
+      setLegacyPassword('');await loadDocuments(selectedStudent.id);Alert.alert('Legacy Import',d.imported+' imported, '+d.skipped+' already present, '+d.missing+' not found.');
+    }catch(e:any){Alert.alert('Legacy Import',e.message);}finally{setLegacyBusy(false);}
+  };
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -1603,6 +1615,14 @@ export default function Documents() {
 
         {selectedStudent && (
           <>
+            <Card>
+              <Text style={styles.documentTypeTitle}>Import from Legacy Website</Text>
+              <Muted>Documents are matched by registration number. Password is used once and is not saved.</Muted>
+              <Field placeholder="Legacy login ID" value={legacyEmail} onChangeText={setLegacyEmail} autoCapitalize="none" />
+              <Field placeholder="Legacy password" value={legacyPassword} onChangeText={setLegacyPassword} secureTextEntry />
+              <Field placeholder="Legacy session year" value={legacySession} onChangeText={setLegacySession} keyboardType="numeric" />
+              <Button title={legacyBusy?'Importing...':'Import Available Documents'} onPress={importLegacyDocuments} />
+            </Card>
             <Text style={styles.sectionTitle}>
               Documents
             </Text>
