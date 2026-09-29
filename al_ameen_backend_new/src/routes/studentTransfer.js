@@ -20,11 +20,11 @@ function createTransferRouter(pool, photoDirectory = path.join(__dirname, '../..
 
   router.get('/excel', asyncHandler(async (req, res) => {
     const template = req.query.template === 'true';
-    const students = template ? [] : (await pool.query('SELECT * FROM students ORDER BY registration_no')).rows;
+    const students = template ? [] : (await pool.query('SELECT s.*, r.room_name FROM students s LEFT JOIN rooms r ON r.id=s.room_id ORDER BY s.registration_no')).rows;
     const workbook = await makeWorkbook(students);
-    const rooms = await pool.query('SELECT id, room_name FROM rooms ORDER BY id');
+    const rooms = await pool.query('SELECT room_name FROM rooms ORDER BY room_name');
     const sheet = workbook.addWorksheet('Rooms');
-    sheet.columns = [{ header: 'room_id', key: 'id', width: 15 }, { header: 'room_name', key: 'room_name', width: 35 }];
+    sheet.columns = [{ header: 'room_number', key: 'room_name', width: 25 }];
     sheet.addRows(rooms.rows);
     const buffer = await workbook.xlsx.writeBuffer();
     res.set('Cache-Control', 'no-store');
@@ -54,18 +54,17 @@ function createTransferRouter(pool, photoDirectory = path.join(__dirname, '../..
       if (map.has(key)) parsed.errors.push({ message: 'Multiple existing students match registration ' + student.registration_no });
       map.set(key, student);
     }
-    const rooms = await pool.query('SELECT id, room_name FROM rooms ORDER BY id');
-    const roomById = new Map(rooms.rows.map(room => [String(room.id).toLowerCase(), String(room.id)]));
-    const roomByName = new Map(rooms.rows.map(room => [String(room.room_name).trim().toLowerCase(), String(room.id)]));
-    const roomByNumber = new Map(rooms.rows.map(room => { const match = String(room.room_name).trim().match(/^room\s+(.+)$/i); return match ? [match[1].trim().toLowerCase(), String(room.id)] : null; }).filter(Boolean));
-    const roomChoices = rooms.rows.map(room => `${room.id}: ${room.room_name}`).join(', ');
+    const rooms = await pool.query('SELECT id, room_name FROM rooms ORDER BY room_name');
+    const roomByNumber = new Map(rooms.rows.map(room => [String(room.room_name).trim().toLowerCase(), String(room.id)]));
+    const roomByLabel = new Map(rooms.rows.map(room => { const match = String(room.room_name).trim().match(/^room\s+(.+)$/i); return match ? [match[1].trim().toLowerCase(), String(room.id)] : null; }).filter(Boolean));
+    const roomChoices = rooms.rows.map(room => room.room_name).join(', ');
     for (const row of parsed.rows) {
-      const suppliedRoom = row.data.room_id;
+      const suppliedRoom = row.data.room_number;
       if (suppliedRoom === undefined || suppliedRoom === null || suppliedRoom === '') continue;
       const text = String(suppliedRoom).trim().toLowerCase();
-      const matchedId = roomById.get(text) || roomByName.get(text) || roomByNumber.get(text);
-      if (matchedId) row.data.room_id = Number(matchedId);
-      else parsed.errors.push({ row: row.row, message: `Room "${suppliedRoom}" was not found. Use a room ID or exact room name from the Rooms sheet, or leave room_id blank. Available rooms: ${roomChoices || 'none configured'}` });
+      const matchedId = roomByNumber.get(text) || roomByLabel.get(text);
+      if (matchedId) { row.data.room_id = Number(matchedId); delete row.data.room_number; }
+      else parsed.errors.push({ row: row.row, message: 'Room number "' + suppliedRoom + '" was not found. Choose a room number from the Rooms sheet, or leave room_number blank. Available room numbers: ' + (roomChoices || 'none configured') });
     }
     const summary = { total: parsed.rows.length, created: parsed.rows.filter(row => !map.has(row.data.registration_no.toLowerCase())).length, updated: parsed.rows.filter(row => map.has(row.data.registration_no.toLowerCase())).length };
     if (req.params.action === 'preview') return res.json({ success: true, ...summary, errors: parsed.errors });
@@ -90,10 +89,10 @@ function createTransferRouter(pool, photoDirectory = path.join(__dirname, '../..
       res.json({ success: true, ...summary, errors: [] });
     } catch (error) {
       await client.query('ROLLBACK');
-      let reason = 'Check this row’s values and database requirements.';
+      let reason = 'Check this rowï¿½s values and database requirements.';
       if (error.code === '22001') reason = `Value is too long${error.column ? ' for ' + error.column : ''}.`;
       else if (error.code === '23505') reason = 'Registration number already exists.';
-      else if (error.code === '23503') reason = 'Room ID or another linked record does not exist.';
+      else if (error.code === '23503') reason = 'Room number or another linked record does not exist.';
       else if (error.code === '23502') reason = `Required field${error.column ? ' ' + error.column : ''} is missing.`;
       else if (error.code === '22P02') reason = `Invalid value format${error.column ? ' for ' + error.column : ''}.`;
       else if (error.code === '23514') reason = `Value is not allowed${error.constraint ? ' (' + error.constraint + ')' : ''}.`;

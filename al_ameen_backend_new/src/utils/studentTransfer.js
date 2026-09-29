@@ -4,6 +4,7 @@ const path = require('path');
 const { studentFields, numericFields, booleanFields, prepareBody } = require('./studentData');
 const MAX_ROWS = 2000;
 const dateFields = new Set(['date_of_birth', 'admission_date']);
+const excelFields = studentFields.map(field => field === 'room_id' ? 'room_number' : field);
 
 function dateText(date) {
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
@@ -34,7 +35,7 @@ function cleanValue(field, value) {
     if (['false', 'no', '0'].includes(text.toLowerCase())) return false;
     throw new Error(field + ': use Yes/No or True/False');
   }
-  if (field === 'room_id') return text;
+  if (field === 'room_number') return text;
   if (numericFields.has(field)) {
     const number = Number(text);
     if (!Number.isFinite(number) || number < 0) throw new Error(field + ': invalid number');
@@ -60,7 +61,7 @@ async function parseWorkbook(buffer) {
   const seenHeaders = new Set();
   sheet.getRow(1).eachCell((cell, col) => {
     const header = String(cellValue(cell)).trim().toLowerCase().replace(/\s+/g, '_');
-    if (!studentFields.includes(header)) throw new Error('Unknown column: ' + header + '. Use the downloaded template.');
+    if (!excelFields.includes(header)) throw new Error('Unknown column: ' + header + '. Use the downloaded template with room_number.');
     if (seenHeaders.has(header)) throw new Error('Duplicate column: ' + header);
     seenHeaders.add(header); headers.push({ field: header, col });
   });
@@ -91,11 +92,11 @@ async function makeWorkbook(students = []) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Al-Ameen Mission Academy Memari';
   const sheet = workbook.addWorksheet('Students', { views: [{ state: 'frozen', ySplit: 1 }] });
-  sheet.columns = studentFields.map(key => ({ header: key, key, width: Math.max(18, key.length + 2), style: { numFmt: '@' } }));
+  sheet.columns = excelFields.map(key => ({ header: key, key, width: Math.max(18, key.length + 2), style: { numFmt: '@' } }));
   for (const student of students) {
     const row = {};
-    for (const field of studentFields) {
-      const value = student[field];
+    for (const field of excelFields) {
+      const value = field === 'room_number' ? (student.room_name ?? student.room_number) : student[field];
       row[field] = value == null ? '' : value instanceof Date ? dateText(value) : typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value);
     }
     sheet.addRow(row);
@@ -112,7 +113,7 @@ async function makeWorkbook(students = []) {
     'New registration numbers create students. They are Active unless is_active is No.',
     'Keep registration numbers, phone numbers, Aadhaar and bank account numbers formatted as Text to preserve leading zeroes.',
     'Dates: YYYY-MM-DD. Boolean fields: Yes/No. student_type: hostel or day_scholar.',
-    'room_id must be an existing room ID. The Rooms sheet lists available room IDs.',
+    'Enter the room number in room_number. The Rooms sheet lists the available room numbers.',
     'Photo upload is separate: name each photo with its registration number, e.g. 75276.jpg.',
     'This workbook contains student records; visitor records, marks, dues and attendance are managed separately.',
   ].forEach(text => help.addRow({ text }));

@@ -1127,7 +1127,7 @@ router.get(
 
             s.roll_no,
 
-            s.room_id,
+            r.room_name AS room_number,
 
             s.photo_url
 
@@ -1136,6 +1136,8 @@ router.get(
           JOIN student_guardians sg
             ON sg.student_id =
                s.id
+
+          LEFT JOIN rooms r ON r.id=s.room_id
 
           WHERE
             sg.guardian_id=$1
@@ -1234,27 +1236,28 @@ router.get(
           pool.query(
             `
             SELECT
-              id,
-              registration_no,
-              admission_no,
-              student_name,
-              class_name,
-              roll_no,
-              room_id,
-              date_of_birth,
-              gender,
-              father_name,
-              mother_name,
-              guardian_name,
-              guardian_mobile,
-              admission_date,
-              student_type,
-              photo_url
+              s.id,
+              s.registration_no,
+              s.admission_no,
+              s.student_name,
+              s.class_name,
+              s.roll_no,
+              r.room_name AS room_number,
+              s.date_of_birth,
+              s.gender,
+              s.father_name,
+              s.mother_name,
+              s.guardian_name,
+              s.guardian_mobile,
+              s.admission_date,
+              s.student_type,
+              s.photo_url
 
-            FROM students
+            FROM students s
+            LEFT JOIN rooms r ON r.id=s.room_id
 
             WHERE
-              id=$1
+              s.id=$1
             `,
             [
               studentId
@@ -2344,7 +2347,7 @@ router.get(
 
           s.roll_no,
 
-          s.room_id,
+          r.room_name AS room_number,
 
           s.guardian_name,
 
@@ -2406,6 +2409,9 @@ router.get(
         LEFT JOIN student_deposit_transactions t
           ON t.student_id=s.id
 
+        LEFT JOIN rooms r
+          ON r.id=s.room_id
+
         WHERE
           s.is_active=TRUE
 
@@ -2421,7 +2427,7 @@ router.get(
 
           s.roll_no,
 
-          s.room_id,
+          r.room_name,
 
           s.guardian_name,
 
@@ -2655,10 +2661,11 @@ router.get(
     const studentResult =
       await pool.query(
         `
-        SELECT *
-        FROM students
-        WHERE id=$1
-          AND is_active=TRUE
+        SELECT s.*, r.room_name AS room_number
+        FROM students s
+        LEFT JOIN rooms r ON r.id=s.room_id
+        WHERE s.id=$1
+          AND s.is_active=TRUE
         LIMIT 1
         `,
         [studentId]

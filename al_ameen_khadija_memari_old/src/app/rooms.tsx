@@ -45,7 +45,7 @@ export default function Rooms() {
 
   const saveRoom = async () => {
     if (!name.trim()) {
-      Alert.alert('Required', 'Please enter room name');
+      Alert.alert('Required', 'Please enter room number');
       return;
     }
 
@@ -140,7 +140,7 @@ export default function Rooms() {
         )}
 
         <Field
-          placeholder="Room name"
+          placeholder="Room number"
           value={name}
           onChangeText={setName}
         />

@@ -1143,8 +1143,7 @@ export default function Documents() {
                   label="Room No"
                   value={
                     selectedStudent.room_no ||
-                    selectedStudent.room_name ||
-                    selectedStudent.room_id
+                    selectedStudent.room_name
                   }
                 />
                 <InfoRow

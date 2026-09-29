@@ -77,7 +77,7 @@ const EMPTY_FORM: any = {
   student_name: '',
   class_name: '',
   roll_no: '',
-  room_id: null,
+  room_number: '',
 
   admission_date: '',
   session_from: '',
@@ -340,10 +340,12 @@ export default function Students() {
     }
 
     try {
+      const { room_number, ...studentFields } = form;
+      const selectedRoom = rooms.find((room) => String(room.room_name) === String(room_number));
       const body = {
-        ...form,
+        ...studentFields,
         registration_no: form.registration_no.trim(),
-        room_id: form.room_id || null,
+        room_id: selectedRoom?.id || null,
         visitor1,
         visitor2,
       };
@@ -377,8 +379,8 @@ export default function Students() {
       const next: any = { ...EMPTY_FORM };
 
       Object.keys(next).forEach((key) => {
-        if (key === 'room_id') {
-          next[key] = s[key] ? Number(s[key]) : null;
+        if (key === 'room_number') {
+          next[key] = s.room_name || '';
         } else if (key === 'is_handicapped' || key === 'is_orphan') {
           next[key] = !!s[key];
         } else if (key === 'date_of_birth' || key === 'admission_date') {
@@ -609,7 +611,7 @@ export default function Students() {
           <Text style={styles.transferTitle}>Student Data Excel</Text>
           <Text style={styles.transferHelp}>Download student records or a template. Upload an Excel file to preview changes before importing.</Text>
           <View style={styles.transferActions}>{transferButton('Download Students (.xlsx)', () => downloadStudentsExcel(false))}{transferButton('Download Template', () => downloadStudentsExcel(true))}{transferButton('Choose Excel & Preview', chooseStudentsExcel)}</View>
-          {excelPreview && <View style={styles.transferPreview}><Text style={styles.transferHelp}>{excelFile?.name}: {excelPreview.created} new, {excelPreview.updated} to update, {excelPreview.errors.length} errors</Text>{excelPreview.errors.map((item: any, index: number) => <Text key={index} style={styles.transferError}>Row {item.row || '—'}: {item.message}</Text>)}{transferButton(`Import ${excelPreview.total} Students`, importStudentsExcel, !!excelPreview.errors.length)}</View>}
+          {excelPreview && <View style={styles.transferPreview}><Text style={styles.transferHelp}>{excelFile?.name}: {excelPreview.created} new, {excelPreview.updated} to update, {excelPreview.errors.length} errors</Text>{excelPreview.errors.map((item: any, index: number) => <Text key={index} style={styles.transferError}>Row {item.row || 'ï¿½'}: {item.message}</Text>)}{transferButton(`Import ${excelPreview.total} Students`, importStudentsExcel, !!excelPreview.errors.length)}</View>}
         </View>
 <View style={styles.transferCard}>
           <Text style={styles.transferTitle}>Bulk Student Photos</Text>
@@ -681,8 +683,8 @@ export default function Students() {
           {rooms.map((room) =>
             choice(
               room.room_name,
-              form.room_id === Number(room.id),
-              () => update('room_id', Number(room.id))
+              form.room_number === room.room_name,
+              () => update('room_number', room.room_name)
             )
           )}
         </View>

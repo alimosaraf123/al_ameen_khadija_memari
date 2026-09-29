@@ -26,7 +26,7 @@ export function Select({ label, value, options, onChange }: { label: string; val
 const columns: [string, string, number][] = [
   ['serial', 'S.L', 45], ['photo', 'Photo', 66], ['registration_no', 'Reg.', 95],
   ['student_name', 'Name', 185], ['class_name', 'Class', 65], ['monthly_fees', 'Fees', 85],
-  ['mobile_number', 'Mobile', 125], ['whatsapp_number', 'WhatsApp', 125], ['room_name', 'Room', 105], ['is_active', 'Status', 90], ['action', 'Action', 155],
+  ['mobile_number', 'Mobile', 125], ['whatsapp_number', 'WhatsApp', 125], ['room_name', 'Room No.', 105], ['is_active', 'Status', 90], ['action', 'Action', 155],
 ];
 
 export default function StudentDirectory({ students, loading, error, onEdit, onRefresh, onDeactivate }: {
@@ -113,7 +113,8 @@ function Photo({ student }: { student: any }) {
 }
 
 function RecordDetails({ record }: { record: any }) {
-  return <>{Object.entries(record).filter(([key, value]) => !['id', 'photo_url', 'created_at', 'updated_at', 'user_id', 'visitor1', 'visitor2'].includes(key) && value !== null && value !== '').map(([key, value]) => <View key={key} style={s.detailRow}><Text style={s.detailLabel}>{key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</Text><Text selectable style={{ flex: 1 }}>{typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}</Text></View>)}
+  return <>{Object.entries(record).filter(([key, value]) => !['id', 'room_id', 'room_name', 'photo_url', 'created_at', 'updated_at', 'user_id', 'visitor1', 'visitor2'].includes(key) && value !== null && value !== '').map(([key, value]) => <View key={key} style={s.detailRow}><Text style={s.detailLabel}>{key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</Text><Text selectable style={{ flex: 1 }}>{typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}</Text></View>)}
+    {(record.room_number || record.room_name) && <View style={s.detailRow}><Text style={s.detailLabel}>Room Number</Text><Text selectable style={{ flex: 1 }}>{record.room_number || record.room_name}</Text></View>}
     {['visitor1', 'visitor2'].map((key, index) => record[key] && <View key={key}><Text style={s.panelTitle}>Visitor {index + 1}</Text><RecordDetails record={record[key]} /></View>)}
   </>;
 }

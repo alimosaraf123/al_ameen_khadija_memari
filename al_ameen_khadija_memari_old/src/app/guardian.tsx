@@ -351,8 +351,8 @@ export default function Guardian() {
           <Text style={styles.studentMeta}>
             Class: {s?.class_name || '-'}
           </Text>
-          {!!s?.room_id && (
-            <Text style={styles.studentMeta}>Room: {s.room_id}</Text>
+          {!!s?.room_number && (
+            <Text style={styles.studentMeta}>Room: {s.room_number}</Text>
           )}
         </View>
       </View>
@@ -618,7 +618,7 @@ export default function Guardian() {
               <Info label="Session From" value={s.session_from} />
               <Info label="Session To" value={s.session_to} />
               <Info label="Student Type" value={s.student_type} />
-              <Info label="Room" value={s.room_id} />
+              <Info label="Room Number" value={s.room_number} />
               <Info label="Monthly Fees" value={s.monthly_fees} />
               <Info label="School" value={s.admitted_school_name} />
               <Info label="Stream" value={s.stream} />
