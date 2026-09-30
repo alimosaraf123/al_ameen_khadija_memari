@@ -26,7 +26,7 @@ router.get('/weekly-tests', auth, allow('super_admin','admin','teacher'), asyncH
   }
   const result = await pool.query(`
     SELECT b.id,b.exam_id,b.subject_id,b.class_name,b.full_marks,b.locked,b.submitted_at,b.updated_at,
-           e.exam_name,e.exam_date,e.is_published,su.subject_name,u.full_name AS entered_by_name,
+           e.exam_name,e.exam_date,e.session_name,e.is_published,su.subject_name,u.full_name AS entered_by_name,
            COUNT(sm.id)::int AS student_count
     FROM mark_entry_batches b
     JOIN exams e ON e.id=b.exam_id
@@ -43,7 +43,7 @@ router.get('/weekly-tests', auth, allow('super_admin','admin','teacher'), asyncH
 
 router.get('/weekly-tests/:id', auth, allow('super_admin','admin','teacher'), asyncHandler(async(req,res)=>{
   const batch = await pool.query(`
-    SELECT b.*,e.exam_name,e.exam_date,e.is_published,su.subject_name,u.full_name AS entered_by_name
+    SELECT b.*,e.exam_name,e.exam_date,e.session_name,e.is_published,su.subject_name,u.full_name AS entered_by_name
     FROM mark_entry_batches b
     JOIN exams e ON e.id=b.exam_id
     JOIN subjects su ON su.id=b.subject_id
@@ -124,7 +124,7 @@ router.patch('/weekly-tests/:id', auth, allow('super_admin','admin'), asyncHandl
     const existingIds = (await client.query('SELECT student_id FROM student_marks WHERE exam_id=$1 AND subject_id=$2',[batch.rows[0].exam_id,batch.rows[0].subject_id])).rows.map(row=>Number(row.student_id));
     const entryIds = entries.map(entry=>Number(entry.student_id));
     if(existingIds.length!==entryIds.length || !existingIds.every(id=>new Set(entryIds).has(id))){await client.query('ROLLBACK');return res.status(409).json({success:false,message:'Marks list does not match this test'});}
-    await client.query('UPDATE exams SET exam_name=$1,exam_date=$2 WHERE id=$3',[String(body.exam_name||'Weekly Test').trim(),examDate,batch.rows[0].exam_id]);
+    await client.query('UPDATE exams SET exam_name=$1,exam_date=$2,session_name=$3 WHERE id=$4',[String(body.exam_name||'Weekly Test').trim(),examDate,body.session_name||null,batch.rows[0].exam_id]);
     await client.query('UPDATE exam_subjects SET full_marks=$1,pass_marks=$2 WHERE exam_id=$3 AND subject_id=$4',[fullMarks,body.pass_marks||0,batch.rows[0].exam_id,batch.rows[0].subject_id]);
     for(const entry of entries){
       const mark = entry.obtained_marks === '' || entry.obtained_marks === null ? null : Number(entry.obtained_marks);
@@ -161,7 +161,7 @@ router.patch('/exams/:id/publish',auth,allow('super_admin','admin'),asyncHandler
 router.get('/exam/:examId/class/:className',auth,asyncHandler(async(req,res)=>{const r=await pool.query(`SELECT s.id student_id,s.registration_no,s.student_name,s.roll_no,s.class_name,su.subject_name,sm.obtained_marks,sm.grade,sm.verification_status FROM students s LEFT JOIN student_marks sm ON sm.student_id=s.id AND sm.exam_id=$1 LEFT JOIN subjects su ON su.id=sm.subject_id WHERE s.class_name=$2 ORDER BY s.roll_no,s.student_name,su.subject_name`,[req.params.examId,req.params.className]);res.json({success:true,rows:r.rows});}));
 
 router.get('/published-results',auth,allow('super_admin','admin','teacher','guardian'),asyncHandler(async(req,res)=>{const args=[],guard=req.user.role==='guardian';if(guard)args.push(req.user.userId);const r=await pool.query(`SELECT b.id,b.exam_id,b.class_name,b.full_marks,e.exam_name,e.exam_date,su.subject_name,COUNT(sm.id)::int student_count FROM mark_entry_batches b JOIN exams e ON e.id=b.exam_id JOIN subjects su ON su.id=b.subject_id LEFT JOIN student_marks sm ON sm.exam_id=b.exam_id AND sm.subject_id=b.subject_id WHERE e.is_published=TRUE ${guard?`AND EXISTS(SELECT 1 FROM guardian_profiles gp JOIN student_guardians gs ON gs.guardian_id=gp.id JOIN students st ON st.id=gs.student_id WHERE gp.user_id=$1 AND st.class_name=b.class_name)`:''} GROUP BY b.id,e.id,su.id ORDER BY e.exam_date DESC`,args);res.json({success:true,tests:r.rows});}));
-async function publishedBatch(req,res){const b=(await pool.query(`SELECT b.*,e.exam_name,e.exam_date,e.is_published,su.subject_name FROM mark_entry_batches b JOIN exams e ON e.id=b.exam_id JOIN subjects su ON su.id=b.subject_id WHERE b.id=$1`,[req.params.id])).rows[0];if(!b||!b.is_published)return res.status(404).json({success:false,message:'Published result not found'});if(req.user.role==='guardian'&&!(await pool.query(`SELECT 1 FROM guardian_profiles gp JOIN student_guardians gs ON gs.guardian_id=gp.id JOIN students s ON s.id=gs.student_id WHERE gp.user_id=$1 AND s.class_name=$2`,[req.user.userId,b.class_name])).rowCount)return res.status(403).json({success:false,message:'Result not available'});return b;}
+async function publishedBatch(req,res){const b=(await pool.query(`SELECT b.*,e.exam_name,e.exam_date,e.session_name,e.is_published,su.subject_name FROM mark_entry_batches b JOIN exams e ON e.id=b.exam_id JOIN subjects su ON su.id=b.subject_id WHERE b.id=$1`,[req.params.id])).rows[0];if(!b||!b.is_published)return res.status(404).json({success:false,message:'Published result not found'});if(req.user.role==='guardian'&&!(await pool.query(`SELECT 1 FROM guardian_profiles gp JOIN student_guardians gs ON gs.guardian_id=gp.id JOIN students s ON s.id=gs.student_id WHERE gp.user_id=$1 AND s.class_name=$2`,[req.user.userId,b.class_name])).rowCount)return res.status(403).json({success:false,message:'Result not available'});return b;}
 router.get('/published-results/:id',auth,allow('super_admin','admin','teacher','guardian'),asyncHandler(async(req,res)=>{const b=await publishedBatch(req,res);if(!b)return;const rows=(await pool.query(`SELECT s.registration_no,s.student_name,sm.obtained_marks FROM student_marks sm JOIN students s ON s.id=sm.student_id WHERE sm.exam_id=$1 AND sm.subject_id=$2 ORDER BY s.registration_no`,[b.exam_id,b.subject_id])).rows;res.json({success:true,test:b,students:rows});}));
 router.get('/published-results/:id/excel',auth,allow('super_admin','admin','teacher','guardian'),asyncHandler(async(req,res)=>{const b=await publishedBatch(req,res);if(!b)return;const rows=(await pool.query(`SELECT s.registration_no,s.student_name,sm.obtained_marks FROM student_marks sm JOIN students s ON s.id=sm.student_id WHERE sm.exam_id=$1 AND sm.subject_id=$2 ORDER BY s.registration_no`,[b.exam_id,b.subject_id])).rows,wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('Result');ws.addRow(['Sl','Reg.','Name',`${b.subject_name} | F.M.-${b.full_marks} | ${String(b.exam_date).slice(0,10)}`]);rows.forEach((x,i)=>ws.addRow([i+1,x.registration_no,x.student_name,x.obtained_marks===null?'B':Number(x.obtained_marks)]));ws.columns=[{width:7},{width:15},{width:32},{width:25}];ws.getRow(1).font={bold:true};ws.eachRow(row=>row.eachCell(c=>c.border={top:{style:'thin'},left:{style:'thin'},bottom:{style:'thin'},right:{style:'thin'}}));const out=await wb.xlsx.writeBuffer();res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');res.setHeader('Content-Disposition',`attachment; filename="class-result-${b.id}.xlsx"`);res.send(Buffer.from(out));}));
 

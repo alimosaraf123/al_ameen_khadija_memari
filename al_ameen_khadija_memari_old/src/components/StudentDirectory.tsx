@@ -16,7 +16,7 @@ export function Select({ label, value, options, onChange, searchable=false }: { 
   const visibleOptions = searchable && query ? options.filter(option => option.label.toLowerCase().includes(query.toLowerCase())) : options;
   return <>
     <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${label}: ${options.find(o => o.value === value)?.label || value}`} onPress={() => { setQuery(''); setOpen(true); }} style={s.select}>
-      <Text style={s.selectText}>{options.find(o => o.value === value)?.label || value}  v</Text>
+      <Text style={s.selectText}>{options.find(o => o.value === value)?.label || label}  ▼</Text>
     </TouchableOpacity>
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
       <View style={s.overlay}><Pressable accessibilityRole="button" accessibilityLabel="Close dropdown" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} onPress={() => setOpen(false)} /><View style={s.selectPanel}>

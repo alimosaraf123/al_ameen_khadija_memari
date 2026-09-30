@@ -1,0 +1,1 @@
+﻿export const SUBJECTS=['Arabic','Art','Beng','Bio','Chem','Comp','Eng','Eng-I','Eng-II','Geo','Hind','Hist','L.Sc','Math','P.Sc','Phy','Sci'];

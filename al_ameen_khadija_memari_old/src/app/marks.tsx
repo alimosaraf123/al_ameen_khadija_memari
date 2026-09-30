@@ -12,7 +12,8 @@ import { getToken, getUser } from '../lib/auth';
 import { STUDENT_CLASSES } from '../lib/studentClasses';
 
 function localDate() { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
-const blankForm={className:'',subjectName:'',fullMarks:'',examDate:localDate(),examName:'Weekly Test'};
+const blankForm={className:'',subjectName:'',fullMarks:'',examDate:localDate(),examName:'Weekly Test',sessionName:String(new Date().getFullYear())};
+const SESSION_OPTIONS=Array.from({length:8},(_,i)=>String(new Date().getFullYear()+1-i));
 
 export default function Marks() {
   const [form,setForm]=useState(blankForm);
@@ -50,7 +51,7 @@ export default function Marks() {
     if(unfinished) return Alert.alert('Marks Missing','Enter marks or select Absent for every student.');
     const invalid=students.some(student=>!student.absent&&(Number(student.obtained_marks)<0||Number(student.obtained_marks)>full));
     if(invalid) return Alert.alert('Invalid Marks',`Marks must be between 0 and ${full}.`);
-    const body={exam_name:form.examName.trim()||'Weekly Test',class_name:form.className,subject_name:form.subjectName.trim(),full_marks:full,exam_date:form.examDate,entries:students.map(student=>({student_id:student.id,obtained_marks:student.absent?null:Number(student.obtained_marks),remarks:student.absent?'Absent':null}))};
+    const body={exam_name:form.examName.trim()||'Weekly Test',class_name:form.className,subject_name:form.subjectName.trim(),full_marks:full,exam_date:form.examDate,session_name:form.sessionName,entries:students.map(student=>({student_id:student.id,obtained_marks:student.absent?null:Number(student.obtained_marks),remarks:student.absent?'Absent':null}))};
     setSaving(true);
     try{
       if(editingId){await api(`/api/marks/weekly-tests/${editingId}`,{method:'PATCH',body:JSON.stringify(body)});Alert.alert('Updated','Marks updated by Admin.');}
@@ -61,7 +62,7 @@ export default function Marks() {
 
   const openTest=async(id:number)=>{
     setLoading(true);
-    try{const data=await api(`/api/marks/weekly-tests/${id}`);setEditingId(id);setForm({className:data.test.class_name,subjectName:data.test.subject_name,fullMarks:String(data.test.full_marks),examDate:String(data.test.exam_date).slice(0,10),examName:data.test.exam_name||'Weekly Test'});setStudents((data.students||[]).map((student:any)=>({...student,id:student.student_id,absent:student.obtained_marks===null,obtained_marks:student.obtained_marks===null?'':String(student.obtained_marks)})));setLoaded(true);}
+    try{const data=await api(`/api/marks/weekly-tests/${id}`);setEditingId(id);setForm({className:data.test.class_name,subjectName:data.test.subject_name,fullMarks:String(data.test.full_marks),examDate:String(data.test.exam_date).slice(0,10),examName:data.test.exam_name||'Weekly Test',sessionName:data.test.session_name||String(new Date().getFullYear())});setStudents((data.students||[]).map((student:any)=>({...student,id:student.student_id,absent:student.obtained_marks===null,obtained_marks:student.obtained_marks===null?'':String(student.obtained_marks)})));setLoaded(true);}
     catch(error:any){Alert.alert('Error',error.message);}finally{setLoading(false);}
   };
   const newEntry=()=>{setEditingId(null);setForm({...blankForm,examDate:localDate()});setStudents([]);setLoaded(false);};
@@ -77,7 +78,7 @@ export default function Marks() {
     <View style={s.formCard}>
       {editingId&&<View style={[s.lockBox,canManage&&s.adminBox]}><Text style={s.lockText}>{canManage?'Admin editing enabled':'Submitted marks — View only'}</Text></View>}
       <View style={s.formGrid}>
-        <View style={s.fieldWrap}><Text style={s.label}>Class</Text><Select label="Class" value={form.className} onChange={value=>set('className',value)} options={[{value:'',label:'Select class'},...STUDENT_CLASSES.map(value=>({value,label:value}))]}/></View>
+        <View style={s.fieldWrap}><Text style={s.label}>Session</Text><Select label="Session" value={form.sessionName} onChange={value=>set('sessionName',value)} options={SESSION_OPTIONS.map(value=>({value,label:value}))}/></View><View style={s.fieldWrap}><Text style={s.label}>Class</Text><Select label="Class" value={form.className} onChange={value=>set('className',value)} options={[{value:'',label:'Select class'},...STUDENT_CLASSES.map(value=>({value,label:value}))]}/></View>
         <View style={s.fieldWrap}><Text style={s.label}>Subject</Text><Select label="Subject" value={form.subjectName} onChange={value=>set('subjectName',value)} options={[{value:'',label:'Select subject'},...subjects.map(item=>({value:String(item.subject_name),label:String(item.subject_name)}))]}/></View>
         <View style={s.fieldWrap}><Text style={s.label}>Full Marks</Text><Field editable={!lockedForTeacher} placeholder="Full marks" value={form.fullMarks} onChangeText={(value:string)=>set('fullMarks',value.replace(/[^0-9.]/g,''))} keyboardType="numeric" style={s.input}/></View>
         <View style={s.fieldWrap}><Text style={s.label}>Date / Month / Year</Text>{Platform.OS==='web'?React.createElement('input',{type:'date',value:form.examDate,disabled:lockedForTeacher,onChange:(event:any)=>set('examDate',event.target.value),style:{minHeight:42,border:'1px solid #ccd3da',borderRadius:10,padding:'0 12px',background:'#fff',fontSize:14}}):<><TouchableOpacity disabled={lockedForTeacher} onPress={()=>setShowDatePicker(true)} style={s.dateField}><Text>{form.examDate.split('-').reverse().join('/')}</Text></TouchableOpacity>{showDatePicker&&<DateTimePicker value={new Date(form.examDate+'T00:00:00')} mode="date" onChange={(_,selected)=>{setShowDatePicker(false);if(selected){const y=selected.getFullYear(),m=String(selected.getMonth()+1).padStart(2,'0'),d=String(selected.getDate()).padStart(2,'0');set('examDate',y+'-'+m+'-'+d);}}}/>}</>}</View>
