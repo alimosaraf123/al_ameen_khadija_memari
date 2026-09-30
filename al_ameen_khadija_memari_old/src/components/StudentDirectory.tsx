@@ -32,6 +32,8 @@ export function Select({ label, value, options, onChange, searchable=false }: { 
 }
 
 const DOCUMENT_SLOTS = [
+  ['father_photo','Father Photo'], ['mother_photo','Mother Photo'],
+  ['visitor1_photo','Visitor-1 Photo'], ['visitor2_photo','Visitor-2 Photo'],
   ['birth_certificate','Date Of Birth'], ['mp_admit','MP Admit'], ['mp_marksheet','MP Marksheet'],
   ['aadhaar','Aadhaar'], ['bank_passbook','Passbook'], ['obc_certificate','OBC'],
   ['ph_certificate','P.H. Certificate'], ['xi_registration','XI Registration'],

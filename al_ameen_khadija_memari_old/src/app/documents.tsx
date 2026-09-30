@@ -1626,6 +1626,35 @@ export default function Documents() {
               <Button title={legacyBusy?'Importing...':'Import Available Documents'} onPress={importLegacyDocuments} />
             </Card>
             <Text style={styles.sectionTitle}>
+              Family & Visitor Photos
+            </Text>
+            <Muted>Upload clear photos for ID cards and gate verification.</Muted>
+            <View style={styles.familyPhotoGrid}>
+              {DOCUMENT_TYPES
+                .filter((item) => ['father_photo', 'mother_photo', 'visitor1_photo', 'visitor2_photo'].includes(item.key))
+                .map((item) => {
+                  const doc = getDocumentByType(item.key);
+                  const personName = item.key === 'father_photo'
+                    ? selectedStudent.father_name
+                    : item.key === 'mother_photo'
+                    ? selectedStudent.mother_name
+                    : item.key === 'visitor1_photo'
+                    ? (visitor1?.visitor_name || selectedStudent.visitor1_name)
+                    : (visitor2?.visitor_name || selectedStudent.visitor2_name);
+                  return (
+                    <View key={item.key} style={styles.familyPhotoCard}>
+                      <Text style={styles.documentTypeTitle}>{item.label}</Text>
+                      <Text style={styles.photoPersonName}>{personName || 'Name not recorded'}</Text>
+                      {doc ? renderExistingDocument(doc) : <>
+                        <View style={styles.emptyPhoto}><Text style={styles.emptyPhotoText}>No photo</Text></View>
+                        <View style={styles.uploadButtonWrap}><Button title={busyKey === 'upload-' + item.key ? 'Uploading...' : 'Upload Photo'} onPress={() => uploadNew(item.key, item.label)} /></View>
+                      </>}
+                    </View>
+                  );
+                })}
+            </View>
+
+            <Text style={styles.sectionTitle}>
               Documents
             </Text>
 
@@ -1634,7 +1663,7 @@ export default function Documents() {
             )}
 
             {DOCUMENT_TYPES
-              .filter((item) => item.key !== 'other')
+              .filter((item) => item.key !== 'other' && !['father_photo', 'mother_photo', 'visitor1_photo', 'visitor2_photo'].includes(item.key))
               .map((item) => {
                 const doc =
                   getDocumentByType(item.key);
@@ -1984,6 +2013,45 @@ const styles = StyleSheet.create({
 
   toggleActiveText: {
     color: '#1565c0',
+  },
+
+  familyPhotoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 12,
+    marginBottom: 16,
+  },
+
+  familyPhotoCard: {
+    width: 245,
+    minHeight: 220,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 12,
+    padding: 13,
+  },
+
+  photoPersonName: {
+    color: '#52606d',
+    marginBottom: 10,
+  },
+
+  emptyPhoto: {
+    height: 110,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#aab7c4',
+    borderRadius: 9,
+    backgroundColor: '#f7fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  emptyPhotoText: {
+    color: '#718096',
+    fontWeight: '700',
   },
 
   uploadButtonWrap: {
