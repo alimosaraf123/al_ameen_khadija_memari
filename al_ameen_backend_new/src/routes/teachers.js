@@ -160,7 +160,12 @@ router.post('/:id/documents',auth,allow('super_admin','admin'),acceptDocument,as
   uploaded=await uploadBuffer(compressed,{folder:'al-ameen/teacher-documents',resourceType:'image',format:'webp'});
  }else uploaded=await uploadBuffer(req.file.buffer,{folder:'al-ameen/teacher-documents',resourceType:'raw',extension:path.extname(req.file.originalname)||'.pdf'});
  try{
-  const result=await pool.query('INSERT INTO teacher_documents(teacher_id,document_type,document_title,file_url,uploaded_by) VALUES($1,$2,$3,$4,$5) RETURNING *',[req.params.id,req.body.document_type||'other',req.body.document_title||req.file.originalname,uploaded.url,req.user.userId]);
+  const documentType=String(req.body.document_type||'other').trim()||'other';
+  const existing=await pool.query('SELECT id,file_url FROM teacher_documents WHERE teacher_id=$1 AND document_type=$2 ORDER BY uploaded_at DESC LIMIT 1',[req.params.id,documentType]);
+  const result=existing.rowCount
+   ? await pool.query('UPDATE teacher_documents SET document_title=$1,file_url=$2,uploaded_by=$3,uploaded_at=NOW() WHERE id=$4 RETURNING *',[req.body.document_title||req.file.originalname,uploaded.url,req.user.userId,existing.rows[0].id])
+   : await pool.query('INSERT INTO teacher_documents(teacher_id,document_type,document_title,file_url,uploaded_by) VALUES($1,$2,$3,$4,$5) RETURNING *',[req.params.id,documentType,req.body.document_title||req.file.originalname,uploaded.url,req.user.userId]);
+  if(existing.rowCount)await deleteCloudinaryUrl(existing.rows[0].file_url).catch(()=>{});
   res.status(201).json({success:true,document:result.rows[0]});
  }catch(error){await deleteCloudinaryUrl(uploaded.url).catch(()=>{});throw error;}
 }));
