@@ -1,5 +1,5 @@
 const express = require('express');
-const multer=require('multer');const sharp=require('sharp');const {uploadBuffer,deleteCloudinaryUrl}=require('../utils/cloudStorage');
+const multer=require('multer');const sharp=require('sharp');const path=require('path');const {uploadBuffer,deleteCloudinaryUrl}=require('../utils/cloudStorage');
 const bcrypt = require('bcryptjs');
 const pool = require('../db');
 const { auth, allow } = require('../middleware/auth');
@@ -140,6 +140,37 @@ router.post('/:id/photo',auth,allow('super_admin','admin'),(req,res,next)=>photo
  }catch(error){await deleteCloudinaryUrl(uploaded.url).catch(()=>{});throw error;}
 }));
 
+const documentUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:10*1024*1024},fileFilter:(req,file,cb)=>{const allowed=file.mimetype.startsWith('image/')||file.mimetype==='application/pdf';cb(allowed?null:new Error('Only image and PDF files are allowed'),allowed);}}).single('file');
+const acceptDocument=(req,res,next)=>documentUpload(req,res,error=>error?res.status(400).json({success:false,message:error.message||'Document must be under 10 MB'}):next());
+
+router.get('/:id/documents',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ const teacher=await pool.query('SELECT id FROM teachers WHERE id=$1',[req.params.id]);
+ if(!teacher.rowCount)return res.status(404).json({success:false,message:'Teacher not found'});
+ const result=await pool.query('SELECT * FROM teacher_documents WHERE teacher_id=$1 ORDER BY uploaded_at DESC',[req.params.id]);
+ res.json({success:true,documents:result.rows});
+}));
+
+router.post('/:id/documents',auth,allow('super_admin','admin'),acceptDocument,asyncHandler(async(req,res)=>{
+ if(!req.file)return res.status(400).json({success:false,message:'Choose an image or PDF file'});
+ const teacher=await pool.query('SELECT id FROM teachers WHERE id=$1',[req.params.id]);
+ if(!teacher.rowCount)return res.status(404).json({success:false,message:'Teacher not found'});
+ let uploaded;
+ if(req.file.mimetype.startsWith('image/')){
+  const compressed=await sharp(req.file.buffer,{failOn:'error'}).rotate().resize({width:1800,height:1800,fit:'inside',withoutEnlargement:true}).webp({quality:82,effort:4}).toBuffer();
+  uploaded=await uploadBuffer(compressed,{folder:'al-ameen/teacher-documents',resourceType:'image',format:'webp'});
+ }else uploaded=await uploadBuffer(req.file.buffer,{folder:'al-ameen/teacher-documents',resourceType:'raw',extension:path.extname(req.file.originalname)||'.pdf'});
+ try{
+  const result=await pool.query('INSERT INTO teacher_documents(teacher_id,document_type,document_title,file_url,uploaded_by) VALUES($1,$2,$3,$4,$5) RETURNING *',[req.params.id,req.body.document_type||'other',req.body.document_title||req.file.originalname,uploaded.url,req.user.userId]);
+  res.status(201).json({success:true,document:result.rows[0]});
+ }catch(error){await deleteCloudinaryUrl(uploaded.url).catch(()=>{});throw error;}
+}));
+
+router.delete('/documents/:documentId',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ const result=await pool.query('DELETE FROM teacher_documents WHERE id=$1 RETURNING *',[req.params.documentId]);
+ if(!result.rowCount)return res.status(404).json({success:false,message:'Document not found'});
+ await deleteCloudinaryUrl(result.rows[0].file_url).catch(()=>{});
+ res.json({success:true,message:'Document deleted'});
+}));
 router.patch('/:id/subjects', auth, allow('super_admin','admin'), asyncHandler(async(req,res)=>{
  const subjects=Array.isArray(req.body?.subjects)?req.body.subjects.map(v=>String(v).trim()).filter(Boolean):[];
  const result=await pool.query('UPDATE teachers SET subject=$1 WHERE id=$2 RETURNING id,name,subject',[subjects.join(', '),req.params.id]);

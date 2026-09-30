@@ -171,6 +171,14 @@ CREATE TABLE IF NOT EXISTS student_documents (
   uploaded_by BIGINT REFERENCES users(id) ON DELETE SET NULL, uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS teacher_documents (
+  id BIGSERIAL PRIMARY KEY,
+  teacher_id BIGINT NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+  document_type VARCHAR(50) NOT NULL DEFAULT 'other',
+  document_title VARCHAR(200), file_url TEXT NOT NULL,
+  uploaded_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 CREATE TABLE IF NOT EXISTS document_download_logs (
   id BIGSERIAL PRIMARY KEY,
   document_id BIGINT NOT NULL REFERENCES student_documents(id) ON DELETE CASCADE,
@@ -198,6 +206,7 @@ CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(attendance_date);
 CREATE INDEX IF NOT EXISTS idx_student_marks_exam ON student_marks(exam_id);
 CREATE INDEX IF NOT EXISTS idx_student_marks_student ON student_marks(student_id);
 CREATE INDEX IF NOT EXISTS idx_student_documents_student ON student_documents(student_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_documents_teacher ON teacher_documents(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_student_dues_student ON student_dues(student_id);
 CREATE INDEX IF NOT EXISTS idx_notice_targets_notice ON notice_targets(notice_id);
 
