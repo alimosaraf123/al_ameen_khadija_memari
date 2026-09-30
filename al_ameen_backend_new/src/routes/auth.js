@@ -179,18 +179,24 @@ router.post(
 
     const {
       current_password,
-      new_password
+      new_password,
+      confirm_password
     } = req.body || {};
 
     if (
       !current_password ||
-      !new_password
+      !new_password ||
+      !confirm_password
     ) {
       return res.status(400).json({
         success: false,
         message:
-          'Current password and new password are required',
+          'Current password, new password and confirmation are required',
       });
+    }
+
+    if (new_password !== confirm_password) {
+      return res.status(400).json({ success: false, message: 'New password confirmation does not match' });
     }
 
     if (

@@ -58,6 +58,7 @@ router.post('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res
     if (suffixedLogin.rowCount) return res.status(409).json({success:false,message:'A unique User ID could not be created. Enter one manually.'});
   }
 
+  if(body.password&&body.password!==body.confirm_password)return res.status(400).json({success:false,message:'Password confirmation does not match'});
   const initialPassword = String(body.password || staffId);
   const hash = await bcrypt.hash(initialPassword, 12);
   const client = await pool.connect();
@@ -96,6 +97,7 @@ router.post('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res
 
 router.put('/:id', auth, allow('super_admin','admin'), asyncHandler(async (req,res) => {
   const body=req.body||{};
+  if(body.password&&body.password!==body.confirm_password)return res.status(400).json({success:false,message:'Password confirmation does not match'});
   const current=await pool.query('SELECT t.*,u.login_id,u.id AS login_user_id,u.is_active AS user_active FROM teachers t LEFT JOIN users u ON u.id=t.user_id WHERE t.id=$1',[req.params.id]);
   if(!current.rowCount)return res.status(404).json({success:false,message:'Teacher not found'});
   const old=current.rows[0];

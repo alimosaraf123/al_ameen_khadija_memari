@@ -161,6 +161,7 @@ export default function Guardian() {
         body: JSON.stringify({
           current_password: currentPassword,
           new_password: newPassword,
+          confirm_password: confirmPassword,
         }),
       });
 
@@ -816,7 +817,7 @@ export default function Guardian() {
                     secureTextEntry
                   />
                   <Field
-                    placeholder="Confirm New Password"
+                    placeholder="Re-enter New Password"
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
                     secureTextEntry
