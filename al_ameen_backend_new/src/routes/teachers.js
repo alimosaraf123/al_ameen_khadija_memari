@@ -140,4 +140,10 @@ router.post('/:id/photo',auth,allow('super_admin','admin'),(req,res,next)=>photo
  }catch(error){await deleteCloudinaryUrl(uploaded.url).catch(()=>{});throw error;}
 }));
 
+router.patch('/:id/subjects', auth, allow('super_admin','admin'), asyncHandler(async(req,res)=>{
+ const subjects=Array.isArray(req.body?.subjects)?req.body.subjects.map(v=>String(v).trim()).filter(Boolean):[];
+ const result=await pool.query('UPDATE teachers SET subject=$1 WHERE id=$2 RETURNING id,name,subject',[subjects.join(', '),req.params.id]);
+ if(!result.rowCount)return res.status(404).json({success:false,message:'Teacher not found'});
+ res.json({success:true,teacher:result.rows[0],assigned_subjects:subjects});
+}));
 module.exports = router;
