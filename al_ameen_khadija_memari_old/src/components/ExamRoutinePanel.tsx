@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState}from'react';
 import{Alert,Platform,ScrollView,StyleSheet,Text,TextInput,TouchableOpacity,View}from'react-native';
 import{Select}from'./StudentDirectory';
 import{api}from'../lib/api';
+import DatePickerField from'./DatePickerField';
 
 const SUBJECTS=['Arabic','Art','Beng','Bio','Chem','Comp','Eng','Eng-I','Eng-II','Geo','Hind','Hist','L.Sc','Math','P.Sc','Phy','Sci'];
 const GROUP_CLASSES:any={v_x:['V','VI','VII','VIII','IX','X'],xi_xii:['XI-A','XI-B','XII-A','XII-B']};
@@ -12,7 +13,7 @@ export default function ExamRoutinePanel({teachers,initialDate}:{teachers:any[];
  const classes=GROUP_CLASSES[form.group_name]||[];
  useEffect(()=>{void load()},[month]);
  async function load(){try{const d=await api('/api/routines/exams?month='+month);setItems(d.exams||[]);setCounts(d.duty_counts||[])}catch(e:any){Alert.alert('Exam routine',e.message)}}
- const dateField=(key:string,label:string)=><View style={s.field}><Text style={s.label}>{label}</Text>{Platform.OS==='web'?React.createElement('input',{type:'date',value:form[key]||'',onChange:(e:any)=>setForm((x:any)=>({...x,[key]:e.target.value})),style:webInput}):<TextInput value={form[key]} onChangeText={v=>setForm((x:any)=>({...x,[key]:v}))} placeholder="YYYY-MM-DD" style={s.input}/>}</View>;
+ const dateField=(key:string,label:string)=><DatePickerField label={label} value={form[key]||''} onChange={v=>setForm((x:any)=>({...x,[key]:v}))} style={s.field} optional={key==='end_date'}/>;
  const timeField=(key:string,label:string)=><View style={s.smallField}><Text style={s.label}>{label}</Text>{Platform.OS==='web'?React.createElement('input',{type:'time',value:form[key]||'',onChange:(e:any)=>setForm((x:any)=>({...x,[key]:e.target.value})),style:webInput}):<TextInput value={form[key]} onChangeText={v=>setForm((x:any)=>({...x,[key]:v}))} placeholder="HH:MM" style={s.input}/>}</View>;
  const toggle=(key:'class_names'|'teacher_ids',value:string)=>setForm((x:any)=>{const on=x[key].includes(value),next=on?x[key].filter((v:string)=>v!==value):[...x[key],value];if(key==='teacher_ids')return{...x,teacher_ids:next,teacher_names:next.map((id:string)=>teachers.find(t=>String(t.id)===id)?.name||'Teacher')};return{...x,[key]:next}});
  async function save(){if(!form.class_names.length||!form.subject||!form.exam_date||!form.start_time||!form.end_time||!form.teacher_ids.length)return Alert.alert('Required','Select date, class, subject, time and duty teacher.');setBusy(true);try{await api('/api/routines/exams'+(editing?'/'+editing:''),{method:editing?'PUT':'POST',body:JSON.stringify(form)});setEditing('');setForm(empty(form.exam_date));setMonth(form.exam_date.slice(0,7));await load();Alert.alert('Saved','Exam routine saved.')}catch(e:any){Alert.alert('Error',e.message)}finally{setBusy(false)}}

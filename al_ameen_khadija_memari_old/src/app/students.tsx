@@ -19,6 +19,7 @@ import { router } from 'expo-router';
 import StudentDirectory, { Select } from '../components/StudentDirectory';
 import { STUDENT_CLASSES, isVisibleStudentClass } from '../lib/studentClasses';
 import StudentMenu from '../components/StudentMenu';
+import DatePickerField from '../components/DatePickerField';
 import { normalizeStudentClass } from '../lib/studentDirectory';
 
 import { api, API_BASE } from '../lib/api';
@@ -659,10 +660,7 @@ export default function Students() {
         <LabeledField label="Student Name *" field="student_name" />
         <LabeledField label="Mobile Number" field="mobile_number" />
         <LabeledField label="Admission No" field="admission_no" />
-        <LabeledField
-          label="Admission Date YYYY-MM-DD"
-          field="admission_date"
-        />
+        <DatePickerField label="Admission Date" value={form.admission_date} onChange={v=>update('admission_date',v)} />
         <LabeledField label="WhatsApp Number" field="whatsapp_number" />
         <View style={styles.fieldWrap}>
           <Text style={styles.fieldLabel}>Class Name</Text>
@@ -936,7 +934,7 @@ export default function Students() {
           })}
         </View>
 
-        {editingId !== null && <View style={styles.exitPanel}><SectionTitle>Dropout & Transfer Certificate</SectionTitle><LabeledField label="Dropout Date (YYYY-MM-DD)" value={exitForm.dropout_date} onChangeText={(v:string)=>setExitForm(x=>({...x,dropout_date:v}))}/><LabeledField label="Reason for Dropout" value={exitForm.dropout_reason} onChangeText={(v:string)=>setExitForm(x=>({...x,dropout_reason:v}))}/><TouchableOpacity disabled={exitBusy} style={styles.clearanceButton} onPress={()=>refreshExitClearance()}><Text style={styles.actionText}>{exitBusy?'Checking...':'Check SDF, Library & Fees Clearance'}</Text></TouchableOpacity>{exitClearance&&<View style={styles.clearanceBox}><Text style={exitClearance.sdf_dues?.length?styles.blockedText:styles.clearText}>SDF: {exitClearance.sdf_dues?.length?'Due — TC blocked':'Clear'}</Text><Text style={exitClearance.library_dues?.length?styles.blockedText:styles.clearText}>Library Book: {exitClearance.library_dues?.length?'Due — TC blocked':'Clear'}</Text><Text style={styles.feeDueText}>Monthly Fees Due: ₹{Number(exitClearance.monthly_fee_due_total||0).toFixed(2)} (will be printed on TC)</Text></View>}<View style={styles.exitActions}><TouchableOpacity disabled={exitBusy} style={styles.dropoutButton} onPress={saveDropout}><Text style={styles.actionText}>Save Dropout</Text></TouchableOpacity><TouchableOpacity disabled={exitBusy||!exitClearance?.exit||exitClearance?.tc_blocked} style={[styles.tcButton,(exitBusy||!exitClearance?.exit||exitClearance?.tc_blocked)&&styles.disabledButton]} onPress={issueAndPrintTc}><Text style={styles.actionText}>Preview / Print TC Form</Text></TouchableOpacity></View></View>}
+        {editingId !== null && <View style={styles.exitPanel}><SectionTitle>Dropout & Transfer Certificate</SectionTitle><DatePickerField label="Dropout Date" value={exitForm.dropout_date} onChange={v=>setExitForm(x=>({...x,dropout_date:v}))}/><LabeledField label="Reason for Dropout" value={exitForm.dropout_reason} onChangeText={(v:string)=>setExitForm(x=>({...x,dropout_reason:v}))}/><TouchableOpacity disabled={exitBusy} style={styles.clearanceButton} onPress={()=>refreshExitClearance()}><Text style={styles.actionText}>{exitBusy?'Checking...':'Check SDF, Library & Fees Clearance'}</Text></TouchableOpacity>{exitClearance&&<View style={styles.clearanceBox}><Text style={exitClearance.sdf_dues?.length?styles.blockedText:styles.clearText}>SDF: {exitClearance.sdf_dues?.length?'Due — TC blocked':'Clear'}</Text><Text style={exitClearance.library_dues?.length?styles.blockedText:styles.clearText}>Library Book: {exitClearance.library_dues?.length?'Due — TC blocked':'Clear'}</Text><Text style={styles.feeDueText}>Monthly Fees Due: ₹{Number(exitClearance.monthly_fee_due_total||0).toFixed(2)} (will be printed on TC)</Text></View>}<View style={styles.exitActions}><TouchableOpacity disabled={exitBusy} style={styles.dropoutButton} onPress={saveDropout}><Text style={styles.actionText}>Save Dropout</Text></TouchableOpacity><TouchableOpacity disabled={exitBusy||!exitClearance?.exit||exitClearance?.tc_blocked} style={[styles.tcButton,(exitBusy||!exitClearance?.exit||exitClearance?.tc_blocked)&&styles.disabledButton]} onPress={issueAndPrintTc}><Text style={styles.actionText}>Preview / Print TC Form</Text></TouchableOpacity></View></View>}
 
         <View style={styles.saveArea}>
           <Button
