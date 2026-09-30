@@ -152,9 +152,12 @@ router.get(
       });
     }
 
+    const permissions=(await pool.query('SELECT module_key FROM user_module_permissions WHERE user_id=$1 ORDER BY module_key',[req.user.userId])).rows.map(x=>x.module_key);
     res.json({
       success: true,
       user: result.rows[0],
+      restricted: result.rows[0].role==='admin' && permissions.length>0,
+      permissions,
     });
 
   })

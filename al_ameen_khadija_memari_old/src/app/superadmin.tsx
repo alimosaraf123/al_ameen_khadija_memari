@@ -23,6 +23,10 @@ import AcademyHeader from '../components/AcademyHeader';
 import { api } from '../lib/api';
 
 
+const menuPermission:Record<string,string>={
+  '/attendance':'attendance','/behavior':'behavior','/gate-pass':'gate_passes','/visits':'visits','/marks':'marks','/terminal-exams':'terminal_exams','/class-results':'terminal_exams','/problems':'problems','/routines':'routines','/notices':'notices'
+};
+
 const menus: any[] = [
 
   ['Students', '/students'],
@@ -68,8 +72,9 @@ const menus: any[] = [
 
 export default function Dashboard() {
   const [unread,setUnread]=useState(0);
+  const [restricted,setRestricted]=useState(false),[permissions,setPermissions]=useState<string[]>([]);
   const loadCounter=async()=>{try{const d=await api('/api/notices/admin-counter');setUnread(d.unread||0);}catch{}};
-  useEffect(()=>{void loadCounter();const timer=setInterval(loadCounter,30000);return()=>clearInterval(timer);},[]);
+  useEffect(()=>{void api('/api/me').then(d=>{setRestricted(!!d.restricted);setPermissions(d.permissions||[])}).catch(()=>{});void loadCounter();const timer=setInterval(loadCounter,30000);return()=>clearInterval(timer);},[]);
   const openNotifications=async()=>{try{await api('/api/notices/read-all',{method:'POST'});setUnread(0);}finally{router.push('/notices');}};
 
   const logout =
@@ -100,7 +105,7 @@ export default function Dashboard() {
         <Text
           style={s.sub}
         >
-          Super Admin Dashboard
+          {restricted ? 'Admin Dashboard' : 'Super Admin Dashboard'}
         </Text>
         <TouchableOpacity onPress={openNotifications} style={s.notification}><Text style={s.notificationText}>🔔 Admin Notifications</Text>{unread>0&&<View style={s.badge}><Text style={s.badgeText}>{unread>99?'99+':unread}</Text></View>}</TouchableOpacity>
 
@@ -109,7 +114,7 @@ export default function Dashboard() {
           style={s.grid}
         >
 
-          {menus.map(
+          {menus.filter(([,path])=>!restricted||permissions.includes(menuPermission[path])).map(
             ([title, path]) => (
 
               <TouchableOpacity
