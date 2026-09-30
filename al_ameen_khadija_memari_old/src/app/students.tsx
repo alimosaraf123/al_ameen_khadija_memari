@@ -626,6 +626,7 @@ export default function Students() {
         setMenuOpen(false);
         if (key === 'entry') { clearForm(); setScreen('entry'); }
         if (key === 'details') setScreen('details');
+        if (key === 'forms') router.push('/id-cards');
         if (key === 'behavior') router.push('/behavior');
         if (key === 'attendance') router.push('/attendance');
         if (key === 'gatepass') router.push('/gate-pass');
