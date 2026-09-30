@@ -41,7 +41,7 @@ const menus: any[] = [
 
   ['Student Gate Pass', '/gate-pass'],
 
-  ['Guardian Visit Permission', '/visits'],
+  ['Visiting Day Record / Permission', '/visits'],
 
   ['Promotion / TC / Re-Activation', '/student-lifecycle'],
 
