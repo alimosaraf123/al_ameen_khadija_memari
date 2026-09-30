@@ -1,0 +1,7 @@
+
+> al_ameen_backend@1.0.0 start
+> node server.js
+
+◇ injected env (12) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+Server running on http://localhost:3000
