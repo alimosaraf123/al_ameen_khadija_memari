@@ -268,6 +268,25 @@ CREATE TABLE IF NOT EXISTS routine_manager_grids (
 );
 CREATE INDEX IF NOT EXISTS idx_routine_manager_group_date ON routine_manager_grids(group_name,routine_date DESC);
 
+CREATE TABLE IF NOT EXISTS routine_exam_entries (
+ id BIGSERIAL PRIMARY KEY,
+ group_name VARCHAR(20) NOT NULL CHECK(group_name IN ('v_x','xi_xii')),
+ exam_date DATE NOT NULL,
+ end_date DATE,
+ class_names JSONB NOT NULL DEFAULT '[]'::jsonb,
+ subject VARCHAR(100) NOT NULL,
+ start_time TIME NOT NULL,
+ end_time TIME NOT NULL,
+ room VARCHAR(200),
+ teacher_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+ teacher_names JSONB NOT NULL DEFAULT '[]'::jsonb,
+ suppress_regular BOOLEAN NOT NULL DEFAULT TRUE,
+ duty_final BOOLEAN NOT NULL DEFAULT FALSE,
+ created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_routine_exam_date ON routine_exam_entries(exam_date DESC);
 CREATE TABLE IF NOT EXISTS notification_reads (
  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  notice_id BIGINT NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
