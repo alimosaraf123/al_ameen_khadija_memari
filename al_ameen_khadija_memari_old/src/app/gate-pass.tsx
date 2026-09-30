@@ -3,13 +3,14 @@ import{ActivityIndicator,Alert,Image,Platform,ScrollView,StyleSheet,Text,TextInp
 import{SafeAreaView}from'react-native-safe-area-context';
 import{useRouter}from'expo-router';
 import*as Print from'expo-print';
+import{Asset}from'expo-asset';
 import AcademyHeader from'../components/AcademyHeader';
 import{Select}from'../components/StudentDirectory';
 import{api,API_BASE}from'../lib/api';
 import{STUDENT_CLASSES}from'../lib/studentClasses';
 const now=()=>{const d=new Date(),z=(n:number)=>String(n).padStart(2,'0');return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+'T'+z(d.getHours())+':'+z(d.getMinutes())};
 const blank=()=>({reason:'',departure_at:now(),expected_return_at:'',late_note:''});
-const logoUri=Image.resolveAssetSource(require('../../assets/images/al-ameen-logo.jpg')).uri;
+const logoUri=Asset.fromModule(require('../../assets/images/al-ameen-logo.jpg')).uri;
 export default function GatePass(){const router=useRouter(),[tab,setTab]=useState('generate'),[reg,setReg]=useState(''),[student,setStudent]=useState<any>(null),[form,setForm]=useState<any>(blank()),[bulkClass,setBulkClass]=useState(''),[list,setList]=useState<any[]>([]),[status,setStatus]=useState('pending'),[year,setYear]=useState(String(new Date().getFullYear())),[className,setClassName]=useState(''),[query,setQuery]=useState(''),[loading,setLoading]=useState(false),[executeCode,setExecuteCode]=useState('');
 useEffect(()=>{void load()},[status,year,className]);async function load(){try{const d=await api('/api/gate-passes?year='+year+'&status='+status+(className?'&class_name='+encodeURIComponent(className):'')+(query?'&q='+encodeURIComponent(query):''));setList(d.gate_passes||[])}catch(e:any){Alert.alert('Gate Pass',e.message)}}
 async function search(){if(!reg.trim())return;setLoading(true);try{const d=await api('/api/gate-passes/student/'+encodeURIComponent(reg.trim()));setStudent(d.student)}catch(e:any){setStudent(null);Alert.alert('Search',e.message)}finally{setLoading(false)}}
