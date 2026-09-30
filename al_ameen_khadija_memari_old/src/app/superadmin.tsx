@@ -41,6 +41,8 @@ const menus: any[] = [
 
   ['Student Gate Pass', '/gate-pass'],
 
+  ['Guardian Visit Permission', '/visits'],
+
   ['Student Illness / Problem', '/illness'],
 
   ['Weekly Test Marks', '/marks'],

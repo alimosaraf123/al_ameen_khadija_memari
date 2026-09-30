@@ -186,6 +186,24 @@ CREATE TABLE IF NOT EXISTS document_download_logs (
   downloaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS student_visits (
+  id BIGSERIAL PRIMARY KEY,
+  student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  token_no VARCHAR(40) UNIQUE,
+  visitor_name VARCHAR(150) NOT NULL,
+  visitor_relation VARCHAR(100) NOT NULL,
+  visit_at TIMESTAMPTZ NOT NULL,
+  duration_minutes INTEGER NOT NULL DEFAULT 15,
+  purpose TEXT,
+  status VARCHAR(20) NOT NULL DEFAULT 'approved' CHECK(status IN ('approved','completed','cancelled')),
+  approved_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  completed_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  completed_at TIMESTAMPTZ,
+  cancelled_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS student_exit_records (
   id BIGSERIAL PRIMARY KEY,
   student_id BIGINT UNIQUE NOT NULL REFERENCES students(id) ON DELETE CASCADE,

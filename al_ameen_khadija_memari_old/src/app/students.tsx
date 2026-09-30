@@ -629,6 +629,7 @@ export default function Students() {
         if (key === 'behavior') router.push('/behavior');
         if (key === 'attendance') router.push('/attendance');
         if (key === 'gatepass') router.push('/gate-pass');
+        if (key === 'visit') router.push('/visits');
         if (key === 'marks') router.push('/marks');
         if (key === 'documents') router.push('/documents');
         if (key === 'dues') router.push('/dues');
