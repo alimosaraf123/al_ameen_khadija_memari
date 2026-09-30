@@ -29,6 +29,7 @@ import {
 
 import {
   saveSession,
+  getDeviceId,
 } from '../lib/auth';
 
 import {
@@ -199,6 +200,7 @@ export default function Login() {
               headers: {
                 'Content-Type':
                   'application/json',
+                'X-Device-Id': await getDeviceId(),
               },
 
               body:
@@ -368,6 +370,7 @@ export default function Login() {
               headers: {
                 'Content-Type':
                   'application/json',
+                'X-Device-Id': await getDeviceId(),
               },
 
               body:
@@ -539,6 +542,7 @@ export default function Login() {
               headers: {
                 'Content-Type':
                   'application/json',
+                'X-Device-Id': await getDeviceId(),
               },
 
               body:

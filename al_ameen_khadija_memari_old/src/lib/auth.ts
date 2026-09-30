@@ -3,6 +3,18 @@ import * as SecureStore from 'expo-secure-store';
 
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'user_data';
+const DEVICE_KEY = 'app_device_id';
+
+
+export async function getDeviceId() {
+  let value: string | null = Platform.OS === 'web' ? localStorage.getItem(DEVICE_KEY) : await SecureStore.getItemAsync(DEVICE_KEY);
+  if (!value) {
+    value = `device-${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+    if (Platform.OS === 'web') localStorage.setItem(DEVICE_KEY, value);
+    else await SecureStore.setItemAsync(DEVICE_KEY, value);
+  }
+  return value;
+}
 
 export async function saveSession(token: string, user: unknown) {
   const userJson = JSON.stringify(user);

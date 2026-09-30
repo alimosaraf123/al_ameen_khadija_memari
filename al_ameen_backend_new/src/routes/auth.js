@@ -9,6 +9,37 @@ const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
 
+const guardianSessionSchemaReady=pool.query(`
+  CREATE TABLE IF NOT EXISTS guardian_login_sessions(
+    id BIGSERIAL PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    device_id VARCHAR(150) NOT NULL,token_jti VARCHAR(100) NOT NULL,is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    expires_at TIMESTAMPTZ NOT NULL,last_login_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),logged_out_at TIMESTAMPTZ,
+    UNIQUE(user_id,device_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_guardian_login_sessions_active ON guardian_login_sessions(user_id,is_active,expires_at);
+`);
+function normalToken(user){return jwt.sign({userId:user.id,loginId:user.login_id,role:user.role},process.env.JWT_SECRET,{expiresIn:'12h'});}
+async function issueToken(user,deviceId){
+  if(user.role!=='guardian')return normalToken(user);
+  await guardianSessionSchemaReady;
+  const device=String(deviceId||'').trim().slice(0,150);
+  if(device.length<12){const e=new Error('This phone could not be identified. Please update/reopen the app and try again.');e.status=400;throw e;}
+  const c=await pool.connect();
+  try{
+    await c.query('BEGIN');
+    const studentIds=(await c.query(`SELECT sg.student_id FROM guardian_profiles gp JOIN student_guardians sg ON sg.guardian_id=gp.id WHERE gp.user_id=$1 ORDER BY sg.student_id`,[user.id])).rows.map(x=>Number(x.student_id));
+    for(const studentId of studentIds){
+      await c.query('SELECT pg_advisory_xact_lock($1)',[studentId]);
+      const devices=(await c.query(`SELECT DISTINCT gls.device_id FROM student_guardians sg JOIN guardian_profiles gp ON gp.id=sg.guardian_id JOIN guardian_login_sessions gls ON gls.user_id=gp.user_id WHERE sg.student_id=$1 AND gls.is_active=TRUE AND gls.expires_at>NOW()`,[studentId])).rows.map(x=>x.device_id);
+      if(!devices.includes(device)&&devices.length>=3){const e=new Error('This student already has active logins on 3 mobile devices. Logout from one device before logging in here.');e.status=409;throw e;}
+    }
+    const jti=crypto.randomUUID(),expires=new Date(Date.now()+12*60*60*1000);
+    await c.query(`INSERT INTO guardian_login_sessions(user_id,device_id,token_jti,is_active,expires_at,last_login_at,logged_out_at) VALUES($1,$2,$3,TRUE,$4,NOW(),NULL) ON CONFLICT(user_id,device_id) DO UPDATE SET token_jti=EXCLUDED.token_jti,is_active=TRUE,expires_at=EXCLUDED.expires_at,last_login_at=NOW(),logged_out_at=NULL`,[user.id,device,jti,expires]);
+    await c.query('COMMIT');
+    return jwt.sign({userId:user.id,loginId:user.login_id,role:user.role,jti,deviceId:device},process.env.JWT_SECRET,{expiresIn:'12h'});
+  }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+}
+
 
 // ========================================
 // LOGIN WITH PASSWORD
@@ -74,17 +105,7 @@ router.post(
       });
     }
 
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        loginId: user.login_id,
-        role: user.role,
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: '12h',
-      }
-    );
+    const token = await issueToken(user, req.body?.device_id || req.headers['x-device-id']);
 
     res.json({
       success: true,
@@ -487,25 +508,7 @@ router.post(
       });
     }
 
-    const token =
-      jwt.sign(
-        {
-          userId:
-            user.id,
-
-          loginId:
-            user.login_id,
-
-          role:
-            user.role,
-        },
-
-        process.env.JWT_SECRET,
-
-        {
-          expiresIn: '12h',
-        }
-      );
+    const token = await issueToken(user, req.body?.device_id || req.headers['x-device-id']);
 
     res.json({
       success: true,
@@ -778,25 +781,7 @@ router.post(
     );
 
 
-    const token =
-      jwt.sign(
-        {
-          userId:
-            row.user_id,
-
-          loginId:
-            row.login_id,
-
-          role:
-            row.role,
-        },
-
-        process.env.JWT_SECRET,
-
-        {
-          expiresIn: '12h',
-        }
-      );
+    const token = await issueToken({id:row.user_id,login_id:row.login_id,role:row.role}, req.body?.device_id || req.headers['x-device-id']);
 
 
     res.json({
@@ -888,6 +873,9 @@ router.post(
   })
 );
 
+
+
+router.post('/logout',auth,asyncHandler(async(req,res)=>{if(req.user.role==='guardian'&&req.user.jti){await guardianSessionSchemaReady;await pool.query(`UPDATE guardian_login_sessions SET is_active=FALSE,logged_out_at=NOW() WHERE user_id=$1 AND token_jti=$2`,[req.user.userId,req.user.jti]);}res.json({success:true});}));
 
 // ========================================
 // EXPORT ROUTER

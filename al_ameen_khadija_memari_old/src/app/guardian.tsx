@@ -322,6 +322,7 @@ export default function Guardian() {
   };
 
   const logout = async () => {
+    try { await api('/api/logout', { method: 'POST' }); } catch {}
     await clearSession();
     router.replace('/');
   };

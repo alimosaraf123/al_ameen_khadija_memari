@@ -9,6 +9,14 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS guardian_login_sessions (
+  id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  device_id VARCHAR(150) NOT NULL, token_jti VARCHAR(100) NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  expires_at TIMESTAMPTZ NOT NULL, last_login_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), logged_out_at TIMESTAMPTZ,
+  UNIQUE(user_id,device_id)
+);
+CREATE INDEX IF NOT EXISTS idx_guardian_login_sessions_active ON guardian_login_sessions(user_id,is_active,expires_at);
+
 CREATE TABLE IF NOT EXISTS rooms (
   id BIGSERIAL PRIMARY KEY,
   room_name VARCHAR(100) UNIQUE NOT NULL,
