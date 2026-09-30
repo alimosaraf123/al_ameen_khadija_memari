@@ -15,7 +15,7 @@ import { router } from 'expo-router';
 import * as LocalAuthentication from 'expo-local-authentication';
 
 import { api, API_BASE } from '../lib/api';
-import { clearSession } from '../lib/auth';
+import { clearSession, getToken } from '../lib/auth';
 import {
   saveGuardianBiometricToken,
   hasGuardianBiometricToken,
@@ -294,6 +294,33 @@ export default function Guardian() {
     }
   };
 
+  const openGuardianDocument = async (doc: any, download = false) => {
+    if (Platform.OS !== 'web') {
+      router.push({ pathname: '/guardian-student', params: { id: String(student.id) } } as any);
+      return;
+    }
+    let opened: any = null;
+    try {
+      if (!download) opened = window.open('about:blank', '_blank');
+      const token = await getToken();
+      const endpoint = download ? doc.download_endpoint : doc.view_endpoint;
+      if (!endpoint) throw new Error('Download is not allowed for this document.');
+      const response = await fetch(API_BASE + endpoint, { headers: { Authorization: 'Bearer ' + token } });
+      if (!response.ok) throw new Error('Document could not be opened.');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      if (download) {
+        const link = window.document.createElement('a');
+        link.href = url; link.download = doc.document_title || doc.document_type || 'document';
+        window.document.body.appendChild(link); link.click(); link.remove();
+      } else if (opened) opened.location.href = url;
+      setTimeout(() => URL.revokeObjectURL(url), 120000);
+    } catch (error: any) {
+      if (opened) opened.close();
+      Alert.alert('Document', error.message || 'Document action failed.');
+    }
+  };
+
   const logout = async () => {
     await clearSession();
     router.replace('/');
@@ -403,7 +430,7 @@ export default function Guardian() {
                 <Muted>No new notification.</Muted>
               </Card>
             ) : (
-              notices.slice(0, 5).map((notice: any, index: number) => (
+              notices.slice(0, 1).map((notice: any, index: number) => (
                 <Card key={notice.id || index} tone="notice">
                   <Text style={styles.noticeTitle}>
                     {notice.title || notice.notice_title || 'Notice'}
@@ -737,10 +764,12 @@ export default function Guardian() {
                     {doc.document_title || doc.document_type || 'Document'}
                   </Text>
                   <Text style={styles.documentMeta}>
-                    {doc.guardian_download_allowed
-                      ? 'View + Download Allowed'
-                      : 'View Only'}
+                    {doc.guardian_download_allowed ? 'View + Download Allowed' : 'View Only'}
                   </Text>
+                  <View style={styles.documentActions}>
+                    <TouchableOpacity style={styles.documentViewButton} onPress={() => openGuardianDocument(doc, false)}><Text style={styles.documentButtonText}>View</Text></TouchableOpacity>
+                    {doc.guardian_download_allowed && <TouchableOpacity style={styles.documentDownloadButton} onPress={() => openGuardianDocument(doc, true)}><Text style={styles.documentButtonText}>Download</Text></TouchableOpacity>}
+                  </View>
                 </Card>
               ))
             )}
@@ -1271,6 +1300,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  documentActions:{flexDirection:'row',gap:8,marginTop:10},documentViewButton:{backgroundColor:'#1764a5',paddingHorizontal:14,paddingVertical:9,borderRadius:7},documentDownloadButton:{backgroundColor:'#16814d',paddingHorizontal:14,paddingVertical:9,borderRadius:7},documentButtonText:{color:'#fff',fontWeight:'800'},
   documentMeta: {
     color: '#667085',
     marginTop: 5,
