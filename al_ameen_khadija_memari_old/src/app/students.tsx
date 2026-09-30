@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
+import * as Print from 'expo-print';
 import { File as ExpoFile } from 'expo-file-system';
 import { fetch as expoFetch } from 'expo/fetch';
 import { router } from 'expo-router';
@@ -98,6 +99,7 @@ const EMPTY_FORM: any = {
   admission_date: '',
   session_from: '',
   session_to: '',
+  academic_session: '',
   monthly_fees: '',
   mobile_number: '',
   whatsapp_number: '',
@@ -193,6 +195,9 @@ export default function Students() {
   const [listError, setListError] = useState('');
   const [entryDocuments, setEntryDocuments] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState(false);
+  const [exitForm,setExitForm]=useState({dropout_date:new Date().toISOString().slice(0,10),dropout_reason:''});
+  const [exitClearance,setExitClearance]=useState<any>(null);
+  const [exitBusy,setExitBusy]=useState(false);
 
 
   const [form, setForm] = useState<any>({ ...EMPTY_FORM });
@@ -241,6 +246,8 @@ export default function Students() {
     setVisitor1({ ...EMPTY_VISITOR });
     setVisitor2({ ...EMPTY_VISITOR });
     setEntryDocuments({});
+    setExitClearance(null);
+    setExitForm({dropout_date:new Date().toISOString().slice(0,10),dropout_reason:''});
   };
 
   const chooseEntryDocument = async (documentType: string) => {
@@ -338,6 +345,8 @@ export default function Students() {
       Alert.alert('Required', 'Student Name is required');
       return;
     }
+    const sessionMatch=String(form.academic_session||'').trim().match(/^(\d{4})-(\d{4})$/);
+    if(!sessionMatch){Alert.alert('Invalid Session','Use session format 2026-2026 or 2026-2027.');return;}
 
     const normalizedRegistration = form.registration_no.trim().toLowerCase();
     const duplicateRegistration = students.some((student) =>
@@ -357,6 +366,8 @@ export default function Students() {
       const selectedRoom = rooms.find((room) => String(room.room_name) === String(room_number));
       const body = {
         ...studentFields,
+        session_from:sessionMatch[1],
+        session_to:sessionMatch[2],
         registration_no: form.registration_no.trim(),
         room_id: selectedRoom?.id || null,
         visitor1,
@@ -434,8 +445,11 @@ export default function Students() {
         return out;
       };
 
+      next.academic_session=s.session_from&&s.session_to?String(s.session_from)+'-'+String(s.session_to):'';
       setEditingId(s.id);
       setForm(next);
+      setExitBusy(true);
+      try{const clearance=await api('/api/students/'+s.id+'/exit-clearance');setExitClearance(clearance);if(clearance.exit)setExitForm({dropout_date:String(clearance.exit.dropout_date).slice(0,10),dropout_reason:clearance.exit.dropout_reason||''});}catch{}finally{setExitBusy(false)};
       setVisitor1(normalizeVisitor(s.visitor1));
       setVisitor2(normalizeVisitor(s.visitor2));
       setScreen('entry');
@@ -444,43 +458,11 @@ export default function Students() {
     }
   };
 
-  const deleteStudent = (student: any) => {
-    const deactivate = async () => {
-      try {
-        await api(`/api/students/${student.id}`, { method: 'DELETE' });
-        if (editingId === student.id) clearForm();
-        await loadStudents();
-      } catch (e: any) { Alert.alert('Error', e.message); }
-    };
-    if (Platform.OS === 'web') {
-      if (window.confirm(`Mark ${student.student_name} as Dropout? The student will be removed from the active list.`)) void deactivate();
-      return;
-    }
-    Alert.alert(
-      'Mark as Dropout',
-      `Remove ${student.student_name} from the active list?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Mark as Dropout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await api(`/api/students/${student.id}`, {
-                method: 'DELETE',
-              });
+  const deleteStudent = (student: any) => {Alert.alert('Dropout','Open Student Edit and complete Dropout Date and Reason.');void startEdit(student);};
 
-              if (editingId === student.id) clearForm();
-              await loadStudents();
-              Alert.alert('Deleted', 'Student removed from active list');
-            } catch (e: any) {
-              Alert.alert('Error', e.message);
-            }
-          },
-        },
-      ]
-    );
-  };
+  const refreshExitClearance=async(id=editingId)=>{if(!id)return;setExitBusy(true);try{setExitClearance(await api('/api/students/'+id+'/exit-clearance'))}catch(e:any){Alert.alert('Clearance',e.message)}finally{setExitBusy(false)}};
+  const saveDropout=async()=>{if(!editingId)return;if(!exitForm.dropout_date||!exitForm.dropout_reason.trim())return Alert.alert('Required','Dropout date and reason are required.');setExitBusy(true);try{await api('/api/students/'+editingId+'/dropout',{method:'POST',body:JSON.stringify(exitForm)});await refreshExitClearance(editingId);await loadStudents();Alert.alert('Saved','Student marked as Dropout.')}catch(e:any){Alert.alert('Dropout',e.message)}finally{setExitBusy(false)}};
+  const issueAndPrintTc=async()=>{if(!editingId)return;setExitBusy(true);try{const d=await api('/api/students/'+editingId+'/transfer-certificate',{method:'POST'});setExitClearance(d);const st=d.student,ex=d.exit,session=[st.session_from,st.session_to].filter(Boolean).join('-'),monthly=Number(d.monthly_fee_due_total||0);const html=`<style>@page{size:A4;margin:18mm}body{font:15px Georgia,serif;color:#111}.sheet{border:2px solid #174c36;padding:28px;min-height:245mm}header{text-align:center;border-bottom:2px solid #174c36;padding-bottom:14px}h1{margin:6px;font-size:24px}h2{text-align:center;text-decoration:underline;margin:34px 0}.row{display:grid;grid-template-columns:190px 1fr;border-bottom:1px dotted #777;padding:10px 0}.note{margin-top:25px;padding:12px;border:1px solid #999}.sign{display:flex;justify-content:space-between;margin-top:70px}</style><div class="sheet"><header><h1>Al-Ameen Mission Academy Memari</h1><div>Memari, Purba Bardhaman - 713146</div></header><h2>TRANSFER CERTIFICATE</h2><div class="row"><b>Student Name</b><span>${st.student_name}</span></div><div class="row"><b>Registration No.</b><span>${st.registration_no}</span></div><div class="row"><b>Class</b><span>${st.class_name||'-'}</span></div><div class="row"><b>Academic Session</b><span>${session||'-'}</span></div><div class="row"><b>Guardian Name</b><span>${st.guardian_name||st.father_name||'-'}</span></div><div class="row"><b>Dropout Date</b><span>${String(ex.dropout_date).slice(0,10)}</span></div><div class="row"><b>Reason</b><span>${ex.dropout_reason}</span></div><div class="note"><b>Monthly Fees Due:</b> ${monthly>0?'Rs. '+monthly.toFixed(2):'No due'}${monthly>0?'<br/>The outstanding monthly fees remain payable.':''}</div><div class="sign"><span>Prepared By</span><span>Guardian</span><span>Principal / Administrator</span></div></div>`;await Print.printAsync({html});}catch(e:any){Alert.alert('TC cannot be issued',e.message)}finally{setExitBusy(false)}};
 
   const copyPresentToPermanent = () => {
     setForm((old: any) => ({
@@ -697,8 +679,7 @@ export default function Students() {
         </View>
         <LabeledField label="Roll No" field="roll_no" />
         <LabeledField label="Email ID" field="email" />
-        <LabeledField label="Session From" field="session_from" />
-        <LabeledField label="Session To" field="session_to" />
+        <LabeledField label="Academic Session (e.g. 2026-2027)" field="academic_session" />
 
         <Text style={styles.label}>Room No</Text>
         <View style={styles.options}>
@@ -955,6 +936,8 @@ export default function Students() {
           })}
         </View>
 
+        {editingId !== null && <View style={styles.exitPanel}><SectionTitle>Dropout & Transfer Certificate</SectionTitle><LabeledField label="Dropout Date (YYYY-MM-DD)" value={exitForm.dropout_date} onChangeText={(v:string)=>setExitForm(x=>({...x,dropout_date:v}))}/><LabeledField label="Reason for Dropout" value={exitForm.dropout_reason} onChangeText={(v:string)=>setExitForm(x=>({...x,dropout_reason:v}))}/><TouchableOpacity disabled={exitBusy} style={styles.clearanceButton} onPress={()=>refreshExitClearance()}><Text style={styles.actionText}>{exitBusy?'Checking...':'Check SDF, Library & Fees Clearance'}</Text></TouchableOpacity>{exitClearance&&<View style={styles.clearanceBox}><Text style={exitClearance.sdf_dues?.length?styles.blockedText:styles.clearText}>SDF: {exitClearance.sdf_dues?.length?'Due — TC blocked':'Clear'}</Text><Text style={exitClearance.library_dues?.length?styles.blockedText:styles.clearText}>Library Book: {exitClearance.library_dues?.length?'Due — TC blocked':'Clear'}</Text><Text style={styles.feeDueText}>Monthly Fees Due: ₹{Number(exitClearance.monthly_fee_due_total||0).toFixed(2)} (will be printed on TC)</Text></View>}<View style={styles.exitActions}><TouchableOpacity disabled={exitBusy} style={styles.dropoutButton} onPress={saveDropout}><Text style={styles.actionText}>Save Dropout</Text></TouchableOpacity><TouchableOpacity disabled={exitBusy||!exitClearance?.exit||exitClearance?.tc_blocked} style={[styles.tcButton,(exitBusy||!exitClearance?.exit||exitClearance?.tc_blocked)&&styles.disabledButton]} onPress={issueAndPrintTc}><Text style={styles.actionText}>Preview / Print TC Form</Text></TouchableOpacity></View></View>}
+
         <View style={styles.saveArea}>
           <Button
             title={
@@ -1113,6 +1096,11 @@ const styles = StyleSheet.create({
     color: '#888',
   },
 
+  exitPanel:{marginTop:20,padding:14,borderWidth:1,borderColor:'#e0a800',borderRadius:10,backgroundColor:'#fffaf0'},
+  clearanceButton:{backgroundColor:'#1565c0',padding:11,borderRadius:8,marginVertical:8},
+  clearanceBox:{padding:11,borderWidth:1,borderColor:'#d7e0e7',borderRadius:8,backgroundColor:'#fff'},
+  blockedText:{color:'#c62828',fontWeight:'800',marginVertical:2},clearText:{color:'#198754',fontWeight:'800',marginVertical:2},feeDueText:{color:'#7c4a03',fontWeight:'700',marginTop:5},
+  exitActions:{flexDirection:'row',gap:9,marginTop:10,flexWrap:'wrap'},dropoutButton:{flex:1,minWidth:150,backgroundColor:'#c62828',padding:12,borderRadius:8},tcButton:{flex:1,minWidth:190,backgroundColor:'#198754',padding:12,borderRadius:8},disabledButton:{opacity:.4},
   saveArea: {
     marginTop: 24,
   },

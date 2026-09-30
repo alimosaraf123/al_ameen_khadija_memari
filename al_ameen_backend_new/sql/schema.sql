@@ -186,6 +186,18 @@ CREATE TABLE IF NOT EXISTS document_download_logs (
   downloaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS student_exit_records (
+  id BIGSERIAL PRIMARY KEY,
+  student_id BIGINT UNIQUE NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  dropout_date DATE NOT NULL,
+  dropout_reason TEXT NOT NULL,
+  tc_issued_at TIMESTAMPTZ,
+  tc_issued_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS student_dues (
   id BIGSERIAL PRIMARY KEY,
   student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
