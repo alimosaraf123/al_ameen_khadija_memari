@@ -15,14 +15,14 @@ export function Select({ label, value, options, onChange, searchable=false }: { 
   const visibleOptions = searchable && query ? options.filter(option => option.label.toLowerCase().includes(query.toLowerCase())) : options;
   return <>
     <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${label}: ${options.find(o => o.value === value)?.label || value}`} onPress={() => { setQuery(''); setOpen(true); }} style={s.select}>
-      <Text style={s.selectText}>{options.find(o => o.value === value)?.label || value}  ▾</Text>
+      <Text style={s.selectText}>{options.find(o => o.value === value)?.label || value}  v</Text>
     </TouchableOpacity>
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
       <View style={s.overlay}><Pressable accessibilityRole="button" accessibilityLabel="Close dropdown" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} onPress={() => setOpen(false)} /><View style={s.selectPanel}>
         <Text style={s.panelTitle}>{label}</Text>
         {searchable && <TextInput autoFocus value={query} onChangeText={setQuery} placeholder="Type teacher name..." style={s.search} />}
         <ScrollView keyboardShouldPersistTaps="handled">{visibleOptions.map(option => <TouchableOpacity key={option.value} accessibilityRole="button" accessibilityState={{ selected: value === option.value }} style={[s.option, value === option.value && s.selected]} onPress={() => { onChange(option.value); setOpen(false); }}>
-          <Text>{option.label}{value === option.value ? '  ✓' : ''}</Text>
+          <Text>{option.label}{value === option.value ? '  Selected' : ''}</Text>
         </TouchableOpacity>)}</ScrollView>
 
       </View></View>
@@ -168,16 +168,16 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
     {loading ? <ActivityIndicator style={{ margin: 20 }} /> : error ? <Text style={s.error}>{error}</Text> : <>
       <ScrollView horizontal>
         <View>
-          <View style={[s.row, s.tableHead]}>{columns.map(([key, title, width]) => <TouchableOpacity key={key} disabled={['serial', 'photo', 'action'].includes(key)} accessibilityRole="button" style={[s.cell, { width }]} onPress={() => setSort({ key, ascending: sort.key === key ? !sort.ascending : true })}><Text style={s.columnTitle}>{title}{sort.key === key ? (sort.ascending ? ' ↑' : ' ↓') : ''}</Text></TouchableOpacity>)}</View>
+          <View style={[s.row, s.tableHead]}>{columns.map(([key, title, width]) => <TouchableOpacity key={key} disabled={['serial', 'photo', 'action'].includes(key)} accessibilityRole="button" style={[s.cell, { width }]} onPress={() => setSort({ key, ascending: sort.key === key ? !sort.ascending : true })}><Text style={s.columnTitle}>{title}{sort.key === key ? (sort.ascending ? ' -' : ' -') : ''}</Text></TouchableOpacity>)}</View>
           {rows.map((student, index) => <View key={student.id} style={[s.row, index % 2 === 0 && s.striped]}>
             {columns.map(([key, , width]) => <View key={key} style={[s.cell, { width }]}>
               {key === 'serial' ? <Text>{start + index + 1}</Text> : key === 'photo' ? <Photo student={student} /> : key === 'action' ? <View style={s.inline}>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Edit ${student.student_name}`} style={[s.action, s.edit]} onPress={() => onEdit(student)}><Text>Edit</Text></TouchableOpacity>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel={`View ${student.student_name}`} style={[s.action, s.view]} onPress={() => openDetails(student)}><Text>View</Text></TouchableOpacity>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel={'Documents for ' + student.student_name} style={[s.action, s.documents]} onPress={() => openDocuments(student)}><Text style={s.documentIcon}>{String.fromCodePoint(0x1F4C4)}</Text></TouchableOpacity>
-                {student.is_active && <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Mark ${student.student_name} as dropout`} style={[s.action, s.remove]} onPress={() => onDeactivate(student)}><Text style={{ color: '#fff' }}>×</Text></TouchableOpacity>}
+                {student.is_active && <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Mark ${student.student_name} as dropout`} style={[s.action, s.remove]} onPress={() => onDeactivate(student)}><Text style={{ color: '#fff' }}>-</Text></TouchableOpacity>}
               </View> : key === 'is_active' ? <Text style={{ color: student.is_active ? '#166534' : '#b91c1c', fontWeight: '700' }}>{student.is_active ? 'Active' : 'Dropout'}</Text>
-                : <Text selectable style={s.cellText}>{String(student[key] ?? '—')}</Text>}
+                : <Text selectable style={s.cellText}>{String(student[key] ?? '-')}</Text>}
             </View>)}
           </View>)}
         </View>
@@ -227,7 +227,7 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
       </View>
     </Modal>
     <Modal visible={detailOpen} transparent animationType="fade" onRequestClose={() => setDetailOpen(false)}><View style={s.overlay}><View style={s.detailPanel}>
-      <View style={s.modalHeader}><Text style={s.modalTitle}>Student Details</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Close student details" onPress={() => setDetailOpen(false)}><Text style={s.close}>×</Text></TouchableOpacity></View>
+      <View style={s.modalHeader}><Text style={s.modalTitle}>Student Details</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Close student details" onPress={() => setDetailOpen(false)}><Text style={s.close}>-</Text></TouchableOpacity></View>
       <ScrollView contentContainerStyle={{ padding: 18 }}>{detailLoading ? <ActivityIndicator /> : detailError ? <Text style={s.error}>{detailError}</Text> : detail && <><Photo student={detail} /><Text style={s.panelTitle}>{detail.student_name}</Text><RecordDetails record={detail} /></>}</ScrollView>
     </View></View></Modal>
   </View>;
