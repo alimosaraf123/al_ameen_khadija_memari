@@ -25,6 +25,7 @@ app.use('/api/illness',require('./src/routes/illness'));
 app.use('/api/problems',require('./src/routes/problems'));
 app.use('/api/notices',require('./src/routes/notices'));
 app.use('/api/routines',require('./src/routes/routines'));
+app.use('/api/gate-passes',require('./src/routes/gatePasses'));
 app.use('/api/marks',require('./src/routes/marks'));
 app.use('/api/terminal-exams',require('./src/routes/terminalExams'));
 app.use('/api/dues',require('./src/routes/dues'));

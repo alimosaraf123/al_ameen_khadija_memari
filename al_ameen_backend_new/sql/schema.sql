@@ -287,6 +287,23 @@ CREATE TABLE IF NOT EXISTS routine_exam_entries (
  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_routine_exam_date ON routine_exam_entries(exam_date DESC);
+CREATE TABLE IF NOT EXISTS student_gate_passes (
+ id BIGSERIAL PRIMARY KEY,
+ token_no VARCHAR(30) UNIQUE,
+ student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+ reason TEXT NOT NULL,
+ departure_at TIMESTAMPTZ NOT NULL,
+ expected_return_at TIMESTAMPTZ,
+ late_note TEXT,
+ status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','returned','cancelled')),
+ generated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+ executed_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+ returned_at TIMESTAMPTZ,
+ cancelled_at TIMESTAMPTZ,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_gate_pass_status_date ON student_gate_passes(status,departure_at DESC);
 CREATE TABLE IF NOT EXISTS notification_reads (
  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  notice_id BIGINT NOT NULL REFERENCES notices(id) ON DELETE CASCADE,

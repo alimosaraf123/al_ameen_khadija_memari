@@ -39,6 +39,8 @@ const menus: any[] = [
 
   ['Student Behaviour', '/behavior'],
 
+  ['Student Gate Pass', '/gate-pass'],
+
   ['Student Illness / Problem', '/illness'],
 
   ['Weekly Test Marks', '/marks'],
