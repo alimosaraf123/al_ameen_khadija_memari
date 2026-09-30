@@ -3,7 +3,7 @@ const pool=require('../db');
 const {auth,allow}=require('../middleware/auth');
 const asyncHandler=require('../utils/asyncHandler');
 const router=express.Router();
-const roles=allow('super_admin','admin');
+const roles=allow('super_admin','admin','office');
 async function notifyGuardian(client,studentId,token,departure,userId){
  const notice=await client.query(`INSERT INTO notices(title,notice_text,notice_type,published_by,is_active,published_at) VALUES($1,$2,'gate_pass',$3,TRUE,NOW()) RETURNING id`,['Gate Pass Generated',`Gate pass ${token} has been prepared. Departure: ${departure}.`,userId]);
  await client.query(`INSERT INTO notice_targets(notice_id,target_type,target_value) VALUES($1,'student',$2)`,[notice.rows[0].id,String(studentId)]);

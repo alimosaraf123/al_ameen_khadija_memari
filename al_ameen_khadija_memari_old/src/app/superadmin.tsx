@@ -29,6 +29,8 @@ const menus: any[] = [
 
   ['Teachers', '/teachers'],
 
+  ['Gateman / Office / Library Accounts', '/service-staff'],
+
   ['Guardians', '/guardians'],
 
   ['Rooms', '/rooms'],

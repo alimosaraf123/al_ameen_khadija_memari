@@ -28,6 +28,7 @@ app.use('/api/routines',require('./src/routes/routines'));
 app.use('/api/gate-passes',require('./src/routes/gatePasses'));
 app.use('/api/visits',require('./src/routes/visits'));
 app.use('/api/student-lifecycle',require('./src/routes/studentLifecycle'));
+app.use('/api/service-panels',require('./src/routes/servicePanels'));
 app.use('/api/marks',require('./src/routes/marks'));
 app.use('/api/terminal-exams',require('./src/routes/terminalExams'));
 app.use('/api/dues',require('./src/routes/dues'));

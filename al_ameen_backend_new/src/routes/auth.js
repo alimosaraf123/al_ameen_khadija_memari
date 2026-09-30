@@ -170,7 +170,7 @@ router.post(
 
   auth,
 
-  allow('guardian'),
+  allow('guardian','teacher','gateman','office','library'),
 
   asyncHandler(async (req, res) => {
 
@@ -294,7 +294,7 @@ router.post(
 
   auth,
 
-  allow('guardian','teacher'),
+  allow('guardian','teacher','gateman','office','library'),
 
   asyncHandler(async (req, res) => {
 
@@ -469,12 +469,12 @@ router.post(
       result.rows[0];
 
     if (
-      user.role !== 'guardian'
+      !['guardian','teacher','gateman','office','library'].includes(user.role)
     ) {
       return res.status(403).json({
         success: false,
         message:
-          'mPIN login is only available for Guardian accounts',
+          'mPIN login is not available for this account',
       });
     }
 

@@ -26,7 +26,8 @@ async function exitClearance(studentId) {
   const isSdf=x=>/\bs\.?d\.?f\b|student development fund/i.test(String(x.due_title||''));
   const isLibrary=x=>/library|book/i.test(String(x.due_title||''));
   const isMonthly=x=>/monthly|tuition|school fee|fees?/i.test(String(x.due_title||''))&&!isSdf(x);
-  const sdfDues=dues.filter(isSdf),libraryDues=dues.filter(isLibrary),monthlyDues=dues.filter(isMonthly);
+  const libraryLoans=(await pool.query(`SELECT l.id,b.accession_no,b.title,l.issued_at,l.due_date,'Library Book: '||b.title AS due_title FROM library_loans l JOIN library_books b ON b.id=l.book_id WHERE l.student_id=$1 AND l.returned_at IS NULL ORDER BY l.due_date`,[studentId])).rows;
+  const sdfDues=dues.filter(isSdf),libraryDues=[...dues.filter(isLibrary),...libraryLoans],monthlyDues=dues.filter(isMonthly);
   const exit=(await pool.query('SELECT * FROM student_exit_records WHERE student_id=$1',[studentId])).rows[0]||null;
   return {student,exit,dues,sdf_dues:sdfDues,library_dues:libraryDues,monthly_fee_dues:monthlyDues,monthly_fee_due_total:monthlyDues.reduce((n,x)=>n+Number(x.amount||0),0),tc_blocked:sdfDues.length>0||libraryDues.length>0};
 }

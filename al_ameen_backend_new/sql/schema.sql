@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS users (
   login_id VARCHAR(100) UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   full_name VARCHAR(150) NOT NULL,
-  role VARCHAR(30) NOT NULL CHECK (role IN ('super_admin','admin','teacher','guardian')),
+  role VARCHAR(30) NOT NULL CHECK (role IN ('super_admin','admin','teacher','guardian','gateman','office','library')),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -375,3 +375,10 @@ CREATE TABLE IF NOT EXISTS notification_reads (
  read_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
  PRIMARY KEY(user_id,notice_id)
 );
+
+CREATE TABLE IF NOT EXISTS service_staff_profiles (id BIGSERIAL PRIMARY KEY,user_id BIGINT UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,staff_id VARCHAR(100) UNIQUE NOT NULL,name VARCHAR(150) NOT NULL,staff_role VARCHAR(30) NOT NULL CHECK(staff_role IN ('gateman','office','library')),mobile VARCHAR(30),created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS gate_entry_logs (id BIGSERIAL PRIMARY KEY,student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,permission_type VARCHAR(20) NOT NULL CHECK(permission_type IN ('visit','gate_pass')),permission_id BIGINT NOT NULL,entered_by BIGINT REFERENCES users(id) ON DELETE SET NULL,entered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),remarks TEXT);
+CREATE TABLE IF NOT EXISTS dining_stock (id BIGSERIAL PRIMARY KEY,item_name VARCHAR(150) UNIQUE NOT NULL,unit VARCHAR(30) NOT NULL,current_quantity NUMERIC(12,2) NOT NULL DEFAULT 0,reorder_level NUMERIC(12,2) NOT NULL DEFAULT 0,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS dining_stock_transactions (id BIGSERIAL PRIMARY KEY,stock_id BIGINT NOT NULL REFERENCES dining_stock(id) ON DELETE CASCADE,transaction_type VARCHAR(10) NOT NULL CHECK(transaction_type IN ('in','out')),quantity NUMERIC(12,2) NOT NULL CHECK(quantity>0),note TEXT,entered_by BIGINT REFERENCES users(id) ON DELETE SET NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS library_books (id BIGSERIAL PRIMARY KEY,accession_no VARCHAR(100) UNIQUE NOT NULL,title VARCHAR(250) NOT NULL,author VARCHAR(180),total_copies INTEGER NOT NULL DEFAULT 1 CHECK(total_copies>=0),available_copies INTEGER NOT NULL DEFAULT 1 CHECK(available_copies>=0),created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS library_loans (id BIGSERIAL PRIMARY KEY,book_id BIGINT NOT NULL REFERENCES library_books(id),student_id BIGINT NOT NULL REFERENCES students(id),issued_at DATE NOT NULL DEFAULT CURRENT_DATE,due_date DATE NOT NULL,returned_at TIMESTAMPTZ,issued_by BIGINT REFERENCES users(id) ON DELETE SET NULL,returned_by BIGINT REFERENCES users(id) ON DELETE SET NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());

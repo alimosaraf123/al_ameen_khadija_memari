@@ -47,6 +47,8 @@ import {
 } from '../components/ui';
 
 
+const panelForRole=(role:string)=>role==='guardian'?'/guardian':role==='teacher'?'/teacher':role==='gateman'?'/gateman':role==='office'?'/office':role==='library'?'/library':'/';
+
 export default function Login() {
 
   // NORMAL LOGIN
@@ -237,6 +239,12 @@ export default function Login() {
         );
 
 
+        if (['gateman','office','library'].includes(data.user.role)) {
+          await saveGuardianDeviceAccount(data.user.login_id || userId.trim());
+          router.replace(panelForRole(data.user.role) as any);
+          return;
+        }
+
         if (
           data.user.role ===
           'guardian'
@@ -410,9 +418,7 @@ export default function Login() {
         setMpin('');
 
 
-        router.replace(
-          '/guardian'
-        );
+        router.replace(panelForRole(data.user.role) as any);
 
 
       } catch (e: any) {
@@ -577,9 +583,7 @@ export default function Login() {
         );
 
 
-        router.replace(
-          '/guardian'
-        );
+        router.replace(panelForRole(data.user.role) as any);
 
 
       } catch (e: any) {
