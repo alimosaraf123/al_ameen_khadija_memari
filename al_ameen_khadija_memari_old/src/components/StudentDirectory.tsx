@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
 import { api, API_BASE } from '../lib/api';
 import { getToken } from '../lib/auth';
 import { STUDENT_CLASSES, isVisibleStudentClass } from '../lib/studentClasses';
@@ -29,6 +30,14 @@ export function Select({ label, value, options, onChange, searchable=false }: { 
     </Modal>
   </>;
 }
+
+const DOCUMENT_SLOTS = [
+  ['birth_certificate','Date Of Birth'], ['mp_admit','MP Admit'], ['mp_marksheet','MP Marksheet'],
+  ['aadhaar','Aadhaar'], ['bank_passbook','Passbook'], ['obc_certificate','OBC'],
+  ['ph_certificate','P.H. Certificate'], ['xi_registration','XI Registration'], ['hs_admit','H.S Admit'],
+  ['hs_marksheet','H.S Marksheet'], ['hs_certificate','H.S Certificate'], ['admission_slip','Admission Slip'],
+  ['other','Other'],
+] as const;
 
 const columns: [string, string, number][] = [
   ['serial', 'S.L', 45], ['photo', 'Photo', 66], ['registration_no', 'Reg.', 95],
@@ -57,6 +66,7 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
   const [documentsLoading, setDocumentsLoading] = useState(false);
   const [documentsError, setDocumentsError] = useState('');
   const [documentBusy, setDocumentBusy] = useState<string | null>(null);
+  const [pendingDocuments, setPendingDocuments] = useState<Record<string, any>>({});
   const years = useMemo(() => [...new Set(students.flatMap(sessionYears))].sort((a, b) => b - a), [students]);
   const classes = useMemo(() => [...new Set<string>([
     ...STUDENT_CLASSES,
@@ -82,6 +92,7 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
     setDocumentStudent(student);
     setDocuments([]);
     setDocumentsError('');
+    setPendingDocuments({});
     setDocumentsOpen(true);
     setDocumentsLoading(true);
     try {
@@ -93,6 +104,37 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
       setDocumentsLoading(false);
     }
   };
+
+  const chooseDocument = async (type: string) => {
+    const picked = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'], copyToCacheDirectory: true });
+    if (!picked.canceled) setPendingDocuments(current => ({ ...current, [type]: picked.assets[0] }));
+  };
+
+  const uploadSelectedDocuments = async () => {
+    if (!documentStudent) return;
+    const selected = Object.entries(pendingDocuments);
+    if (!selected.length) return Alert.alert('Select files', 'Choose one or more document files first.');
+    setDocumentBusy('upload');
+    try {
+      for (const [type, file] of selected) {
+        const existing = documents.find(item => item.document_type === type);
+        const body = new FormData();
+        if ((file as any).file) body.append('file', (file as any).file);
+        else body.append('file', { uri: (file as any).uri, name: (file as any).name || type, type: (file as any).mimeType || 'application/octet-stream' } as any);
+        body.append('document_type', type);
+        body.append('document_title', DOCUMENT_SLOTS.find(item => item[0] === type)?.[1] || (file as any).name || 'Document');
+        await api(existing ? '/api/documents/' + existing.id + '/replace' : '/api/documents/student/' + documentStudent.id, { method: 'POST', body });
+      }
+      setPendingDocuments({});
+      const refreshed = await api('/api/documents/student/' + documentStudent.id);
+      setDocuments(refreshed.documents || []);
+      Alert.alert('Uploaded', selected.length + ' document(s) uploaded successfully.');
+    } catch (error: any) { Alert.alert('Upload failed', error.message); }
+    finally { setDocumentBusy(null); }
+  };
+
+  const documentFor = (type: string) => documents.find(item => item.document_type === type);
+  const previewUrl = (doc: any) => doc?.file_url && !/\.pdf(?:[?#]|$)/i.test(doc.file_url) ? doc.file_url : '';
 
   const documentFileName = (doc: any) => {
     const title = String(doc.document_title || doc.document_type || 'document').replace(/[\\/:*?"<>|]/g, '_');
@@ -188,43 +230,16 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
       </View>
     </>}
     <Modal visible={documentsOpen} transparent animationType="fade" onRequestClose={() => setDocumentsOpen(false)}>
-      <View style={s.overlay}>
-        <View style={s.documentPanel}>
-          <View style={s.modalHeader}>
-            <Text style={s.modalTitle}>Student Photo & Documents</Text>
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close documents" onPress={() => setDocumentsOpen(false)}>
-              <Text style={s.close}>{String.fromCharCode(215)}</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView contentContainerStyle={s.documentContent}>
-            {documentStudent && (
-              <View style={s.studentDocumentHeader}>
-                <Photo student={documentStudent} large />
-                <View style={{ flex: 1 }}>
-                  <Text style={s.documentStudentName}>{documentStudent.student_name}</Text>
-                  <Text style={s.documentMeta}>Reg: {documentStudent.registration_no || '-'} | Class: {documentStudent.class_name || '-'}</Text>
-                </View>
-              </View>
-            )}
-            {documentsLoading ? <ActivityIndicator style={{ margin: 24 }} /> : documentsError ? <Text style={s.error}>{documentsError}</Text> : documents.length === 0 ? (
-              <Text style={s.empty}>No uploaded documents found.</Text>
-            ) : documents.map((doc) => (
-              <View key={doc.id} style={s.documentCard}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.documentTitle}>{doc.document_title || doc.document_type}</Text>
-                  <Text style={s.documentMeta}>{String(doc.document_type || '').replace(/_/g, ' ')}</Text>
-                </View>
-                <View style={s.inline}>
-                  <TouchableOpacity disabled={documentBusy !== null} style={[s.docAction, s.view]} onPress={() => handleDocument(doc, 'view')}><Text>View</Text></TouchableOpacity>
-                  <TouchableOpacity disabled={documentBusy !== null} style={[s.docAction, s.download]} onPress={() => handleDocument(doc, 'download')}><Text style={s.whiteText}>Download</Text></TouchableOpacity>
-                  <TouchableOpacity disabled={documentBusy !== null} style={[s.docAction, s.print]} onPress={() => handleDocument(doc, 'print')}><Text style={s.whiteText}>Print</Text></TouchableOpacity>
-                </View>
-              </View>
-            ))}
-            {documentBusy && <Text style={s.busyText}>Preparing document...</Text>}
-          </ScrollView>
-        </View>
-      </View>
+      <View style={s.overlay}><View style={s.documentPanel}>
+        <View style={s.documentTopBar}><TouchableOpacity style={s.documentCloseButton} onPress={() => setDocumentsOpen(false)}><Text style={s.whiteText}>Close</Text></TouchableOpacity><Text style={s.lastUpdated}>Last Updated{documents[0]?.uploaded_at ? '\n' + String(documents[0].uploaded_at).slice(0, 16).replace('T', ' ') : ''}</Text></View>
+        <Text style={s.registrationLine}>Reg. No. {documentStudent?.registration_no || '-'}</Text>
+        {documentsLoading ? <ActivityIndicator style={{margin:30}}/> : documentsError ? <Text style={s.error}>{documentsError}</Text> : <ScrollView contentContainerStyle={s.documentGrid}>
+          <View style={s.documentTile}><Text style={s.tileTitle}>Photo</Text><View style={s.previewBox}>{documentStudent && <Photo student={documentStudent} large/>}</View><View style={s.tileActions}><TouchableOpacity style={[s.iconButton,s.viewIcon]} onPress={()=>documentStudent?.photo_url&&Linking.openURL(/^https?:/.test(documentStudent.photo_url)?documentStudent.photo_url:API_BASE+documentStudent.photo_url)}><Text style={s.iconText}>View</Text></TouchableOpacity></View></View>
+          {DOCUMENT_SLOTS.map(([type,label])=>{const doc=documentFor(type),pending=pendingDocuments[type],preview=pending?.uri||previewUrl(doc);return <View key={type} style={s.documentTile}><Text numberOfLines={1} style={s.tileTitle}>{label}</Text><View style={s.previewBox}>{preview?<Image source={{uri:preview}} resizeMode="contain" style={s.documentPreview}/>:<Text style={s.noPreview}>{doc?'PDF / File':'No document'}</Text>}</View><TouchableOpacity disabled={documentBusy!==null} style={s.chooseButton} onPress={()=>chooseDocument(type)}><Text numberOfLines={1} style={s.chooseText}>{pending?pending.name:'Choose File'}</Text></TouchableOpacity><View style={s.tileActions}><TouchableOpacity disabled={!doc||documentBusy!==null} style={[s.iconButton,s.viewIcon,!doc&&s.disabled]} onPress={()=>doc&&handleDocument(doc,'view')}><Text style={s.iconText}>View</Text></TouchableOpacity><TouchableOpacity disabled={!doc||documentBusy!==null} style={[s.iconButton,s.printIcon,!doc&&s.disabled]} onPress={()=>doc&&handleDocument(doc,'print')}><Text style={s.iconText}>Print</Text></TouchableOpacity><TouchableOpacity disabled={!doc||documentBusy!==null} style={[s.iconButton,s.downloadIcon,!doc&&s.disabled]} onPress={()=>doc&&handleDocument(doc,'download')}><Text style={s.iconText}>Download</Text></TouchableOpacity></View></View>})}
+        </ScrollView>}
+        <TouchableOpacity disabled={documentBusy!==null} onPress={uploadSelectedDocuments} style={[s.uploadAllButton,documentBusy!==null&&s.disabled]}><Text style={s.whiteText}>{documentBusy==='upload'?'Uploading...':'Upload Selected Documents'}</Text></TouchableOpacity>
+        {documentBusy && documentBusy!=='upload' && <Text style={s.busyText}>Preparing document...</Text>}
+      </View></View>
     </Modal>
     <Modal visible={detailOpen} transparent animationType="fade" onRequestClose={() => setDetailOpen(false)}><View style={s.overlay}><View style={s.detailPanel}>
       <View style={s.modalHeader}><Text style={s.modalTitle}>Student Details</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Close student details" onPress={() => setDetailOpen(false)}><Text style={s.close}>-</Text></TouchableOpacity></View>
@@ -274,5 +289,6 @@ const s = StyleSheet.create({
   print: { backgroundColor: '#475569' },
   whiteText: { color: '#fff', fontWeight: '700' },
   busyText: { textAlign: 'center', color: '#1565c0', fontWeight: '700', padding: 8 },
-  modalHeader: { backgroundColor: '#11101e', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, modalTitle: { color: '#fff', fontSize: 16, fontWeight: '700' }, close: { color: '#fff', fontSize: 28, paddingHorizontal: 8 }, detailRow: { flexDirection: 'row', gap: 12, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }, detailLabel: { width: '42%', color: '#475569', fontWeight: '600' },
+  documentTopBar:{minHeight:48,backgroundColor:'#eef6fc',borderWidth:1,borderColor:'#94a3b8',borderRadius:5,padding:7,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},documentCloseButton:{backgroundColor:'#dc3545',paddingHorizontal:12,paddingVertical:8,borderRadius:4},lastUpdated:{fontSize:9,textAlign:'right',color:'#475569'},registrationLine:{paddingHorizontal:18,paddingTop:8,color:'#475569'},documentGrid:{padding:14,flexDirection:'row',flexWrap:'wrap',gap:18,alignItems:'flex-start'},documentTile:{width:158,minHeight:200,borderWidth:1,borderColor:'#b6bec8',borderRadius:7,backgroundColor:'#f8fafc',overflow:'hidden'},tileTitle:{textAlign:'center',fontSize:13,paddingVertical:5,color:'#111827'},previewBox:{height:126,alignItems:'center',justifyContent:'center',backgroundColor:'#fff'},documentPreview:{width:'100%',height:'100%'},noPreview:{color:'#94a3b8',fontSize:12},chooseButton:{height:28,backgroundColor:'#60a5fa',justifyContent:'center',paddingHorizontal:5},chooseText:{fontSize:10,color:'#0f172a'},tileActions:{minHeight:40,backgroundColor:'#d1d5db',flexDirection:'row',justifyContent:'space-around',alignItems:'center',padding:4},iconButton:{paddingHorizontal:7,paddingVertical:7,borderRadius:4},viewIcon:{backgroundColor:'#0d6efd'},printIcon:{backgroundColor:'#059669'},downloadIcon:{backgroundColor:'#06b6d4'},iconText:{color:'#fff',fontSize:10,fontWeight:'800'},uploadAllButton:{alignSelf:'center',backgroundColor:'#0d6efd',paddingHorizontal:18,paddingVertical:11,borderRadius:6,marginBottom:14},
+    modalHeader: { backgroundColor: '#11101e', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, modalTitle: { color: '#fff', fontSize: 16, fontWeight: '700' }, close: { color: '#fff', fontSize: 28, paddingHorizontal: 8 }, detailRow: { flexDirection: 'row', gap: 12, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }, detailLabel: { width: '42%', color: '#475569', fontWeight: '600' },
 });
