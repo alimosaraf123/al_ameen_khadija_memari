@@ -4,11 +4,13 @@ const express=require('express');
 const cors=require('cors');
 const pool=require('./src/db');
 const {moduleAccess}=require('./src/middleware/moduleAccess');
+const {governance}=require('./src/middleware/governance');
 
 const app=express();
 const PORT=process.env.PORT||3000;
 app.use(cors());
-app.use(express.json({limit:'2mb'}));
+app.use(express.json({limit:'20mb'}));
+app.use(governance);
 app.use('/uploads',express.static(path.join(__dirname,'uploads')));
 
 app.get('/',(req,res)=>res.json({success:true,message:'Al-Ameen Backend API is running'}));
@@ -29,6 +31,7 @@ app.use('/api/routines',...moduleAccess('routines'),require('./src/routes/routin
 app.use('/api/gate-passes',...moduleAccess('gate_passes'),require('./src/routes/gatePasses'));
 app.use('/api/visits',...moduleAccess('visits'),require('./src/routes/visits'));
 app.use('/api/student-lifecycle',...moduleAccess('student_lifecycle'),require('./src/routes/studentLifecycle'));
+app.use('/api/system-admin',require('./src/routes/systemAdmin'));
 app.use('/api/service-panels',...moduleAccess('service_panels'),require('./src/routes/servicePanels'));
 app.use('/api/marks',...moduleAccess('marks'),require('./src/routes/marks'));
 app.use('/api/terminal-exams',...moduleAccess('terminal_exams'),require('./src/routes/terminalExams'));

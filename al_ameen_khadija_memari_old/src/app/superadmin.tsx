@@ -67,14 +67,18 @@ const menus: any[] = [
 
   ['Student Deposit Fund', '/deposit-fund'],
 
+  ['Activity Audit Log', '/audit-log'],
+
+  ['System Administration', '/system-admin'],
+
 ];
 
 
 export default function Dashboard() {
   const [unread,setUnread]=useState(0);
-  const [restricted,setRestricted]=useState(false),[permissions,setPermissions]=useState<string[]>([]);
+  const [restricted,setRestricted]=useState(false),[permissions,setPermissions]=useState<string[]>([]),[userRole,setUserRole]=useState('');
   const loadCounter=async()=>{try{const d=await api('/api/notices/admin-counter');setUnread(d.unread||0);}catch{}};
-  useEffect(()=>{void api('/api/me').then(d=>{setRestricted(!!d.restricted);setPermissions(d.permissions||[])}).catch(()=>{});void loadCounter();const timer=setInterval(loadCounter,30000);return()=>clearInterval(timer);},[]);
+  useEffect(()=>{void api('/api/me').then(d=>{setRestricted(!!d.restricted);setPermissions(d.permissions||[]);setUserRole(d.user?.role||'')}).catch(()=>{});void loadCounter();const timer=setInterval(loadCounter,30000);return()=>clearInterval(timer);},[]);
   const openNotifications=async()=>{try{await api('/api/notices/read-all',{method:'POST'});setUnread(0);}finally{router.push('/notices');}};
 
   const logout =
@@ -114,7 +118,7 @@ export default function Dashboard() {
           style={s.grid}
         >
 
-          {menus.filter(([,path])=>!restricted||permissions.includes(menuPermission[path])).map(
+          {menus.filter(([,path])=>path==='/system-admin'?userRole==='super_admin':path==='/audit-log'?true:!restricted||permissions.includes(menuPermission[path])).map(
             ([title, path]) => (
 
               <TouchableOpacity
