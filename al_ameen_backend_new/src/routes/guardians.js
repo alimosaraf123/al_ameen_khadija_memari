@@ -1247,6 +1247,8 @@ router.get(
 
         marks,
 
+        gatePasses,
+
         notices,
 
       ] =
@@ -1393,6 +1395,20 @@ router.get(
 
           pool.query(
             `
+            SELECT gp.id,gp.token_no,gp.reason,gp.status,gp.departure_at,gp.expected_return_at,gp.returned_at,gp.printed_at,gp.created_at,
+                   to_char(gp.departure_at,'DD-MM-YYYY HH24:MI') AS departure_text,
+                   to_char(gp.expected_return_at,'DD-MM-YYYY HH24:MI') AS return_text
+            FROM student_gate_passes gp
+            WHERE gp.student_id=$1
+            ORDER BY gp.created_at DESC
+            LIMIT 100
+            `,
+            [studentId]
+          ),
+
+
+          pool.query(
+            `
             SELECT DISTINCT n.* FROM notices n
             JOIN notice_targets nt ON nt.notice_id=n.id
             WHERE n.is_active=TRUE AND (
@@ -1465,6 +1481,9 @@ router.get(
 
         marks:
           marks.rows,
+
+        gate_passes:
+          gatePasses.rows,
 
         notices:
           notices.rows,

@@ -24,7 +24,7 @@ import {
 } from '../lib/guardianDevice';
 import { Field, Button, Muted } from '../components/ui';
 
-type TabName = 'home' | 'result' | 'details' | 'documents' | 'settings';
+type TabName = 'home' | 'result' | 'gatepass' | 'details' | 'documents' | 'settings';
 
 const PAYMENT_URL = 'https://alameenmission.net/fees_payment/fees_memari/';
 const RECEIPT_URL = 'https://alameenmission.net/fees_receipt/';
@@ -320,6 +320,7 @@ export default function Guardian() {
   const notices = childData?.notices || [];
   const marks = childData?.marks || [];
   const documents = childData?.documents || [];
+  const gatePasses = childData?.gate_passes || [];
   const photoUrl = getPhotoUrl();
 
   return (
@@ -366,6 +367,7 @@ export default function Guardian() {
       >
         <Tab title="Home" active={tab === 'home'} onPress={() => setTab('home')} />
         <Tab title="Result" active={tab === 'result'} onPress={() => setTab('result')} />
+        <Tab title="Gate Pass" active={tab === 'gatepass'} onPress={() => setTab('gatepass')} />
         <Tab
           title="Student Details"
           active={tab === 'details'}
@@ -407,9 +409,9 @@ export default function Guardian() {
                     {notice.title || notice.notice_title || 'Notice'}
                   </Text>
 
-                  {!!(notice.message || notice.content || notice.description) && (
+                  {!!(notice.notice_text || notice.message || notice.content || notice.description) && (
                     <Text style={styles.noticeText}>
-                      {notice.message || notice.content || notice.description}
+                      {notice.notice_text || notice.message || notice.content || notice.description}
                     </Text>
                   )}
 
@@ -589,6 +591,13 @@ export default function Guardian() {
         )}
 
         {/* STUDENT DETAILS */}
+        {tab === 'gatepass' && (
+          <>
+            <Text style={styles.heading}>Gate Pass Records</Text>
+            {gatePasses.length===0?<Card><Muted>No Gate Pass record found.</Muted></Card>:gatePasses.map((pass:any)=><Card key={pass.id} tone="notice"><View style={styles.gateHeader}><Text style={styles.noticeTitle}>{pass.token_no}</Text><Text style={[styles.gateStatus,pass.status==='returned'&&styles.gateReturned,pass.status==='cancelled'&&styles.gateCancelled]}>{pass.status==='draft'?'Ready to Print':pass.status==='pending'?'Outside / Return Pending':pass.status==='returned'?'Returned':'Cancelled'}</Text></View><Text style={styles.noticeText}>Reason: {pass.reason}</Text><Text style={styles.noticeText}>Departure: {pass.departure_text||String(pass.departure_at||'').slice(0,16).replace('T',' ')}</Text><Text style={styles.noticeText}>Expected Return: {pass.return_text||String(pass.expected_return_at||'').slice(0,16).replace('T',' ')||'-'}</Text>{pass.returned_at&&<Text style={styles.dateText}>Returned: {String(pass.returned_at).slice(0,16).replace('T',' ')}</Text>}</Card>)}
+          </>
+        )}
+
         {tab === 'details' && (
           <>
             <Text style={styles.heading}>Student Details</Text>
@@ -1282,6 +1291,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   card: { backgroundColor: '#ffffff', borderRadius: 18, padding: 18, marginBottom: 12, borderWidth: 1, borderColor: '#e0e7ff' },
-  noticeCard: { backgroundColor: '#fffbeb', borderColor: '#fde68a', borderLeftWidth: 4, borderLeftColor: '#f59e0b' },
+  gateHeader:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',gap:10},gateStatus:{backgroundColor:'#fff0b8',color:'#7c5200',fontWeight:'800',fontSize:11,paddingHorizontal:9,paddingVertical:5,borderRadius:12},gateReturned:{backgroundColor:'#dcfce7',color:'#166534'},gateCancelled:{backgroundColor:'#fee2e2',color:'#991b1b'},
+    noticeCard: { backgroundColor: '#fffbeb', borderColor: '#fde68a', borderLeftWidth: 4, borderLeftColor: '#f59e0b' },
   feesCard: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
 });
