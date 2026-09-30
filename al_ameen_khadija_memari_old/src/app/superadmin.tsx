@@ -118,7 +118,7 @@ export default function Dashboard() {
           style={s.grid}
         >
 
-          {menus.filter(([,path])=>path==='/system-admin'?userRole==='super_admin':path==='/audit-log'?true:!restricted||permissions.includes(menuPermission[path])).map(
+          {menus.filter(([,path])=>path==='/system-admin'?userRole==='super_admin':path==='/audit-log'?!restricted:!restricted||permissions.includes(menuPermission[path])).map(
             ([title, path]) => (
 
               <TouchableOpacity
