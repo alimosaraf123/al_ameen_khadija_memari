@@ -8,7 +8,7 @@ const options = [
   ['data', 'Excel & Bulk Photos'], ['tc', 'T.C'], ['reactivation', 'Re-Activation Request'], ['transfer', 'Transfer'],
 ];
 const enabled = new Set([
-  'entry', 'details', 'behavior', 'attendance', 'visit', 'gatepass', 'marks', 'documents', 'dues', 'passwords', 'data',
+  'entry', 'details', 'behavior', 'attendance', 'visit', 'gatepass', 'marks', 'documents', 'dues', 'promotion', 'passwords', 'data', 'tc', 'reactivation',
 ]);
 
 export default function StudentMenu({ visible, onClose, onSelect }: { visible: boolean; onClose: () => void; onSelect: (key: string) => void }) {

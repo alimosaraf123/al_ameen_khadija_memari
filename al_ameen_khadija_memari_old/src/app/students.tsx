@@ -630,6 +630,7 @@ export default function Students() {
         if (key === 'attendance') router.push('/attendance');
         if (key === 'gatepass') router.push('/gate-pass');
         if (key === 'visit') router.push('/visits');
+        if (['promotion','tc','reactivation'].includes(key)) router.push({pathname:'/student-lifecycle',params:{tab:key}});
         if (key === 'marks') router.push('/marks');
         if (key === 'documents') router.push('/documents');
         if (key === 'dues') router.push('/dues');

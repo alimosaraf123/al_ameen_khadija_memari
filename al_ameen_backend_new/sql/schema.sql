@@ -211,9 +211,25 @@ CREATE TABLE IF NOT EXISTS student_exit_records (
   dropout_reason TEXT NOT NULL,
   tc_issued_at TIMESTAMPTZ,
   tc_issued_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  reactivated_at TIMESTAMPTZ,
+  reactivated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
   created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS student_promotion_history (
+  id BIGSERIAL PRIMARY KEY, student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  from_class VARCHAR(50), to_class VARCHAR(50) NOT NULL, from_session VARCHAR(20), to_session VARCHAR(20) NOT NULL,
+  promoted_by BIGINT REFERENCES users(id) ON DELETE SET NULL, promoted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS student_reactivation_requests (
+  id BIGSERIAL PRIMARY KEY, student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  request_reason TEXT NOT NULL, request_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
+  requested_by BIGINT REFERENCES users(id) ON DELETE SET NULL, reviewed_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ, review_note TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS student_dues (
