@@ -39,10 +39,13 @@ const STUDENT_DOCUMENT_TYPES = [
   { key: 'obc_certificate', label: 'OBC Certificate' },
   { key: 'ph_certificate', label: 'PH Certificate' },
   { key: 'xi_registration', label: 'XI Registration' },
-  { key: 'hs_admit', label: 'HS Admit' },
+  { key: 'hs_admit_3rd', label: 'HS Admit 3rd Semester' },
+  { key: 'hs_admit_4th', label: 'HS Admit 4th Semester' },
   { key: 'hs_marksheet', label: 'HS Marksheet' },
   { key: 'hs_certificate', label: 'HS Certificate' },
   { key: 'admission_slip', label: 'Admission Slip' },
+  { key: 'signature', label: 'Signature' },
+  { key: 'other', label: 'Others' },
 ];
 
 const LabeledField = ({
@@ -275,7 +278,7 @@ export default function Students() {
     for (const [documentType, asset] of selections) {
       const selectedAsset: any = asset;
       const definition = STUDENT_DOCUMENT_TYPES.find((item) => item.key === documentType);
-      const existing = existingDocuments.find((item: any) => item.document_type === documentType);
+      const existing = existingDocuments.find((item: any) => item.document_type === documentType || (documentType === 'hs_admit_3rd' && item.document_type === 'hs_admit'));
       const fd = new FormData();
       fd.append('document_title', definition?.label || selectedAsset.name);
       if (!existing) {

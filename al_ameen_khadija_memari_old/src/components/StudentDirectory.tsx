@@ -34,9 +34,10 @@ export function Select({ label, value, options, onChange, searchable=false }: { 
 const DOCUMENT_SLOTS = [
   ['birth_certificate','Date Of Birth'], ['mp_admit','MP Admit'], ['mp_marksheet','MP Marksheet'],
   ['aadhaar','Aadhaar'], ['bank_passbook','Passbook'], ['obc_certificate','OBC'],
-  ['ph_certificate','P.H. Certificate'], ['xi_registration','XI Registration'], ['hs_admit','H.S Admit'],
+  ['ph_certificate','P.H. Certificate'], ['xi_registration','XI Registration'],
+  ['hs_admit_3rd','HS Admit 3rd Semester'], ['hs_admit_4th','HS Admit 4th Semester'],
   ['hs_marksheet','H.S Marksheet'], ['hs_certificate','H.S Certificate'], ['admission_slip','Admission Slip'],
-  ['other','Other'],
+  ['signature','Signature'], ['other','Others'],
 ] as const;
 
 const columns: [string, string, number][] = [
@@ -117,7 +118,7 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
     setDocumentBusy('upload');
     try {
       for (const [type, file] of selected) {
-        const existing = documents.find(item => item.document_type === type);
+        const existing = documents.find(item => item.document_type === type || (type === 'hs_admit_3rd' && item.document_type === 'hs_admit'));
         const body = new FormData();
         if ((file as any).file) body.append('file', (file as any).file);
         else body.append('file', { uri: (file as any).uri, name: (file as any).name || type, type: (file as any).mimeType || 'application/octet-stream' } as any);
@@ -133,7 +134,7 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
     finally { setDocumentBusy(null); }
   };
 
-  const documentFor = (type: string) => documents.find(item => item.document_type === type);
+  const documentFor = (type: string) => documents.find(item => item.document_type === type || (type === 'hs_admit_3rd' && item.document_type === 'hs_admit'));
   const previewUrl = (doc: any) => doc?.file_url && !/\.pdf(?:[?#]|$)/i.test(doc.file_url) ? doc.file_url : '';
 
   const documentFileName = (doc: any) => {

@@ -343,7 +343,7 @@ const LEGACY_TYPES=[
  ['dob','birth_certificate','Date of Birth Certificate'],['mpAdmit','mp_admit','MP Admit'],['mpMarksheet','mp_marksheet','MP Marksheet'],
  ['aadhar','aadhaar','Aadhaar'],['passbook','bank_passbook','Bank Passbook'],['obc','obc_certificate','OBC Certificate'],
  ['phCertificate','ph_certificate','P.H. Certificate'],['xiRegistration','xi_registration','XI Registration'],
- ['hsAdmit','hs_admit','H.S Admit'],['hsMarksheet','hs_marksheet','H.S Marksheet'],['hsCertificate','hs_certificate','H.S Certificate']
+ ['hsAdmit','hs_admit_3rd','HS Admit 3rd Semester'],['hsMarksheet','hs_marksheet','H.S Marksheet'],['hsCertificate','hs_certificate','H.S Certificate']
 ];
 function legacyToken(html){const tag=(html.match(/<input[^>]*name=["']csrf_token["'][^>]*>/is)||[])[0]||'';return (tag.match(/value=["']([^"']+)["']/i)||[])[1]||'';}
 function legacyCookie(response,current=''){const raw=response.headers.get('set-cookie');return raw?raw.split(';')[0]:current;}

@@ -46,11 +46,13 @@ const DOCUMENT_TYPES = [
   { key: 'obc_certificate', label: 'OBC Certificate' },
   { key: 'ph_certificate', label: 'P.H. Certificate' },
   { key: 'xi_registration', label: 'XI Registration' },
-  { key: 'hs_admit', label: 'H.S Admit' },
+  { key: 'hs_admit_3rd', label: 'HS Admit 3rd Semester' },
+  { key: 'hs_admit_4th', label: 'HS Admit 4th Semester' },
   { key: 'hs_marksheet', label: 'H.S Marksheet' },
   { key: 'hs_certificate', label: 'H.S Certificate' },
   { key: 'admission_slip', label: 'Admission Slip' },
-  { key: 'other', label: 'Other Document' },
+  { key: 'signature', label: 'Signature' },
+  { key: 'other', label: 'Others' },
 ];
 
 function safeFileName(name: string) {
@@ -991,7 +993,7 @@ export default function Documents() {
 
     return (
       list.find(
-        (doc) => doc.document_type === type
+        (doc) => doc.document_type === type || (type === 'hs_admit_3rd' && doc.document_type === 'hs_admit')
       ) || null
     );
   };
