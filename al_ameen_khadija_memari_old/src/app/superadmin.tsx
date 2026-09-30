@@ -109,7 +109,7 @@ export default function Dashboard() {
         <Text
           style={s.sub}
         >
-          {restricted ? 'Admin Dashboard' : 'Super Admin Dashboard'}
+          {restricted ? 'Nasmin Dashboard' : 'Super Admin Dashboard'}
         </Text>
         <TouchableOpacity onPress={openNotifications} style={s.notification}><Text style={s.notificationText}>🔔 Admin Notifications</Text>{unread>0&&<View style={s.badge}><Text style={s.badgeText}>{unread>99?'99+':unread}</Text></View>}</TouchableOpacity>
 
