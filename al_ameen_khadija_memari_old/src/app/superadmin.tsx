@@ -24,7 +24,7 @@ import { api } from '../lib/api';
 
 
 const menuPermission:Record<string,string>={
-  '/attendance':'attendance','/behavior':'behavior','/gate-pass':'gate_passes','/visits':'visits','/marks':'marks','/terminal-exams':'terminal_exams','/class-results':'terminal_exams','/problems':'problems','/routines':'routines','/notices':'notices'
+ '/students':'students','/teachers':'teachers','/service-staff':'service_staff','/gateman':'gateman_panel','/office':'office_panel','/library':'library_panel','/dining-stock':'dining_stock','/guardians':'guardians','/rooms':'rooms','/room-assignments':'room_assignments','/attendance':'attendance','/behavior':'behavior','/gate-pass':'gate_passes','/visits':'visits','/student-lifecycle':'student_lifecycle','/illness':'illness','/marks':'marks','/terminal-exams':'terminal_exams','/class-results':'published_results','/problems':'problems','/routines':'routines','/notices':'notices','/deposit-fund':'deposit_fund','/audit-log':'audit_log'
 };
 
 const menus: any[] = [
@@ -34,6 +34,14 @@ const menus: any[] = [
   ['Teachers', '/teachers'],
 
   ['Gateman / Office / Library Accounts', '/service-staff'],
+
+  ['Gateman Panel', '/gateman'],
+
+  ['Office Panel', '/office'],
+
+  ['Library Panel', '/library'],
+
+  ['Dining Stock', '/dining-stock'],
 
   ['Guardians', '/guardians'],
 
@@ -118,7 +126,7 @@ export default function Dashboard() {
           style={s.grid}
         >
 
-          {menus.filter(([,path])=>path==='/system-admin'?userRole==='super_admin':path==='/audit-log'?!restricted:!restricted||permissions.includes(menuPermission[path])).map(
+          {menus.filter(([,path])=>path==='/system-admin'?userRole==='super_admin':!restricted||permissions.includes(menuPermission[path])).map(
             ([title, path]) => (
 
               <TouchableOpacity
@@ -223,6 +231,11 @@ const s =
       fontWeight: '700',
       color: '#124a94',
     },
+
+    notification: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', backgroundColor: '#e8f1fb', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 9, marginBottom: 16 },
+    notificationText: { color: '#124a94', fontWeight: '800' },
+    badge: { marginLeft: 8, minWidth: 22, height: 22, paddingHorizontal: 5, borderRadius: 11, backgroundColor: '#c62828', alignItems: 'center', justifyContent: 'center' },
+    badgeText: { color: '#fff', fontSize: 11, fontWeight: '900' },
 
     logout: {
       backgroundColor: '#c62828',

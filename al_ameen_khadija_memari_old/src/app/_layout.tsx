@@ -1,8 +1,10 @@
 import { Stack } from 'expo-router';
+import RoleHomeButton from '../components/RoleHomeButton';
 
 export default function Layout() {
   return (
-    <Stack screenOptions={{ headerTitleAlign: 'center' }}>
+    <Stack screenOptions={{ headerTitleAlign: 'center', headerRight: () => <RoleHomeButton /> }}>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="guardian" options={{ headerShown: false }} />
       <Stack.Screen name="superadmin" options={{ headerShown: false }} />
       <Stack.Screen name="students" options={{ headerShown: false }} />

@@ -173,7 +173,7 @@ router.post(
 
   auth,
 
-  allow('guardian','teacher','gateman','office','library'),
+  allow('super_admin','admin','guardian','teacher','gateman','office','library'),
 
   asyncHandler(async (req, res) => {
 
@@ -303,7 +303,7 @@ router.post(
 
   auth,
 
-  allow('guardian','teacher','gateman','office','library'),
+  allow('super_admin','admin','guardian','teacher','gateman','office','library'),
 
   asyncHandler(async (req, res) => {
 
@@ -568,7 +568,7 @@ router.post(
 
   auth,
 
-  allow('guardian','teacher'),
+  allow('super_admin','admin','guardian','teacher','gateman','office','library'),
 
   asyncHandler(async (req, res) => {
 
@@ -826,7 +826,7 @@ router.post(
 
   auth,
 
-  allow('guardian'),
+  allow('super_admin','admin','guardian','teacher','gateman','office','library'),
 
   asyncHandler(async (req, res) => {
 
