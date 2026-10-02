@@ -61,7 +61,7 @@ export default function Dashboard() {
   const [studentMenu,setStudentMenu]=useState(false);
   const [restricted,setRestricted]=useState(false),[permissions,setPermissions]=useState<string[]>([]),[userRole,setUserRole]=useState(''),[dashboardName,setDashboardName]=useState('');
   const loadCounter=async()=>{try{const d=await api('/api/notices/admin-counter');setUnread(d.unread||0);}catch{}};
-  useEffect(()=>{void api('/api/me').then(d=>{setRestricted(!!d.restricted);setPermissions(d.permissions||[]);setUserRole(d.user?.role||'');setDashboardName(String(d.user?.full_name||d.user?.name||d.user?.login_id||'').trim())}).catch(()=>{});void loadCounter();const timer=setInterval(loadCounter,30000);return()=>clearInterval(timer);},[]);
+  useEffect(()=>{void getUser<any>().then(u=>{if(u)setDashboardName(String(u.full_name||u.name||u.login_id||'').trim())});void api('/api/me').then(d=>{setRestricted(!!d.restricted);setPermissions(d.permissions||[]);setUserRole(d.user?.role||'');setDashboardName(String(d.user?.full_name||d.user?.name||d.user?.login_id||'').trim())}).catch(()=>{});void loadCounter();const timer=setInterval(loadCounter,30000);return()=>clearInterval(timer);},[]);
   const openNotifications=async()=>{try{await api('/api/notices/read-all',{method:'POST'});setUnread(0);}finally{router.push('/notices');}};
 
   const logout =
