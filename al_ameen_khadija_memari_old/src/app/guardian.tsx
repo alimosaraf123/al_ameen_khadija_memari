@@ -814,7 +814,7 @@ export default function Guardian() {
                     <View style={styles.documentCardActions}>
                       <TouchableOpacity style={styles.documentEyeButton} onPress={() => openGuardianDocument(doc, false)}><Text style={styles.documentIcon}>?</Text></TouchableOpacity>
                       <TouchableOpacity style={styles.documentPrintButton} onPress={() => openGuardianDocument(doc, false)}><Text style={styles.documentIcon}>?</Text></TouchableOpacity>
-                      {doc.guardian_download_allowed && <TouchableOpacity style={styles.documentDownloadButton} onPress={() => openGuardianDocument(doc, true)}><Text style={styles.documentIcon}>?</Text></TouchableOpacity>}
+                      {doc.guardian_download_allowed && <TouchableOpacity style={styles.documentDownloadButton} onPress={() => openGuardianDocument(doc, true)}><Text style={styles.documentActionText}>Download</Text></TouchableOpacity>}
                     </View>
                   </View>;
                 })}
