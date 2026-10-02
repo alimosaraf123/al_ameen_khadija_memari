@@ -269,6 +269,12 @@ export default function Students() {
   }, []);
 
 
+  const lookupPin = async (field: 'present_pin_code'|'permanent_pin_code', value: string) => {
+    const pin=String(value||'').replace(/\D/g,'').slice(0,6); update(field,pin);
+    if(pin.length!==6)return;
+    try { const response=await fetch('https://api.postalpincode.in/pincode/'+pin); const data=await response.json(); const offices=data?.[0]?.PostOffice||[]; if(!offices.length)return; const office=offices[0]; const prefix=field.startsWith('present')?'present_':'permanent_'; setForm((old:any)=>({...old,[field]:pin,[prefix+'post_office']:office.Name||old[prefix+'post_office'],[prefix+'block']:office.Block||old[prefix+'block'],[prefix+'district']:office.District||old[prefix+'district'],[prefix+'state']:office.State||old[prefix+'state']})); } catch {}
+  };
+
   useEffect(() => {
     if (!sameAsPresent) return;
     setForm((old: any) => ({ ...old, permanent_village: old.present_village, permanent_police_station: old.present_police_station, permanent_pin_code: old.present_pin_code, permanent_post_office: old.present_post_office, permanent_block: old.present_block, permanent_district: old.present_district, permanent_state: old.present_state }));
@@ -823,7 +829,7 @@ export default function Students() {
           label="Police Station"
           field="present_police_station"
         />
-        <LabeledField label="PIN Code" field="present_pin_code" />
+        <LabeledField label="PIN Code" field="present_pin_code" onChangeText={(value:string)=>lookupPin('present_pin_code',value)} keyboardType="number-pad" maxLength={6} />
         <LabeledField label="Post Office" field="present_post_office" />
         <LabeledField label="Block" field="present_block" />
         <LabeledField label="District" field="present_district" />
@@ -838,7 +844,7 @@ export default function Students() {
           label="Police Station"
           field="permanent_police_station"
         />
-        <LabeledField label="PIN Code" field="permanent_pin_code" />
+        <LabeledField label="PIN Code" field="permanent_pin_code" onChangeText={(value:string)=>lookupPin('permanent_pin_code',value)} keyboardType="number-pad" maxLength={6} />
         <LabeledField
           label="Post Office"
           field="permanent_post_office"
