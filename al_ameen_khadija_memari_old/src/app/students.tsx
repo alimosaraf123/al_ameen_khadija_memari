@@ -272,7 +272,7 @@ export default function Students() {
   const lookupPin = async (field: 'present_pin_code'|'permanent_pin_code', value: string) => {
     const pin=String(value||'').replace(/\D/g,'').slice(0,6); update(field,pin);
     if(pin.length!==6)return;
-    try { const response=await fetch('https://api.postalpincode.in/pincode/'+pin); const data=await response.json(); const offices=data?.[0]?.PostOffice||[]; if(!offices.length)return; const office=offices[0]; const prefix=field.startsWith('present')?'present_':'permanent_'; setForm((old:any)=>({...old,[field]:pin,[prefix+'post_office']:office.Name||old[prefix+'post_office'],[prefix+'block']:office.Block||old[prefix+'block'],[prefix+'district']:office.District||old[prefix+'district'],[prefix+'state']:office.State||old[prefix+'state']})); } catch {}
+    try { const response=await fetch('https://api.postalpincode.in/pincode/'+pin); const data=await response.json(); const offices=data?.[0]?.PostOffice||[]; if(!offices.length)return; const office=offices[0]; const prefix=field.startsWith('present')?'present_':'permanent_'; setForm((old:any)=>({...old,[field]:pin,[prefix+'post_office']:office.Name||old[prefix+'post_office'],[prefix+'block']:office.Block||old[prefix+'block'],[prefix+'police_station']:office.Block||old[prefix+'police_station'],[prefix+'district']:office.District||old[prefix+'district'],[prefix+'state']:office.State||old[prefix+'state']})); } catch {}
   };
 
   useEffect(() => {
