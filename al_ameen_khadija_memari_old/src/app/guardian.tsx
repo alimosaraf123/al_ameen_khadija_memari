@@ -1678,15 +1678,7 @@ export default function Guardian() {
               </View>
             )}
 
-            <Button
-              title="Open Secure Documents"
-              onPress={() =>
-                router.push({
-                  pathname: '/guardian-student',
-                  params: { id: String(student.id) },
-                } as any)
-              }
-            />
+
           </>
         )}
 
