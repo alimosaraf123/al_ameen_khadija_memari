@@ -645,7 +645,7 @@ export default function Students() {
       <ScrollView contentContainerStyle={styles.content}>
         <AcademyHeader />
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center"}}><H1>Students</H1><TouchableOpacity onPress={()=>router.push("/student-lifecycle")} style={{backgroundColor:"#1769aa",padding:10,borderRadius:7}}><Text style={{color:"#fff",fontWeight:"800"}}>Promotion / TC / Re-Activation</Text></TouchableOpacity></View>
+          <H1>Students</H1>
           <Button title="Student Menu" onPress={() => setMenuOpen(true)} />
         </View>
         <StudentDirectory students={students} loading={listLoading} error={listError} onRefresh={loadStudents} onEdit={startEdit} onDeactivate={deleteStudent} />
@@ -659,7 +659,7 @@ export default function Students() {
         if (key === 'attendance') router.push('/attendance');
         if (key === 'gatepass') router.push('/gate-pass');
         if (key === 'visit') router.push('/visits');
-        if (['promotion','tc','reactivation'].includes(key)) router.push({pathname:'/student-lifecycle',params:{tab:key}});
+        if (key === 'lifecycle') router.push('/student-lifecycle');
         if (key === 'marks') router.push('/marks');
         if (key === 'documents') router.push('/documents');
         if (key === 'dues') router.push('/dues');
