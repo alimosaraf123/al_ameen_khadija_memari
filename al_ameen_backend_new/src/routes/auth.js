@@ -8,6 +8,7 @@ const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
+const passwordSchemaReady=pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_change_required BOOLEAN NOT NULL DEFAULT FALSE");
 
 const guardianSessionSchemaReady=pool.query(`
   CREATE TABLE IF NOT EXISTS guardian_login_sessions(
@@ -48,6 +49,7 @@ async function issueToken(user,deviceId){
 router.post(
   '/login',
   asyncHandler(async (req, res) => {
+    await passwordSchemaReady;
 
     const {
       login_id,
@@ -69,7 +71,8 @@ router.post(
         password_hash,
         full_name,
         role,
-        is_active
+        is_active,
+        password_change_required
       FROM users
       WHERE login_id=$1
       LIMIT 1
@@ -115,6 +118,7 @@ router.post(
         login_id: user.login_id,
         full_name: user.full_name,
         role: user.role,
+        password_change_required: !!user.password_change_required,
       },
     });
 
@@ -130,7 +134,7 @@ router.get(
   '/me',
   auth,
   asyncHandler(async (req, res) => {
-
+    await passwordSchemaReady;
     const result = await pool.query(
       `
       SELECT
@@ -138,7 +142,8 @@ router.get(
         login_id,
         full_name,
         role,
-        is_active
+        is_active,
+        password_change_required
       FROM users
       WHERE id=$1
       `,
@@ -275,7 +280,7 @@ router.post(
     await pool.query(
       `
       UPDATE users
-      SET password_hash=$1
+      SET password_hash=$1, password_change_required=FALSE
       WHERE id=$2
       `,
       [

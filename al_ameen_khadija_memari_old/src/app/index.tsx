@@ -244,6 +244,8 @@ export default function Login() {
           data.user
         );
 
+        if (data.user.password_change_required) { router.replace('/settings'); return; }
+
 
         if (['gateman','office','library'].includes(data.user.role)) {
           await saveGuardianDeviceAccount(data.user.login_id || userId.trim());
@@ -420,6 +422,8 @@ export default function Login() {
           data.user
         );
 
+        if (data.user.password_change_required) { router.replace('/settings'); return; }
+
 
         setMpin('');
 
@@ -587,6 +591,8 @@ export default function Login() {
           data.token,
           data.user
         );
+
+        if (data.user.password_change_required) { router.replace('/settings'); return; }
 
 
         router.replace(panelForRole(data.user.role) as any);
