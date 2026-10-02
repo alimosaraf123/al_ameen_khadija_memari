@@ -1,4 +1,4 @@
-﻿const jwt=require('jsonwebtoken');
+const jwt=require('jsonwebtoken');
 const pool=require('../db');
 async function auth(req,res,next){
  const header=req.headers.authorization||'',token=header.startsWith('Bearer ')?header.slice(7):null;
@@ -10,7 +10,7 @@ async function auth(req,res,next){
    const q=await pool.query(`SELECT 1 FROM guardian_login_sessions WHERE user_id=$1 AND token_jti=$2 AND is_active=TRUE AND expires_at>NOW()`,[user.userId,user.jti]);
    if(!q.rowCount)return res.status(401).json({success:false,message:'This device session is no longer active. Please login again.'});
   }
-  const bypass=['/api/me','/api/change-password','/api/logout','/api/login'];
+  const bypass=['/me','/change-password','/logout','/login','/api/me','/api/change-password','/api/logout','/api/login'];
   if(!bypass.includes(req.path)){const q=await pool.query('SELECT password_change_required FROM users WHERE id=$1',[user.userId]);if(q.rows[0]?.password_change_required)return res.status(428).json({success:false,message:'Password change required',password_change_required:true});}
   req.user=user;next();
  }catch(e){return res.status(401).json({success:false,message:'Invalid or expired token'});}
