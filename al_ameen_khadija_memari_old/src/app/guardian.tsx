@@ -812,8 +812,8 @@ export default function Guardian() {
                     <Text style={styles.documentCardTitle}>{title.replace(/_/g, ' ')}</Text>
                     <View style={styles.documentPreview}>{preview ? <Image source={{uri: preview}} style={styles.documentPreviewImage} resizeMode="contain"/> : <Text style={styles.documentNoPreview}>Click View to open</Text>}</View>
                     <View style={styles.documentCardActions}>
-                      <TouchableOpacity style={styles.documentEyeButton} onPress={() => openGuardianDocument(doc, false)}><Text style={styles.documentIcon}>?</Text></TouchableOpacity>
-                      <TouchableOpacity style={styles.documentPrintButton} onPress={() => openGuardianDocument(doc, false)}><Text style={styles.documentIcon}>?</Text></TouchableOpacity>
+                      <TouchableOpacity style={styles.documentEyeButton} onPress={() => openGuardianDocument(doc, false)}><Text style={styles.documentActionText}>View</Text></TouchableOpacity>
+                      <TouchableOpacity style={styles.documentPrintButton} onPress={() => openGuardianDocument(doc, false)}><Text style={styles.documentActionText}>Print</Text></TouchableOpacity>
                       {doc.guardian_download_allowed && <TouchableOpacity style={styles.documentDownloadButton} onPress={() => openGuardianDocument(doc, true)}><Text style={styles.documentActionText}>Download</Text></TouchableOpacity>}
                     </View>
                   </View>;
