@@ -110,7 +110,7 @@ export default function Dashboard() {
 
                 style={s.card}
 
-                onPress={() => title==='Students'?setStudentMenu(true):title==='Teachers'?setTeacherMenu(true):title==='Hostel'?setHostelMenu(true):title==='Academy'?setAcademyMenu(true):router.push(path as any)}
+                onPress={() => title==='Students'?router.push('/students' as any):title==='Teachers'?setTeacherMenu(true):title==='Hostel'?setHostelMenu(true):title==='Academy'?setAcademyMenu(true):router.push(path as any)}
 
               >
 
