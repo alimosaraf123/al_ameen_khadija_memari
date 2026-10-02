@@ -53,6 +53,7 @@ export default function Guardian() {
 
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricBusy, setBiometricBusy] = useState(false);
+  const [documentPreviews, setDocumentPreviews] = useState<Record<string,string>>({});
 
   const openMonthlyFeePayment = async () => {
     if (!student?.id) {
@@ -380,6 +381,21 @@ export default function Guardian() {
   const documents = childData?.documents || [];
   const gatePasses = childData?.gate_passes || [];
   const photoUrl = getPhotoUrl();
+  useEffect(() => {
+    let cancelled = false;
+    const loadPreviews = async () => {
+      const docs = childData?.documents || [];
+      if (!docs.length) { setDocumentPreviews({}); return; }
+      const token = await getToken();
+      const entries = await Promise.all(docs.map(async (doc: any) => {
+        if (!doc.view_endpoint) return [String(doc.id), ''] as const;
+        try { const response = await fetch(API_BASE + doc.view_endpoint, { headers: { Authorization: 'Bearer ' + token } }); if (!response.ok) return [String(doc.id), ''] as const; const blob = await response.blob(); return [String(doc.id), URL.createObjectURL(blob)] as const; } catch { return [String(doc.id), ''] as const; }
+      }));
+      if (!cancelled) setDocumentPreviews(Object.fromEntries(entries));
+    };
+    void loadPreviews();
+    return () => { cancelled = true; };
+  }, [childData]);
 
   return (
     <SafeAreaView style={styles.page}>
@@ -807,7 +823,7 @@ export default function Guardian() {
               <View style={styles.documentGrid}>
                 {documents.map((doc: any, index: number) => {
                   const title = doc.document_title || doc.document_type || 'Document';
-                  const preview = /^https?:\/\//i.test(String(doc.file_url || '')) ? String(doc.file_url) : '';
+                  const preview = documentPreviews[String(doc.id)] || (/^https?:\/\//i.test(String(doc.file_url || '')) ? String(doc.file_url) : '');
                   return <View key={doc.id || index} style={styles.documentCard}>
                     <Text style={styles.documentCardTitle}>{title.replace(/_/g, ' ')}</Text>
                     <View style={styles.documentPreview}>{preview ? <Image source={{uri: preview}} style={styles.documentPreviewImage} resizeMode="contain"/> : <Text style={styles.documentNoPreview}>Click View to open</Text>}</View>
