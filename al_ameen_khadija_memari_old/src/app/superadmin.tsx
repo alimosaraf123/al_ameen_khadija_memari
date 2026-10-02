@@ -59,9 +59,9 @@ export default function Dashboard() {
   const [hostelMenu,setHostelMenu]=useState(false);
   const [academyMenu,setAcademyMenu]=useState(false);
   const [studentMenu,setStudentMenu]=useState(false);
-  const [restricted,setRestricted]=useState(false),[permissions,setPermissions]=useState<string[]>([]),[userRole,setUserRole]=useState('');
+  const [restricted,setRestricted]=useState(false),[permissions,setPermissions]=useState<string[]>([]),[userRole,setUserRole]=useState(''),[dashboardName,setDashboardName]=useState('');
   const loadCounter=async()=>{try{const d=await api('/api/notices/admin-counter');setUnread(d.unread||0);}catch{}};
-  useEffect(()=>{void api('/api/me').then(d=>{setRestricted(!!d.restricted);setPermissions(d.permissions||[]);setUserRole(d.user?.role||'')}).catch(()=>{});void loadCounter();const timer=setInterval(loadCounter,30000);return()=>clearInterval(timer);},[]);
+  useEffect(()=>{void api('/api/me').then(d=>{setRestricted(!!d.restricted);setPermissions(d.permissions||[]);setUserRole(d.user?.role||'');setDashboardName(String(d.user?.full_name||d.user?.name||d.user?.login_id||'').trim())}).catch(()=>{});void loadCounter();const timer=setInterval(loadCounter,30000);return()=>clearInterval(timer);},[]);
   const openNotifications=async()=>{try{await api('/api/notices/read-all',{method:'POST'});setUnread(0);}finally{router.push('/notices');}};
 
   const logout =
@@ -92,7 +92,7 @@ export default function Dashboard() {
         <Text
           style={s.sub}
         >
-          {restricted ? 'Nasmin Dashboard' : 'Super Admin Dashboard'}
+          {restricted ? (dashboardName ? dashboardName+' Dashboard' : 'Dashboard') : 'Super Admin Dashboard'}
         </Text>
         <TouchableOpacity onPress={openNotifications} style={s.notification}><Text style={s.notificationText}>🔔 Admin Notifications</Text>{unread>0&&<View style={s.badge}><Text style={s.badgeText}>{unread>99?'99+':unread}</Text></View>}</TouchableOpacity>
 
@@ -157,7 +157,7 @@ export default function Dashboard() {
 
       <Modal visible={studentMenu} transparent animationType="fade" onRequestClose={()=>setStudentMenu(false)}>
         <View style={s.modalBackdrop}><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Students</Text><TouchableOpacity onPress={()=>setStudentMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
-          <View style={s.modalGrid}>{[["Student Details","/students"],["Promotion / TC / Re-Activation","/student-lifecycle"]].map(([label,path])=><TouchableOpacity key={label} style={s.modalItem} onPress={()=>{setStudentMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></TouchableOpacity>)}</View>
+          <View style={s.modalGrid}>{[["Student Details","/students"]].map(([label,path])=><TouchableOpacity key={label} style={s.modalItem} onPress={()=>{setStudentMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></TouchableOpacity>)}</View>
         </View></View>
       </Modal>
 
