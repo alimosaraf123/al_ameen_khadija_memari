@@ -30,6 +30,8 @@ import {
 } from '../components/ui';
 
 const StudentFormContext = React.createContext<any>(null);
+const PARENT_QUALIFICATIONS=['Illiterate','Primary','Madhyamik','Higher Secondary','ITI','Diploma','Graduate','Post Graduate','Other'];
+const PARENT_OCCUPATIONS=['Farmer','Business','Daily Labourer','Private Service','Government Service','Teacher','Driver','Mason','Carpenter','Housewife','Unemployed','Other'];
 
 const STUDENT_DOCUMENT_TYPES = [
   { key: 'birth_certificate', label: 'Date of Birth Certificate' },
@@ -790,14 +792,8 @@ export default function Students() {
 
         <LabeledField label="Father Name *" field="father_name" />
         <DigitField label="Father Aadhaar No" field="father_aadhaar_no" length={12} />
-        <LabeledField
-          label="Father Qualification"
-          field="father_qualification"
-        />
-        <LabeledField
-          label="Father Occupation"
-          field="father_occupation"
-        />
+        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Father Qualification</Text><Select label="Select Qualification" value={form.father_qualification} onChange={value=>update('father_qualification',value)} options={PARENT_QUALIFICATIONS.map(value=>({value,label:value}))} searchable /></View>
+        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Father Occupation</Text><Select label="Select Occupation" value={form.father_occupation} onChange={value=>update('father_occupation',value)} options={PARENT_OCCUPATIONS.map(value=>({value,label:value}))} searchable /></View>
         <LabeledField
           label="Father Annual Income"
           field="father_annual_income"
@@ -806,14 +802,8 @@ export default function Students() {
 
         <LabeledField label="Mother Name *" field="mother_name" />
         <DigitField label="Mother Aadhaar No" field="mother_aadhaar_no" length={12} />
-        <LabeledField
-          label="Mother Qualification"
-          field="mother_qualification"
-        />
-        <LabeledField
-          label="Mother Occupation"
-          field="mother_occupation"
-        />
+        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Mother Qualification</Text><Select label="Select Qualification" value={form.mother_qualification} onChange={value=>update('mother_qualification',value)} options={PARENT_QUALIFICATIONS.map(value=>({value,label:value}))} searchable /></View>
+        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Mother Occupation</Text><Select label="Select Occupation" value={form.mother_occupation} onChange={value=>update('mother_occupation',value)} options={PARENT_OCCUPATIONS.map(value=>({value,label:value}))} searchable /></View>
         <LabeledField
           label="Mother Annual Income"
           field="mother_annual_income"
