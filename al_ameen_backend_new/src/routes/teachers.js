@@ -6,6 +6,11 @@ const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
 const router = express.Router();
 
+const teacherDetailsSchemaReady = pool.query([
+  "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS profile_details JSONB NOT NULL DEFAULT '{}'::jsonb",
+  "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS education_details JSONB NOT NULL DEFAULT '[]'::jsonb"
+].join(';'));
+
 function firstNameLogin(name) {
   return String(name || '')
     .trim()
@@ -17,6 +22,7 @@ function firstNameLogin(name) {
 router.get('/me', auth, allow('teacher'), asyncHandler(async(req,res)=>{const result=await pool.query(`SELECT t.*,u.full_name,u.login_id FROM teachers t JOIN users u ON u.id=t.user_id WHERE t.user_id=$1 LIMIT 1`,[req.user.userId]);if(!result.rowCount)return res.status(404).json({success:false,message:'Teacher profile not found'});res.json({success:true,teacher:result.rows[0]});}));
 
 router.get('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res)=>{
+  await teacherDetailsSchemaReady;
   const result = await pool.query(`
     SELECT t.*, u.login_id, u.full_name, u.is_active AS user_active,
       COALESCE((
@@ -40,6 +46,7 @@ router.get('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res)
 }));
 
 router.post('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res)=>{
+  await teacherDetailsSchemaReady;
   const body = req.body || {};
   const staffId = String(body.staff_id || '').trim();
   const name = String(body.name || '').trim();
@@ -71,14 +78,15 @@ router.post('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res
     const teacher = await client.query(`
       INSERT INTO teachers(
         user_id,staff_id,name,designation,subject,mobile,whatsapp,gender,email,address,
-        date_of_birth,joining_date,qualification,photo_url
-      ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        date_of_birth,joining_date,qualification,photo_url,profile_details,education_details
+      ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       RETURNING *
     `, [
       user.rows[0].id, staffId, name, body.designation || null, body.subject || null,
       body.mobile || null, body.whatsapp || null, body.gender || null, body.email || null,
       body.address || null, body.date_of_birth || null, body.joining_date || null,
       body.qualification || null, body.photo_url || null,
+      JSON.stringify(body.profile_details || {}), JSON.stringify(Array.isArray(body.education_details) ? body.education_details : []),
     ]);
     await client.query('COMMIT');
     res.status(201).json({
@@ -96,6 +104,7 @@ router.post('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res
 
 
 router.put('/:id', auth, allow('super_admin','admin'), asyncHandler(async (req,res) => {
+  await teacherDetailsSchemaReady;
   const body=req.body||{};
   if(body.password&&body.password!==body.confirm_password)return res.status(400).json({success:false,message:'Password confirmation does not match'});
   const current=await pool.query('SELECT t.*,u.login_id,u.id AS login_user_id,u.is_active AS user_active FROM teachers t LEFT JOIN users u ON u.id=t.user_id WHERE t.id=$1',[req.params.id]);
@@ -109,8 +118,13 @@ router.put('/:id', auth, allow('super_admin','admin'), asyncHandler(async (req,r
   try{
     await client.query('BEGIN');
     const teacher=await client.query(
-      'UPDATE teachers SET staff_id=$1,name=$2,mobile=$3,whatsapp=$4,gender=$5,joining_date=$6,subject=$7,is_active=$8 WHERE id=$9 RETURNING *',
-      [staffId,name,body.mobile||null,body.whatsapp||null,body.gender||null,body.joining_date||null,body.subject||null,active,req.params.id]
+      'UPDATE teachers SET staff_id=$1,name=$2,designation=$3,subject=$4,mobile=$5,whatsapp=$6,gender=$7,email=$8,address=$9,date_of_birth=$10,joining_date=$11,qualification=$12,profile_details=$13,education_details=$14,is_active=$15 WHERE id=$16 RETURNING *',
+      [staffId,name,body.designation??old.designation,body.subject??old.subject,body.mobile??old.mobile,
+       body.whatsapp??old.whatsapp,body.gender??old.gender,body.email??old.email,body.address??old.address,
+       body.date_of_birth??old.date_of_birth,body.joining_date??old.joining_date,body.qualification??old.qualification,
+       JSON.stringify(body.profile_details??old.profile_details??{}),
+       JSON.stringify(Array.isArray(body.education_details)?body.education_details:(old.education_details||[])),
+       active,req.params.id]
     );
     if(old.login_user_id){
       const loginId=String(body.login_id??old.login_id).trim().toLowerCase();

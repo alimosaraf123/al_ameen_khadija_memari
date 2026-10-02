@@ -22,7 +22,14 @@ type Student = {
   guardian_name?: string;
   guardian_mobile?: string;
   mobile_number?: string;
+  date_of_birth?: string;
 };
+
+function defaultGuardianPassword(student: Student | null) {
+  const firstName = String(student?.student_name || '').trim().split(/\s+/)[0];
+  const match = String(student?.date_of_birth || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return firstName && match ? firstName + match[3] + match[2] + match[1] : '';
+}
 
 export default function Guardians() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -193,7 +200,7 @@ export default function Guardians() {
 
         Alert.alert(
           'Success',
-          'New password generated.'
+          'Default password restored.'
         );
       } catch (e: any) {
         Alert.alert(
@@ -220,7 +227,7 @@ export default function Guardians() {
         </H1>
 
         <Text style={styles.note}>
-          Guardian login is created from the student's unique Registration No.
+          Login ID is the Registration No. Default password is the first part of the student name followed by Date of Birth in DDMMYYYY format.
         </Text>
 
         <Text style={styles.heading}>
@@ -414,6 +421,13 @@ export default function Guardians() {
                   }
                 </Text>
 
+                <Text style={styles.loginRule}>
+                  Default Password:
+                </Text>
+
+                <Text style={styles.bigLogin}>
+                  {defaultGuardianPassword(selectedStudent) || 'Add Student Name and Date of Birth first'}
+                </Text>
                 <Button
                   title={
                     saving
@@ -465,7 +479,7 @@ export default function Guardians() {
                   title={
                     saving
                       ? 'Generating...'
-                      : 'Generate New Password'
+                      : 'Restore Default Password'
                   }
                   onPress={
                     resetGuardianPassword
@@ -491,7 +505,7 @@ export default function Guardians() {
             </Text>
 
             <Text style={styles.warning}>
-              এই password এখনই Guardian-কে দিন বা লিখে রাখুন। নিরাপত্তার জন্য পুরনো password পরে দেখা যাবে না; প্রয়োজন হলে নতুন password generate করবেন।
+              Guardian can change this default password later from Settings. Use Restore Default Password if it needs to be reset.
             </Text>
 
             <Text

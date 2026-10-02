@@ -10,7 +10,6 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Print from 'expo-print';
 import { File as ExpoFile } from 'expo-file-system';
@@ -47,7 +46,10 @@ const STUDENT_DOCUMENT_TYPES = [
   { key: 'hs_certificate', label: 'HS Certificate' },
   { key: 'admission_slip', label: 'Admission Slip' },
   { key: 'signature', label: 'Signature' },
+  { key: 'transfer_certificate', label: 'T.C.' },
   { key: 'other', label: 'Others' },
+  { key: 'other_2', label: 'Others-2' },
+  { key: 'other_3', label: 'Others-3' },
 ];
 
 const LabeledField = ({
@@ -55,6 +57,7 @@ const LabeledField = ({
   field,
   value,
   onChangeText,
+  ...inputProps
 }: any) => {
   const ctx = React.useContext(StudentFormContext);
 
@@ -78,10 +81,31 @@ const LabeledField = ({
         placeholder={label}
         value={actualValue}
         onChangeText={handleChange}
+        {...inputProps}
       />
     </View>
   );
 };
+
+
+const DigitField = ({ label, field, value, onChangeText, length }: any) => {
+  const ctx = React.useContext(StudentFormContext);
+  const current = String(value !== undefined ? value : ctx?.form?.[field] ?? '');
+  const valid = current.length === length;
+  const touched = current.length > 0;
+  const change = onChangeText || ((next: string) => ctx?.update?.(field, next));
+  return <View>
+    <LabeledField label={label} field={field} value={value} keyboardType="numeric" maxLength={length}
+      onChangeText={(next: string) => change(next.replace(/\D/g, '').slice(0, length))}
+      style={touched ? { borderColor: valid ? '#16803a' : '#d92d20', borderWidth: 2 } : undefined} />
+    {touched && <Text style={{ color: valid ? '#16803a' : '#d92d20', fontWeight: '700', marginTop: -7, marginBottom: 9 }}>
+      {valid ? 'Valid' : current.length + '/' + length + ' digits'}
+    </Text>}
+  </View>;
+};
+
+const BLOOD_GROUPS = ['', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+const SESSION_OPTIONS = Array.from({ length: 25 }, (_, index) => 2026 + index).flatMap(year => [year + '-' + year, year + '-' + (year + 1)]);
 
 const SectionTitle = ({ children }: any) => (
   <View style={styles.sectionHeader}>
@@ -108,7 +132,7 @@ const EMPTY_FORM: any = {
   student_type: 'hostel',
 
   date_of_birth: '',
-  gender: '',
+  gender: 'Female',
   aadhaar_no: '',
   caste_name: '',
   blood_group: '',
@@ -189,7 +213,6 @@ export default function Students() {
   const [students, setStudents] = useState<any[]>([]);
   const [rooms, setRooms] = useState<any[]>([]);
   const [editingId, setEditingId] = useState<any>(null);
-  const [showDobPicker, setShowDobPicker] = useState(false);
   const [menuOpen, setMenuOpen] = useState(true);
   const [screen, setScreen] = useState<'details' | 'entry'>('details');
   const [listLoading, setListLoading] = useState(true);
@@ -199,6 +222,8 @@ export default function Students() {
   const [exitForm,setExitForm]=useState({dropout_date:new Date().toISOString().slice(0,10),dropout_reason:''});
   const [exitClearance,setExitClearance]=useState<any>(null);
   const [exitBusy,setExitBusy]=useState(false);
+  const [sameAsPresent, setSameAsPresent] = useState(false);
+  const [ifscMessage, setIfscMessage] = useState('');
 
 
   const [form, setForm] = useState<any>({ ...EMPTY_FORM });
@@ -241,6 +266,25 @@ export default function Students() {
     loadRooms();
   }, []);
 
+
+  useEffect(() => {
+    if (!sameAsPresent) return;
+    setForm((old: any) => ({ ...old, permanent_village: old.present_village, permanent_police_station: old.present_police_station, permanent_pin_code: old.present_pin_code, permanent_post_office: old.present_post_office, permanent_block: old.present_block, permanent_district: old.present_district, permanent_state: old.present_state }));
+  }, [sameAsPresent, form.present_village, form.present_police_station, form.present_pin_code, form.present_post_office, form.present_block, form.present_district, form.present_state]);
+
+  useEffect(() => {
+    const ifsc = String(form.bank_ifsc_code || '').trim().toUpperCase();
+    if (ifsc.length !== 11) { setIfscMessage(ifsc ? 'IFSC must be 11 characters' : ''); return; }
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) { setIfscMessage('Invalid IFSC format'); return; }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setIfscMessage('Finding bank...');
+      try { const data = await api('/api/students/bank/ifsc/' + encodeURIComponent(ifsc)); if (!cancelled) { setForm((old: any) => ({ ...old, bank_ifsc_code: ifsc, bank_name: data.bank_name || old.bank_name, bank_branch_name: data.branch_name || old.bank_branch_name, bank_branch_address: data.branch_address || old.bank_branch_address })); setIfscMessage('Bank details found. You may edit them manually.'); } }
+      catch (error: any) { if (!cancelled) setIfscMessage(error.message || 'Bank not found; enter details manually'); }
+    }, 450);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [form.bank_ifsc_code]);
+
   const clearForm = () => {
     setEditingId(null);
     setForm({ ...EMPTY_FORM });
@@ -248,6 +292,8 @@ export default function Students() {
     setVisitor2({ ...EMPTY_VISITOR });
     setEntryDocuments({});
     setExitClearance(null);
+    setSameAsPresent(false);
+    setIfscMessage('');
     setExitForm({dropout_date:new Date().toISOString().slice(0,10),dropout_reason:''});
   };
 
@@ -346,6 +392,22 @@ export default function Students() {
       Alert.alert('Required', 'Student Name is required');
       return;
     }
+    const requiredFields = [
+      ['Admission Date', form.admission_date], ['Class', form.class_name], ['Admission Session', form.academic_session],
+      ['Date of Birth', form.date_of_birth], ['Father Name', form.father_name], ['Mother Name', form.mother_name],
+      ['Present Village', form.present_village], ['Present Police Station', form.present_police_station], ['Present PIN Code', form.present_pin_code],
+      ['Present Post Office', form.present_post_office], ['Present Block', form.present_block], ['Present District', form.present_district], ['Present State', form.present_state],
+      ['Permanent Village', form.permanent_village], ['Permanent Police Station', form.permanent_police_station], ['Permanent PIN Code', form.permanent_pin_code],
+      ['Permanent Post Office', form.permanent_post_office], ['Permanent Block', form.permanent_block], ['Permanent District', form.permanent_district], ['Permanent State', form.permanent_state],
+    ].filter(([, value]) => !String(value || '').trim());
+    if (requiredFields.length) {
+      Alert.alert('Required', 'Complete these mandatory fields:\n' + requiredFields.map(([label]) => '• ' + label).join('\n'));
+      return;
+    }
+    const invalidAadhaar = [['Student Aadhaar', form.aadhaar_no], ['Father Aadhaar', form.father_aadhaar_no], ['Mother Aadhaar', form.mother_aadhaar_no]].find(([, value]) => value && String(value).length !== 12);
+    if (invalidAadhaar) { Alert.alert('Invalid Aadhaar', invalidAadhaar[0] + ' number must be exactly 12 digits.'); return; }
+    const invalidMobile = [['Student Mobile', form.mobile_number], ['WhatsApp', form.whatsapp_number], ['Father Mobile', form.father_mobile], ['Mother Mobile', form.mother_mobile], ['Guardian Mobile', form.guardian_mobile], ['Alternate Mobile', form.alternate_mobile], ['Visitor-1 Mobile', visitor1.mobile_number], ['Visitor-2 Mobile', visitor2.mobile_number]].find(([, value]) => value && String(value).length !== 10);
+    if (invalidMobile) { Alert.alert('Invalid Mobile Number', invalidMobile[0] + ' must be exactly 10 digits.'); return; }
     const sessionMatch=String(form.academic_session||'').trim().match(/^(\d{4})-(\d{4})$/);
     if(!sessionMatch){Alert.alert('Invalid Session','Use session format 2026-2026 or 2026-2027.');return;}
 
@@ -433,6 +495,7 @@ export default function Students() {
       });
 
       if (!next.student_type) next.student_type = 'hostel';
+      if (!next.gender) next.gender = 'Female';
 
       const normalizeVisitor = (v: any) => {
         const out: any = { ...EMPTY_VISITOR };
@@ -499,37 +562,6 @@ export default function Students() {
     setter((old: any) => ({ ...old, ...data }));
   };
 
-  const dobPickerValue = () => {
-    if (form.date_of_birth) {
-      const parts = String(form.date_of_birth).split('-');
-      if (parts.length === 3) {
-        const y = Number(parts[0]);
-        const m = Number(parts[1]);
-        const d = Number(parts[2]);
-
-        if (y && m && d) {
-          return new Date(y, m - 1, d);
-        }
-      }
-    }
-
-    return new Date(2010, 0, 1);
-  };
-
-  const onDobChange = (_event: any, selectedDate?: Date) => {
-    if (Platform.OS === 'android') {
-      setShowDobPicker(false);
-    }
-
-    if (!selectedDate) return;
-
-    const y = selectedDate.getFullYear();
-    const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
-    const d = String(selectedDate.getDate()).padStart(2, '0');
-
-    update('date_of_birth', `${y}-${m}-${d}`);
-  };
-
   const renderVisitor = (no: 1 | 2, title: string, visitor: any) => (
     <View>
       <SectionTitle>{title}</SectionTitle>
@@ -544,11 +576,7 @@ export default function Students() {
         value={visitor.relation}
         onChangeText={(v: string) => updateVisitor(no, 'relation', v)}
       />
-      <LabeledField
-        label="Mobile Number"
-        value={visitor.mobile_number}
-        onChangeText={(v: string) => updateVisitor(no, 'mobile_number', v)}
-      />
+      <DigitField label="Mobile Number" value={visitor.mobile_number} length={10} onChangeText={(v: string) => updateVisitor(no, 'mobile_number', v)} />
       <LabeledField
         label="Email ID"
         value={visitor.email}
@@ -649,7 +677,7 @@ export default function Students() {
         keyboardShouldPersistTaps="handled"
       >
         <AcademyHeader />
-        <Button title="← Back to Student Details" onPress={() => { clearForm(); setScreen('details'); }} />
+        <Button title="Back to Student Details" onPress={() => { clearForm(); setScreen('details'); }} />
         <H1>{editingId !== null ? 'Edit Student' : 'Student Entry'}</H1>
 
         {editingId !== null && (
@@ -661,12 +689,12 @@ export default function Students() {
         <LabeledField label="Registration No *" field="registration_no" />
         <LabeledField label="Monthly Fees" field="monthly_fees" />
         <LabeledField label="Student Name *" field="student_name" />
-        <LabeledField label="Mobile Number" field="mobile_number" />
+        <DigitField label="Mobile Number" field="mobile_number" length={10} onChangeText={(value:string)=>setForm((old:any)=>({...old,mobile_number:value,whatsapp_number:value,father_mobile:value}))} />
         <LabeledField label="Admission No" field="admission_no" />
-        <DatePickerField label="Admission Date" value={form.admission_date} onChange={v=>update('admission_date',v)} />
-        <LabeledField label="WhatsApp Number" field="whatsapp_number" />
+        <DatePickerField label="Admission Date *" value={form.admission_date} onChange={v=>update('admission_date',v)} />
+        <DigitField label="WhatsApp Number" field="whatsapp_number" length={10} />
         <View style={styles.fieldWrap}>
-          <Text style={styles.fieldLabel}>Class Name</Text>
+          <Text style={styles.fieldLabel}>Class Name *</Text>
           <Select
             label="Class Name"
             value={normalizeStudentClass(form.class_name)}
@@ -680,18 +708,9 @@ export default function Students() {
         </View>
         <LabeledField label="Roll No" field="roll_no" />
         <LabeledField label="Email ID" field="email" />
-        <LabeledField label="Academic Session (e.g. 2026-2027)" field="academic_session" />
+        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Admission Session *</Text><Select label="Select Admission Session" value={form.academic_session} onChange={value => update('academic_session', value)} options={[{value:'',label:'Select Session'}, ...SESSION_OPTIONS.map(value => ({value,label:value}))]} /></View>
 
-        <Text style={styles.label}>Room No</Text>
-        <View style={styles.options}>
-          {rooms.map((room) =>
-            choice(
-              room.room_name,
-              form.room_number === room.room_name,
-              () => update('room_number', room.room_name)
-            )
-          )}
-        </View>
+        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Room No</Text><Select label="Select Room" value={form.room_number} onChange={value => update('room_number', value)} searchable options={[{value:'',label:'Select Room'}, ...rooms.map(room => ({value:String(room.room_name),label:String(room.room_name)}))]} /></View>
 
         <Text style={styles.label}>Student Type</Text>
         <View style={styles.options}>
@@ -709,35 +728,7 @@ export default function Students() {
 
         <SectionTitle>Student Information</SectionTitle>
 
-        <View style={styles.fieldWrap}>
-          <Text style={styles.fieldLabel}>Date of Birth</Text>
-
-          <TouchableOpacity
-            style={styles.dateBox}
-            onPress={() => setShowDobPicker(true)}
-          >
-            <Text
-              style={
-                form.date_of_birth
-                  ? styles.dateText
-                  : styles.datePlaceholder
-              }
-            >
-              {form.date_of_birth || 'Select Date of Birth'}
-            </Text>
-          </TouchableOpacity>
-
-          {showDobPicker && (
-            <DateTimePicker
-              value={dobPickerValue()}
-              mode="date"
-              display="default"
-              maximumDate={new Date()}
-              onChange={onDobChange}
-            />
-          )}
-        </View>
-
+        <DatePickerField label="Date of Birth *" value={form.date_of_birth} onChange={value => update('date_of_birth', value)} />
         <Text style={styles.label}>Gender</Text>
         <View style={styles.options}>
           {['Male', 'Female', 'Other'].map((item) =>
@@ -749,13 +740,11 @@ export default function Students() {
           )}
         </View>
 
-        <LabeledField label="Aadhaar No" field="aadhaar_no" />
+        <DigitField label="Aadhaar No" field="aadhaar_no" length={12} />
         <LabeledField label="Caste Name" field="caste_name" />
-        <LabeledField label="Blood Group" field="blood_group" />
-        <LabeledField
-          label="Admitted School Name"
-          field="admitted_school_name"
-        />
+        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Blood Group</Text><Select label="Select Blood Group" value={form.blood_group} onChange={value => update('blood_group', value)} options={BLOOD_GROUPS.map(value => ({value,label:value || 'Select Blood Group'}))} /></View>
+        <LabeledField label="Admitted School Name" field="admitted_school_name" />
+        {!!form.admitted_school_name && <View style={{flexDirection:'row',flexWrap:'wrap',gap:6,marginTop:-5,marginBottom:10}}>{[...new Set(students.map(item => String(item.admitted_school_name || '').trim()).filter(Boolean))].filter(name => name.toLowerCase().includes(String(form.admitted_school_name).toLowerCase()) && name !== form.admitted_school_name).slice(0,6).map(name => <TouchableOpacity key={name} onPress={() => update('admitted_school_name', name)} style={{paddingHorizontal:10,paddingVertical:7,backgroundColor:'#e8f1fb',borderRadius:15}}><Text>{name}</Text></TouchableOpacity>)}</View>}
         <LabeledField label="Stream" field="stream" />
 
         <Text style={styles.label}>Handicapped</Text>
@@ -799,11 +788,8 @@ export default function Students() {
 
         <SectionTitle>Parents Information</SectionTitle>
 
-        <LabeledField label="Father Name" field="father_name" />
-        <LabeledField
-          label="Father Aadhaar No"
-          field="father_aadhaar_no"
-        />
+        <LabeledField label="Father Name *" field="father_name" />
+        <DigitField label="Father Aadhaar No" field="father_aadhaar_no" length={12} />
         <LabeledField
           label="Father Qualification"
           field="father_qualification"
@@ -816,13 +802,10 @@ export default function Students() {
           label="Father Annual Income"
           field="father_annual_income"
         />
-        <LabeledField label="Father Mobile No" field="father_mobile" />
+        <DigitField label="Father Mobile No" field="father_mobile" length={10} />
 
-        <LabeledField label="Mother Name" field="mother_name" />
-        <LabeledField
-          label="Mother Aadhaar No"
-          field="mother_aadhaar_no"
-        />
+        <LabeledField label="Mother Name *" field="mother_name" />
+        <DigitField label="Mother Aadhaar No" field="mother_aadhaar_no" length={12} />
         <LabeledField
           label="Mother Qualification"
           field="mother_qualification"
@@ -835,15 +818,15 @@ export default function Students() {
           label="Mother Annual Income"
           field="mother_annual_income"
         />
-        <LabeledField label="Mother Mobile No" field="mother_mobile" />
+        <DigitField label="Mother Mobile No" field="mother_mobile" length={10} />
 
         <LabeledField label="Guardian Name" field="guardian_name" />
-        <LabeledField label="Guardian Mobile" field="guardian_mobile" />
-        <LabeledField label="Alternate Mobile" field="alternate_mobile" />
+        <DigitField label="Guardian Mobile" field="guardian_mobile" length={10} />
+        <DigitField label="Alternate Mobile" field="alternate_mobile" length={10} />
 
         <SectionTitle>Address Details</SectionTitle>
 
-        <Text style={styles.subSection}>Present Address</Text>
+        <Text style={styles.subSection}>Present Address (All fields mandatory)</Text>
 
         <LabeledField label="Village" field="present_village" />
         <LabeledField
@@ -856,16 +839,9 @@ export default function Students() {
         <LabeledField label="District" field="present_district" />
         <LabeledField label="State" field="present_state" />
 
-        <Text style={styles.subSection}>Permanent Address</Text>
+        <Text style={styles.subSection}>Permanent Address (All fields mandatory)</Text>
 
-        <TouchableOpacity
-          style={styles.copyButton}
-          onPress={copyPresentToPermanent}
-        >
-          <Text style={styles.copyButtonText}>
-            Same as Present Address
-          </Text>
-        </TouchableOpacity>
+        <TouchableOpacity style={styles.copyButton} onPress={() => { const next=!sameAsPresent; setSameAsPresent(next); if(next) copyPresentToPermanent(); }}><Text style={styles.copyButtonText}>{sameAsPresent ? '[x]' : '[ ]'} Same as Present Address</Text></TouchableOpacity>
 
         <LabeledField label="Village" field="permanent_village" />
         <LabeledField
@@ -883,10 +859,11 @@ export default function Students() {
 
         <SectionTitle>Student Account Details</SectionTitle>
 
-        <LabeledField label="Account No" field="bank_account_no" />
-        <LabeledField label="Bank Name" field="bank_name" />
-        <LabeledField label="IFSC Code" field="bank_ifsc_code" />
-        <LabeledField label="Branch Name" field="bank_branch_name" />
+        <LabeledField label="Account No" field="bank_account_no" keyboardType="numeric" />
+        <LabeledField label="IFSC Code" field="bank_ifsc_code" maxLength={11} autoCapitalize="characters" onChangeText={(value:string) => update('bank_ifsc_code', value.replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,11))} />
+        {!!ifscMessage && <Text style={{color:ifscMessage.startsWith('Bank details found')?'#16803a':'#b54708',fontWeight:'700',marginTop:-7,marginBottom:9}}>{ifscMessage}</Text>}
+        <LabeledField label="Bank Name (editable)" field="bank_name" />
+        <LabeledField label="Branch Name (editable)" field="bank_branch_name" />
         <LabeledField
           label="Branch Address"
           field="bank_branch_address"
@@ -937,7 +914,7 @@ export default function Students() {
           })}
         </View>
 
-        {editingId !== null && <View style={styles.exitPanel}><SectionTitle>Dropout & Transfer Certificate</SectionTitle><DatePickerField label="Dropout Date" value={exitForm.dropout_date} onChange={v=>setExitForm(x=>({...x,dropout_date:v}))}/><LabeledField label="Reason for Dropout" value={exitForm.dropout_reason} onChangeText={(v:string)=>setExitForm(x=>({...x,dropout_reason:v}))}/><TouchableOpacity disabled={exitBusy} style={styles.clearanceButton} onPress={()=>refreshExitClearance()}><Text style={styles.actionText}>{exitBusy?'Checking...':'Check SDF, Library & Fees Clearance'}</Text></TouchableOpacity>{exitClearance&&<View style={styles.clearanceBox}><Text style={exitClearance.sdf_dues?.length?styles.blockedText:styles.clearText}>SDF: {exitClearance.sdf_dues?.length?'Due — TC blocked':'Clear'}</Text><Text style={exitClearance.library_dues?.length?styles.blockedText:styles.clearText}>Library Book: {exitClearance.library_dues?.length?'Due — TC blocked':'Clear'}</Text><Text style={styles.feeDueText}>Monthly Fees Due: ₹{Number(exitClearance.monthly_fee_due_total||0).toFixed(2)} (will be printed on TC)</Text></View>}<View style={styles.exitActions}><TouchableOpacity disabled={exitBusy} style={styles.dropoutButton} onPress={saveDropout}><Text style={styles.actionText}>Save Dropout</Text></TouchableOpacity><TouchableOpacity disabled={exitBusy||!exitClearance?.exit||exitClearance?.tc_blocked} style={[styles.tcButton,(exitBusy||!exitClearance?.exit||exitClearance?.tc_blocked)&&styles.disabledButton]} onPress={issueAndPrintTc}><Text style={styles.actionText}>Preview / Print TC Form</Text></TouchableOpacity></View></View>}
+        {editingId !== null && <View style={styles.exitPanel}><SectionTitle>Dropout & Transfer Certificate</SectionTitle><DatePickerField label="Dropout Date" value={exitForm.dropout_date} onChange={v=>setExitForm(x=>({...x,dropout_date:v}))}/><LabeledField label="Reason for Dropout" value={exitForm.dropout_reason} onChangeText={(v:string)=>setExitForm(x=>({...x,dropout_reason:v}))}/><TouchableOpacity disabled={exitBusy} style={styles.clearanceButton} onPress={()=>refreshExitClearance()}><Text style={styles.actionText}>{exitBusy?'Checking...':'Check SDF, Library & Fees Clearance'}</Text></TouchableOpacity>{exitClearance&&<View style={styles.clearanceBox}><Text style={exitClearance.sdf_dues?.length?styles.blockedText:styles.clearText}>SDF: {exitClearance.sdf_dues?.length?'Due â€” TC blocked':'Clear'}</Text><Text style={exitClearance.library_dues?.length?styles.blockedText:styles.clearText}>Library Book: {exitClearance.library_dues?.length?'Due â€” TC blocked':'Clear'}</Text><Text style={styles.feeDueText}>Monthly Fees Due: â‚¹{Number(exitClearance.monthly_fee_due_total||0).toFixed(2)} (will be printed on TC)</Text></View>}<View style={styles.exitActions}><TouchableOpacity disabled={exitBusy} style={styles.dropoutButton} onPress={saveDropout}><Text style={styles.actionText}>Save Dropout</Text></TouchableOpacity><TouchableOpacity disabled={exitBusy||!exitClearance?.exit||exitClearance?.tc_blocked} style={[styles.tcButton,(exitBusy||!exitClearance?.exit||exitClearance?.tc_blocked)&&styles.disabledButton]} onPress={issueAndPrintTc}><Text style={styles.actionText}>Preview / Print TC Form</Text></TouchableOpacity></View></View>}
 
         <View style={styles.saveArea}>
           <Button

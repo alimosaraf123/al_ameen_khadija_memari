@@ -52,7 +52,10 @@ const DOCUMENT_TYPES = [
   { key: 'hs_certificate', label: 'H.S Certificate' },
   { key: 'admission_slip', label: 'Admission Slip' },
   { key: 'signature', label: 'Signature' },
+  { key: 'transfer_certificate', label: 'T.C.' },
   { key: 'other', label: 'Others' },
+  { key: 'other_2', label: 'Others-2' },
+  { key: 'other_3', label: 'Others-3' },
 ];
 
 function safeFileName(name: string) {

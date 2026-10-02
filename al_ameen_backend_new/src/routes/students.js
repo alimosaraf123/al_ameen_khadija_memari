@@ -39,6 +39,15 @@ router.post('/:id/transfer-certificate',auth,allow('super_admin','admin'),asyncH
 
 const { studentFields, normalizeValue, prepareBody } = require('../utils/studentData');
 
+function validateStudentInput(body) {
+  const aadhaarFields = [['aadhaar_no', 'Student Aadhaar'], ['father_aadhaar_no', 'Father Aadhaar'], ['mother_aadhaar_no', 'Mother Aadhaar']];
+  for (const [field, label] of aadhaarFields) { const value=String(body[field]||'').trim(); if(value&&!/^\d{12}$/.test(value)){const error=new Error(label+' number must be exactly 12 digits');error.status=400;throw error;} }
+  const mobileFields = [['mobile_number','Student mobile'],['whatsapp_number','WhatsApp'],['father_mobile','Father mobile'],['mother_mobile','Mother mobile'],['guardian_mobile','Guardian mobile'],['alternate_mobile','Alternate mobile']];
+  for (const [field, label] of mobileFields) { const value=String(body[field]||'').trim(); if(value&&!/^\d{10}$/.test(value)){const error=new Error(label+' number must be exactly 10 digits');error.status=400;throw error;} }
+  for (const visitor of [body.visitor1,body.visitor2]) { const value=String(visitor?.mobile_number||'').trim(); if(value&&!/^\d{10}$/.test(value)){const error=new Error('Visitor mobile number must be exactly 10 digits');error.status=400;throw error;} }
+  if(body.session_from||body.session_to){const from=Number(body.session_from),to=Number(body.session_to);if(!/^\d{4}$/.test(String(body.session_from))||!/^\d{4}$/.test(String(body.session_to))||![from,from+1].includes(to)){const error=new Error('Admission session must use same-year or next-year format');error.status=400;throw error;}}
+}
+
 function visitorValue(value) {
   if (value === undefined || value === null) {
     return null;
@@ -268,6 +277,14 @@ router.get(
 // GET ONE STUDENT
 // =========================
 
+router.get('/bank/ifsc/:ifsc', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
+  const ifsc=String(req.params.ifsc||'').trim().toUpperCase();
+  if(!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) return res.status(400).json({success:false,message:'Enter a valid 11-character IFSC code'});
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);
+  try { const response=await fetch('https://ifsc.razorpay.com/'+encodeURIComponent(ifsc),{signal:controller.signal}); if(response.status===404)return res.status(404).json({success:false,message:'IFSC code not found'}); if(!response.ok)throw new Error('IFSC service unavailable'); const bank=await response.json(); res.json({success:true,ifsc,bank_name:bank.BANK||'',branch_name:bank.BRANCH||'',branch_address:bank.ADDRESS||'',city:bank.CITY||'',district:bank.DISTRICT||'',state:bank.STATE||''}); }
+  catch(error){if(error.name==='AbortError')return res.status(504).json({success:false,message:'IFSC lookup timed out; enter bank details manually'});throw error;} finally{clearTimeout(timeout);}
+}));
+
 router.get(
   '/:id',
   auth,
@@ -348,6 +365,8 @@ router.post(
   asyncHandler(async (req, res) => {
 
     const b = prepareBody(req.body);
+
+    validateStudentInput(b);
 
     if (
       !b.registration_no ||
@@ -472,6 +491,8 @@ router.put(
   asyncHandler(async (req, res) => {
 
     const b = prepareBody(req.body);
+
+    validateStudentInput(b);
 
     const fields =
       studentFields.filter(

@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   View,
+  Modal,
 } from 'react-native';
 
 import {
@@ -24,7 +25,7 @@ import { api } from '../lib/api';
 
 
 const menuPermission:Record<string,string>={
- '/students':'students','/teachers':'teachers','/service-staff':'service_staff','/gateman':'gateman_panel','/office':'office_panel','/library':'library_panel','/dining-stock':'dining_stock','/guardians':'guardians','/rooms':'rooms','/room-assignments':'room_assignments','/attendance':'attendance','/behavior':'behavior','/gate-pass':'gate_passes','/visits':'visits','/student-lifecycle':'student_lifecycle','/illness':'illness','/marks':'marks','/terminal-exams':'terminal_exams','/class-results':'published_results','/problems':'problems','/routines':'routines','/notices':'notices','/deposit-fund':'deposit_fund','/audit-log':'audit_log'
+ '/students':'students','/teachers':'teachers','/hostel-menu':'rooms','/academy-menu':'marks','/service-staff':'service_staff','/office':'office_panel','/library':'library_panel','/dining-stock':'dining_stock','/guardians':'guardians','/rooms':'rooms','/room-assignments':'room_assignments','/attendance':'attendance','/behavior':'behavior','/gate-pass':'gate_passes','/visits':'visits','/student-lifecycle':'student_lifecycle','/illness':'illness','/marks':'marks','/terminal-exams':'terminal_exams','/class-results':'published_results','/problems':'problems','/routines':'routines','/notices':'notices','/deposit-fund':'deposit_fund','/audit-log':'audit_log'
 };
 
 const menus: any[] = [
@@ -33,45 +34,15 @@ const menus: any[] = [
 
   ['Teachers', '/teachers'],
 
-  ['Gateman / Office / Library Accounts', '/service-staff'],
+  ['Hostel', '/hostel-menu'],
 
-  ['Gateman Panel', '/gateman'],
-
-  ['Office Panel', '/office'],
-
-  ['Library Panel', '/library'],
-
-  ['Dining Stock', '/dining-stock'],
+  ['Academy', '/academy-menu'],
 
   ['Guardians', '/guardians'],
-
-  ['Rooms', '/rooms'],
-
-  ['Teacher Room Assignment', '/room-assignments'],
-
-  ['Evening Room Attendance', '/attendance'],
-
-  ['Student Behaviour', '/behavior'],
 
   ['Student Gate Pass', '/gate-pass'],
 
   ['Visiting Day Record / Permission', '/visits'],
-
-  ['Promotion / TC / Re-Activation', '/student-lifecycle'],
-
-  ['Student Illness / Problem', '/illness'],
-
-  ['Weekly Test Marks', '/marks'],
-
-  ['Terminal Exam', '/terminal-exams'],
-
-  ['Published Results', '/class-results'],
-
-  ['Room Problems', '/problems'],
-
-  ['Routine', '/routines'],
-
-  ['Notice', '/notices'],
 
   ['Student Deposit Fund', '/deposit-fund'],
 
@@ -84,6 +55,10 @@ const menus: any[] = [
 
 export default function Dashboard() {
   const [unread,setUnread]=useState(0);
+  const [teacherMenu,setTeacherMenu]=useState(false);
+  const [hostelMenu,setHostelMenu]=useState(false);
+  const [academyMenu,setAcademyMenu]=useState(false);
+  const [studentMenu,setStudentMenu]=useState(false);
   const [restricted,setRestricted]=useState(false),[permissions,setPermissions]=useState<string[]>([]),[userRole,setUserRole]=useState('');
   const loadCounter=async()=>{try{const d=await api('/api/notices/admin-counter');setUnread(d.unread||0);}catch{}};
   useEffect(()=>{void api('/api/me').then(d=>{setRestricted(!!d.restricted);setPermissions(d.permissions||[]);setUserRole(d.user?.role||'')}).catch(()=>{});void loadCounter();const timer=setInterval(loadCounter,30000);return()=>clearInterval(timer);},[]);
@@ -126,7 +101,7 @@ export default function Dashboard() {
           style={s.grid}
         >
 
-          {menus.filter(([,path])=>path==='/system-admin'?userRole==='super_admin':!restricted||permissions.includes(menuPermission[path])).map(
+          {menus.filter(([,path])=>!['/gateman','/office','/library','/dining-stock'].includes(path) && (path==='/system-admin'?userRole==='super_admin':!restricted||permissions.includes(menuPermission[path]))).map(
             ([title, path]) => (
 
               <TouchableOpacity
@@ -135,11 +110,7 @@ export default function Dashboard() {
 
                 style={s.card}
 
-                onPress={() =>
-                  router.push(
-                    path as any
-                  )
-                }
+                onPress={() => title==='Students'?setStudentMenu(true):title==='Teachers'?setTeacherMenu(true):title==='Hostel'?setHostelMenu(true):title==='Academy'?setAcademyMenu(true):router.push(path as any)}
 
               >
 
@@ -175,6 +146,32 @@ export default function Dashboard() {
         </TouchableOpacity>
 
       </ScrollView>
+
+      <Modal visible={teacherMenu} transparent animationType="fade" onRequestClose={()=>setTeacherMenu(false)}>
+        <View style={s.modalBackdrop}><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Teachers</Text><TouchableOpacity onPress={()=>setTeacherMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
+          <View style={s.modalGrid}>
+            {[["Add Teacher","/teachers?mode=add"],["View Teacher","/teachers?mode=view"],["I-Card & Form","/teachers?mode=icard"],["Attendance","/attendance"],["Passwords","/teacher-security"]].map(([label,path])=><TouchableOpacity key={label} style={s.modalItem} onPress={()=>{setTeacherMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></TouchableOpacity>)}
+          </View>
+        </View></View>
+      </Modal>
+
+      <Modal visible={studentMenu} transparent animationType="fade" onRequestClose={()=>setStudentMenu(false)}>
+        <View style={s.modalBackdrop}><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Students</Text><TouchableOpacity onPress={()=>setStudentMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
+          <View style={s.modalGrid}>{[["Student Details","/students"],["Promotion / TC / Re-Activation","/student-lifecycle"]].map(([label,path])=><TouchableOpacity key={label} style={s.modalItem} onPress={()=>{setStudentMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></TouchableOpacity>)}</View>
+        </View></View>
+      </Modal>
+
+      <Modal visible={academyMenu} transparent animationType="fade" onRequestClose={()=>setAcademyMenu(false)}>
+        <View style={s.modalBackdrop}><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Academy</Text><TouchableOpacity onPress={()=>setAcademyMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
+          <View style={s.modalGrid}>{[["Weekly Marks","/marks"],["Terminal Exam","/terminal-exams"],["Published Result","/class-results"],["Routine","/routines"],["Notice","/notices"]].map(([label,path])=><TouchableOpacity key={label} style={s.modalItem} onPress={()=>{setAcademyMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></TouchableOpacity>)}</View>
+        </View></View>
+      </Modal>
+
+      <Modal visible={hostelMenu} transparent animationType="fade" onRequestClose={()=>setHostelMenu(false)}>
+        <View style={s.modalBackdrop}><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Hostel</Text><TouchableOpacity onPress={()=>setHostelMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
+          <View style={s.modalGrid}>{[["Rooms","/rooms"],["Teacher Room Assignment","/room-assignments"],["Evening Room Attendance","/attendance"],["Student Behaviour","/behavior"],["Student Illness","/illness"],["Room Problem","/problems"]].map(([label,path])=><TouchableOpacity key={label} style={s.modalItem} onPress={()=>{setHostelMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></TouchableOpacity>)}</View>
+        </View></View>
+      </Modal>
 
     </SafeAreaView>
 
@@ -234,6 +231,15 @@ const s =
 
     notification: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', backgroundColor: '#e8f1fb', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 9, marginBottom: 16 },
     notificationText: { color: '#124a94', fontWeight: '800' },
+    modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,.65)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+    teacherModal: { width: '100%', maxWidth: 670, backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden' },
+    modalHeader: { backgroundColor: '#11101d', padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    modalTitle: { color: '#fff', fontSize: 20, fontWeight: '800' },
+    closeText: { color: '#fff', fontSize: 32, lineHeight: 32 },
+    modalGrid: { padding: 22, flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+    modalItem: { width: '48%', minWidth: 220, borderWidth: 1, borderColor: '#d7dde5', backgroundColor: '#f8fafc', borderRadius: 10, padding: 17, flexDirection: 'row', alignItems: 'center', gap: 16 },
+    arrow: { color: '#075b9c', fontSize: 22, fontWeight: '900' },
+    modalItemText: { color: '#172033', fontSize: 16, fontWeight: '600' },
     badge: { marginLeft: 8, minWidth: 22, height: 22, paddingHorizontal: 5, borderRadius: 11, backgroundColor: '#c62828', alignItems: 'center', justifyContent: 'center' },
     badgeText: { color: '#fff', fontSize: 11, fontWeight: '900' },
 

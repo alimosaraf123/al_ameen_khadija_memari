@@ -132,9 +132,9 @@ export default function Login() {
               loginId
             );
 
-            setUsePasswordLogin(
-              false
-            );
+            // Show the password form first so an admin-reset password can be used immediately.
+            setUserId(loginId);
+            setUsePasswordLogin(true);
 
           }
 
@@ -193,6 +193,9 @@ export default function Login() {
 
       try {
 
+        const deviceId =
+          await getDeviceId();
+
         const response =
           await fetch(
             `${API_BASE}/api/login`,
@@ -202,15 +205,18 @@ export default function Login() {
               headers: {
                 'Content-Type':
                   'application/json',
-                'X-Device-Id': await getDeviceId(),
+                'X-Device-Id': deviceId,
               },
 
               body:
                 JSON.stringify({
                   login_id:
                     userId.trim(),
+                  password:
+                    password.trim(),
 
-                  password,
+                  device_id:
+                    deviceId,
                 }),
             }
           );
@@ -843,17 +849,20 @@ export default function Login() {
             />
 
 
-            <Field
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Password"
-              secureTextEntry={!showPassword}
-              returnKeyType="done"
-              onSubmitEditing={login}
-            />
-            <TouchableOpacity onPress={() => setShowPassword(value => !value)} style={{alignSelf:'flex-end',marginTop:-8,marginBottom:12,padding:5}}>
-              <Text style={{color:'#1764a5',fontWeight:'800'}}>{showPassword ? 'Hide password' : 'View password'}</Text>
-            </TouchableOpacity>
+            <View style={styles.passwordFieldWrap}>
+              <Field
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Password"
+                secureTextEntry={!showPassword}
+                returnKeyType="done"
+                onSubmitEditing={login}
+                style={styles.passwordField}
+              />
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={showPassword ? 'Hide password' : 'Show password'} onPress={() => setShowPassword(value => !value)} style={styles.passwordEye}>
+                <Text style={styles.passwordEyeIcon}>{String.fromCodePoint(0x1F441)}</Text>
+              </TouchableOpacity>
+            </View>
 
 
             <Button
@@ -990,6 +999,31 @@ const styles =
       borderWidth: 1,
       borderColor: '#1565c0',
       borderRadius: 9,
+    },
+
+    passwordFieldWrap: {
+      position: 'relative',
+      marginBottom: 10,
+    },
+
+    passwordField: {
+      paddingRight: 54,
+      marginBottom: 0,
+    },
+
+    passwordEye: {
+      position: 'absolute',
+      right: 8,
+      top: 4,
+      width: 42,
+      height: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    passwordEyeIcon: {
+      color: '#1764a5',
+      fontSize: 22,
     },
 
     passwordText: {

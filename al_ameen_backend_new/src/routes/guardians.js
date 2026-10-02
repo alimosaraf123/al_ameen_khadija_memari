@@ -1,6 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
 
@@ -50,29 +50,37 @@ async function sendGuardianDocument(res, document, download = false) {
 }
 
 
-function generateGuardianPassword(
-  length = 8
-) {
-  const chars =
-    'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function generateGuardianPassword(studentName, dateOfBirth) {
+  const firstName = String(studentName || '').trim().split(/\s+/)[0];
+  let year;
+  let month;
+  let day;
 
-  let password = '';
-
-  for (
-    let i = 0;
-    i < length;
-    i++
-  ) {
-    password +=
-      chars[
-        crypto.randomInt(
-          0,
-          chars.length
-        )
-      ];
+  const dateMatch = String(dateOfBirth || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dateMatch) {
+    [, year, month, day] = dateMatch;
+  } else if (dateOfBirth instanceof Date && !Number.isNaN(dateOfBirth.getTime())) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(dateOfBirth).reduce((result, part) => ({ ...result, [part.type]: part.value }), {});
+    year = parts.year;
+    month = parts.month;
+    day = parts.day;
   }
 
-  return password;
+  if (!firstName) {
+    const error = new Error('Student name is required to create the default guardian password');
+    error.status = 400;
+    throw error;
+  }
+
+  if (!year || !month || !day) {
+    const error = new Error('Student Date of Birth is required to create the default guardian password');
+    error.status = 400;
+    throw error;
+  }
+
+  return firstName + day + month + year;
 }
 
 
@@ -104,6 +112,159 @@ async function guardianOwnsStudent(
   return result.rowCount > 0;
 }
 
+
+const feeClassIds = new Map([
+  ['nursery', '1'], ['nursary', '1'], ['i', '2'], ['ii', '3'], ['iii', '4'],
+  ['iv', '5'], ['v', '6'], ['vi', '7'], ['vii', '8'], ['viii', '9'],
+  ['ix', '10'], ['x', '11'], ['xi science', '12'], ['xi sc', '12'],
+  ['xi arts', '13'], ['xii arts', '15'], ['xii science', '16'], ['xii sc', '16'],
+  ['neet', '18'], ['jee', '19'], ['jee engineering', '19'],
+  ['pre nursery', '34'], ['play group', '35'],
+]);
+
+function feeClassId(className) {
+  const normalized = String(className || '')
+    .trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\./g, '').replace(/\s+/g, ' ');
+  return feeClassIds.get(normalized) || null;
+}
+
+router.get(
+  '/student/:studentId/fee-payment-link',
+  auth,
+  allow('guardian'),
+  asyncHandler(async (req, res) => {
+    if (!(await guardianOwnsStudent(req.user.userId, req.params.studentId))) {
+      return res.status(403).json({ success: false, message: 'This student is not linked to your Guardian account' });
+    }
+
+    const student = (await pool.query(
+      'SELECT id,registration_no,class_name FROM students WHERE id=$1 AND is_active=TRUE',
+      [req.params.studentId]
+    )).rows[0];
+
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+
+    const classId = feeClassId(student.class_name);
+    if (!classId) {
+      return res.status(400).json({ success: false, message: 'This student class is not mapped with the fee payment website' });
+    }
+
+    const token = jwt.sign(
+      { purpose: 'guardian_fee_payment', registrationNo: student.registration_no, classId },
+      process.env.JWT_SECRET,
+      { expiresIn: '2m' }
+    );
+
+    res.json({
+      success: true,
+      payment_path: '/api/guardians/fee-payment/open?token=' + encodeURIComponent(token),
+    });
+  })
+);
+
+router.get(
+  '/student/:studentId/fee-receipt-link',
+  auth,
+  allow('guardian'),
+  asyncHandler(async (req, res) => {
+    if (!(await guardianOwnsStudent(req.user.userId, req.params.studentId))) {
+      return res.status(403).json({ success: false, message: 'This student is not linked to your Guardian account' });
+    }
+
+    const student = (await pool.query(
+      'SELECT id,registration_no,class_name FROM students WHERE id=$1 AND is_active=TRUE',
+      [req.params.studentId]
+    )).rows[0];
+
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+
+    const classId = feeClassId(student.class_name);
+    if (!classId) {
+      return res.status(400).json({ success: false, message: 'This student class is not mapped with the fee receipt website' });
+    }
+
+    const token = jwt.sign(
+      { purpose: 'guardian_fee_receipt', registrationNo: student.registration_no, classId },
+      process.env.JWT_SECRET,
+      { expiresIn: '2m' }
+    );
+
+    res.json({
+      success: true,
+      receipt_path: '/api/guardians/fee-receipt/open?token=' + encodeURIComponent(token),
+    });
+  })
+);
+router.get('/fee-payment/open', asyncHandler(async (req, res) => {
+  let payload;
+
+  try {
+    payload = jwt.verify(String(req.query.token || ''), process.env.JWT_SECRET);
+  } catch {
+    return res.status(401).type('html').send('<h2>This fee-payment link has expired. Return to the Guardian Panel and tap Pay Monthly Fees again.</h2>');
+  }
+
+  if (payload.purpose !== 'guardian_fee_payment') {
+    return res.status(401).type('html').send('<h2>Invalid fee-payment link.</h2>');
+  }
+
+  const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[char]);
+
+  const registrationNo = escapeHtml(payload.registrationNo);
+  const classId = escapeHtml(payload.classId);
+  const html = '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>Opening Fee Payment</title></head><body>' +
+    '<p>Opening the student fee details...</p>' +
+    '<form id="fee-payment" method="post" action="https://alameenmission.net/fees_payment/fees_memari/">' +
+    '<input type="hidden" name="regno" value="' + registrationNo + '">' +
+    '<input type="hidden" name="classid" value="' + classId + '">' +
+    '<input type="hidden" name="search" value="SEARCH">' +
+    '<noscript><button type="submit">Open Fee Details</button></noscript></form>' +
+    '<script>document.getElementById("fee-payment").submit();</script></body></html>';
+
+  res.set('Cache-Control', 'no-store').type('html').send(html);
+}));
+
+router.get('/fee-receipt/open', asyncHandler(async (req, res) => {
+  let payload;
+
+  try {
+    payload = jwt.verify(String(req.query.token || ''), process.env.JWT_SECRET);
+  } catch {
+    return res.status(401).type('html').send('<h2>This fee-receipt link has expired. Return to the Guardian Panel and tap Download Fee Receipt again.</h2>');
+  }
+
+  if (payload.purpose !== 'guardian_fee_receipt') {
+    return res.status(401).type('html').send('<h2>Invalid fee-receipt link.</h2>');
+  }
+
+  const form = new URLSearchParams({
+    regno: String(payload.registrationNo || ''),
+    class: String(payload.classId || ''),
+    submit: 'Submit',
+  });
+  const receiptResponse = await fetch('https://alameenmission.net/fees_receipt/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: form.toString(),
+  });
+
+  if (!receiptResponse.ok) {
+    return res.status(502).type('html').send('<h2>The fee receipt website is unavailable. Please try again.</h2>');
+  }
+
+  let html = await receiptResponse.text();
+  const autoScroll = '<script>window.addEventListener("load",function(){var receipts=document.querySelectorAll("[id^=printData-]");if(receipts.length){receipts[receipts.length-1].scrollIntoView({behavior:"instant",block:"start"});}});</script>';
+  html = html.replace('</body>', autoScroll + '</body>');
+  res.set('Cache-Control', 'no-store').type('html').send(html);
+}));
 
 // ========================================
 // ADMIN / SUPER ADMIN
@@ -224,7 +385,7 @@ router.get(
 // FROM STUDENT REGISTRATION NO
 //
 // USER ID = REGISTRATION NO
-// PASSWORD = AUTO GENERATED
+// PASSWORD = FIRST PART OF STUDENT NAME + DOB (DDMMYYYY)
 // ========================================
 
 router.post(
@@ -448,10 +609,10 @@ router.post(
         // GENERATE PASSWORD
         // ----------------------------
 
-        const plainPassword =
-          generateGuardianPassword(
-            8
-          );
+        const plainPassword = generateGuardianPassword(
+          student.student_name,
+          student.date_of_birth
+        );
 
 
         const passwordHash =
@@ -749,13 +910,31 @@ router.post(
             g.guardian_name,
 
             u.login_id,
-            u.is_active
+            u.is_active,
+
+            s.student_name,
+            s.date_of_birth
 
           FROM guardian_profiles g
 
           JOIN users u
             ON u.id =
                g.user_id
+
+          LEFT JOIN LATERAL (
+            SELECT
+              linked_student.student_name,
+              linked_student.date_of_birth
+            FROM student_guardians sg
+            JOIN students linked_student
+              ON linked_student.id=sg.student_id
+            WHERE sg.guardian_id=g.id
+            ORDER BY
+              (linked_student.registration_no=u.login_id) DESC,
+              sg.is_primary DESC,
+              sg.id
+            LIMIT 1
+          ) s ON TRUE
 
           WHERE
             g.id=$1
@@ -811,10 +990,10 @@ router.post(
       }
 
 
-      const plainPassword =
-        generateGuardianPassword(
-          8
-        );
+      const plainPassword = generateGuardianPassword(
+        guardian.student_name,
+        guardian.date_of_birth
+      );
 
 
       const passwordHash =
@@ -850,7 +1029,7 @@ router.post(
         success: true,
 
         message:
-          'New password generated successfully',
+          'Default password restored successfully',
 
         credentials: {
 

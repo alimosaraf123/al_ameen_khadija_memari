@@ -26,8 +26,6 @@ import { Field, Button, Muted } from '../components/ui';
 
 type TabName = 'home' | 'result' | 'gatepass' | 'details' | 'documents' | 'settings';
 
-const PAYMENT_URL = 'https://alameenmission.net/fees_payment/fees_memari/';
-const RECEIPT_URL = 'https://alameenmission.net/fees_receipt/';
 
 export default function Guardian() {
   const [tab, setTab] = useState<TabName>('home');
@@ -56,6 +54,37 @@ export default function Guardian() {
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricBusy, setBiometricBusy] = useState(false);
 
+  const openMonthlyFeePayment = async () => {
+    if (!student?.id) {
+      return Alert.alert('Fee Payment', 'Student information is not available.');
+    }
+
+    try {
+      const result = await api('/api/guardians/student/' + student.id + '/fee-payment-link');
+      if (!result?.payment_path) {
+        throw new Error('Fee payment link could not be created.');
+      }
+      await Linking.openURL(API_BASE + result.payment_path);
+    } catch (e: any) {
+      Alert.alert('Fee Payment', e.message || 'Unable to open the fee payment page.');
+    }
+  };
+
+  const openFeeReceipt = async () => {
+    if (!student?.id) {
+      return Alert.alert('Fee Receipt', 'Student information is not available.');
+    }
+
+    try {
+      const result = await api('/api/guardians/student/' + student.id + '/fee-receipt-link');
+      if (!result?.receipt_path) {
+        throw new Error('Fee receipt link could not be created.');
+      }
+      await Linking.openURL(API_BASE + result.receipt_path);
+    } catch (e: any) {
+      Alert.alert('Fee Receipt', e.message || 'Unable to open the fee receipt page.');
+    }
+  };
   const loadMonthlyFeeDue = async (studentId: number) => {
     try {
       setMonthlyFeeLoading(true);
@@ -500,24 +529,25 @@ export default function Guardian() {
                 </>
               ) : null}
 
-              <Button
-                title={monthlyFeeLoading ? 'Checking...' : 'Refresh Monthly Due'}
-                onPress={() => loadMonthlyFeeDue(student.id)}
-              />
 
               <TouchableOpacity
                 style={styles.primaryLink}
-                onPress={() => Linking.openURL(PAYMENT_URL)}
+                onPress={openMonthlyFeePayment}
               >
                 <Text style={styles.primaryLinkText}>Pay Monthly Fees</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.secondaryLink}
-                onPress={() => Linking.openURL(RECEIPT_URL)}
+                onPress={openFeeReceipt}
               >
                 <Text style={styles.secondaryLinkText}>Download Fee Receipt</Text>
               </TouchableOpacity>
+              <Button
+                title={monthlyFeeLoading ? 'Checking...' : 'Refresh Monthly Due'}
+                onPress={() => loadMonthlyFeeDue(student.id)}
+              />
+
             </Card>
 
             {/* DEPOSIT FUND */}
@@ -1002,6 +1032,7 @@ const styles = StyleSheet.create({
     gap: 13,
     borderBottomLeftRadius: 26,
     borderBottomRightRadius: 26,
+    marginBottom: 8,
   },
 
   photo: {
@@ -1041,14 +1072,21 @@ const styles = StyleSheet.create({
   },
 
   tabBar: {
-    maxHeight: 66,
+    height: 62,
+    minHeight: 62,
+    maxHeight: 62,
     flexGrow: 0,
-    backgroundColor: '#f4f3ff',
+    flexShrink: 0,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#d9deea',
+    zIndex: 2,
   },
 
   tabContent: {
+    minHeight: 62,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 8,
     alignItems: 'center',
   },
 

@@ -4,7 +4,7 @@ const {auth,allow}=require('../middleware/auth');
 const asyncHandler=require('../utils/asyncHandler');
 const router=express.Router();
 const roles=allow('super_admin','admin','office');
-function blockOffice001(req,res,next){if(String(req.user?.loginId||'').toUpperCase()==='OFFICE-001')return res.status(403).json({success:false,message:'OFFICE-001 cannot generate gate passes'});next();}
+async function blockOffice001(req,res,next){try{const loginKey=String(req.user?.loginId||'').toLowerCase().replace(/[^a-z0-9]/g,'');const staff=await pool.query('SELECT staff_id FROM service_staff_profiles WHERE user_id=$1 LIMIT 1',[req.user?.userId]);const staffKey=String(staff.rows[0]?.staff_id||'').toLowerCase().replace(/[^a-z0-9]/g,'');if(loginKey==='office001'||staffKey==='office001')return res.status(403).json({success:false,message:'OFFICE-001 cannot generate gate passes'});next();}catch(error){next(error);}}
 async function notifyGuardian(client,studentId,token,departure,userId){
  const notice=await client.query(`INSERT INTO notices(title,notice_text,notice_type,published_by,is_active,published_at) VALUES($1,$2,'gate_pass',$3,TRUE,NOW()) RETURNING id`,['Gate Pass Generated',`Gate pass ${token} has been prepared. Departure: ${departure}.`,userId]);
  await client.query(`INSERT INTO notice_targets(notice_id,target_type,target_value) VALUES($1,'student',$2)`,[notice.rows[0].id,String(studentId)]);

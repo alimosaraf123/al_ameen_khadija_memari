@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS teachers (
   name VARCHAR(150) NOT NULL,
   designation VARCHAR(100), subject VARCHAR(100), mobile VARCHAR(30), whatsapp VARCHAR(30), gender VARCHAR(20), email VARCHAR(150), address TEXT,
   date_of_birth DATE, joining_date DATE, qualification VARCHAR(200), photo_url TEXT,
+  profile_details JSONB NOT NULL DEFAULT '{}'::jsonb, education_details JSONB NOT NULL DEFAULT '[]'::jsonb,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

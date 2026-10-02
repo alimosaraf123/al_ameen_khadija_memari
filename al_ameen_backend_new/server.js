@@ -21,7 +21,7 @@ app.use('/api/rooms',...moduleAccess('rooms_support',req=>req.method==='GET'&&re
 app.use('/api/students',...moduleAccess('students'),require('./src/routes/students'));
 app.use('/api/student-transfer',...moduleAccess('student_transfer'),require('./src/routes/studentTransfer').createTransferRouter(pool));
 app.use('/api/teachers',...moduleAccess('teachers_support',req=>(req.method==='GET'&&req.path==='/')||(req.method==='PATCH'&&/^\/\d+\/subjects$/.test(req.path))),require('./src/routes/teachers'));
-app.use('/api/guardians',...moduleAccess('guardians'),require('./src/routes/guardians'));
+app.use('/api/guardians',...moduleAccess('guardians',null,req=>req.method==='GET'&&['/fee-payment/open','/fee-receipt/open'].includes(req.path)),require('./src/routes/guardians'));
 app.use('/api/attendance',...moduleAccess('attendance'),require('./src/routes/attendance'));
 app.use('/api/behavior',...moduleAccess('behavior'),require('./src/routes/behavior'));
 app.use('/api/illness',...moduleAccess('illness'),require('./src/routes/illness'));
