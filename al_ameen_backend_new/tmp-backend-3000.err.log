@@ -1,0 +1,1749 @@
+(node:24032) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+
+To prepare for this change:
+- If you want the current behavior, explicitly use 'sslmode=verify-full'
+- If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+
+See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+(Use `node --trace-warnings ...` to show where the warning was created)
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+Error: getaddrinfo ENOTFOUND ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  errno: -3008,
+  code: 'ENOTFOUND',
+  syscall: 'getaddrinfo',
+  hostname: 'ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech'
+}
+Error: getaddrinfo ENOTFOUND ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\routes\notices.js:9:10 {
+  errno: -3008,
+  code: 'ENOTFOUND',
+  syscall: 'getaddrinfo',
+  hostname: 'ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech'
+}
+Error: getaddrinfo ENOTFOUND ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\routes\notices.js:9:10 {
+  errno: -3008,
+  code: 'ENOTFOUND',
+  syscall: 'getaddrinfo',
+  hostname: 'ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech'
+}
+Error: getaddrinfo ENOTFOUND ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  errno: -3008,
+  code: 'ENOTFOUND',
+  syscall: 'getaddrinfo',
+  hostname: 'ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech'
+}
+Error: getaddrinfo ENOTFOUND ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\routes\notices.js:9:10 {
+  errno: -3008,
+  code: 'ENOTFOUND',
+  syscall: 'getaddrinfo',
+  hostname: 'ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech'
+}
+Error: getaddrinfo ENOTFOUND ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\routes\notices.js:9:10 {
+  errno: -3008,
+  code: 'ENOTFOUND',
+  syscall: 'getaddrinfo',
+  hostname: 'ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech'
+}
+Error: getaddrinfo ENOTFOUND ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  errno: -3008,
+  code: 'ENOTFOUND',
+  syscall: 'getaddrinfo',
+  hostname: 'ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech'
+}
+Error: getaddrinfo ENOTFOUND ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\routes\notices.js:9:10 {
+  errno: -3008,
+  code: 'ENOTFOUND',
+  syscall: 'getaddrinfo',
+  hostname: 'ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech'
+}
+Error: getaddrinfo ENOTFOUND ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\routes\notices.js:9:10 {
+  errno: -3008,
+  code: 'ENOTFOUND',
+  syscall: 'getaddrinfo',
+  hostname: 'ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+Error: getaddrinfo ENOTFOUND ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\routes\notices.js:9:10 {
+  errno: -3008,
+  code: 'ENOTFOUND',
+  syscall: 'getaddrinfo',
+  hostname: 'ep-shy-hat-a7rylzl2-pooler.ap-southeast-2.aws.neon.tech'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
+error: syntax error at end of input
+    at D:\memari_soft\al_ameen_backend_new\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async D:\memari_soft\al_ameen_backend_new\src\middleware\moduleAccess.js:3:339 {
+  length: 91,
+  severity: 'ERROR',
+  code: '42601',
+  detail: undefined,
+  hint: undefined,
+  position: '62',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'scan.l',
+  line: '1228',
+  routine: 'scanner_yyerror'
+}
