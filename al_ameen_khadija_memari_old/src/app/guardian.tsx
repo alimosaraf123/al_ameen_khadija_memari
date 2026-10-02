@@ -786,24 +786,23 @@ export default function Guardian() {
             <Text style={styles.heading}>Documents</Text>
 
             {documents.length === 0 ? (
-              <Card>
-                <Muted>No document available.</Muted>
-              </Card>
+              <Card><Muted>No document available.</Muted></Card>
             ) : (
-              documents.map((doc: any, index: number) => (
-                <Card key={doc.id || index}>
-                  <Text style={styles.documentTitle}>
-                    {doc.document_title || doc.document_type || 'Document'}
-                  </Text>
-                  <Text style={styles.documentMeta}>
-                    {doc.guardian_download_allowed ? 'View + Download Allowed' : 'View Only'}
-                  </Text>
-                  <View style={styles.documentActions}>
-                    <TouchableOpacity style={styles.documentViewButton} onPress={() => openGuardianDocument(doc, false)}><Text style={styles.documentButtonText}>View</Text></TouchableOpacity>
-                    {doc.guardian_download_allowed && <TouchableOpacity style={styles.documentDownloadButton} onPress={() => openGuardianDocument(doc, true)}><Text style={styles.documentButtonText}>Download</Text></TouchableOpacity>}
-                  </View>
-                </Card>
-              ))
+              <View style={styles.documentGrid}>
+                {documents.map((doc: any, index: number) => {
+                  const title = doc.document_title || doc.document_type || 'Document';
+                  const preview = /^https?:\/\//i.test(String(doc.file_url || '')) ? String(doc.file_url) : '';
+                  return <View key={doc.id || index} style={styles.documentCard}>
+                    <Text style={styles.documentCardTitle}>{title.replace(/_/g, ' ')}</Text>
+                    <View style={styles.documentPreview}>{preview ? <Image source={{uri: preview}} style={styles.documentPreviewImage} resizeMode="contain"/> : <Text style={styles.documentNoPreview}>Document</Text>}</View>
+                    <View style={styles.documentCardActions}>
+                      <TouchableOpacity style={styles.documentEyeButton} onPress={() => openGuardianDocument(doc, false)}><Text style={styles.documentIcon}>?</Text></TouchableOpacity>
+                      <TouchableOpacity style={styles.documentPrintButton} onPress={() => openGuardianDocument(doc, false)}><Text style={styles.documentIcon}>?</Text></TouchableOpacity>
+                      {doc.guardian_download_allowed && <TouchableOpacity style={styles.documentDownloadButton} onPress={() => openGuardianDocument(doc, true)}><Text style={styles.documentIcon}>?</Text></TouchableOpacity>}
+                    </View>
+                  </View>;
+                })}
+              </View>
             )}
 
             <Button
@@ -1340,7 +1339,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  documentActions:{flexDirection:'row',gap:8,marginTop:10},documentViewButton:{backgroundColor:'#1764a5',paddingHorizontal:14,paddingVertical:9,borderRadius:7},documentDownloadButton:{backgroundColor:'#16814d',paddingHorizontal:14,paddingVertical:9,borderRadius:7},documentButtonText:{color:'#fff',fontWeight:'800'},
+  documentGrid:{flexDirection:'row',flexWrap:'wrap',gap:14},documentCard:{width:210,borderWidth:1,borderColor:'#b8bec6',borderRadius:8,overflow:'hidden',backgroundColor:'#fff'},documentCardTitle:{textAlign:'center',fontSize:16,color:'#174f75',paddingVertical:7},documentPreview:{height:155,marginHorizontal:10,alignItems:'center',justifyContent:'center',backgroundColor:'#fafafa'},documentPreviewImage:{width:'100%',height:'100%'},documentNoPreview:{color:'#667085'},documentCardActions:{flexDirection:'row',justifyContent:'center',gap:10,padding:8,backgroundColor:'#d9d9d9'},documentEyeButton:{backgroundColor:'#1769e8',paddingHorizontal:13,paddingVertical:8,borderRadius:5},documentPrintButton:{backgroundColor:'#16834f',paddingHorizontal:13,paddingVertical:8,borderRadius:5},documentIcon:{color:'#fff',fontSize:18,fontWeight:'900'},documentActions:{flexDirection:'row',gap:8,marginTop:10},documentViewButton:{backgroundColor:'#1764a5',paddingHorizontal:14,paddingVertical:9,borderRadius:7},documentDownloadButton:{backgroundColor:'#16814d',paddingHorizontal:14,paddingVertical:9,borderRadius:7},documentButtonText:{color:'#fff',fontWeight:'800'},
   documentMeta: {
     color: '#667085',
     marginTop: 5,
