@@ -645,7 +645,7 @@ export default function Students() {
       <ScrollView contentContainerStyle={styles.content}>
         <AcademyHeader />
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <H1>Students</H1>
+          <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center"}}><H1>Students</H1><TouchableOpacity onPress={()=>router.push("/student-lifecycle")} style={{backgroundColor:"#1769aa",padding:10,borderRadius:7}}><Text style={{color:"#fff",fontWeight:"800"}}>Promotion / TC / Re-Activation</Text></TouchableOpacity></View>
           <Button title="Student Menu" onPress={() => setMenuOpen(true)} />
         </View>
         <StudentDirectory students={students} loading={listLoading} error={listError} onRefresh={loadStudents} onEdit={startEdit} onDeactivate={deleteStudent} />
