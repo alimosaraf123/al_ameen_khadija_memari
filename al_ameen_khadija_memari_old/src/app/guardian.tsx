@@ -24,7 +24,7 @@ import {
 } from '../lib/guardianDevice';
 import { Field, Button, Muted } from '../components/ui';
 
-type TabName = 'home' | 'result' | 'gatepass' | 'details' | 'documents' | 'settings';
+type TabName = 'home' | 'result' | 'gatepass' | 'visits' | 'details' | 'documents' | 'settings';
 
 
 export default function Guardian() {
@@ -426,6 +426,7 @@ export default function Guardian() {
         <Tab title="Home" active={tab === 'home'} onPress={() => setTab('home')} />
         <Tab title="Result" active={tab === 'result'} onPress={() => setTab('result')} />
         <Tab title="Gate Pass" active={tab === 'gatepass'} onPress={() => setTab('gatepass')} />
+        <Tab title="Visiting Day Permission" active={tab === 'visits'} onPress={() => setTab('visits')} />
         <Tab
           title="Student Details"
           active={tab === 'details'}
@@ -654,6 +655,21 @@ export default function Guardian() {
           <>
             <Text style={styles.heading}>Gate Pass Records</Text>
             {gatePasses.length===0?<Card><Muted>No Gate Pass record found.</Muted></Card>:gatePasses.map((pass:any)=><Card key={pass.id} tone="notice"><View style={styles.gateHeader}><Text style={styles.noticeTitle}>{pass.token_no}</Text><Text style={[styles.gateStatus,pass.status==='returned'&&styles.gateReturned,pass.status==='cancelled'&&styles.gateCancelled]}>{pass.status==='draft'?'Ready to Print':pass.status==='pending'?'Outside / Return Pending':pass.status==='returned'?'Returned':'Cancelled'}</Text></View><Text style={styles.noticeText}>Reason: {pass.reason}</Text><Text style={styles.noticeText}>Departure: {pass.departure_text||String(pass.departure_at||'').slice(0,16).replace('T',' ')}</Text><Text style={styles.noticeText}>Expected Return: {pass.return_text||String(pass.expected_return_at||'').slice(0,16).replace('T',' ')||'-'}</Text>{pass.returned_at&&<Text style={styles.dateText}>Returned: {String(pass.returned_at).slice(0,16).replace('T',' ')}</Text>}</Card>)}
+          </>
+        )}
+
+        {tab === 'visits' && (
+          <>
+            <Text style={styles.heading}>Visiting Day Permission</Text>
+            {(notices.filter((n: any) => String(n.notice_type || '').toLowerCase() === 'visit').length === 0) ? (
+              <Card tone="notice"><Muted>No visiting day permission notification.</Muted></Card>
+            ) : notices.filter((n: any) => String(n.notice_type || '').toLowerCase() === 'visit').map((notice: any, index: number) => (
+              <Card key={notice.id || index} tone="notice">
+                <Text style={styles.noticeTitle}>{notice.title || 'Visit Permission Approved'}</Text>
+                <Text style={styles.noticeText}>{notice.notice_text || notice.message || ''}</Text>
+                <Text style={styles.dateText}>{String(notice.published_at || notice.created_at || '').slice(0, 16).replace('T', ' ')}</Text>
+              </Card>
+            ))}
           </>
         )}
 
