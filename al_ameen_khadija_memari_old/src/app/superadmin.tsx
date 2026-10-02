@@ -19,6 +19,7 @@ import {
 
 import {
   clearSession,
+  getUser,
 } from '../lib/auth';
 import AcademyHeader from '../components/AcademyHeader';
 import { api } from '../lib/api';
