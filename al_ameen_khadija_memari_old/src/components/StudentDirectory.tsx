@@ -21,7 +21,7 @@ export function Select({ label, value, options, onChange, searchable=false }: { 
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
       <View style={s.overlay}><Pressable accessibilityRole="button" accessibilityLabel="Close dropdown" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} onPress={() => setOpen(false)} /><View style={s.selectPanel}>
         <Text style={s.panelTitle}>{label}</Text>
-        {searchable && <TextInput autoFocus value={query} onChangeText={setQuery} placeholder="Type teacher name..." style={s.search} />}
+        {searchable && <TextInput autoFocus value={query} onChangeText={setQuery} placeholder={label ? `Search ${label}...` : "Type to search..."} style={s.search} />}
         <ScrollView keyboardShouldPersistTaps="handled">{visibleOptions.map(option => <TouchableOpacity key={option.value} accessibilityRole="button" accessibilityState={{ selected: value === option.value }} style={[s.option, value === option.value && s.selected]} onPress={() => { onChange(option.value); setOpen(false); }}>
           <Text>{option.label}{value === option.value ? '  Selected' : ''}</Text>
         </TouchableOpacity>)}</ScrollView>
