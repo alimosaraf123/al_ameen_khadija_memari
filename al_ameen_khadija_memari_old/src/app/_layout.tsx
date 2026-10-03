@@ -14,6 +14,7 @@ export default function Layout() {
       <Stack.Screen name="gateman" options={{ headerShown: false }} />
       <Stack.Screen name="office" options={{ headerShown: false }} />
       <Stack.Screen name="library" options={{ headerShown: false }} />
+      <Stack.Screen name="settings" options={{ headerShown: false }} />
     </Stack>
   );
 }
