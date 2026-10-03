@@ -68,6 +68,7 @@ router.post('/weekly-tests', auth, allow('super_admin','admin','teacher'), async
   const fullMarks = Number(body.full_marks);
   const examDate = String(body.exam_date || '');
   const entries = Array.isArray(body.entries) ? body.entries : [];
+  const draft = body.submit_mode === 'draft';
   if(!className || !subjectName || !Number.isFinite(fullMarks) || fullMarks<=0 || !validDate(examDate)) return res.status(400).json({success:false,message:'Class, subject, positive full marks and valid exam date are required'});
   if(entries.some(entry=>!validMark(entry.obtained_marks,fullMarks))) return res.status(400).json({success:false,message:`Marks must be between 0 and ${fullMarks}; leave blank for absent`});
 
@@ -98,7 +99,7 @@ router.post('/weekly-tests', auth, allow('super_admin','admin','teacher'), async
       const mark = entry.obtained_marks === '' || entry.obtained_marks === null ? null : Number(entry.obtained_marks);
       await client.query(`INSERT INTO student_marks(exam_id,student_id,subject_id,obtained_marks,remarks,entered_by,verification_status) VALUES($1,$2,$3,$4,$5,$6,'pending')`,[exam.rows[0].id,entry.student_id,subject.rows[0].id,mark,mark===null?(entry.remarks||'Absent'):(entry.remarks||null),req.user.userId]);
     }
-    const batch = await client.query(`INSERT INTO mark_entry_batches(exam_id,subject_id,class_name,full_marks,entered_by,locked) VALUES($1,$2,$3,$4,$5,TRUE) RETURNING *`,[exam.rows[0].id,subject.rows[0].id,className,fullMarks,req.user.userId]);
+    const batch = await client.query(`INSERT INTO mark_entry_batches(exam_id,subject_id,class_name,full_marks,entered_by,locked,submitted_at) VALUES($1,$2,$3,$4,$5,$6,CASE WHEN $6 THEN NOW() ELSE NULL END) RETURNING *`,[exam.rows[0].id,subject.rows[0].id,className,fullMarks,req.user.userId,!draft]);
     await client.query('COMMIT');
     res.status(201).json({success:true,test:{...batch.rows[0],exam_name:examName,exam_date:examDate,subject_name:subjectName}});
   } catch(error) {
@@ -114,6 +115,7 @@ router.patch('/weekly-tests/:id', auth, allow('super_admin','admin'), asyncHandl
   const fullMarks = Number(body.full_marks);
   const examDate = String(body.exam_date || '');
   const entries = Array.isArray(body.entries) ? body.entries : [];
+  const draft = body.submit_mode === 'draft';
   if(!Number.isFinite(fullMarks) || fullMarks<=0 || !validDate(examDate)) return res.status(400).json({success:false,message:'Positive full marks and valid exam date are required'});
   if(entries.some(entry=>!validMark(entry.obtained_marks,fullMarks))) return res.status(400).json({success:false,message:`Marks must be between 0 and ${fullMarks}`});
   const client = await pool.connect();

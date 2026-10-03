@@ -294,7 +294,7 @@ CREATE TABLE IF NOT EXISTS mark_entry_batches (
   class_name VARCHAR(50) NOT NULL,
   full_marks NUMERIC(8,2) NOT NULL,
   entered_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
-  submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  submitted_at TIMESTAMPTZ,
   locked BOOLEAN NOT NULL DEFAULT TRUE,
   updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

@@ -42,16 +42,16 @@ export default function Marks() {
   const setMark=(id:number,value:string)=>setStudents(current=>current.map(student=>student.id===id?{...student,obtained_marks:value.replace(/[^0-9.]/g,''),absent:false}:student));
   const toggleAbsent=(id:number)=>setStudents(current=>current.map(student=>student.id===id?{...student,absent:!student.absent,obtained_marks:''}:student));
 
-  const save=async()=>{
+  const save=async(submit_mode:'draft'|'final')=>{
     if(!loaded||!students.length) return Alert.alert('Required','Load a class first.');
     if(!form.subjectName.trim()||!form.fullMarks||!form.examDate) return Alert.alert('Required','Subject, full marks and exam date are required.');
     const full=Number(form.fullMarks);
     if(!Number.isFinite(full)||full<=0) return Alert.alert('Invalid','Enter valid full marks.');
     const unfinished=students.some(student=>!student.absent&&student.obtained_marks==='');
-    if(unfinished) return Alert.alert('Marks Missing','Enter marks or select Absent for every student.');
+    if(submit_mode==='final'&&unfinished) return Alert.alert('Marks Missing','Enter marks or select Absent for every student.');
     const invalid=students.some(student=>!student.absent&&(Number(student.obtained_marks)<0||Number(student.obtained_marks)>full));
     if(invalid) return Alert.alert('Invalid Marks',`Marks must be between 0 and ${full}.`);
-    const body={exam_name:form.examName.trim()||'Weekly Test',class_name:form.className,subject_name:form.subjectName.trim(),full_marks:full,exam_date:form.examDate,session_name:form.sessionName,entries:students.map(student=>({student_id:student.id,obtained_marks:student.absent?null:Number(student.obtained_marks),remarks:student.absent?'Absent':null}))};
+    const body={exam_name:form.examName.trim()||'Weekly Test',class_name:form.className,subject_name:form.subjectName.trim(),full_marks:full,exam_date:form.examDate,session_name:form.sessionName,submit_mode,entries:students.map(student=>({student_id:student.id,obtained_marks:student.absent?null:Number(student.obtained_marks),remarks:student.absent?'Absent':null}))};
     setSaving(true);
     try{
       if(editingId){await api(`/api/marks/weekly-tests/${editingId}`,{method:'PATCH',body:JSON.stringify(body)});Alert.alert('Updated','Marks updated by Admin.');}
@@ -90,7 +90,7 @@ export default function Marks() {
     {loaded&&<>
       <View style={s.summary}><Text style={s.summaryText}>Students: {students.length}</Text><Text style={s.summaryText}>Completed: {enteredCount}</Text></View>
       {students.map(student=><View key={student.id} style={[s.studentCard,student.absent&&s.absentCard]}><View style={s.studentInfo}><Text style={s.studentName}>{student.student_name}</Text><Text style={s.meta}>Reg. {student.registration_no}</Text></View>{student.absent?<View style={s.hiddenMark}><Text style={s.hiddenMarkText}>Marks hidden</Text></View>:<TextInput editable={!lockedForTeacher} placeholder="Enter marks" placeholderTextColor="#c2c8cf" value={student.obtained_marks} onChangeText={value=>setMark(student.id,value)} keyboardType="numeric" style={s.markInput}/>}<TouchableOpacity disabled={lockedForTeacher} onPress={()=>toggleAbsent(student.id)} style={[s.absentButton,student.absent&&s.absentActive]}><Text style={[s.absentText,student.absent&&s.absentActiveText]}>{student.absent?'ABSENT':'Mark Absent'}</Text></TouchableOpacity></View>)}
-      <View style={s.actionRow}>{(!editingId||canManage)&&<TouchableOpacity disabled={saving} onPress={save} style={s.saveButton}><Text style={s.buttonText}>{saving?'Saving...':editingId?'Update Marks as Admin':'Submit & Lock Marks'}</Text></TouchableOpacity>}<TouchableOpacity onPress={print} style={s.printButton}><Text style={s.printText}>Print</Text></TouchableOpacity>{editingId&&<TouchableOpacity onPress={downloadExcel} style={s.printButton}><Text style={s.printText}>Excel</Text></TouchableOpacity>}</View>
+      <View style={s.actionRow}>{(!editingId||canManage)&&<TouchableOpacity disabled={saving} onPress={()=>save('draft')} style={s.saveButton}><Text style={s.buttonText}>{saving?'Saving...':editingId?'Update Marks as Admin':'Save as Draft'}</Text></TouchableOpacity>}{!editingId&&<TouchableOpacity disabled={saving} onPress={()=>save('final')} style={[s.saveButton,{backgroundColor:'#167447'}]}><Text style={s.buttonText}>Final Submit</Text></TouchableOpacity>}<TouchableOpacity onPress={print} style={s.printButton}><Text style={s.printText}>Print</Text></TouchableOpacity>{editingId&&<TouchableOpacity onPress={downloadExcel} style={s.printButton}><Text style={s.printText}>Excel</Text></TouchableOpacity>}</View>
     </>}
 
     {canManage&&<View style={s.publishPanel}>
