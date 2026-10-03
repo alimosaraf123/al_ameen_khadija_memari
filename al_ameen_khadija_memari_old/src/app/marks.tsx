@@ -13,7 +13,7 @@ import { STUDENT_CLASSES } from '../lib/studentClasses';
 
 function localDate() { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 const blankForm={className:'',subjectName:'',fullMarks:'',examDate:localDate(),examName:'Weekly Test',sessionName:String(new Date().getFullYear())};
-const SESSION_OPTIONS=Array.from({length:8},(_,i)=>String(new Date().getFullYear()+1-i));
+const SESSION_OPTIONS=Array.from({length:10},(_,i)=>{const y=new Date().getFullYear()-2+i;return [`${y}-${y}`,`${y}-${y+1}`]}).flat();
 
 export default function Marks() {
   const [form,setForm]=useState(blankForm);
