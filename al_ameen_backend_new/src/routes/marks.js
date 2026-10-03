@@ -35,8 +35,8 @@ router.get('/weekly-tests', auth, allow('super_admin','admin','teacher'), asyncH
     LEFT JOIN student_marks sm ON sm.exam_id=b.exam_id AND sm.subject_id=b.subject_id
     ${where}
     GROUP BY b.id,e.id,su.id,u.full_name
-    ORDER BY e.exam_date DESC,b.submitted_at DESC
-    LIMIT 100
+    ORDER BY b.locked ASC,b.updated_at DESC,e.exam_date DESC
+    ${req.user.role==='teacher'?'':'LIMIT 100'}
   `, params);
   res.json({success:true,tests:result.rows});
 }));

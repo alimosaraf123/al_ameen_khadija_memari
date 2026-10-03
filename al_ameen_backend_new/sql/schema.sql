@@ -300,6 +300,7 @@ CREATE TABLE IF NOT EXISTS mark_entry_batches (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_mark_entry_batches_date ON mark_entry_batches(submitted_at DESC);
+ALTER TABLE mark_entry_batches ALTER COLUMN submitted_at DROP NOT NULL;
 
 CREATE TABLE IF NOT EXISTS terminal_exams (
  id BIGSERIAL PRIMARY KEY, exam_name VARCHAR(150) NOT NULL, class_name VARCHAR(50) NOT NULL,

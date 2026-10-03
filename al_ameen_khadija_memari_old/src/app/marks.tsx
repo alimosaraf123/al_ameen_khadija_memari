@@ -33,7 +33,7 @@ export default function Marks() {
   const rosterRequest=useRef(0);
 
   const loadTests=async()=>{try{const data=await api('/api/marks/weekly-tests');setTests(data.tests||[]);}catch(error:any){Alert.alert('Error',error.message);}};
-  useEffect(()=>{(async()=>{const user=await getUser<any>();setCanManage(user?.role==='admin'||user?.role==='super_admin');const subjectData=await api('/api/marks/subjects');setSubjects(subjectData.subjects||[]);await loadTests();})();},[]);
+  useEffect(()=>{void getUser<any>().then(user=>setCanManage(user?.role==='admin'||user?.role==='super_admin'));void api('/api/marks/subjects').then(data=>setSubjects(data.subjects||[])).catch(error=>Alert.alert('Subjects',error.message));void api('/api/marks/weekly-tests').then(data=>setTests(data.tests||[])).catch(error=>Alert.alert('Drafts',error.message));},[]);
   const set=(key:string,value:string)=>{
     if(key==='sessionName'&&editingId&&canManage){setForm(current=>({...current,sessionName:value}));return;}
     if(key==='sessionName'||key==='className'){
@@ -66,10 +66,10 @@ export default function Marks() {
     const body={exam_name:form.examName.trim()||'Weekly Test',class_name:form.className,subject_name:form.subjectName.trim(),full_marks:full,exam_date:form.examDate,session_name:form.sessionName,submit_mode,entries:students.map(student=>({student_id:student.id,obtained_marks:student.absent||student.obtained_marks===''?null:Number(student.obtained_marks),remarks:student.absent?'Absent':null}))};
     setSaving(true);
     try{
-      if(editingId){await api(`/api/marks/weekly-tests/${editingId}`,{method:'PATCH',body:JSON.stringify(body)});}
-      else{await api('/api/marks/weekly-tests',{method:'POST',body:JSON.stringify(body)});}
+      const result=editingId?await api(`/api/marks/weekly-tests/${editingId}`,{method:'PATCH',body:JSON.stringify(body)}):await api('/api/marks/weekly-tests',{method:'POST',body:JSON.stringify(body)});
       Alert.alert(submit_mode==='draft'?'Saved':'Submitted',submit_mode==='draft'?(editingTest?.locked?'Marks updated.':'Draft saved. You can continue editing later.'):'Marks submitted and locked.');
-      await loadTests();newEntry();
+      await loadTests();
+      if(submit_mode==='draft'&&!result.test?.locked){await openTest(Number(result.test.id));}else{newEntry();}
     }catch(error:any){Alert.alert('Error',error.message);}finally{setSaving(false);}
   };
 
@@ -88,6 +88,7 @@ export default function Marks() {
   return <SafeAreaView style={s.page}><ScrollView contentContainerStyle={s.content}>
     <AcademyHeader />
     <View style={s.titleRow}><View><Text style={s.title}>Weekly Test Marks Entry</Text><Text style={s.help}>Class নির্বাচন করলে সব student আসবে। একবার submit করলে Teacher আর edit করতে পারবেন না।</Text></View>{loaded&&<TouchableOpacity onPress={newEntry} style={s.newButton}><Text style={s.newText}>New Entry</Text></TouchableOpacity>}</View>
+    {!canManage&&<View style={s.formCard}><View style={s.titleRow}><Text style={s.sectionTitle}>My Drafts ({tests.filter(test=>!test.locked).length})</Text><TouchableOpacity onPress={loadTests} style={s.viewButton}><Text style={s.viewText}>Refresh</Text></TouchableOpacity></View>{tests.filter(test=>!test.locked).map(test=><TouchableOpacity key={test.id} onPress={()=>openTest(test.id)} style={s.testCard}><View style={{flex:1}}><Text style={s.testTitle}>{test.exam_name} — Class {test.class_name}</Text><Text style={s.meta}>{test.subject_name} | Session {test.session_name} | {String(test.exam_date).slice(0,10)}</Text></View><Text style={s.viewText}>Continue Draft</Text></TouchableOpacity>)}{!tests.some(test=>!test.locked)&&<Text style={s.meta}>No saved drafts.</Text>}</View>}
     <View style={s.formCard}>
       {editingId&&<View style={[s.lockBox,canManage&&s.adminBox]}><Text style={s.lockText}>{editingTest?.locked?(canManage?'Submitted — Admin editing enabled':'Submitted marks — View only'):'Draft — Continue editing'}</Text></View>}
       <View style={s.formGrid}>
