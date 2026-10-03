@@ -11,7 +11,7 @@ function greeting(){const h=new Date().getHours();return h<12?'Good morning':h<1
 function date(value:any){return String(value||'').slice(0,10);}
 export default function Teacher(){
  const [roomMenu,setRoomMenu]=useState(false),[examMenu,setExamMenu]=useState(false),[teacher,setTeacher]=useState<any>(null),[routines,setRoutines]=useState<any[]>([]),[notices,setNotices]=useState<any[]>([]),[loading,setLoading]=useState(true);
- useEffect(()=>{void(async()=>{try{const [profile,routineData,noticeData]=await Promise.all([api('/api/teachers/me'),api('/api/routines'),api('/api/notices')]);setTeacher(profile.teacher);setRoutines((routineData.routines||[]).filter((item:any)=>item.file_url));setNotices((noticeData.notices||[]).slice(0,4));}finally{setLoading(false);}})();},[]);
+ useEffect(()=>{void(async()=>{try{const [profile,routineData,noticeData]=await Promise.all([api('/api/teachers/me'),api('/api/routines'),api('/api/notices')]);setTeacher(profile.teacher);setRoutines((routineData.routines||[]).filter((item:any)=>item.file_url));setNotices(noticeData.notices||[]);}finally{setLoading(false);}})();},[]);
  const name=teacher?.name||teacher?.full_name||(getUser as any)?.full_name||'Teacher';const first=String(name).trim().split(/\s+/)[0];
  const photo=teacher?.photo_url?(/^https?:/.test(teacher.photo_url)?teacher.photo_url:`${API_BASE}${teacher.photo_url}`):null;
  const recentNotice=notices.find((n:any)=>Date.now()-new Date(n.published_at||n.created_at||0).getTime()<48*60*60*1000);
