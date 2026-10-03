@@ -205,6 +205,13 @@ router.get(
 
     const values = [];
     const where = [];
+    if (req.query.session) {
+      const session = String(req.query.session).trim();
+      if (!/^\d{4}-\d{4}$/.test(session)) return res.status(400).json({success:false,message:'Select a valid session (YYYY-YYYY)'});
+      const [from,to] = session.split('-');
+      values.push(from,to);
+      where.push(`s.session_from::text=$1 AND s.session_to::text=$2`);
+    }
 
     if (include_inactive !== 'true') {
       where.push(`s.is_active = TRUE`);

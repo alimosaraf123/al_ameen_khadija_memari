@@ -7,7 +7,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { api, API_BASE } from '../lib/api';
 import { getToken } from '../lib/auth';
 import { STUDENT_CLASSES, isVisibleStudentClass } from '../lib/studentClasses';
-import { filterStudents, sessionYears, normalizeStudentClass } from '../lib/studentDirectory';
+import { filterStudents, studentSession, normalizeStudentClass } from '../lib/studentDirectory';
 
 type Option = { value: string; label: string };
 export function Select({ label, value, options, onChange, searchable=false }: { label: string; value: string; options: Option[]; onChange: (value: string) => void; searchable?: boolean }) {
@@ -71,7 +71,7 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
   const [documentsError, setDocumentsError] = useState('');
   const [documentBusy, setDocumentBusy] = useState<string | null>(null);
   const [pendingDocuments, setPendingDocuments] = useState<Record<string, any>>({});
-  const years = useMemo(() => [...new Set(students.flatMap(sessionYears))].sort((a, b) => b - a), [students]);
+  const sessions = useMemo(() => [...new Set(students.map(studentSession).filter(Boolean))].sort().reverse(), [students]);
   const classes = useMemo(() => [...new Set<string>([
     ...STUDENT_CLASSES,
     ...students.map(student => normalizeStudentClass(student.class_name)).filter(Boolean).filter(isVisibleStudentClass),
@@ -202,7 +202,7 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
 
   return <View style={s.directory}>
     <View style={s.filters}>
-      <Select label="Session year" value={year} onChange={setYear} options={[{ value: 'all', label: 'All Years' }, ...years.map(y => ({ value: String(y), label: String(y) }))]} />
+      <Select label="Session" value={year} onChange={setYear} options={[{ value: 'all', label: 'All Sessions' }, ...sessions.map(session => ({ value: session, label: session }))]} />
       <Select label="Class" value={className} onChange={setClassName} options={[{ value: 'all', label: 'All Classes' }, ...classes.map(c => ({ value: c, label: c }))]} />
       <Select label="Gender" value={gender} onChange={setGender} options={[{ value: 'all', label: 'All Genders' }, { value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }]} />
       <Select label="Status" value={status} onChange={setStatus} options={[{ value: 'active', label: 'Active' }, { value: 'dropout', label: 'Dropout' }, { value: 'all', label: 'All Statuses' }]} />

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Print from 'expo-print';
@@ -12,7 +12,7 @@ import { getToken, getUser } from '../lib/auth';
 import { STUDENT_CLASSES } from '../lib/studentClasses';
 
 function localDate() { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
-const blankForm={className:'',subjectName:'',fullMarks:'',examDate:localDate(),examName:'Weekly Test',sessionName:String(new Date().getFullYear())};
+const blankForm={className:'',subjectName:'',fullMarks:'',examDate:localDate(),examName:'Weekly Test',sessionName:`${new Date().getFullYear()}-${new Date().getFullYear()}`};
 const SESSION_OPTIONS=Array.from({length:10},(_,i)=>{const y=new Date().getFullYear()-2+i;return [`${y}-${y}`,`${y}-${y+1}`]}).flat();
 
 export default function Marks() {
@@ -20,6 +20,7 @@ export default function Marks() {
   const [students,setStudents]=useState<any[]>([]);
   const [tests,setTests]=useState<any[]>([]);
   const [editingId,setEditingId]=useState<number|null>(null);
+  const [editingTest,setEditingTest]=useState<any>(null);
   const [canManage,setCanManage]=useState(false);
   const [loading,setLoading]=useState(false);
   const [saving,setSaving]=useState(false);
@@ -27,17 +28,28 @@ export default function Marks() {
   const [subjects,setSubjects]=useState<any[]>([]);
   const [showDatePicker,setShowDatePicker]=useState(false);
   const [publishClass,setPublishClass]=useState('');
+  const [resultSession,setResultSession]=useState('all');
   const [publishTestId,setPublishTestId]=useState('');
+  const rosterRequest=useRef(0);
 
   const loadTests=async()=>{try{const data=await api('/api/marks/weekly-tests');setTests(data.tests||[]);}catch(error:any){Alert.alert('Error',error.message);}};
   useEffect(()=>{(async()=>{const user=await getUser<any>();setCanManage(user?.role==='admin'||user?.role==='super_admin');const subjectData=await api('/api/marks/subjects');setSubjects(subjectData.subjects||[]);await loadTests();})();},[]);
-  const set=(key:string,value:string)=>setForm(current=>({...current,[key]:value}));
+  const set=(key:string,value:string)=>{
+    if(key==='sessionName'&&editingId&&canManage){setForm(current=>({...current,sessionName:value}));return;}
+    if(key==='sessionName'||key==='className'){
+      if(editingId)return;
+      rosterRequest.current++;setStudents([]);setLoaded(false);setLoading(false);
+    }
+    setForm(current=>({...current,[key]:value}));
+  };
 
   const loadClass=async()=>{
     if(!form.className) return Alert.alert('Required','Select a class.');
+    if(!form.sessionName) return Alert.alert('Required','Select a session.');
+    const request=++rosterRequest.current;
     setLoading(true);
-    try{const data=await api(`/api/students?class_name=${encodeURIComponent(form.className)}`);setStudents((data.students||[]).map((student:any)=>({...student,obtained_marks:'',absent:false})));setLoaded(true);setEditingId(null);}
-    catch(error:any){Alert.alert('Error',error.message);}finally{setLoading(false);}
+    try{const data=await api(`/api/students?class_name=${encodeURIComponent(form.className)}&session=${encodeURIComponent(form.sessionName)}`);if(request!==rosterRequest.current)return;setStudents((data.students||[]).map((student:any)=>({...student,obtained_marks:'',absent:false})));setLoaded(true);setEditingId(null);setEditingTest(null);if(!data.students?.length)Alert.alert('No Students','No active students found for this class and session.');}
+    catch(error:any){if(request===rosterRequest.current)Alert.alert('Error',error.message);}finally{if(request===rosterRequest.current)setLoading(false);}
   };
   const setMark=(id:number,value:string)=>setStudents(current=>current.map(student=>student.id===id?{...student,obtained_marks:value.replace(/[^0-9.]/g,''),absent:false}:student));
   const toggleAbsent=(id:number)=>setStudents(current=>current.map(student=>student.id===id?{...student,absent:!student.absent,obtained_marks:''}:student));
@@ -51,32 +63,33 @@ export default function Marks() {
     if(submit_mode==='final'&&unfinished) return Alert.alert('Marks Missing','Enter marks or select Absent for every student.');
     const invalid=students.some(student=>!student.absent&&(Number(student.obtained_marks)<0||Number(student.obtained_marks)>full));
     if(invalid) return Alert.alert('Invalid Marks',`Marks must be between 0 and ${full}.`);
-    const body={exam_name:form.examName.trim()||'Weekly Test',class_name:form.className,subject_name:form.subjectName.trim(),full_marks:full,exam_date:form.examDate,session_name:form.sessionName,submit_mode,entries:students.map(student=>({student_id:student.id,obtained_marks:student.absent?null:Number(student.obtained_marks),remarks:student.absent?'Absent':null}))};
+    const body={exam_name:form.examName.trim()||'Weekly Test',class_name:form.className,subject_name:form.subjectName.trim(),full_marks:full,exam_date:form.examDate,session_name:form.sessionName,submit_mode,entries:students.map(student=>({student_id:student.id,obtained_marks:student.absent||student.obtained_marks===''?null:Number(student.obtained_marks),remarks:student.absent?'Absent':null}))};
     setSaving(true);
     try{
-      if(editingId){await api(`/api/marks/weekly-tests/${editingId}`,{method:'PATCH',body:JSON.stringify(body)});Alert.alert('Updated','Marks updated by Admin.');}
-      else{await api('/api/marks/weekly-tests',{method:'POST',body:JSON.stringify(body)});Alert.alert('Submitted','Marks saved and locked. Teacher cannot edit this submission.');}
+      if(editingId){await api(`/api/marks/weekly-tests/${editingId}`,{method:'PATCH',body:JSON.stringify(body)});}
+      else{await api('/api/marks/weekly-tests',{method:'POST',body:JSON.stringify(body)});}
+      Alert.alert(submit_mode==='draft'?'Saved':'Submitted',submit_mode==='draft'?(editingTest?.locked?'Marks updated.':'Draft saved. You can continue editing later.'):'Marks submitted and locked.');
       await loadTests();newEntry();
     }catch(error:any){Alert.alert('Error',error.message);}finally{setSaving(false);}
   };
 
   const openTest=async(id:number)=>{
     setLoading(true);
-    try{const data=await api(`/api/marks/weekly-tests/${id}`);setEditingId(id);setForm({className:data.test.class_name,subjectName:data.test.subject_name,fullMarks:String(data.test.full_marks),examDate:String(data.test.exam_date).slice(0,10),examName:data.test.exam_name||'Weekly Test',sessionName:data.test.session_name||String(new Date().getFullYear())});setStudents((data.students||[]).map((student:any)=>({...student,id:student.student_id,absent:student.obtained_marks===null,obtained_marks:student.obtained_marks===null?'':String(student.obtained_marks)})));setLoaded(true);}
+    try{const data=await api(`/api/marks/weekly-tests/${id}`);setEditingId(id);setEditingTest(data.test);setForm({className:data.test.class_name,subjectName:data.test.subject_name,fullMarks:String(data.test.full_marks),examDate:String(data.test.exam_date).slice(0,10),examName:data.test.exam_name||'Weekly Test',sessionName:data.test.session_name||String(new Date().getFullYear())});setStudents((data.students||[]).map((student:any)=>({...student,id:student.student_id,absent:student.obtained_marks===null&&student.remarks==='Absent',obtained_marks:student.obtained_marks===null?'':String(student.obtained_marks)})));setLoaded(true);}
     catch(error:any){Alert.alert('Error',error.message);}finally{setLoading(false);}
   };
-  const newEntry=()=>{setEditingId(null);setForm({...blankForm,examDate:localDate()});setStudents([]);setLoaded(false);};
+  const newEntry=()=>{setEditingId(null);setEditingTest(null);setForm({...blankForm,examDate:localDate()});setStudents([]);setLoaded(false);};
   const enteredCount=useMemo(()=>students.filter(student=>student.absent||student.obtained_marks!=='').length,[students]);
   const print=async()=>{const pages=[];for(let i=0;i<students.length;i+=25){const rows=students.slice(i,i+25).map((student,index)=>`<tr><td>${i+index+1}</td><td>${student.registration_no}</td><td class="name">${student.student_name}</td><td>${student.absent?'B':student.obtained_marks}</td></tr>`).join('');pages.push(`<section><h2>Al-Ameen Mission Academy Memari</h2><h3>${form.examName} · Class ${form.className}</h3><table><thead><tr><th>Sl</th><th>Reg.</th><th>Name</th><th>${form.subjectName}<br>F.M.-${form.fullMarks}<br>${form.examDate.split('-').reverse().join('-')}</th></tr></thead><tbody>${rows}</tbody></table></section>`);}const html=`<style>@page{size:A4 portrait;margin:10mm}body{font-family:Arial;color:#111}section{page-break-after:always}section:last-child{page-break-after:auto}h2,h3{text-align:center;margin:3px}table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border:1px solid #222;padding:5px;text-align:center;height:22px}th{font-weight:700}.name{text-align:left}</style>${pages.join('')}`;await Print.printAsync({html});};
   const publish=async(test:any)=>{try{await api(`/api/marks/exams/${test.exam_id}/publish`,{method:'PATCH',body:JSON.stringify({is_published:!test.is_published})});Alert.alert('Success',test.is_published?'Result unpublished.':'Result published and Guardian notification sent.');await loadTests();}catch(error:any){Alert.alert('Error',error.message);}};
   const downloadExcel=async()=>{if(!editingId)return;try{const token=await getToken();const response=await fetch(`${API_BASE}/api/marks/published-results/${editingId}/excel`,{headers:{Authorization:`Bearer ${token}`}});if(!response.ok)throw new Error('Publish the result before downloading Excel.');if(Platform.OS==='web'){const blob=await response.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`class-result-${editingId}.xlsx`;a.click();URL.revokeObjectURL(url);}else Alert.alert('Excel ready','Mobile sharing will be enabled in the app package.');}catch(error:any){Alert.alert('Excel',error.message);}};
-  const lockedForTeacher=editingId!==null&&!canManage;
+  const lockedForTeacher=editingId!==null&&!canManage&&!!editingTest?.locked;
 
   return <SafeAreaView style={s.page}><ScrollView contentContainerStyle={s.content}>
     <AcademyHeader />
     <View style={s.titleRow}><View><Text style={s.title}>Weekly Test Marks Entry</Text><Text style={s.help}>Class নির্বাচন করলে সব student আসবে। একবার submit করলে Teacher আর edit করতে পারবেন না।</Text></View>{loaded&&<TouchableOpacity onPress={newEntry} style={s.newButton}><Text style={s.newText}>New Entry</Text></TouchableOpacity>}</View>
     <View style={s.formCard}>
-      {editingId&&<View style={[s.lockBox,canManage&&s.adminBox]}><Text style={s.lockText}>{canManage?'Admin editing enabled':'Submitted marks — View only'}</Text></View>}
+      {editingId&&<View style={[s.lockBox,canManage&&s.adminBox]}><Text style={s.lockText}>{editingTest?.locked?(canManage?'Submitted — Admin editing enabled':'Submitted marks — View only'):'Draft — Continue editing'}</Text></View>}
       <View style={s.formGrid}>
         <View style={s.fieldWrap}><Text style={s.label}>Session</Text><Select label="Session" value={form.sessionName} onChange={value=>set('sessionName',value)} options={SESSION_OPTIONS.map(value=>({value,label:value}))}/></View><View style={s.fieldWrap}><Text style={s.label}>Class</Text><Select label="Class" value={form.className} onChange={value=>set('className',value)} options={[{value:'',label:'Select class'},...STUDENT_CLASSES.map(value=>({value,label:value}))]}/></View>
         <View style={s.fieldWrap}><Text style={s.label}>Subject</Text><Select label="Subject" value={form.subjectName} onChange={value=>set('subjectName',value)} options={[{value:'',label:'Select subject'},...subjects.map(item=>({value:String(item.subject_name),label:String(item.subject_name)}))]}/></View>
@@ -90,20 +103,21 @@ export default function Marks() {
     {loaded&&<>
       <View style={s.summary}><Text style={s.summaryText}>Students: {students.length}</Text><Text style={s.summaryText}>Completed: {enteredCount}</Text></View>
       {students.map(student=><View key={student.id} style={[s.studentCard,student.absent&&s.absentCard]}><View style={s.studentInfo}><Text style={s.studentName}>{student.student_name}</Text><Text style={s.meta}>Reg. {student.registration_no}</Text></View>{student.absent?<View style={s.hiddenMark}><Text style={s.hiddenMarkText}>Marks hidden</Text></View>:<TextInput editable={!lockedForTeacher} placeholder="Enter marks" placeholderTextColor="#c2c8cf" value={student.obtained_marks} onChangeText={value=>setMark(student.id,value)} keyboardType="numeric" style={s.markInput}/>}<TouchableOpacity disabled={lockedForTeacher} onPress={()=>toggleAbsent(student.id)} style={[s.absentButton,student.absent&&s.absentActive]}><Text style={[s.absentText,student.absent&&s.absentActiveText]}>{student.absent?'ABSENT':'Mark Absent'}</Text></TouchableOpacity></View>)}
-      <View style={s.actionRow}>{(!editingId||canManage)&&<TouchableOpacity disabled={saving} onPress={()=>save('draft')} style={s.saveButton}><Text style={s.buttonText}>{saving?'Saving...':editingId?'Update Marks as Admin':'Save as Draft'}</Text></TouchableOpacity>}{!editingId&&<TouchableOpacity disabled={saving} onPress={()=>save('final')} style={[s.saveButton,{backgroundColor:'#167447'}]}><Text style={s.buttonText}>Final Submit</Text></TouchableOpacity>}<TouchableOpacity onPress={print} style={s.printButton}><Text style={s.printText}>Print</Text></TouchableOpacity>{editingId&&<TouchableOpacity onPress={downloadExcel} style={s.printButton}><Text style={s.printText}>Excel</Text></TouchableOpacity>}</View>
+      <View style={s.actionRow}>{!lockedForTeacher&&<TouchableOpacity disabled={saving} onPress={()=>save('draft')} style={s.saveButton}><Text style={s.buttonText}>{saving?'Saving...':editingTest?.locked?'Update Marks as Admin':'Save as Draft'}</Text></TouchableOpacity>}{!lockedForTeacher&&!editingTest?.locked&&<TouchableOpacity disabled={saving} onPress={()=>save('final')} style={[s.saveButton,{backgroundColor:'#167447'}]}><Text style={s.buttonText}>Final Submit</Text></TouchableOpacity>}<TouchableOpacity onPress={print} style={s.printButton}><Text style={s.printText}>Print</Text></TouchableOpacity>{editingId&&<TouchableOpacity onPress={downloadExcel} style={s.printButton}><Text style={s.printText}>Excel</Text></TouchableOpacity>}</View>
     </>}
 
     {canManage&&<View style={s.publishPanel}>
       <Text style={s.publishTitle}>Publish Weekly Result by Class</Text>
       <View style={s.publishControls}>
+        <View style={s.publishSelect}><Select label="Result session" value={resultSession} onChange={value=>{setResultSession(value);setPublishTestId('');}} options={[{value:'all',label:'All Sessions'},...Array.from(new Set([...SESSION_OPTIONS,...tests.map(item=>String(item.session_name||'')).filter(Boolean)])).sort().reverse().map(value=>({value,label:value}))]}/></View>
         <View style={s.publishSelect}><Select label="Publish class" value={publishClass} onChange={value=>{setPublishClass(value);setPublishTestId('');}} options={[{value:'',label:'Select class'},...Array.from(new Set(tests.map(item=>String(item.class_name)))).map(value=>({value,label:value}))]}/></View>
-        <View style={s.publishSelect}><Select label="Result" value={publishTestId} onChange={setPublishTestId} options={[{value:'',label:'Select result to publish'},...tests.filter(item=>!publishClass||String(item.class_name)===publishClass).map(item=>({value:String(item.id),label:String(item.exam_name)+' - '+String(item.subject_name)+(item.is_published?' (Published)':'' )}))]}/></View>
+        <View style={s.publishSelect}><Select label="Result" value={publishTestId} onChange={setPublishTestId} options={[{value:'',label:'Select result to publish'},...tests.filter(item=>item.locked&&(resultSession==='all'||item.session_name===resultSession)&&(!publishClass||String(item.class_name)===publishClass)).map(item=>({value:String(item.id),label:String(item.exam_name)+' - '+String(item.subject_name)+(item.is_published?' (Published)':'' )}))]}/></View>
         <TouchableOpacity disabled={!publishTestId} onPress={()=>{const test=tests.find(item=>String(item.id)===publishTestId);if(test)publish(test);}} style={[s.publishButton,!publishTestId&&{opacity:.5}]}><Text style={s.buttonText}>{tests.find(item=>String(item.id)===publishTestId)?.is_published?'Unpublish Selected':'Publish Selected'}</Text></TouchableOpacity>
       </View>
     </View>}
 
-    <Text style={s.sectionTitle}>Submitted Weekly Tests ({tests.length})</Text>
-    {tests.map(test=><View key={test.id} style={s.testCard}><View style={{flex:1}}><Text style={s.testTitle}>{test.exam_name} · {test.class_name}</Text><Text style={s.meta}>{test.subject_name} · Full {test.full_marks} · {String(test.exam_date).slice(0,10)}</Text><Text style={s.meta}>{test.student_count} students · By {test.entered_by_name||'User'}</Text></View>{canManage&&<TouchableOpacity onPress={()=>publish(test)} style={[s.viewButton,test.is_published&&{backgroundColor:'#dff3e5'}]}><Text style={s.viewText}>{test.is_published?'Published ✓':'Publish'}</Text></TouchableOpacity>}<TouchableOpacity onPress={()=>openTest(test.id)} style={s.viewButton}><Text style={s.viewText}>{canManage?'Edit':'View'}</Text></TouchableOpacity></View>)}
+    <Text style={s.sectionTitle}>Weekly Tests ({tests.filter(test=>!canManage||resultSession==='all'||test.session_name===resultSession).length})</Text>
+    {tests.filter(test=>!canManage||resultSession==='all'||test.session_name===resultSession).map(test=><View key={test.id} style={s.testCard}><View style={{flex:1}}><Text style={s.testTitle}>{test.exam_name} · {test.class_name}</Text><Text style={s.meta}>Session {test.session_name||'Not set'} · {test.subject_name} · Full {test.full_marks} · {String(test.exam_date).slice(0,10)}</Text><Text style={s.meta}>{test.student_count} students</Text><Text style={{marginTop:6,fontWeight:'900',color:test.locked?'#167447':'#a56700'}}>{test.locked?'Submitted':'Draft'}</Text><Text style={s.meta}>{test.locked?'Submitted by: ':'Draft saved by: '}{test.entered_by_name||'User'}</Text></View>{canManage&&test.locked&&<TouchableOpacity onPress={()=>publish(test)} style={[s.viewButton,test.is_published&&{backgroundColor:'#dff3e5'}]}><Text style={s.viewText}>{test.is_published?'Published ✓':'Publish'}</Text></TouchableOpacity>}<TouchableOpacity onPress={()=>openTest(test.id)} style={s.viewButton}><Text style={s.viewText}>{canManage||!test.locked?'Edit':'View'}</Text></TouchableOpacity></View>)}
     {loading&&<ActivityIndicator color="#1d5fa7" style={{margin:15}}/>}
   </ScrollView></SafeAreaView>;
 }

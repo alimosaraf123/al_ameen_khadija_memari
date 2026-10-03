@@ -8,6 +8,7 @@ export default function Layout() {
       <Stack.Screen name="guardian" options={{ headerShown: false }} />
       <Stack.Screen name="teacher" options={{ headerShown: false }} />
       <Stack.Screen name="routines" options={{ headerShown: false }} />
+      <Stack.Screen name="notices" options={{ headerShown: false }} />
       <Stack.Screen name="superadmin" options={{ headerShown: false }} />
       <Stack.Screen name="students" options={{ headerShown: false }} />
       <Stack.Screen name="student-transfer" options={{ headerShown: false }} />

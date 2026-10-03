@@ -69,15 +69,18 @@ router.post('/weekly-tests', auth, allow('super_admin','admin','teacher'), async
   const examDate = String(body.exam_date || '');
   const entries = Array.isArray(body.entries) ? body.entries : [];
   const draft = body.submit_mode === 'draft';
+  const session = String(body.session_name || '').trim();
+  if (!/^\d{4}-\d{4}$/.test(session)) return res.status(400).json({success:false,message:'Select a valid session (YYYY-YYYY)'});
+  const [sessionFrom,sessionTo] = session.split('-');
   if(!className || !subjectName || !Number.isFinite(fullMarks) || fullMarks<=0 || !validDate(examDate)) return res.status(400).json({success:false,message:'Class, subject, positive full marks and valid exam date are required'});
   if(entries.some(entry=>!validMark(entry.obtained_marks,fullMarks))) return res.status(400).json({success:false,message:`Marks must be between 0 and ${fullMarks}; leave blank for absent`});
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const classStudents = (await client.query('SELECT id FROM students WHERE class_name=$1 AND is_active=TRUE ORDER BY id FOR UPDATE',[className])).rows.map(row=>Number(row.id));
+    const classStudents = (await client.query('SELECT id FROM students WHERE class_name=$1 AND session_from::text=$2 AND session_to::text=$3 AND is_active=TRUE ORDER BY id FOR UPDATE',[className,sessionFrom,sessionTo])).rows.map(row=>Number(row.id));
     const entryIds = entries.map(entry=>Number(entry.student_id));
-    if(!classStudents.length){await client.query('ROLLBACK');return res.status(400).json({success:false,message:'No active student found in this class'});}
+    if(!classStudents.length){await client.query('ROLLBACK');return res.status(400).json({success:false,message:'No active student found in this class and session'});}
     const uniqueIds = new Set(entryIds);
     if(classStudents.length!==entryIds.length || !classStudents.every(id=>uniqueIds.has(id))){
       await client.query('ROLLBACK');
@@ -86,8 +89,8 @@ router.post('/weekly-tests', auth, allow('super_admin','admin','teacher'), async
     const subject = await client.query(`INSERT INTO subjects(subject_name) VALUES($1) ON CONFLICT(subject_name) DO UPDATE SET subject_name=EXCLUDED.subject_name RETURNING id,subject_name`,[subjectName]);
     const duplicate = await client.query(`
       SELECT b.id FROM mark_entry_batches b JOIN exams e ON e.id=b.exam_id
-      WHERE b.class_name=$1 AND b.subject_id=$2 AND e.exam_date=$3
-    `,[className,subject.rows[0].id,examDate]);
+      WHERE b.class_name=$1 AND b.subject_id=$2 AND e.exam_date=$3 AND e.session_name=$4
+    `,[className,subject.rows[0].id,examDate,session]);
     if(duplicate.rowCount){
       await client.query('ROLLBACK');
       return res.status(409).json({success:false,message:'This weekly test has already been submitted. Admin can edit it if required.',batch_id:duplicate.rows[0].id});
@@ -97,7 +100,7 @@ router.post('/weekly-tests', auth, allow('super_admin','admin','teacher'), async
     await client.query('INSERT INTO exam_subjects(exam_id,subject_id,full_marks,pass_marks) VALUES($1,$2,$3,$4)',[exam.rows[0].id,subject.rows[0].id,fullMarks,body.pass_marks||0]);
     for(const entry of entries){
       const mark = entry.obtained_marks === '' || entry.obtained_marks === null ? null : Number(entry.obtained_marks);
-      await client.query(`INSERT INTO student_marks(exam_id,student_id,subject_id,obtained_marks,remarks,entered_by,verification_status) VALUES($1,$2,$3,$4,$5,$6,'pending')`,[exam.rows[0].id,entry.student_id,subject.rows[0].id,mark,mark===null?(entry.remarks||'Absent'):(entry.remarks||null),req.user.userId]);
+      await client.query(`INSERT INTO student_marks(exam_id,student_id,subject_id,obtained_marks,remarks,entered_by,verification_status) VALUES($1,$2,$3,$4,$5,$6,'pending')`,[exam.rows[0].id,entry.student_id,subject.rows[0].id,mark,mark===null?(entry.remarks||(draft?null:'Absent')):(entry.remarks||null),req.user.userId]);
     }
     const batch = await client.query(`INSERT INTO mark_entry_batches(exam_id,subject_id,class_name,full_marks,entered_by,locked,submitted_at) VALUES($1,$2,$3,$4,$5,$6,CASE WHEN $6 THEN NOW() ELSE NULL END) RETURNING *`,[exam.rows[0].id,subject.rows[0].id,className,fullMarks,req.user.userId,!draft]);
     await client.query('COMMIT');
@@ -110,7 +113,7 @@ router.post('/weekly-tests', auth, allow('super_admin','admin','teacher'), async
   }
 }));
 
-router.patch('/weekly-tests/:id', auth, allow('super_admin','admin'), asyncHandler(async(req,res)=>{
+router.patch('/weekly-tests/:id', auth, allow('super_admin','admin','teacher'), asyncHandler(async(req,res)=>{
   const body = req.body || {};
   const fullMarks = Number(body.full_marks);
   const examDate = String(body.exam_date || '');
@@ -123,6 +126,15 @@ router.patch('/weekly-tests/:id', auth, allow('super_admin','admin'), asyncHandl
     await client.query('BEGIN');
     const batch = await client.query('SELECT * FROM mark_entry_batches WHERE id=$1 FOR UPDATE',[req.params.id]);
     if(!batch.rowCount){await client.query('ROLLBACK');return res.status(404).json({success:false,message:'Weekly test not found'});}
+    if(req.user.role==='teacher' && (Number(batch.rows[0].entered_by)!==Number(req.user.userId)||batch.rows[0].locked)){
+      await client.query('ROLLBACK');return res.status(403).json({success:false,message:'You can only edit your own draft. Submitted marks are locked.'});
+    }
+    const examSession=(await client.query('SELECT session_name FROM exams WHERE id=$1',[batch.rows[0].exam_id])).rows[0]?.session_name;
+    if(String(body.session_name||'')!==String(examSession||'')){
+      if(req.user.role==='teacher'){await client.query('ROLLBACK');return res.status(403).json({success:false,message:'Only Admin can change a saved result session'});}
+      const session=String(body.session_name||'');
+      if(!/^\d{4}-\d{4}$/.test(session)){await client.query('ROLLBACK');return res.status(400).json({success:false,message:'Select a valid session (YYYY-YYYY)'});}
+    }
     const existingIds = (await client.query('SELECT student_id FROM student_marks WHERE exam_id=$1 AND subject_id=$2',[batch.rows[0].exam_id,batch.rows[0].subject_id])).rows.map(row=>Number(row.student_id));
     const entryIds = entries.map(entry=>Number(entry.student_id));
     if(existingIds.length!==entryIds.length || !existingIds.every(id=>new Set(entryIds).has(id))){await client.query('ROLLBACK');return res.status(409).json({success:false,message:'Marks list does not match this test'});}
@@ -130,9 +142,11 @@ router.patch('/weekly-tests/:id', auth, allow('super_admin','admin'), asyncHandl
     await client.query('UPDATE exam_subjects SET full_marks=$1,pass_marks=$2 WHERE exam_id=$3 AND subject_id=$4',[fullMarks,body.pass_marks||0,batch.rows[0].exam_id,batch.rows[0].subject_id]);
     for(const entry of entries){
       const mark = entry.obtained_marks === '' || entry.obtained_marks === null ? null : Number(entry.obtained_marks);
-      await client.query(`UPDATE student_marks SET obtained_marks=$1,remarks=$2,entered_by=$3,updated_at=NOW() WHERE exam_id=$4 AND subject_id=$5 AND student_id=$6`,[mark,mark===null?(entry.remarks||'Absent'):(entry.remarks||null),req.user.userId,batch.rows[0].exam_id,batch.rows[0].subject_id,entry.student_id]);
+      await client.query(`UPDATE student_marks SET obtained_marks=$1,remarks=$2,entered_by=$3,updated_at=NOW() WHERE exam_id=$4 AND subject_id=$5 AND student_id=$6`,[mark,mark===null?(entry.remarks||(draft?null:'Absent')):(entry.remarks||null),req.user.userId,batch.rows[0].exam_id,batch.rows[0].subject_id,entry.student_id]);
     }
-    const updated = await client.query('UPDATE mark_entry_batches SET full_marks=$1,updated_by=$2,updated_at=NOW() WHERE id=$3 RETURNING *',[fullMarks,req.user.userId,req.params.id]);
+    const updated = await client.query(`UPDATE mark_entry_batches SET full_marks=$1,updated_by=$2,updated_at=NOW(),
+      locked=locked OR $4,submitted_at=CASE WHEN locked OR $4 THEN COALESCE(submitted_at,NOW()) ELSE NULL END
+      WHERE id=$3 RETURNING *`,[fullMarks,req.user.userId,req.params.id,!draft]);
     await client.query('COMMIT');
     res.json({success:true,test:updated.rows[0]});
   }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
