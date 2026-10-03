@@ -6,10 +6,7 @@ import AcademyHeader from '../components/AcademyHeader';
 import {API_BASE,api} from '../lib/api';
 import {clearSession,getUser} from '../lib/auth';
 
-const items:any[]=[
- ['Attendance','/attendance','#157347'],
-
-];
+const items:any[]=[];
 function greeting(){const h=new Date().getHours();return h<12?'Good morning':h<17?'Good afternoon':'Good evening';}
 function date(value:any){return String(value||'').slice(0,10);}
 export default function Teacher(){
