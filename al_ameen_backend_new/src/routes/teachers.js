@@ -136,6 +136,8 @@ router.put('/:id', auth, allow('super_admin','admin'), asyncHandler(async (req,r
   }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }));
 
+router.patch('/:id/password-reset', auth, allow('super_admin','admin'), asyncHandler(async(req,res)=>{const temporaryPassword='Temp@'+Math.floor(100000+Math.random()*900000);const t=(await pool.query('SELECT user_id,login_id FROM teachers JOIN users ON users.id=teachers.user_id WHERE teachers.id=$1',[req.params.id])).rows[0];if(!t)return res.status(404).json({success:false,message:'Teacher not found'});await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2',[await bcrypt.hash(temporaryPassword,12),t.user_id]);res.json({success:true,login_id:t.login_id,temporary_password:temporaryPassword});}));
+
 router.patch('/:id/status', auth, allow('super_admin','admin'), asyncHandler(async(req,res)=>{
  const active=req.body?.is_active!==false,client=await pool.connect();
  try{await client.query('BEGIN');const result=await client.query('UPDATE teachers SET is_active=$1 WHERE id=$2 RETURNING *',[active,req.params.id]);if(!result.rowCount){await client.query('ROLLBACK');return res.status(404).json({success:false,message:'Teacher not found'});}if(result.rows[0].user_id)await client.query('UPDATE users SET is_active=$1 WHERE id=$2',[active,result.rows[0].user_id]);if(!active)await client.query('UPDATE teacher_room_assignments SET is_active=FALSE WHERE teacher_id=$1',[req.params.id]);await client.query('COMMIT');res.json({success:true,teacher:result.rows[0]});}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
