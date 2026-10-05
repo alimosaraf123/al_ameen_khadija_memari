@@ -33,7 +33,8 @@ async function action(id:any,type:'execute'|'cancel'){try{await api('/api/gate-p
 async function execute(){const x=list.find(p=>p.token_no===executeCode||p.registration_no===executeCode);if(!x)return Alert.alert('Not found','Load Pending list and enter a valid token or registration number.');await action(x.id,'execute');setExecuteCode('')}
 async function openPreview(x:any){try{const data=await api('/api/gate-passes/'+x.id);const monthly=await api('/api/gate-passes/'+x.id+'/monthly-fee-due');setPreviewPass({...data.gate_pass,monthly_fees_due:monthly.total_due});}catch(e:any){Alert.alert('Print Preview',e.message)}}
 async function printPass(x:any){
- const photo=x.photo_url?(/^https?:|^data:/.test(x.photo_url)?x.photo_url:API_BASE+x.photo_url):'';
+ const photoUrl=x.photo_url||x.student_photo_url||x.photo||'';
+ const photo=photoUrl?(/^https?:|^data:/.test(photoUrl)?photoUrl:API_BASE+photoUrl):'';
  if(Platform.OS==='web'&&typeof window!=='undefined'){
   const w=window.open('','_blank','width=1200,height=850');
   if(!w)throw new Error('Allow pop-ups to print the gate pass.');
