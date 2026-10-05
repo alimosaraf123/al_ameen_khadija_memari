@@ -1,39 +1,35 @@
 import React,{useEffect,useState} from 'react';
-import {ActivityIndicator,Image,Linking,Modal,ScrollView,Text,TouchableOpacity,Pressable,StyleSheet,View} from 'react-native';
+import {ActivityIndicator,Image,Modal,ScrollView,Text,TouchableOpacity,Pressable,StyleSheet,View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {router} from 'expo-router';
 import AcademyHeader from '../components/AcademyHeader';
+import {RoutineCard,newestRoutineFirst} from '../components/TeacherRoutineHistory';
 import {API_BASE,api} from '../lib/api';
 import {clearSession,getUser} from '../lib/auth';
 
 const items:any[]=[];
 function greeting(){const h=new Date().getHours();return h<12?'Good morning':h<17?'Good afternoon':'Good evening';}
-function date(value:any){return String(value||'').slice(0,10);}
-function routineDate(item:any){return date(item.routine_date||item.published_at||item.created_at);}
-function newestRoutineFirst(a:any,b:any){return routineDate(b).localeCompare(routineDate(a))||String(b.published_at||b.created_at||'').localeCompare(String(a.published_at||a.created_at||''));}
-function RoutineImage({url}:{url:string}){
- const [aspectRatio,setAspectRatio]=useState(2);
+export default function Teacher(){
+ const [roomMenu,setRoomMenu]=useState(false),[examMenu,setExamMenu]=useState(false),[teacher,setTeacher]=useState<any>(null),[routines,setRoutines]=useState<any[]>([]),[notices,setNotices]=useState<any[]>([]),[loading,setLoading]=useState(true),[routineError,setRoutineError]=useState('');
  useEffect(()=>{
   let active=true;
-  Image.getSize(url,(width,height)=>{if(active&&Number.isFinite(width)&&Number.isFinite(height)&&width>0&&height>0)setAspectRatio(width/height);},()=>{});
-  return ()=>{active=false;};
- },[url]);
- return <Image source={{uri:url}} resizeMode="contain" style={[s.routineImage,{aspectRatio}]}/>;
-}
-function RoutineCard({item}:{item:any}){
- const url=/^https?:/.test(item.file_url)?item.file_url:`${API_BASE}${item.file_url}`;
- return <TouchableOpacity style={s.routineItem} onPress={()=>Linking.openURL(url)}><Text style={s.routineTitle}>{item.title||'Published Routine'}</Text><Text style={s.routineMeta}>{routineDate(item)}</Text><RoutineImage url={url}/><Text style={s.routineOpen}>Open JPG</Text></TouchableOpacity>;
-}
-export default function Teacher(){
- const [roomMenu,setRoomMenu]=useState(false),[examMenu,setExamMenu]=useState(false),[teacher,setTeacher]=useState<any>(null),[routines,setRoutines]=useState<any[]>([]),[notices,setNotices]=useState<any[]>([]),[loading,setLoading]=useState(true);
- useEffect(()=>{void(async()=>{try{const [profile,routineData,noticeData]=await Promise.all([api('/api/teachers/me'),api('/api/routines'),api('/api/notices')]);setTeacher(profile.teacher);setRoutines((routineData.routines||[]).filter((item:any)=>item.file_url).sort(newestRoutineFirst));setNotices(noticeData.notices||[]);}finally{setLoading(false);}})();},[]);
+  void Promise.allSettled([api('/api/teachers/me'),api('/api/routines'),api('/api/notices')]).then(([profile,routineData,noticeData])=>{
+   if(!active)return;
+   if(profile.status==='fulfilled')setTeacher(profile.value.teacher);
+   if(routineData.status==='fulfilled')setRoutines((routineData.value.routines||[]).filter((item:any)=>item.file_url).sort(newestRoutineFirst));
+   else setRoutineError(routineData.reason?.message||'Unable to load routines.');
+   if(noticeData.status==='fulfilled')setNotices(noticeData.value.notices||[]);
+   setLoading(false);
+  });
+  return()=>{active=false;};
+ },[]);
  const name=teacher?.name||teacher?.full_name||(getUser as any)?.full_name||'Teacher';const first=String(name).trim().split(/\s+/)[0];
  const photo=teacher?.photo_url?(/^https?:/.test(teacher.photo_url)?teacher.photo_url:`${API_BASE}${teacher.photo_url}`):null;
  const recentNotice=notices.find((n:any)=>Date.now()-new Date(n.published_at||n.created_at||0).getTime()<48*60*60*1000);
  return <SafeAreaView style={s.page}><ScrollView contentContainerStyle={s.content}><AcademyHeader extraActions={<><TouchableOpacity style={[s.headerItem,{backgroundColor:'#174f75'}]} onPress={()=>router.push('/routines')}><Text style={s.headerText}>Routine</Text></TouchableOpacity><TouchableOpacity style={[s.headerItem,{backgroundColor:'#783453'}]} onPress={()=>router.push('/notices')}><Text style={s.headerText}>Notice</Text></TouchableOpacity><TouchableOpacity style={[s.headerItem,{backgroundColor:'#2369b3'}]} onPress={()=>setExamMenu(true)}><Text style={s.headerText}>Exam</Text></TouchableOpacity><TouchableOpacity style={[s.headerItem,{backgroundColor:'#c56a14'}]} onPress={()=>setRoomMenu(true)}><Text style={s.headerText}>Room</Text></TouchableOpacity>{items.map(([title,path,color])=><TouchableOpacity key={title} style={[s.headerItem,{backgroundColor:color}]} onPress={()=>router.push(path as any)}><Text style={s.headerText}>{title}</Text></TouchableOpacity>)}</>}/>
  <View style={s.profile}>{photo?<Image source={{uri:photo}} style={s.photo}/>:<View style={[s.photo,s.avatar]}><Text style={s.initial}>{first.charAt(0)}</Text></View>}<View style={{flex:1}}><Text style={s.greeting}>{greeting()}, {first}</Text><Text style={s.title}>{first}'s Dashboard</Text></View></View>{recentNotice&&<TouchableOpacity style={s.noticeBanner} onPress={()=>router.push('/notices')}><Text style={s.noticeBannerTitle}>New Notice</Text><Text style={s.noticeBannerText}>{recentNotice.title}</Text><Text style={s.newBlink}>NEW</Text></TouchableOpacity>}
  {loading?<ActivityIndicator color="#17643f"/>:<>
- <View style={s.routine}><Text style={s.sectionLabel}>ROUTINES — SCROLL TO VIEW</Text>{routines.length?<ScrollView nestedScrollEnabled style={{maxHeight:600}} contentContainerStyle={{paddingBottom:4}}>{routines.map(item=><RoutineCard key={item.id} item={item}/>)}</ScrollView>:<Text style={s.noRoutine}>No routine published.</Text>}</View>
+ <View style={s.routine}><Text style={s.sectionLabel}>ROUTINES — SCROLL TO VIEW</Text>{routineError?<Text style={s.noRoutine}>{routineError}</Text>:routines.length?<ScrollView nestedScrollEnabled style={{maxHeight:600}} contentContainerStyle={{paddingBottom:4}}>{routines.map(item=><RoutineCard key={item.id} item={item}/>)}</ScrollView>:<Text style={s.noRoutine}>No routine published.</Text>}</View>
 
  </>}
  <View style={s.grid}>{items.map(([title,path,color])=><TouchableOpacity key={title} style={[s.card,{borderLeftColor:color}]} onPress={()=>router.push(path as any)}><Text style={[s.cardText,{color}]}>{title}</Text><Text style={s.open}>Open →</Text></TouchableOpacity>)}</View>

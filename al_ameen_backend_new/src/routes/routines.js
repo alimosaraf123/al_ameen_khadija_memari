@@ -10,7 +10,7 @@ const GROUPS=['v_x','xi_xii','coaching'];
 const validDate=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''));
 const xml=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const short=(v,n=24)=>{const s=String(v||'-');return s.length>n?s.slice(0,n-1)+'…':s};
-async function publishRoutineJpg({group,date,data,userId}){
+async function renderRoutineJpg({group,date,data}){
  const academic=group!=='coaching',columns=academic?(data.periods||[]):(data.rooms||[]),rows=academic?(data.classes||[]):(data.times||[]);
  const firstWidth=155,cellWidth=Math.max(150,Math.min(230,Math.floor((1500-firstWidth)/Math.max(columns.length,1)))),rowHeight=88,headerHeight=100,width=firstWidth+cellWidth*Math.max(columns.length,1)+40,height=Math.max(430,190+headerHeight+rowHeight*Math.max(rows.length,1));
  const groupTitle={v_x:'Class V-X',xi_xii:'Class XI-XII',coaching:'Coaching'}[group]||group;
@@ -18,7 +18,11 @@ async function publishRoutineJpg({group,date,data,userId}){
  if(data.no_class)body+=`<text x="${width/2}" y="210" text-anchor="middle" font-size="34" font-weight="700" fill="#9a1e25">No class / coaching</text>`;
  else{const top=120,left=20;body+=`<rect x="${left}" y="${top}" width="${firstWidth}" height="${headerHeight}" fill="#cfe1f4" stroke="#789"/><text x="${left+firstWidth/2}" y="${top+55}" text-anchor="middle" font-size="17" font-weight="700">${academic?'Class / Period':'Time / Room'}</text>`;columns.forEach((column,index)=>{const x=left+firstWidth+index*cellWidth,label=academic?`${column[0]||''} ${column[1]||''}`:column;body+=`<rect x="${x}" y="${top}" width="${cellWidth}" height="${headerHeight}" fill="#cfe1f4" stroke="#789"/><text x="${x+cellWidth/2}" y="${top+43}" text-anchor="middle" font-size="16" font-weight="700">${xml(short(label,22))}</text>`});rows.forEach((row,rowIndex)=>{const y=top+headerHeight+rowIndex*rowHeight;body+=`<rect x="${left}" y="${y}" width="${firstWidth}" height="${rowHeight}" fill="#dce9f6" stroke="#789"/><text x="${left+firstWidth/2}" y="${y+50}" text-anchor="middle" font-size="17" font-weight="700">${xml(short(row,20))}</text>`;columns.forEach((column,columnIndex)=>{const x=left+firstWidth+columnIndex*cellWidth,key=academic?`${row}|${columnIndex}`:`${row}|${column}`,cell=(data.cells||{})[key]||{},tiffin=academic&&String(column?.[0]||'').toLowerCase()==='tiffin';body+=`<rect x="${x}" y="${y}" width="${cellWidth}" height="${rowHeight}" fill="${tiffin?'#fff0be':rowIndex%2?'#f1f7fd':'#fff'}" stroke="#789"/>`;if(tiffin)body+=`<text x="${x+cellWidth/2}" y="${y+50}" text-anchor="middle" font-size="17" font-weight="700">TIFFIN</text>`;else body+=`<text x="${x+cellWidth/2}" y="${y+34}" text-anchor="middle" font-size="16" font-weight="700">${xml(short(cell.subject||'',20))}</text><text x="${x+cellWidth/2}" y="${y+61}" text-anchor="middle" font-size="14">${xml(short(cell.teacher_name||'-',22))}</text>`})})}
  body+=`<text x="${width-25}" y="${height-25}" text-anchor="end" font-size="14" font-style="italic">Published routine</text>`;
- const image=await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${body}</svg>`)).jpeg({quality:90}).toBuffer(),dir=path.resolve(__dirname,'../../uploads/routines'),name=`routine-${group}-${date}.jpg`,target=path.join(dir,name),temporary=target+'.'+Date.now()+'.tmp';
+ return sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${body}</svg>`)).jpeg({quality:90}).toBuffer();
+}
+async function publishRoutineJpg({group,date,data,userId}){
+ const groupTitle={v_x:'Class V-X',xi_xii:'Class XI-XII',coaching:'Coaching'}[group]||group;
+ const image=await renderRoutineJpg({group,date,data}),dir=path.resolve(__dirname,'../../uploads/routines'),name=`routine-${group}-${date}.jpg`,target=path.join(dir,name),temporary=target+'.'+Date.now()+'.tmp';
  fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(temporary,image);fs.rmSync(target,{force:true});fs.renameSync(temporary,target);const url='/uploads/routines/'+name;
  const old=(await pool.query('SELECT id FROM routines WHERE routine_date=$1 AND title=$2 ORDER BY published_at DESC LIMIT 1',[date,`${groupTitle} Routine`])).rows[0];
  if(old)await pool.query('UPDATE routines SET title=$1,routine_text=$2,file_url=$3,published_by=$4,is_active=TRUE,published_at=NOW() WHERE id=$5',[`${groupTitle} Routine`,`${groupTitle} published routine`,url,userId,old.id]);
@@ -124,4 +128,17 @@ router.delete('/manager/:id',auth,allow('super_admin','admin'),asyncHandler(asyn
  if(!r.rowCount)return res.status(404).json({success:false,message:'Routine not found'});
  res.json({success:true,message:'Routine deleted'});
 }));
+// Upload disks may be empty after deployment. Rebuild only published routine images.
+router.servePublishedImage=asyncHandler(async(req,res,next)=>{
+ const match=/^routine-(v_x|xi_xii|coaching)-(\d{4}-\d{2}-\d{2})\.jpg$/.exec(req.params.filename||'');
+ if(!match)return next();
+ const [,group,date]=match;
+ const routine=await pool.query(`SELECT g.grid_data FROM routine_manager_grids g
+  JOIN routines r ON r.routine_date=g.routine_date AND r.file_url=$3 AND r.is_active=TRUE
+  WHERE g.group_name=$1 AND to_char(g.routine_date,'YYYY-MM-DD')=$2
+  AND g.routine_kind='daily' AND g.is_published=TRUE LIMIT 1`,[group,date,'/uploads/routines/'+req.params.filename]);
+ if(!routine.rows.length)return next();
+ const image=await renderRoutineJpg({group,date,data:routine.rows[0].grid_data||{}});
+ res.type('jpeg').set('Cache-Control','public, max-age=300').send(image);
+});
 module.exports=router;

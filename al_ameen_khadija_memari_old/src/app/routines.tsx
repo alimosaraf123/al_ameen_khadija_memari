@@ -4,6 +4,7 @@ import{SafeAreaView}from'react-native-safe-area-context';
 import{useRouter}from'expo-router';
 import*as Print from'expo-print';
 import AcademyHeader from'../components/AcademyHeader';
+import TeacherRoutineHistory from'../components/TeacherRoutineHistory';
 import DatePickerField from'../components/DatePickerField';
 import ExamRoutinePanel from'../components/ExamRoutinePanel';
 import{Select}from'../components/StudentDirectory';
@@ -39,7 +40,7 @@ export default function Routines(){
  const[reportOpen,setReportOpen]=useState(false),[month,setMonth]=useState(today.slice(0,7)),[report,setReport]=useState<any>(null);
  const academic=group!=='coaching',section=academic?{...CFG[group],rows,periods}:null;
 
- useEffect(()=>{void(async()=>{try{const u=await getUser<any>(),ok=['admin','super_admin'].includes(u?.role);if(!ok){router.replace('/teacher');return}setAdmin(true);const[t,r]=await Promise.all([api('/api/teachers'),api('/api/rooms/accessible')]);setTeachers((t.teachers||[]).filter((x:any)=>x.is_active!==false));const extra=(r.rooms||[]).map((x:any)=>String(x.room_number||x.room_name||'').trim()).filter(Boolean);setRooms([...new Set([...BASE_ROOMS,...extra])])}catch(e:any){Alert.alert('Error',e.message)}})()},[]);
+ useEffect(()=>{void(async()=>{try{const u=await getUser<any>(),ok=['admin','super_admin'].includes(u?.role);if(!ok){if(u?.role==='teacher'){setAdmin(false);return}router.replace('/');return}setAdmin(true);const[t,r]=await Promise.all([api('/api/teachers'),api('/api/rooms/accessible')]);setTeachers((t.teachers||[]).filter((x:any)=>x.is_active!==false));const extra=(r.rooms||[]).map((x:any)=>String(x.room_number||x.room_name||'').trim()).filter(Boolean);setRooms([...new Set([...BASE_ROOMS,...extra])])}catch(e:any){Alert.alert('Error',e.message)}})()},[]);
  useEffect(()=>{if(admin)void load()},[group,date,admin]);
  function applyRoutine(r:any){const data=r?.grid_data||{},base=group==='v_x'?CFG.v_x:CFG.xi_xii;setNoClass(!!data.no_class);setSource(r?.source||'none');setExams(data.exams||[]);setCombinedClassCounting(!!data.combined_class_counting);if(academic){const rr=data.classes?.length?data.classes:[...base.rows],pp=data.periods?.length?data.periods:base.periods.map(x=>[...x]),tiffin=new Set(pp.map((p:any,i:number)=>isTiffin(p)?i:-1).filter((i:number)=>i>=0)),clean=Object.fromEntries(Object.entries(data.cells||{}).filter(([key])=>!tiffin.has(Number(key.split('|')[1])))) as Record<string,Cell>;setCells(clean);setRows(rr);setPeriods(pp);setRowDraft(rr.join(', '));setPeriodDraft(pp.map((x:any)=>x.join('|')).join('\n'))}else{setCells(data.cells||{});const rm=data.rooms?.length?data.rooms:[...BASE_ROOMS],tt=data.times?.length?data.times:[...TIMES];setRooms(rm);setCoachTimes(tt);setRoomDraft(rm.join(', '));setTimeDraft(tt.join('\n'))}}
  async function load(){setLoading(true);try{const d=await api(`/api/routines/manager?group=${group}&date=${date}`);applyRoutine(d.routine)}catch(e:any){Alert.alert('Error',e.message)}finally{setLoading(false)}}
@@ -71,6 +72,7 @@ export default function Routines(){
 
  function field(key:string,subject:boolean){const x=cells[key]||{},selected=teachers.find(t=>String(t.id)===x.teacher_id),allowed=selected?(section?.subjects||[]).filter(s=>mapped(selected).some((v:string)=>canon(v)===canon(s))):(section?.subjects||[]),matching=x.subject?teachers.filter(t=>mapped(t).some((v:string)=>canon(v)===canon(x.subject))):teachers;return <View key={key} style={[subject?s.cell:s.coach,conflicts.has(key)&&s.conflict]}>{admin?<>{subject&&<Select label="Subject" value={x.subject||''} options={[{value:'',label:'Select subject'},...allowed.map(v=>({value:v,label:v}))]} onChange={v=>update(key,{subject:v,teacher_id:'',teacher_name:''})}/>}<Select searchable label="Teacher" value={x.teacher_id||''} options={[{value:'',label:'Select teacher'},...(subject?matching:teachers).map(t=>({value:String(t.id),label:t.name}))]} onChange={v=>chooseTeacher(key,v)}/></>:<><Text style={s.subject}>{subject?x.subject||'-':''}</Text><Text style={s.center}>{x.teacher_name||''}</Text></>}</View>}
 
+ if(admin===false)return <TeacherRoutineHistory/>;
  if(admin!==true)return <SafeAreaView style={s.page}><ActivityIndicator size="large" style={{margin:40}}/></SafeAreaView>;
  return <SafeAreaView style={s.page}><ScrollView contentContainerStyle={s.content} stickyHeaderIndices={[2]}><AcademyHeader/>
   <View style={s.nav}><TouchableOpacity onPress={()=>router.back()} style={s.button}><Text>Back</Text></TouchableOpacity><TouchableOpacity onPress={()=>router.push(admin?'/superadmin':'/teacher')} style={s.button}><Text>Home</Text></TouchableOpacity></View>

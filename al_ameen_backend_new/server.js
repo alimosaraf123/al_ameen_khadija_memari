@@ -12,6 +12,7 @@ app.use(cors());
 app.use(express.json({limit:'20mb'}));
 app.use(governance);
 app.use('/uploads',express.static(path.join(__dirname,'uploads')));
+app.get('/uploads/routines/:filename',require('./src/routes/routines').servePublishedImage);
 
 app.get('/',(req,res)=>res.json({success:true,message:'Al-Ameen Backend API is running'}));
 app.get('/db-test',async(req,res)=>{try{const r=await pool.query('SELECT NOW() server_time');res.json({success:true,message:'Neon PostgreSQL connection successful',serverTime:r.rows[0].server_time});}catch(e){res.status(500).json({success:false,message:'Database connection failed',error:e.message});}});
