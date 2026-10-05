@@ -11,10 +11,10 @@ export function gatePassPrintHtml(pass:any,logo:string,photo:string){
  section{width:287mm;height:97mm;border:1px solid #222;padding:5mm;position:relative;display:flex;flex-direction:column;min-width:0;break-inside:avoid}
  header{display:grid;grid-template-columns:18mm 1fr 19mm;gap:2mm;align-items:center;text-align:center;border-bottom:1px solid #aaa;padding-bottom:2mm;min-height:25mm}
  .logo{width:18mm;height:20mm;object-fit:contain}.student-photo{width:19mm;height:24mm;object-fit:cover;border:1px solid #aaa}.empty{border:0}
- h2{font-size:27px;line-height:1.2;margin:0 0 8px}.academy p{font-size:16px;line-height:1.3;margin:0 0 4px}.academy small{font-size:13px;line-height:1.3;display:block}
- .copy{text-align:right;font-weight:bold;font-size:18px;margin:5mm 0 2mm}h3{font-size:24px;margin:2mm 0 5mm}h3 span{color:#c00}
- .line{padding:1.5mm 0;border-bottom:1px solid #ddd;line-height:1.2;overflow-wrap:anywhere}.warning{background:#fff8df;padding:1.5mm;margin-top:1mm}
- footer{display:flex;justify-content:space-between;gap:3mm;margin-top:auto;padding-top:5mm;font-size:15px}footer span{border-top:1px dotted #222;padding-top:1mm}.officer{margin-left:auto}
+ h2{font-size:32px;line-height:1.2;margin:0 0 8px}.academy p{font-size:18px;line-height:1.3;margin:0 0 4px}.academy small{font-size:14px;line-height:1.3;display:block}
+ .copy{text-align:right;font-weight:bold;font-size:18px;margin:3mm 0 2mm}h3{font-size:22px;margin:2mm 0 3mm}h3 span{color:#c00}
+ .line{padding:2.5mm 0;border-bottom:1px solid #ddd;line-height:1.25;overflow-wrap:anywhere}.warning{background:#fff8df;padding:2.5mm;margin-top:1mm}
+ footer{display:flex;justify-content:space-between;gap:3mm;margin-top:auto;padding-top:12mm;font-size:16px}footer span{border-top:1px dotted #222;padding-top:1mm}.officer{margin-left:auto}
  .cut{width:287mm;height:6mm;display:flex;align-items:center;justify-content:center;border-top:1px dashed #777;border-bottom:1px dashed #777;font-size:9px;letter-spacing:1px}
  @media screen{body{background:#eee;padding:10px}.sheet{background:#fff;margin:auto}}
  @media print{html,body{width:297mm;height:210mm}.warning{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
