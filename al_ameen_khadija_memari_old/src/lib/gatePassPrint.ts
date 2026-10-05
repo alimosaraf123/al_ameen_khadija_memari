@@ -7,8 +7,8 @@ export function gatePassPrintHtml(pass:any,logo:string,photo:string){
  return `<!doctype html><html><head><meta charset="utf-8"><title>Gate Pass ${e(pass.token_no)}</title><style>
  @page{size:A4 landscape;margin:0}
  *{box-sizing:border-box}html,body{width:297mm;height:210mm;margin:0;padding:0;color:#111;font:13px Arial,sans-serif}
- .sheet{width:297mm;height:210mm;padding:5mm;display:grid;grid-template-columns:287mm;grid-template-rows:97mm 6mm 97mm;break-inside:avoid;page-break-inside:avoid}
- section{width:287mm;height:97mm;border:1px solid #222;padding:9mm 5mm 5mm;padding-right:105mm;position:relative;display:block;min-width:0;overflow:hidden;break-inside:avoid}
+ .sheet{width:297mm;height:210mm;padding:25mm 5mm 5mm;display:grid;grid-template-columns:287mm;grid-template-rows:87mm 6mm 87mm;break-inside:avoid;page-break-inside:avoid}
+ section{width:287mm;height:87mm;border:1px solid #222;padding:9mm 5mm 5mm;padding-right:105mm;position:relative;display:block;min-width:0;overflow:hidden;break-inside:avoid}
  header{display:grid;grid-template-columns:18mm 1fr 22mm;gap:2mm;align-items:center;text-align:center;border-bottom:1px solid #aaa;padding-bottom:2mm;min-height:25mm}
  .logo{width:16mm;height:18mm;object-fit:contain;display:block}.student-photo{width:22mm;height:25mm;object-fit:cover;border:1px solid #555;display:block}.empty{border:0}
  h2{font-size:27px;line-height:1.15;margin:0 0 4px}.academy p{font-size:15px;line-height:1.2;margin:0 0 3px}.academy small{font-size:10px;line-height:1.2;display:block}
