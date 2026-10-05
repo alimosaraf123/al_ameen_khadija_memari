@@ -504,6 +504,9 @@ export default function Guardian() {
             <Text style={styles.heading}>Monthly Fees</Text>
 
             <Card tone="fees">
+              <Text style={[styles.settingsHelp, { fontWeight: '700', marginBottom: 12 }]}>
+                Your payment details will be updated within 1-3 working days after the payment successfully done.
+              </Text>
               {monthlyFeeLoading ? (
                 <Text style={styles.settingsHelp}>Checking Monthly Fee Due...</Text>
               ) : monthlyFeeError ? (
