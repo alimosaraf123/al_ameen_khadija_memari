@@ -390,3 +390,10 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (id BIGSERIAL PRIMARY KEY,user_id BI
 ALTER TABLE terminal_exam_subjects ADD COLUMN IF NOT EXISTS theory_marks NUMERIC(8,2);
 ALTER TABLE terminal_exam_subjects ADD COLUMN IF NOT EXISTS oral_marks NUMERIC(8,2);
 UPDATE terminal_exam_subjects SET theory_marks=full_marks, oral_marks=0 WHERE theory_marks IS NULL;
+
+CREATE TABLE IF NOT EXISTS guardian_temporary_credentials (
+  user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  encrypted_password TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

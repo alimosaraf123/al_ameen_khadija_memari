@@ -1,4 +1,5 @@
-const {generateGuardianPassword,revokeGuardianAccess}=require('../utils/guardianCredentials');
+const {decryptTemporaryPassword,saveTemporaryPassword}=require('../utils/guardianTemporaryCredentials');
+const {generateGuardianPassword,revokeGuardianAccess,resetAllGuardianPasswords}=require('../utils/guardianCredentials');
 const {getMonthlyFeeDue}=require('../utils/monthlyFees');
 const express = require('express');
 const bcrypt = require('bcryptjs');
@@ -11,6 +12,19 @@ const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
+const temporarySchemaReady=pool.query(fs.readFileSync(path.join(__dirname,'../../sql/guardian-temporary-credentials.sql'),'utf8'));
+router.get('/temporary-passwords',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ await temporarySchemaReady;
+ const r=await pool.query("SELECT u.id,u.login_id,t.encrypted_password FROM guardian_temporary_credentials t JOIN users u ON u.id=t.user_id WHERE u.role='guardian' AND u.password_change_required=TRUE");
+ res.set('Cache-Control','no-store');
+ res.json({success:true,credentials:r.rows.map(x=>({login_id:x.login_id,password:decryptTemporaryPassword(x.encrypted_password,x.id)}))});
+}));
+router.post('/reset-all-passwords',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+  await temporarySchemaReady;
+  const result=await resetAllGuardianPasswords(pool,{createMissing:req.body?.create_missing===true});
+  res.set('Cache-Control','no-store');
+  res.json({success:true,...result});
+}));
 
 const uploadDir = path.join(
   __dirname,
@@ -768,6 +782,8 @@ router.post(
         );
 
 
+        await temporarySchemaReady;
+        await saveTemporaryPassword(client,userResult.rows[0].id,plainPassword);
         await client.query(
           'COMMIT'
         );
@@ -862,6 +878,7 @@ router.post('/:guardianId/reset-password', auth, allow('super_admin','admin'), a
   if(!r.rowCount){await client.query('ROLLBACK');return res.status(404).json({success:false,message:'Guardian account not found'});}
   const guardian=r.rows[0],password=generateGuardianPassword(),hash=await bcrypt.hash(password,12);
   await client.query('UPDATE users SET password_hash=$1,password_change_required=TRUE,mpin_hash=NULL WHERE id=$2',[hash,guardian.user_id]);
+  await temporarySchemaReady;await saveTemporaryPassword(client,guardian.user_id,password);
   await revokeGuardianAccess(client,guardian.user_id);await client.query('COMMIT');
   res.json({success:true,credentials:{login_id:guardian.login_id,password}});
  }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}

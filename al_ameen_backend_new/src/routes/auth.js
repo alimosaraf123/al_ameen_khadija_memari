@@ -289,6 +289,8 @@ router.post(
       ]
     );
 
+    if(req.user.role==='guardian')await pool.query('DELETE FROM guardian_temporary_credentials WHERE user_id=$1',[req.user.userId]);
+
     res.json({
       success: true,
       message:
