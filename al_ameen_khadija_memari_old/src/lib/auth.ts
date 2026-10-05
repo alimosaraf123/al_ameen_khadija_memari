@@ -4,6 +4,17 @@ import * as SecureStore from 'expo-secure-store';
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'user_data';
 const DEVICE_KEY = 'app_device_id';
+const sessionListeners = new Set<() => Promise<void>>();
+export function subscribeSession(listener: () => Promise<void>) {
+  sessionListeners.add(listener);
+  return () => { sessionListeners.delete(listener); };
+}
+async function notifySessionChanged() {
+  await Promise.allSettled([...sessionListeners].map(listener => listener()));
+}
+export async function refreshSession() {
+  await notifySessionChanged();
+}
 
 
 export async function getDeviceId() {
@@ -22,11 +33,13 @@ export async function saveSession(token: string, user: unknown) {
   if (Platform.OS === 'web') {
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(USER_KEY, userJson);
+    await notifySessionChanged();
     return;
   }
 
   await SecureStore.setItemAsync(TOKEN_KEY, token);
   await SecureStore.setItemAsync(USER_KEY, userJson);
+  await notifySessionChanged();
 }
 
 export async function getToken() {
@@ -59,9 +72,11 @@ export async function clearSession() {
   if (Platform.OS === 'web') {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    await notifySessionChanged();
     return;
   }
 
   await SecureStore.deleteItemAsync(TOKEN_KEY);
   await SecureStore.deleteItemAsync(USER_KEY);
+  await notifySessionChanged();
 }

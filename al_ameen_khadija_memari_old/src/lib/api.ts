@@ -92,7 +92,7 @@
 
 
 import { Platform } from 'react-native';
-import { getToken } from './auth';
+import { getToken, refreshSession } from './auth';
 
 const configuredApiBase = process.env.EXPO_PUBLIC_API_BASE_URL
   ?.replace(/\/+$/, '');
@@ -173,6 +173,7 @@ export async function api(
       );
     }
 
+    if (path === '/api/change-password') await refreshSession();
     return data;
 
   } catch (error: any) {
