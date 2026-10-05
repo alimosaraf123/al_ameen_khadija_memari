@@ -9,12 +9,12 @@ export function gatePassPrintHtml(pass:any,logo:string,photo:string){
  *{box-sizing:border-box}html,body{width:210mm;height:297mm;margin:0;padding:0;color:#111;font:13px Arial,sans-serif}
  .sheet{width:210mm;height:297mm;padding:25mm 10mm 6mm;display:grid;grid-template-columns:190mm;grid-template-rows:120mm 26mm 120mm;break-inside:avoid;page-break-inside:avoid}
  section{width:190mm;height:120mm;border:1px solid #222;border-right:1px solid #222!important;padding:7mm 5mm 5mm;padding-right:55mm;position:relative;display:block;min-width:0;overflow:hidden;break-inside:avoid}
- header{display:grid;grid-template-columns:18mm 1fr 22mm;gap:2mm;align-items:center;text-align:center;border-bottom:1px solid #aaa;padding-bottom:1mm;min-height:20mm}
- .logo{width:16mm;height:18mm;object-fit:contain;display:block}.student-photo{width:22mm;height:25mm;object-fit:cover;border:1px solid #555;display:block}.empty{border:0}
- h2{font-size:24px;line-height:1.1;margin:0 0 2px}.academy p{font-size:13px;line-height:1.15;margin:0 0 2px}.academy small{font-size:9px;line-height:1.1;display:block}
- .copy{text-align:right;font-weight:bold;font-size:13px;margin:1mm 0}h3{font-size:17px;margin:1mm 0}h3 span{color:#c00}
+ header{display:grid;grid-template-columns:18mm 1fr 20mm;gap:2mm;align-items:center;text-align:center;border-bottom:1px solid #aaa;padding-bottom:1mm;min-height:16mm}
+ .logo{width:14mm;height:16mm;object-fit:contain;display:block}.student-photo{width:20mm;height:21mm;object-fit:cover;border:1px solid #555;display:block}.empty{border:0}
+ h2{font-size:20px;line-height:1.1;margin:0 0 1px}.academy p{font-size:11px;line-height:1.1;margin:0 0 1px}.academy small{font-size:8px;line-height:1.1;display:block}
+ .copy{text-align:right;font-weight:bold;font-size:11px;margin:1mm 0}h3{font-size:15px;margin:1mm 0}h3 span{color:#c00}
  .line{display:inline-block;width:50%;vertical-align:top;padding:1mm 0;border-bottom:1px solid #ddd;line-height:1.1;font-size:16px;overflow-wrap:anywhere}.line.full{display:block;width:100%}
- footer{position:absolute;left:5mm;right:55mm;bottom:5mm;padding-top:4mm;font-size:16px}footer span{border-top:1px dotted #222;padding-top:1mm}.office-footer{display:grid;grid-template-columns:1fr 1fr 1fr}.office-footer span:nth-child(2){text-align:center}.office-footer .officer{text-align:right}.guardian-footer{display:flex}.guardian-footer .officer{margin-left:auto}
+ footer{position:relative;clear:both;margin-top:7mm;padding-top:4mm;font-size:16px}footer span{border-top:1px dotted #222;padding-top:1mm}.office-footer{display:grid;grid-template-columns:1fr 1fr 1fr}.office-footer span:nth-child(2){text-align:center}.office-footer .officer{text-align:right}.guardian-footer{display:flex}.guardian-footer .officer{margin-left:auto}
  .cut{width:190mm;height:26mm;display:flex;align-items:center;justify-content:center;border-top:1px dashed #777;border-bottom:1px dashed #777;font-size:9px;letter-spacing:1px}
  @media screen{body{background:#eee;padding:10px}.sheet{background:#fff;margin:auto}}
  @media print{html,body{width:210mm;height:297mm}.warning{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
