@@ -165,7 +165,7 @@ export default function Dashboard() {
 
       <Modal visible={academyMenu} transparent animationType="fade" onRequestClose={()=>setAcademyMenu(false)}>
         <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={()=>setAcademyMenu(false)} accessibilityRole="button" accessibilityLabel="Close academy menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Academy</Text><TouchableOpacity onPress={()=>setAcademyMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
-          <View style={s.modalGrid}>{[["Weekly Marks","/marks"],["Terminal Exam","/terminal-exams"],["Published Result","/class-results"],["Routine","/routines"],["Notice","/notices"]].map(([label,path])=><TouchableOpacity key={label} style={s.modalItem} onPress={()=>{setAcademyMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></TouchableOpacity>)}</View>
+          <View style={s.modalGrid}>{[["Weekly Marks","/marks"],["Terminal Exam","/terminal-exams"],["Print Terminal Result","/class-results"],["Routine","/routines"],["Notice","/notices"]].map(([label,path])=><TouchableOpacity key={label} style={s.modalItem} onPress={()=>{setAcademyMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></TouchableOpacity>)}</View>
         </View></View>
       </Modal>
 
