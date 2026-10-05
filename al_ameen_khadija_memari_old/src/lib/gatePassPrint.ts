@@ -13,8 +13,8 @@ export function gatePassPrintHtml(pass:any,logo:string,photo:string){
  .logo{width:16mm;height:18mm;object-fit:contain;display:block}.student-photo{width:22mm;height:25mm;object-fit:cover;border:1px solid #555;display:block}.empty{border:0}
  h2{font-size:27px;line-height:1.15;margin:0 0 4px}.academy p{font-size:15px;line-height:1.2;margin:0 0 3px}.academy small{font-size:10px;line-height:1.2;display:block}
  .copy{text-align:right;font-weight:bold;font-size:15px;margin:2mm 0 1.5mm}h3{font-size:19px;margin:1.5mm 0 2mm}h3 span{color:#c00}
- .line{display:inline-block;width:50%;vertical-align:top;padding:2.2mm 0;border-bottom:1px solid #ddd;line-height:1.2;font-size:14px;overflow-wrap:anywhere}.line.full{display:block;width:100%}.warning{display:block;width:100%;background:#fff8df;padding:2.2mm;margin-top:0.5mm}
- footer{position:absolute;left:5mm;right:105mm;bottom:5mm;display:flex;justify-content:space-between;gap:3mm;padding-top:10mm;font-size:14px}footer span{border-top:1px dotted #222;padding-top:1mm}.officer{margin-left:auto}
+ .line{display:inline-block;width:50%;vertical-align:top;padding:2.2mm 0;border-bottom:1px solid #ddd;line-height:1.2;font-size:16px;overflow-wrap:anywhere}.line.full{display:block;width:100%}.warning{display:block;width:100%;background:#fff8df;padding:2.2mm;margin-top:0.5mm}
+ footer{position:absolute;left:5mm;right:105mm;bottom:5mm;display:flex;justify-content:space-between;gap:3mm;padding-top:10mm;font-size:16px}footer span{border-top:1px dotted #222;padding-top:1mm}.officer{margin-left:auto}
  .cut{width:287mm;height:6mm;display:flex;align-items:center;justify-content:center;border-top:1px dashed #777;border-bottom:1px dashed #777;font-size:9px;letter-spacing:1px}
  @media screen{body{background:#eee;padding:10px}.sheet{background:#fff;margin:auto}}
  @media print{html,body{width:297mm;height:210mm}.warning{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
