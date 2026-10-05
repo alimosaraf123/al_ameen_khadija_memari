@@ -25,17 +25,17 @@ export async function printImageDataUri(url:string){
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
  try{
   const response=await fetch(url,{signal:controller.signal});
-  if(!response.ok)throw new Error('Photo or logo could not be loaded. Please try again.');
+  if(!response.ok)return url;
   const blob=await response.blob();
-  return await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('Unable to prepare the print image.'));reader.readAsDataURL(blob);});
+  return await new Promise<string>(resolve=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>resolve(url);reader.readAsDataURL(blob);});
  }finally{clearTimeout(timer);}
 }
 export async function waitForPrintImages(doc:Document){
- await Promise.all(Array.from(doc.images).map(image=>new Promise<void>((resolve,reject)=>{
-  const timer=setTimeout(()=>finish(new Error('Print images did not finish loading.')),20000);
-  const finish=(error?:Error)=>{clearTimeout(timer);image.onload=null;image.onerror=null;if(error)reject(error);else resolve();};
-  if(image.complete){finish(image.naturalWidth>0?undefined:new Error('A print image could not be loaded.'));return;}
-  image.onload=()=>finish();image.onerror=()=>finish(new Error('A print image could not be loaded.'));
+ await Promise.all(Array.from(doc.images).map(image=>new Promise<void>(resolve=>{
+  const timer=setTimeout(finish,20000);
+  const finish=()=>{clearTimeout(timer);image.onload=null;image.onerror=null;resolve();};
+  if(image.complete){finish();return;}
+  image.onload=finish;image.onerror=finish;
  })));
  await doc.fonts?.ready;
 }
