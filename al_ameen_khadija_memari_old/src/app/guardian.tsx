@@ -340,7 +340,7 @@ export default function Guardian() {
     }
   };
 
-  const openGuardianDocument = async (doc: any, download = false) => {
+  const openGuardianDocument = async (doc: any, download = false, print = false) => {
     if (Platform.OS !== 'web') {
       router.push({ pathname: '/guardian-student', params: { id: String(student.id) } } as any);
       return;
@@ -348,22 +348,64 @@ export default function Guardian() {
     let opened: any = null;
     try {
       if (!download) opened = window.open('about:blank', '_blank');
+      if (!download && !opened) throw new Error('Please allow pop-ups for this site and try again.');
       const token = await getToken();
       const endpoint = download ? doc.download_endpoint : doc.view_endpoint;
       if (!endpoint) throw new Error('Download is not allowed for this document.');
       const response = await fetch(API_BASE + endpoint, { headers: { Authorization: 'Bearer ' + token } });
       if (!response.ok) throw new Error('Document could not be opened.');
-      const blob = await response.blob();
+      const receivedBlob = await response.blob();
+      const bytes = new Uint8Array(await receivedBlob.slice(0, 16).arrayBuffer());
+      const signature = Array.from(bytes.slice(0, 5), byte => String.fromCharCode(byte)).join('');
+      const detectedType = signature === '%PDF-' ? 'application/pdf'
+        : bytes[0] === 0xff && bytes[1] === 0xd8 ? 'image/jpeg'
+        : bytes[0] === 0x89 && signature.slice(1, 4) === 'PNG' ? 'image/png'
+        : signature.startsWith('GIF8') ? 'image/gif'
+        : signature.startsWith('RIFF') && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP' ? 'image/webp'
+        : receivedBlob.type;
+      const blob = receivedBlob.slice(0, receivedBlob.size, detectedType);
       const url = URL.createObjectURL(blob);
       if (download) {
         const link = window.document.createElement('a');
         link.href = url; link.download = doc.document_title || doc.document_type || 'document';
         window.document.body.appendChild(link); link.click(); link.remove();
+      } else if (opened && print) {
+        const page = opened.document;
+        page.title = 'Print Document';
+        page.body.style.margin = '0';
+        const button = page.createElement('button');
+        button.textContent = 'Print';
+        button.style.cssText = 'padding:12px 24px;margin:12px;cursor:pointer';
+        const image = blob.type.startsWith('image/');
+        const preview = page.createElement(image ? 'img' : 'iframe');
+        preview.src = url;
+        preview.style.cssText = image
+          ? 'display:block;max-width:100%;height:auto;margin:auto'
+          : 'width:100%;height:90vh;border:0';
+        const printDocument = () => {
+          try {
+            if (image) { opened.focus(); opened.print(); }
+            else { preview.contentWindow?.focus(); preview.contentWindow?.print(); }
+          } catch {
+            opened.location.href = url;
+          }
+        };
+        button.onclick = printDocument;
+        preview.onload = () => setTimeout(printDocument, 500);
+        const style = page.createElement('style');
+        style.textContent = '@media print { button { display:none } img { max-width:100%;max-height:95vh;object-fit:contain } }';
+        page.head.appendChild(style);
+        page.body.append(button, preview);
       } else if (opened) opened.location.href = url;
-      setTimeout(() => URL.revokeObjectURL(url), 120000);
+      // Keep the file available while its preview or print dialog is open.
+      if (opened) {
+        const cleanup = setInterval(() => {
+          if (opened.closed) { clearInterval(cleanup); URL.revokeObjectURL(url); }
+        }, 1000);
+      } else setTimeout(() => URL.revokeObjectURL(url), 120000);
     } catch (error: any) {
       if (opened) opened.close();
-      Alert.alert('Document', error.message || 'Document action failed.');
+      window.alert(error.message || 'Document action failed.');
     }
   };
 
@@ -833,7 +875,7 @@ export default function Guardian() {
                     <View style={styles.documentPreview}>{preview ? <Image source={{uri: preview}} style={styles.documentPreviewImage} resizeMode="contain"/> : <Text style={styles.documentNoPreview}>Click View to open</Text>}</View>
                     <View style={styles.documentCardActions}>
                       <TouchableOpacity style={styles.documentEyeButton} onPress={() => openGuardianDocument(doc, false)}><Text style={styles.documentActionText}>View</Text></TouchableOpacity>
-                      <TouchableOpacity style={styles.documentPrintButton} onPress={() => openGuardianDocument(doc, false)}><Text style={styles.documentActionText}>Print</Text></TouchableOpacity>
+                      <TouchableOpacity style={styles.documentPrintButton} onPress={() => openGuardianDocument(doc, false, true)}><Text style={styles.documentActionText}>Print</Text></TouchableOpacity>
                       {doc.guardian_download_allowed && <TouchableOpacity style={styles.documentDownloadButton} onPress={() => openGuardianDocument(doc, true)}><Text style={styles.documentActionText}>Download</Text></TouchableOpacity>}
                     </View>
                   </View>;

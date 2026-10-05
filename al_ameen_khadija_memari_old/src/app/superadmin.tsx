@@ -7,6 +7,7 @@ import {
   StyleSheet,
   View,
   Modal,
+  Pressable,
 } from 'react-native';
 
 import {
@@ -149,7 +150,7 @@ export default function Dashboard() {
       </ScrollView>
 
       <Modal visible={teacherMenu} transparent animationType="fade" onRequestClose={()=>setTeacherMenu(false)}>
-        <View style={s.modalBackdrop}><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Teachers</Text><TouchableOpacity onPress={()=>setTeacherMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
+        <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={()=>setTeacherMenu(false)} accessibilityRole="button" accessibilityLabel="Close teachers menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Teachers</Text><TouchableOpacity onPress={()=>setTeacherMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
           <View style={s.modalGrid}>
             {[["Add Teacher","/teachers?mode=add"],["View Teacher","/teachers?mode=view"],["I-Card & Form","/teachers?mode=icard"],["Attendance","/attendance"],["Teacher Password Reset","/teachers?mode=view"]].map(([label,path])=><TouchableOpacity key={label} style={s.modalItem} onPress={()=>{setTeacherMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></TouchableOpacity>)}
           </View>
@@ -157,19 +158,19 @@ export default function Dashboard() {
       </Modal>
 
       <Modal visible={studentMenu} transparent animationType="fade" onRequestClose={()=>setStudentMenu(false)}>
-        <View style={s.modalBackdrop}><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Students</Text><TouchableOpacity onPress={()=>setStudentMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
+        <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={()=>setStudentMenu(false)} accessibilityRole="button" accessibilityLabel="Close students menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Students</Text><TouchableOpacity onPress={()=>setStudentMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
           <View style={s.modalGrid}>{[["Student Details","/students"]].map(([label,path])=><TouchableOpacity key={label} style={s.modalItem} onPress={()=>{setStudentMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></TouchableOpacity>)}</View>
         </View></View>
       </Modal>
 
       <Modal visible={academyMenu} transparent animationType="fade" onRequestClose={()=>setAcademyMenu(false)}>
-        <View style={s.modalBackdrop}><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Academy</Text><TouchableOpacity onPress={()=>setAcademyMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
+        <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={()=>setAcademyMenu(false)} accessibilityRole="button" accessibilityLabel="Close academy menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Academy</Text><TouchableOpacity onPress={()=>setAcademyMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
           <View style={s.modalGrid}>{[["Weekly Marks","/marks"],["Terminal Exam","/terminal-exams"],["Published Result","/class-results"],["Routine","/routines"],["Notice","/notices"]].map(([label,path])=><TouchableOpacity key={label} style={s.modalItem} onPress={()=>{setAcademyMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></TouchableOpacity>)}</View>
         </View></View>
       </Modal>
 
       <Modal visible={hostelMenu} transparent animationType="fade" onRequestClose={()=>setHostelMenu(false)}>
-        <View style={s.modalBackdrop}><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Hostel</Text><TouchableOpacity onPress={()=>setHostelMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
+        <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={()=>setHostelMenu(false)} accessibilityRole="button" accessibilityLabel="Close hostel menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Hostel</Text><TouchableOpacity onPress={()=>setHostelMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
           <View style={s.modalGrid}>{[["Rooms","/rooms"],["Teacher Room Assignment","/room-assignments"],["Evening Room Attendance","/attendance"],["Student Behaviour","/behavior"],["Student Illness","/illness"],["Room Problem","/problems"]].map(([label,path])=><TouchableOpacity key={label} style={s.modalItem} onPress={()=>{setHostelMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></TouchableOpacity>)}</View>
         </View></View>
       </Modal>

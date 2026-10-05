@@ -82,10 +82,11 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
     return sort.ascending ? result : -result;
   }), [students, year, className, gender, status, search, sort]);
   useEffect(() => { setPage(1); }, [year, className, gender, status, search, size]);
-  const pages = Math.max(1, Math.ceil(filtered.length / Number(size)));
+  const pageSize = size === 'all' ? Math.max(1, filtered.length) : Number(size);
+  const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, pages);
-  const start = (currentPage - 1) * Number(size);
-  const rows = filtered.slice(start, start + Number(size));
+  const start = (currentPage - 1) * pageSize;
+  const rows = filtered.slice(start, start + pageSize);
   const openDetails = async (student: any) => {
     setDetailOpen(true); setDetail(null); setDetailError(''); setDetailLoading(true);
     try { const data = await api(`/api/students/${student.id}`); setDetail(data.student); }
@@ -208,7 +209,7 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
       <Select label="Status" value={status} onChange={setStatus} options={[{ value: 'active', label: 'Active' }, { value: 'dropout', label: 'Dropout' }, { value: 'all', label: 'All Statuses' }]} />
     </View>
     <View style={s.toolbar}>
-      <View style={s.inline}><Text>Show</Text><Select label="Entries per page" value={size} onChange={setSize} options={['10', '25', '50', '100'].map(value => ({ value, label: value }))} /><Text>Entries</Text></View>
+      <View style={s.inline}><Text>Show</Text><Select label="Entries per page" value={size} onChange={setSize} options={['10', '25', '50', '100', 'all'].map(value => ({ value, label: value === 'all' ? 'All' : value }))} /><Text>Entries</Text></View>
       <View style={s.inline}><Text>Search:</Text><TextInput accessibilityLabel="Search students" value={search} onChangeText={setSearch} style={s.search} placeholder="Name, Reg. or mobile" /></View>
       <TouchableOpacity accessibilityRole="button" onPress={onRefresh} style={s.select}><Text>Refresh</Text></TouchableOpacity>
     </View>
@@ -230,7 +231,7 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
         </View>
       </ScrollView>
       {!rows.length && <Text style={s.empty}>No students match these filters.</Text>}
-      <View style={s.toolbar}><Text>Showing {filtered.length ? start + 1 : 0} to {Math.min(start + Number(size), filtered.length)} of {filtered.length} entries</Text>
+      <View style={s.toolbar}><Text>Showing {filtered.length ? start + 1 : 0} to {Math.min(start + pageSize, filtered.length)} of {filtered.length} entries</Text>
         <View style={s.inline}><TouchableOpacity accessibilityRole="button" disabled={currentPage === 1} onPress={() => setPage(currentPage - 1)} style={[s.select, currentPage === 1 && s.disabled]}><Text>Previous</Text></TouchableOpacity><Text>{currentPage} / {pages}</Text><TouchableOpacity accessibilityRole="button" disabled={currentPage === pages} onPress={() => setPage(currentPage + 1)} style={[s.select, currentPage === pages && s.disabled]}><Text>Next</Text></TouchableOpacity></View>
       </View>
     </>}

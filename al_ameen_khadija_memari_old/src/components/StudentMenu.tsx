@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const options = [
   ['entry', 'Entry'], ['details', 'Details'], ['forms', 'Form & I-Card'], ['behavior', 'Behavior'],
@@ -13,7 +13,9 @@ const enabled = new Set([
 
 export default function StudentMenu({ visible, onClose, onSelect }: { visible: boolean; onClose: () => void; onSelect: (key: string) => void }) {
   return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-    <View style={s.overlay}><View style={s.panel}>
+    <View style={s.overlay}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close student menu" />
+      <View style={s.panel}>
       <View style={s.header}><Text style={s.title}>Student</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Close student menu" onPress={onClose}><Text style={s.close}>X</Text></TouchableOpacity></View>
       <ScrollView contentContainerStyle={s.grid}>{options.map(([key, title]) => <TouchableOpacity key={key} accessibilityRole="button" accessibilityState={{ disabled: !enabled.has(key) }} disabled={!enabled.has(key)} style={[s.item, !enabled.has(key) && s.disabled]} onPress={() => onSelect(key)}>
         <Text style={s.label}>-  {title}</Text>{!enabled.has(key) && <Text style={s.hint}>Coming soon</Text>}

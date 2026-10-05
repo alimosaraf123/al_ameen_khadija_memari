@@ -386,3 +386,7 @@ CREATE TABLE IF NOT EXISTS library_books (id BIGSERIAL PRIMARY KEY,accession_no 
 CREATE TABLE IF NOT EXISTS library_loans (id BIGSERIAL PRIMARY KEY,book_id BIGINT NOT NULL REFERENCES library_books(id),student_id BIGINT NOT NULL REFERENCES students(id),issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),due_date DATE NOT NULL,returned_at TIMESTAMPTZ,issued_by BIGINT REFERENCES users(id) ON DELETE SET NULL,returned_by BIGINT REFERENCES users(id) ON DELETE SET NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS user_module_permissions (user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,module_key VARCHAR(80) NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),PRIMARY KEY(user_id,module_key));
 CREATE TABLE IF NOT EXISTS admin_audit_logs (id BIGSERIAL PRIMARY KEY,user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,method VARCHAR(10) NOT NULL,path TEXT NOT NULL,status_code INTEGER,details JSONB,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+
+ALTER TABLE terminal_exam_subjects ADD COLUMN IF NOT EXISTS theory_marks NUMERIC(8,2);
+ALTER TABLE terminal_exam_subjects ADD COLUMN IF NOT EXISTS oral_marks NUMERIC(8,2);
+UPDATE terminal_exam_subjects SET theory_marks=full_marks, oral_marks=0 WHERE theory_marks IS NULL;
