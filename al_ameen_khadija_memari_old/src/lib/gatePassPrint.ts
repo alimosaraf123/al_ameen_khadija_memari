@@ -13,7 +13,7 @@ export function gatePassPrintHtml(pass:any,logo:string,photo:string){
  .logo{width:16mm;height:18mm;object-fit:contain;display:block}.student-photo{width:22mm;height:25mm;object-fit:cover;border:1px solid #555;display:block}.empty{border:0}
  h2{font-size:26px;line-height:1.1;margin:0 0 2px}.academy p{font-size:15px;line-height:1.15;margin:0 0 2px}.academy small{font-size:11px;line-height:1.1;display:block}
  .copy{text-align:right;font-weight:bold;font-size:15px;margin:1mm 0}h3{font-size:19px;margin:1mm 0}h3 span{color:#c00}
- .line{display:inline-block;width:50%;vertical-align:top;padding:1mm 0;border-bottom:1px solid #ddd;line-height:1.1;font-size:18px;overflow-wrap:anywhere}.line.full{display:block;width:100%}
+ .line{display:inline-block;width:50%;vertical-align:top;padding:2mm 0;border-bottom:1px solid #ddd;line-height:1.25;font-size:18px;overflow-wrap:anywhere}.line.full{display:block;width:100%}
  footer{position:absolute;left:5mm;right:90mm;bottom:4mm;padding-top:4mm;font-size:18px}footer span{border-top:1px dotted #222;padding-top:1mm}.office-footer{display:grid;grid-template-columns:1fr 1fr 1fr}.office-footer span:nth-child(2){text-align:center}.office-footer .officer{text-align:right}.guardian-footer{display:flex}.guardian-footer .officer{margin-left:auto}
  .cut{width:274.3mm;height:10mm;display:flex;align-items:center;justify-content:center;border-top:1px dashed #777;border-bottom:1px dashed #777;font-size:11px;letter-spacing:1px}
  @media screen{body{background:#eee;padding:10px}.sheet{background:#fff;margin:auto}}
