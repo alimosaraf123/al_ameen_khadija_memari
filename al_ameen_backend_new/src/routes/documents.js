@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const sharp = require('sharp');
+const { PDFDocument } = require('pdf-lib');
 const pool = require('../db');
 const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
@@ -18,6 +19,23 @@ const upload = multer({
     cb(allowed ? null : new Error('Only image and PDF files are allowed'), allowed);
   },
 });
+const bulkPdfUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => cb(file.mimetype === 'application/pdf' ? null : new Error('A PDF file is required'), file.mimetype === 'application/pdf'),
+});
+
+async function pdfPageText(pdfBuffer) {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const loaded = await pdfjs.getDocument({ data: new Uint8Array(pdfBuffer) }).promise;
+  const pages = [];
+  for (let pageNumber = 1; pageNumber <= loaded.numPages; pageNumber += 1) {
+    const page = await loaded.getPage(pageNumber);
+    const content = await page.getTextContent();
+    pages.push(content.items.map(item => item.str || '').join(' '));
+  }
+  return pages;
+}
 
 function getPhysicalPath(fileUrl) {
   if (!fileUrl || /^https?:\/\//i.test(fileUrl)) return null;
@@ -128,6 +146,38 @@ router.post('/student/:id', auth, allow('super_admin', 'admin'), upload.single('
     await deleteCloudinaryUrl(uploaded.url).catch(() => {});
     throw error;
   }
+}));
+
+// Upload a multi-page XI Registration PDF. Each page is matched by the
+// registration number printed on it and saved to the matching Class XII student.
+router.post('/bulk/xi-registration', auth, allow('super_admin', 'admin'), bulkPdfUpload.single('file'), asyncHandler(async (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, message: 'PDF file required' });
+  const students = (await pool.query("SELECT id,registration_no,student_name,class_name FROM students WHERE is_active=TRUE AND lower(class_name) LIKE 'xii%' AND registration_no IS NOT NULL")).rows;
+  const byRegistration = new Map(students.map(student => [String(student.registration_no).trim(), student]));
+  const pageTexts = await pdfPageText(req.file.buffer);
+  const source = await PDFDocument.load(req.file.buffer);
+  const result = { pages: pageTexts.length, uploaded: [], skipped: [], unmatched: [] };
+  for (let index = 0; index < pageTexts.length; index += 1) {
+    const text = pageTexts[index];
+    const match = Array.from(byRegistration.keys()).find(registration => text.includes(registration));
+    if (!match) { result.unmatched.push({ page: index + 1, text: text.slice(0, 160) }); continue; }
+    const student = byRegistration.get(match);
+    const existing = await pool.query('SELECT id FROM student_documents WHERE student_id=$1 AND document_type=$2 LIMIT 1', [student.id, 'xi_registration']);
+    if (existing.rowCount) { result.skipped.push({ page: index + 1, registration_no: match, student_name: student.student_name, reason: 'Already uploaded' }); continue; }
+    const pagePdf = await PDFDocument.create();
+    const [page] = await pagePdf.copyPages(source, [index]);
+    pagePdf.addPage(page);
+    const buffer = Buffer.from(await pagePdf.save());
+    const uploaded = await uploadDocumentFile({ buffer, mimetype: 'application/pdf', originalname: `xi-registration-${match}.pdf` }, 'al-ameen/student-documents');
+    try {
+      await pool.query('INSERT INTO student_documents (student_id,document_type,document_title,file_url,guardian_visible,guardian_download_allowed,uploaded_by) VALUES($1,$2,$3,$4,TRUE,TRUE,$5)', [student.id, 'xi_registration', `XI Registration - ${match}`, uploaded.url, req.user.userId]);
+      result.uploaded.push({ page: index + 1, registration_no: match, student_name: student.student_name });
+    } catch (error) {
+      await deleteCloudinaryUrl(uploaded.url).catch(() => {});
+      throw error;
+    }
+  }
+  res.status(201).json({ success: true, result });
 }));
 
 

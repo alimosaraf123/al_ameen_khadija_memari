@@ -260,6 +260,7 @@ export default function Documents() {
   const [legacyPassword,setLegacyPassword]=useState('');
   const [legacySession,setLegacySession]=useState(String(new Date().getFullYear()));
   const [legacyBusy,setLegacyBusy]=useState(false);
+  const [bulkXiBusy,setBulkXiBusy]=useState(false);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [previewTitle, setPreviewTitle] = useState('');
   const [previewObjectUrl, setPreviewObjectUrl] =
@@ -569,6 +570,29 @@ export default function Documents() {
       );
     } finally {
       setBusyKey(null);
+    }
+  };
+
+  const bulkUploadXiRegistration = async () => {
+    try {
+      setBulkXiBusy(true);
+      const picked = await pickFile();
+      if (!picked) return;
+      if (!String(picked.mimeType || '').toLowerCase().includes('pdf') && !String(picked.name || '').toLowerCase().endsWith('.pdf')) {
+        throw new Error('Please select the XI Registration PDF file.');
+      }
+      const token = await getToken();
+      const fd = new FormData();
+      await appendPickedFile(fd, picked);
+      const response = await sendMultipart(`${API_BASE}/api/documents/bulk/xi-registration`, fd, token);
+      const data = await responseMessage(response as any);
+      if (!response.ok) throw new Error(data.message || 'Bulk upload failed');
+      const result = data.result || {};
+      Alert.alert('XI Registration bulk upload', `Uploaded: ${result.uploaded?.length || 0}\nSkipped: ${result.skipped?.length || 0}\nUnmatched: ${result.unmatched?.length || 0}`);
+    } catch (e: any) {
+      Alert.alert('Bulk upload', e.message || 'Bulk upload failed');
+    } finally {
+      setBulkXiBusy(false);
     }
   };
 
@@ -1660,6 +1684,12 @@ export default function Documents() {
             <Text style={styles.sectionTitle}>
               Documents
             </Text>
+
+            <Card>
+              <Text style={styles.documentTypeTitle}>Class XII - XI Registration Bulk Upload</Text>
+              <Muted>Select the multi-page PDF. Each page is matched by registration number and saved to the matching Class XII student's XI Registration document.</Muted>
+              <Button title={bulkXiBusy ? 'Uploading PDF pages...' : 'Upload XI Registration PDF'} onPress={bulkUploadXiRegistration} />
+            </Card>
 
             {loading && (
               <Muted>Loading documents...</Muted>
