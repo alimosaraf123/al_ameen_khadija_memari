@@ -451,6 +451,9 @@ export default function Guardian() {
         />
         <View style={{ flex: 1 }}>
           <Text style={styles.brandName}>Al-Ameen Mission Academy Memari</Text>
+          <Text style={[styles.studentMeta, { marginTop: 6, fontWeight: '700' }]}>
+            Reg: {s?.registration_no || '-'} | {s?.student_name || '-'}
+          </Text>
         </View>
       </View>
       {/* STUDENT HEADER */}

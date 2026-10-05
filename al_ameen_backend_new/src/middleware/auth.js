@@ -7,7 +7,7 @@ async function auth(req,res,next){
   const user=jwt.verify(token,process.env.JWT_SECRET);
   if(user.role==='guardian'){
    if(!user.jti)return res.status(401).json({success:false,message:'Please login again on this device'});
-   const q=await pool.query(`SELECT 1 FROM guardian_login_sessions WHERE user_id=$1 AND token_jti=$2 AND is_active=TRUE AND expires_at>NOW()`,[user.userId,user.jti]);
+   const q=await pool.query(`SELECT 1 FROM guardian_login_sessions gls JOIN users u ON u.id=gls.user_id WHERE gls.user_id=$1 AND gls.token_jti=$2 AND gls.is_active=TRUE AND gls.expires_at>NOW() AND u.is_active=TRUE`,[user.userId,user.jti]);
    if(!q.rowCount)return res.status(401).json({success:false,message:'This device session is no longer active. Please login again.'});
   }
   const bypass=['/me','/change-password','/logout','/login','/api/me','/api/change-password','/api/logout','/api/login'];

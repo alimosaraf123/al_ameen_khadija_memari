@@ -1,3 +1,4 @@
+const {generateGuardianPassword,revokeGuardianAccess}=require('../utils/guardianCredentials');
 const {getMonthlyFeeDue}=require('../utils/monthlyFees');
 const express = require('express');
 const bcrypt = require('bcryptjs');
@@ -48,40 +49,6 @@ async function sendGuardianDocument(res, document, download = false) {
   const physicalPath = getPhysicalPath(fileUrl);
   if (!physicalPath || !fs.existsSync(physicalPath)) return res.status(404).json({ success: false, message: 'Document file not found' });
   return download ? res.download(physicalPath, safeTitle + path.extname(physicalPath)) : res.sendFile(physicalPath);
-}
-
-
-function generateGuardianPassword(studentName, dateOfBirth) {
-  const firstName = String(studentName || '').trim().split(/\s+/)[0];
-  let year;
-  let month;
-  let day;
-
-  const dateMatch = String(dateOfBirth || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (dateMatch) {
-    [, year, month, day] = dateMatch;
-  } else if (dateOfBirth instanceof Date && !Number.isNaN(dateOfBirth.getTime())) {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
-    }).formatToParts(dateOfBirth).reduce((result, part) => ({ ...result, [part.type]: part.value }), {});
-    year = parts.year;
-    month = parts.month;
-    day = parts.day;
-  }
-
-  if (!firstName) {
-    const error = new Error('Student name is required to create the default guardian password');
-    error.status = 400;
-    throw error;
-  }
-
-  if (!year || !month || !day) {
-    const error = new Error('Student Date of Birth is required to create the default guardian password');
-    error.status = 400;
-    throw error;
-  }
-
-  return firstName + day + month + year;
 }
 
 
@@ -320,7 +287,9 @@ router.get(
                   s.class_name,
 
                   'roll_no',
-                  s.roll_no
+                  s.roll_no,
+                  'whatsapp_number',s.whatsapp_number,
+                  'photo_url',s.photo_url
 
                 )
 
@@ -683,6 +652,7 @@ router.post(
               login_id,
               password_hash,
               full_name,
+              password_change_required,
               role
             )
 
@@ -691,6 +661,7 @@ router.post(
               $1,
               $2,
               $3,
+              TRUE,
               'guardian'
             )
 
@@ -884,175 +855,31 @@ router.post(
 // GENERATE NEW GUARDIAN PASSWORD
 // ========================================
 
-router.post(
-  '/:guardianId/reset-password',
-
-  auth,
-
-  allow(
-    'super_admin',
-    'admin'
-  ),
-
-  asyncHandler(
-    async (req, res) => {
-
-      const guardianId =
-        req.params
-          .guardianId;
-
-
-      const guardianResult =
-        await pool.query(
-          `
-          SELECT
-            g.id,
-            g.user_id,
-            g.guardian_name,
-
-            u.login_id,
-            u.is_active,
-
-            s.student_name,
-            s.date_of_birth
-
-          FROM guardian_profiles g
-
-          JOIN users u
-            ON u.id =
-               g.user_id
-
-          LEFT JOIN LATERAL (
-            SELECT
-              linked_student.student_name,
-              linked_student.date_of_birth
-            FROM student_guardians sg
-            JOIN students linked_student
-              ON linked_student.id=sg.student_id
-            WHERE sg.guardian_id=g.id
-            ORDER BY
-              (linked_student.registration_no=u.login_id) DESC,
-              sg.is_primary DESC,
-              sg.id
-            LIMIT 1
-          ) s ON TRUE
-
-          WHERE
-            g.id=$1
-
-          LIMIT 1
-          `,
-          [
-            guardianId
-          ]
-        );
-
-
-      if (
-        !guardianResult
-          .rowCount
-      ) {
-
-        return res
-          .status(404)
-          .json({
-
-            success: false,
-
-            message:
-              'Guardian account not found',
-
-          });
-
-      }
-
-
-      const guardian =
-        guardianResult
-          .rows[0];
-
-
-      if (
-        !guardian
-          .is_active
-      ) {
-
-        return res
-          .status(403)
-          .json({
-
-            success: false,
-
-            message:
-              'Guardian account is inactive',
-
-          });
-
-      }
-
-
-      const plainPassword = generateGuardianPassword(
-        guardian.student_name,
-        guardian.date_of_birth
-      );
-
-
-      const passwordHash =
-        await bcrypt.hash(
-          plainPassword,
-          12
-        );
-
-
-      await pool.query(
-        `
-        UPDATE users
-
-        SET
-          password_hash=$1
-
-        WHERE
-          id=$2
-        `,
-        [
-
-          passwordHash,
-
-          guardian
-            .user_id,
-
-        ]
-      );
-
-
-      res.json({
-
-        success: true,
-
-        message:
-          'Default password restored successfully',
-
-        credentials: {
-
-          login_id:
-            guardian.login_id,
-
-          password:
-            plainPassword,
-
-        },
-
-      });
-
-    }
-  )
-);
-
-
-// ========================================
-// OLD CREATE GUARDIAN ROUTE
-// KEPT FOR COMPATIBILITY
-// ========================================
+router.post('/:guardianId/reset-password', auth, allow('super_admin','admin'), asyncHandler(async(req,res)=>{
+ const client=await pool.connect();try{
+  await client.query('BEGIN');
+  const r=await client.query("SELECT g.user_id,u.login_id FROM guardian_profiles g JOIN users u ON u.id=g.user_id WHERE g.id=$1 AND u.role='guardian' FOR UPDATE OF u",[req.params.guardianId]);
+  if(!r.rowCount){await client.query('ROLLBACK');return res.status(404).json({success:false,message:'Guardian account not found'});}
+  const guardian=r.rows[0],password=generateGuardianPassword(),hash=await bcrypt.hash(password,12);
+  await client.query('UPDATE users SET password_hash=$1,password_change_required=TRUE,mpin_hash=NULL WHERE id=$2',[hash,guardian.user_id]);
+  await revokeGuardianAccess(client,guardian.user_id);await client.query('COMMIT');
+  res.json({success:true,credentials:{login_id:guardian.login_id,password}});
+ }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+}));
+router.patch('/:guardianId/lock',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ if(typeof req.body.locked!=='boolean')return res.status(400).json({success:false,message:'Locked must be true or false'});
+ const client=await pool.connect();try{await client.query('BEGIN');
+  const r=await client.query("UPDATE users u SET is_active=$2 FROM guardian_profiles g WHERE g.id=$1 AND g.user_id=u.id AND u.role='guardian' RETURNING u.id",[req.params.guardianId,!req.body.locked]);
+  if(!r.rowCount){await client.query('ROLLBACK');return res.status(404).json({success:false,message:'Guardian account not found'});}
+  if(req.body.locked)await revokeGuardianAccess(client,r.rows[0].id);
+  await client.query('COMMIT');res.json({success:true,locked:req.body.locked});
+ }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+}));
+router.delete('/:guardianId',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ const r=await pool.query("DELETE FROM users u USING guardian_profiles g WHERE g.id=$1 AND g.user_id=u.id AND u.role='guardian' RETURNING u.id",[req.params.guardianId]);
+ if(!r.rowCount)return res.status(404).json({success:false,message:'Guardian account not found'});
+ res.json({success:true});
+}));
 
 router.post(
   '/',
@@ -1097,6 +924,7 @@ router.post(
               login_id,
               password_hash,
               full_name,
+              password_change_required,
               role
             )
 
@@ -1105,6 +933,7 @@ router.post(
               $1,
               $2,
               $3,
+              TRUE,
               'guardian'
             )
 
