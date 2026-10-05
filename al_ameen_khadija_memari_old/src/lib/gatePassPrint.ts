@@ -32,8 +32,8 @@ export async function printImageDataUri(url:string){
 }
 export async function waitForPrintImages(doc:Document){
  await Promise.all(Array.from(doc.images).map(image=>new Promise<void>(resolve=>{
-  const timer=setTimeout(finish,20000);
   const finish=()=>{clearTimeout(timer);image.onload=null;image.onerror=null;resolve();};
+  const timer=setTimeout(finish,20000);
   if(image.complete){finish();return;}
   image.onload=finish;image.onerror=finish;
  })));
