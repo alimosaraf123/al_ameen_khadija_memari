@@ -7,15 +7,15 @@ export function gatePassPrintHtml(pass:any,logo:string,photo:string){
  return `<!doctype html><html><head><meta charset="utf-8"><title>Gate Pass ${e(pass.token_no)}</title><style>
  @page{size:21cm 14cm;margin:0}
  *{box-sizing:border-box}html,body{width:21cm;height:14cm;margin:0;padding:0;color:#111;font:10px Arial,sans-serif}
- .sheet{width:14cm;height:21cm;padding:0.35cm;display:grid;transform:rotate(90deg);transform-origin:center center;grid-template-columns:13.3cm;grid-template-rows:9.8cm 0.3cm 9.8cm;break-inside:avoid;page-break-inside:avoid}
- section{width:13.3cm;height:9.8cm;border:1px solid #222;padding:4mm;position:relative;display:flex;flex-direction:column;min-width:0;break-inside:avoid}
+ .sheet{width:21cm;height:14cm;padding:0.25cm;display:grid;grid-template-columns:9.9cm 0.3cm 9.9cm;grid-template-rows:13.3cm;column-gap:0.1cm;break-inside:avoid;page-break-inside:avoid}
+ section{width:9.9cm;height:13.3cm;border:1px solid #222;padding:3mm;position:relative;display:flex;flex-direction:column;min-width:0;break-inside:avoid}
  header{display:grid;grid-template-columns:18mm 1fr 19mm;gap:2mm;align-items:center;text-align:center;border-bottom:1px solid #aaa;padding-bottom:3mm;min-height:42mm}
  .logo{width:18mm;height:20mm;object-fit:contain}.student-photo{width:19mm;height:24mm;object-fit:cover;border:1px solid #aaa}.empty{border:0}
  h2{font-size:27px;line-height:1.2;margin:0 0 8px}.academy p{font-size:16px;line-height:1.3;margin:0 0 4px}.academy small{font-size:13px;line-height:1.3;display:block}
  .copy{text-align:right;font-weight:bold;font-size:18px;margin:5mm 0 2mm}h3{font-size:24px;margin:2mm 0 5mm}h3 span{color:#c00}
  .line{padding:4.5mm 0;border-bottom:1px solid #ddd;line-height:1.35;overflow-wrap:anywhere}.warning{background:#fff8df;padding:2.5mm;margin-top:1mm}
  footer{display:flex;justify-content:space-between;gap:3mm;margin-top:auto;padding-top:15mm;font-size:18px}footer span{border-top:1px dotted #222;padding-top:2mm}.officer{margin-left:auto}
- .cut{width:13.3cm;height:0.3cm;display:flex;align-items:center;justify-content:center;border-top:1px dashed #777;border-bottom:1px dashed #777;font-size:8px;letter-spacing:1px}
+ .cut{width:0.3cm;height:13.3cm;display:flex;align-items:center;justify-content:center;border-left:1px dashed #777;border-right:1px dashed #777;font-size:7px;letter-spacing:1px;writing-mode:vertical-rl}
  @media screen{body{background:#eee;padding:10px}.sheet{background:#fff;margin:auto}}
  @media print{html,body{width:21cm;height:14cm}.warning{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
  </style></head><body><main class="sheet">${copy('Guardian Copy')}<div class="cut">CUT HERE</div>${copy('Office Copy')}</main></body></html>`;
