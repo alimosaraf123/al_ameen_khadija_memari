@@ -22,6 +22,8 @@ import {
 import {
   api,
 } from '../lib/api';
+import {router} from 'expo-router';
+import AcademyHeader from '../components/AcademyHeader';
 
 import {
   Field,
@@ -385,6 +387,9 @@ export default function DepositFund() {
         keyboardShouldPersistTaps="handled"
 
       >
+
+        <AcademyHeader />
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}><Text style={styles.backText}>← Back</Text></TouchableOpacity>
 
         <H1>
           Student Deposit Fund
@@ -1041,6 +1046,20 @@ netBalanceStatus: {
       flex: 1,
       backgroundColor:
         '#f3f6f9',
+    },
+
+    backButton: {
+      alignSelf: 'flex-start',
+      backgroundColor: '#e5eef8',
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 7,
+      marginBottom: 6,
+    },
+
+    backText: {
+      color: '#1764a5',
+      fontWeight: '800',
     },
 
     content: {
