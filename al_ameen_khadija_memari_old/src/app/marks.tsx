@@ -51,7 +51,7 @@ export default function Marks() {
     try{const data=await api(`/api/students?class_name=${encodeURIComponent(form.className)}&session=${encodeURIComponent(form.sessionName)}`);if(request!==rosterRequest.current)return;setStudents((data.students||[]).map((student:any)=>({...student,obtained_marks:'',absent:false})));setLoaded(true);setEditingId(null);setEditingTest(null);if(!data.students?.length)Alert.alert('No Students','No active students found for this class and session.');}
     catch(error:any){if(request===rosterRequest.current)Alert.alert('Error',error.message);}finally{if(request===rosterRequest.current)setLoading(false);}
   };
-  const setMark=(id:number,value:string)=>{const clean=value.replace(/[^0-9.]/g,'');const student=students.find(x=>x.id===id);if(clean!==''&&Number(clean)>Number(form.fullMarks))Alert.alert('Invalid marks',${student?.student_name||'Student'}: Marks cannot exceed Full Marks ().);else setStudents(current=>current.map(student=>student.id===id?{...student,obtained_marks:value.replace(/[^0-9.]/g,''),absent:false}:student));
+  const setMark=(id:number,value:string)=>{const clean=value.replace(/[^0-9.]/g,'');const student=students.find(x=>x.id===id);if(clean!==''&&Number(clean)>Number(form.fullMarks))Alert.alert('Invalid marks',`${student?.student_name||'Student'}: Marks cannot exceed Full Marks (${form.fullMarks}).`);else setStudents(current=>current.map(student=>student.id===id?{...student,obtained_marks:clean,absent:false}:student));};
   const toggleAbsent=(id:number)=>setStudents(current=>current.map(student=>student.id===id?{...student,absent:!student.absent,obtained_marks:''}:student));
 
   const save=async(submit_mode:'draft'|'final')=>{
