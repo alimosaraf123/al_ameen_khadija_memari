@@ -35,13 +35,15 @@ router.post('/', auth, allow('super_admin','admin','teacher'), asyncHandler(asyn
   const registrationNo = String(req.body?.registration_no || '').trim();
   const details = String(req.body?.illness_details || '').trim();
   if (!registrationNo || !details) return res.status(400).json({success:false,message:'Registration number and illness details are required'});
-  const student = await pool.query('SELECT id FROM students WHERE LOWER(registration_no)=LOWER($1) AND is_active=TRUE',[registrationNo]);
+  const student = await pool.query(`SELECT s.id,s.registration_no,s.student_name,s.class_name,r.room_name,COALESCE((SELECT string_agg(t.name, ', ' ORDER BY t.name) FROM teacher_room_assignments tra JOIN teachers t ON t.id=tra.teacher_id WHERE tra.room_id=s.room_id AND tra.is_active=TRUE),'Not assigned') AS room_teacher_name FROM students s LEFT JOIN rooms r ON r.id=s.room_id WHERE LOWER(s.registration_no)=LOWER($1) AND s.is_active=TRUE`,[registrationNo]);
   if (!student.rowCount) return res.status(404).json({success:false,message:'Student not found'});
   const result = await pool.query(`
     INSERT INTO illness_records(student_id,record_date,illness_details,action_taken,reported_by)
     VALUES($1,COALESCE($2,CURRENT_DATE),$3,$4,$5) RETURNING *
   `,[student.rows[0].id,req.body.record_date||null,details,req.body.action_taken||null,req.user.userId]);
-  const notice=await pool.query(`INSERT INTO notices(title,notice_text,notice_type,published_by) VALUES('Student illness / problem',$1,'urgent',$2) RETURNING id`,[`Reg. ${registrationNo}: ${details}`,req.user.userId]);
+  const st=student.rows[0];
+  const noticeText=`Student: ${st.student_name}\nRegistration: ${st.registration_no}\nClass: ${st.class_name}\nRoom: ${st.room_name||'Not assigned'}\nRoom Teacher: ${st.room_teacher_name}\nProblem: ${details}\nAction Taken: ${req.body.action_taken||'Not recorded'}`;
+  const notice=await pool.query(`INSERT INTO notices(title,notice_text,notice_type,published_by) VALUES('Student illness / problem',$1,'urgent',$2) RETURNING id`,[noticeText,req.user.userId]);
   await pool.query(`INSERT INTO notice_targets(notice_id,target_type,target_value) VALUES($1,'role','admin')`,[notice.rows[0].id]);
   res.status(201).json({success:true,record:result.rows[0],notification_sent:true});
 }));
