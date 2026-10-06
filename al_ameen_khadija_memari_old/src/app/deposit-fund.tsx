@@ -83,7 +83,8 @@ export default function DepositFund() {
     setSaving
   ] = useState(false);
 
-  const [statementDate, setStatementDate] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [statement, setStatement] = useState<any>(null);
 
 
@@ -122,11 +123,12 @@ export default function DepositFund() {
   }, []);
 
   const searchStatement = async () => {
-    if (!selectedStudent && !statementDate.trim()) return Alert.alert('Required', 'Select a student or enter a date.');
+    if (!selectedStudent && !fromDate.trim() && !toDate.trim()) return Alert.alert('Required', 'Select a student or enter a date range.');
     try {
       const query = new URLSearchParams();
       if (selectedStudent?.registration_no) query.set('registration_no', String(selectedStudent.registration_no));
-      if (statementDate.trim()) query.set('date', statementDate.trim());
+      if (fromDate.trim()) query.set('from_date', fromDate.trim());
+      if (toDate.trim()) query.set('to_date', toDate.trim());
       setStatement(await api('/api/guardians/admin/deposit-fund-statement?' + query.toString()));
     } catch (e: any) { Alert.alert('Statement', e.message); }
   };
@@ -136,7 +138,7 @@ export default function DepositFund() {
     const esc = (v:any) => String(v ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c] || c));
     const rows = (statement.transactions || []).map((x:any) => `<tr><td>${esc(x.registration_no)}</td><td>${esc(x.student_name)}</td><td>${esc(String(x.transaction_date).slice(0,10))}</td><td>${x.transaction_type==='deposit'?'Deposit':'Withdrawal'}</td><td>${Number(x.amount||0).toFixed(2)}</td><td>${esc(x.details)}</td></tr>`).join('');
     const w = window.open('', '_blank'); if (!w) return;
-    w.document.write(`<html><head><title>Deposit Fund Statement</title><style>body{font-family:Arial;padding:24px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:7px;text-align:left}h2{margin-bottom:4px}.summary{margin:12px 0}</style></head><body><h2>Student Deposit Fund Statement</h2><div>Student: ${esc(statement.student?.student_name || 'All students')} | Registration: ${esc(statement.student?.registration_no || statement.registration_no || 'All')} | Date: ${esc(statement.date || 'All dates')}</div><div class=summary>Deposit: ₹${Number(statement.summary?.deposit||0).toFixed(2)} | Withdrawal: ₹${Number(statement.summary?.withdrawal||0).toFixed(2)} | Advance: ₹${Number(statement.summary?.advance||0).toFixed(2)} | Due: ₹${Number(statement.summary?.due||0).toFixed(2)}</div><table><thead><tr><th>Reg.</th><th>Student</th><th>Date</th><th>Type</th><th>Amount</th><th>Details</th></tr></thead><tbody>${rows}</tbody></table></body></html>`); w.document.close(); setTimeout(() => w.print(), 300);
+    w.document.write(`<html><head><title>Deposit Fund Statement</title><style>body{font-family:Arial;padding:24px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:7px;text-align:left}h2{margin-bottom:4px}.summary{margin:12px 0}</style></head><body><h2>Student Deposit Fund Statement</h2><div>Student: ${esc(statement.student?.student_name || 'All students')} | Registration: ${esc(statement.student?.registration_no || statement.registration_no || 'All')} | Period: ${esc(statement.from_date || 'All')} to ${esc(statement.to_date || 'All')}</div><div class=summary>Deposit: ₹${Number(statement.summary?.deposit||0).toFixed(2)} | Withdrawal: ₹${Number(statement.summary?.withdrawal||0).toFixed(2)} | Advance: ₹${Number(statement.summary?.advance||0).toFixed(2)} | Due: ₹${Number(statement.summary?.due||0).toFixed(2)}</div><table><thead><tr><th>Reg.</th><th>Student</th><th>Date</th><th>Type</th><th>Amount</th><th>Details</th></tr></thead><tbody>${rows}</tbody></table></body></html>`); w.document.close(); setTimeout(() => w.print(), 300);
   };
 
 
@@ -388,8 +390,8 @@ export default function DepositFund() {
 
         <Card>
           <Text style={styles.heading}>Date Statement / Print</Text>
-          <Text style={styles.help}>Select a student above, or enter only a date to see all students' transactions.</Text>
-          <Field placeholder="Date (YYYY-MM-DD)" value={statementDate} onChangeText={setStatementDate} />
+          <Text style={styles.help}>Select a student above, or enter a date range to see all students' transactions.</Text>
+          <View style={styles.dateRow}><Field placeholder="From Date (YYYY-MM-DD)" value={fromDate} onChangeText={setFromDate} /><Field placeholder="To Date (YYYY-MM-DD)" value={toDate} onChangeText={setToDate} /></View>
           <Button title="View Statement" onPress={searchStatement} />
           {statement && <>
             <Text style={styles.dashboardText}>Deposit: ₹{Number(statement.summary?.deposit || 0).toFixed(2)} | Withdrawal: ₹{Number(statement.summary?.withdrawal || 0).toFixed(2)}</Text>
@@ -1134,6 +1136,11 @@ netBalanceStatus: {
 
     statementName: {
       fontWeight: '800',
+    },
+
+    dateRow: {
+      flexDirection: 'row',
+      gap: 8,
     },
 
     heading: {
