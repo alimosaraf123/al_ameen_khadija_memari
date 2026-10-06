@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AcademyHeader from '../components/AcademyHeader';
 import { Field } from '../components/ui';
 import { api } from '../lib/api';
+import { Select } from '../components/StudentDirectory';
 
 export default function Behavior() {
   const [registrationNo, setRegistrationNo] = useState('');
@@ -48,7 +49,7 @@ export default function Behavior() {
     {student && <>
       <View style={s.studentCard}><Text style={s.studentName}>{student.student_name}</Text><Text style={s.meta}>Reg. {student.registration_no} · Class {student.class_name || '-'} · Room {student.room_name || '-'}</Text></View>
       <View style={s.formCard}>
-        <Field placeholder="Behaviour type (Good/Discipline/Other)" value={type} onChangeText={setType} />
+        <Select label="Behaviour Type" value={type} onChange={setType} options={[{value:'',label:'Select behaviour type'},{value:'Good',label:'Good'},{value:'Discipline',label:'Discipline'},{value:'Misconduct',label:'Misconduct'},{value:'Achievement',label:'Achievement'},{value:'Other',label:'Other'}]} />
         <Field placeholder="Behaviour details *" value={details} onChangeText={setDetails} multiline numberOfLines={3} style={s.multiline} />
         <Field placeholder="Action taken" value={action} onChangeText={setAction} multiline numberOfLines={2} style={s.multiline} />
         <TouchableOpacity disabled={saving} onPress={save} style={s.saveButton}><Text style={s.buttonText}>{saving ? 'Saving...' : 'Save Behaviour'}</Text></TouchableOpacity>
