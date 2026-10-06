@@ -31,7 +31,8 @@ export default function Guardian() {
   const [tab, setTab] = useState<TabName>('home');
   const [student, setStudent] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
-  const [childData, setChildData] = useState<any>(null);`r`n  const [terminalResults, setTerminalResults] = useState<any[]>([]);
+  const [childData, setChildData] = useState<any>(null);
+  const [terminalResults, setTerminalResults] = useState<any[]>([]);
   const [depositData, setDepositData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -132,7 +133,8 @@ export default function Guardian() {
       }
 
       setStudent(firstStudent);
-      const studentId = firstStudent.id;`r`n      try { const published=await api('/api/terminal-exams/published'); const detailed=await Promise.all((published.exams||[]).map((e:any)=>api('/api/terminal-exams/published/'+e.id))); setTerminalResults(detailed.flatMap((d:any)=>{const st=(d.students||[]).find((x:any)=>Number(x.id)===Number(studentId)); return st?[{id:d.exam.id,exam_name:d.exam.exam_name,subject_name:'Published terminal result',marks_obtained:Object.values(st.marks||{}).filter((v:any)=>v!=='Absent').join(', ')}]:[]})); } catch { setTerminalResults([]); }
+      const studentId = firstStudent.id;
+      try { const published=await api('/api/terminal-exams/published'); const detailed=await Promise.all((published.exams||[]).map((e:any)=>api('/api/terminal-exams/published/'+e.id))); setTerminalResults(detailed.flatMap((d:any)=>{const st=(d.students||[]).find((x:any)=>Number(x.id)===Number(studentId)); return st?[{id:d.exam.id,exam_name:d.exam.exam_name,subject_name:'Published terminal result',marks_obtained:Object.values(st.marks||{}).filter((v:any)=>v!=='Absent').join(', ')}]:[]})); } catch { setTerminalResults([]); }
 
       const [profileResult, childResult, depositResult] = await Promise.allSettled([
         api(`/api/guardians/student/${studentId}/profile`),
