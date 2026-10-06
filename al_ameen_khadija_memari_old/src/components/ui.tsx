@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 
 export function Field(props: any) {
-  return <TextInput placeholderTextColor="#888" {...props} style={[styles.input, props.style]} />;
+  return <TextInput placeholderTextColor="#888" {...props} placeholder={props.placeholder||props.label} style={[styles.input, props.style]} />;
 }
 export function Button({ title, onPress, danger=false }: any) {
   return <TouchableOpacity onPress={onPress} style={[styles.button, danger && styles.danger]}><Text style={styles.buttonText}>{title}</Text></TouchableOpacity>;
