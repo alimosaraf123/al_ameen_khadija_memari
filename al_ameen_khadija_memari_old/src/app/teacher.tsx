@@ -7,7 +7,7 @@ import {RoutineCard,newestRoutineFirst} from '../components/TeacherRoutineHistor
 import {API_BASE,api} from '../lib/api';
 import {clearSession,getUser} from '../lib/auth';
 
-const items:any[]=[];
+const items:any[]=[['Attendance','/attendance','#2369b3']];
 function greeting(){const h=new Date().getHours();return h<12?'Good morning':h<17?'Good afternoon':'Good evening';}
 export default function Teacher(){
  const [roomMenu,setRoomMenu]=useState(false),[examMenu,setExamMenu]=useState(false),[teacher,setTeacher]=useState<any>(null),[routines,setRoutines]=useState<any[]>([]),[notices,setNotices]=useState<any[]>([]),[loading,setLoading]=useState(true),[routineError,setRoutineError]=useState('');
