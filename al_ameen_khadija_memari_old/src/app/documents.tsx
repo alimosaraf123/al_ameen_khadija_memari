@@ -1663,6 +1663,13 @@ export default function Documents() {
           </>
         )}
 
+        <Card>
+          <Text style={styles.documentTypeTitle}>Bulk Class XII Documents</Text>
+          <Muted>Select the multi-page PDF. Each page is matched by the registration number printed at the bottom and saved to the matching Class XII student.</Muted>
+          <Button title={bulkXiBusy ? 'Uploading PDF pages...' : 'Upload Class XII Birth Certificate PDF'} onPress={bulkUploadBirthCertificate} />
+          <Button title={bulkXiBusy ? 'Uploading PDF pages...' : 'Upload XI Registration PDF'} onPress={bulkUploadXiRegistration} />
+        </Card>
+
         {selectedStudent && (
           <>
             <Card>
@@ -1705,13 +1712,6 @@ export default function Documents() {
             <Text style={styles.sectionTitle}>
               Documents
             </Text>
-
-            <Card>
-              <Text style={styles.documentTypeTitle}>Class XII - XI Registration Bulk Upload</Text>
-              <Muted>Select the multi-page PDF. Each page is matched by registration number and saved to the matching Class XII student's XI Registration document.</Muted>
-              <Button title={bulkXiBusy ? 'Uploading PDF pages...' : 'Upload XI Registration PDF'} onPress={bulkUploadXiRegistration} />
-              <Button title={bulkXiBusy ? 'Uploading PDF pages...' : 'Upload Class XII Birth Certificate PDF'} onPress={bulkUploadBirthCertificate} />
-            </Card>
 
             {loading && (
               <Muted>Loading documents...</Muted>
