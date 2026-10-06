@@ -6,7 +6,7 @@ import AcademyHeader from '../components/AcademyHeader';
 import {Field} from '../components/ui';
 import {api} from '../lib/api';
 
-type Staff = {id:number; staff_id:string; name:string; status?:string; present?:number; absent?:number; late?:number; leave?:number; recorded?:number};
+type Staff = {id:number; staff_id:string; name:string; photo_url?:string; designation?:string; status?:string; attendance?:Record<string,string>; present?:number; absent?:number; late?:number; leave?:number; recorded?:number};
 const statuses = ['Present','Absent','Late','Leave'];
 const today = () => {const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 export default function TeacherAttendance() {
@@ -14,6 +14,7 @@ export default function TeacherAttendance() {
   const [month,setMonth]=useState(today().slice(0,7));
   const [staff,setStaff]=useState<Staff[]>([]);
   const [report,setReport]=useState<Staff[]>([]);
+  const [days,setDays]=useState<any[]>([]);
   const [loadedDate,setLoadedDate]=useState('');
   const [reportMonth,setReportMonth]=useState('');
   const [busy,setBusy]=useState(false);
@@ -22,8 +23,8 @@ export default function TeacherAttendance() {
   const load = async (monthly=false) => {
     setBusy(true); setError(''); setMessage('');
     try {
-      const data=await api(monthly ? `/api/teachers/attendance/monthly?month=${encodeURIComponent(month)}` : `/api/teachers/attendance?date=${encodeURIComponent(date)}`);
-      if(monthly){setReport(data.staff);setReportMonth(month);}else{setStaff(data.staff);setLoadedDate(date);}
+      const data=await api(monthly ? `/api/teachers/attendance/monthly-grid?month=${encodeURIComponent(month)}` : `/api/teachers/attendance?date=${encodeURIComponent(date)}`);
+      if(monthly){setReport(data.staff);setDays(data.days||[]);setReportMonth(month);}else{setStaff(data.staff);setLoadedDate(date);}
     }catch(e:any){setError(e.message);}finally{setBusy(false);}
   };
   const save=async()=>{
@@ -51,11 +52,10 @@ export default function TeacherAttendance() {
     <View style={s.card}><Text style={s.heading}>Monthly Report</Text><Text>Month (YYYY-MM)</Text>
       <Field value={month} editable={!busy} onChangeText={(v:string)=>{setMonth(v);setReportMonth('');}} placeholder="YYYY-MM"/>
       <TouchableOpacity disabled={busy} style={s.button} onPress={()=>load(true)}><Text style={s.white}>View Monthly Report</Text></TouchableOpacity>
-      {!!reportMonth && <><Text style={s.heading}>Report: {reportMonth}</Text><Text>Recorded counts only; unmarked days are not counted as absent.</Text><ScrollView horizontal><View>
-        <View style={s.row}>{['Staff ID','Name','Present','Absent','Late','Leave','Recorded'].map(label=><Text key={label} style={[s.cell,s.bold]}>{label}</Text>)}</View>
-        {report.map(p=><View key={p.id} style={s.row}>{[p.staff_id,p.name,p.present,p.absent,p.late,p.leave,p.recorded].map((value,i)=><Text key={i} style={s.cell}>{value}</Text>)}</View>)}
+      {!!reportMonth && <><Text style={s.heading}>Report: {reportMonth}</Text><ScrollView horizontal><View><View style={s.row}><Text style={[s.fixedCell,s.head]}>#</Text><Text style={[s.photoCell,s.head]}>Photo</Text><Text style={[s.idCell,s.head]}>ID</Text><Text style={[s.nameCell,s.head]}>Staff Name</Text>{days.map(day=><Text key={day.date} style={[s.dayCell,s.head]}>{day.day}{'\n'}{day.number}</Text>)}</View>
+        {report.map((p,index)=><View key={p.id} style={s.row}><Text style={s.fixedCell}>{index+1}</Text><View style={s.photoCell}><Text style={s.photoPlaceholder}>{p.photo_url?'●':'○'}</Text></View><Text style={s.idCell}>{p.staff_id}</Text><View style={s.nameCell}><Text>{p.name}</Text><Text style={s.role}>{p.designation||'Staff'}</Text></View>{days.map(day=>{const value=p.attendance?.[String(day.date).slice(0,10)];return <Text key={day.date} style={[s.dayCell,value==='Present'&&s.present,value==='Absent'&&s.absent,value==='Late'&&s.late,value==='Leave'&&s.leave]}>{value==='Present'?'P':value==='Absent'?'A':value==='Late'?'L':value==='Leave'?'LV':''}</Text>})}</View>)}
       </View></ScrollView></>}
     </View>
   </ScrollView></SafeAreaView>;
 }
-const s=StyleSheet.create({page:{flex:1,backgroundColor:'#f3f6fa'},content:{padding:16,width:'100%',maxWidth:1100,alignSelf:'center'},title:{fontSize:24,fontWeight:'800',marginVertical:14},heading:{fontWeight:'700',fontSize:16,marginVertical:10},link:{color:'#1764a5',paddingVertical:12},card:{backgroundColor:'#fff',padding:16,borderRadius:10,marginTop:16},button:{backgroundColor:'#1665bb',padding:14,borderRadius:7,alignItems:'center',marginVertical:8},white:{color:'#fff',fontWeight:'700'},error:{color:'#b42318',padding:12},success:{color:'#167044',padding:12},person:{borderBottomWidth:1,borderColor:'#dce2eb',paddingBottom:12},options:{flexDirection:'row',flexWrap:'wrap',gap:8,marginTop:10},option:{padding:10,borderWidth:1,borderColor:'#1665bb',borderRadius:6},selected:{backgroundColor:'#1665bb'},row:{flexDirection:'row'},cell:{width:130,padding:10,borderWidth:0.5,borderColor:'#ccd5df'},bold:{fontWeight:'800'}});
+const s=StyleSheet.create({page:{flex:1,backgroundColor:'#f3f6fa'},content:{padding:16,width:'100%',maxWidth:1500,alignSelf:'center'},title:{fontSize:24,fontWeight:'800',marginVertical:14},heading:{fontWeight:'700',fontSize:16,marginVertical:10},link:{color:'#1764a5',paddingVertical:12},card:{backgroundColor:'#fff',padding:16,borderRadius:10,marginTop:16},button:{backgroundColor:'#1665bb',padding:14,borderRadius:7,alignItems:'center',marginVertical:8},white:{color:'#fff',fontWeight:'700'},error:{color:'#b42318',padding:12},success:{color:'#167044',padding:12},person:{borderBottomWidth:1,borderColor:'#dce2eb',paddingBottom:12},options:{flexDirection:'row',flexWrap:'wrap',gap:8,marginTop:10},option:{padding:10,borderWidth:1,borderColor:'#1665bb',borderRadius:6},selected:{backgroundColor:'#1665bb'},row:{flexDirection:'row'},head:{fontWeight:'800',backgroundColor:'#d3b9a0'},fixedCell:{width:45,padding:10,borderWidth:.5,borderColor:'#8c98a5',textAlign:'center'},photoCell:{width:68,padding:8,borderWidth:.5,borderColor:'#8c98a5',textAlign:'center'},photoPlaceholder:{fontSize:24,color:'#64748b'},idCell:{width:90,padding:10,borderWidth:.5,borderColor:'#8c98a5',textAlign:'center'},nameCell:{width:210,padding:10,borderWidth:.5,borderColor:'#8c98a5'},dayCell:{width:68,minHeight:58,padding:9,borderWidth:.5,borderColor:'#8c98a5',textAlign:'center'},role:{fontSize:12,color:'#526273',marginTop:4},present:{color:'#111',fontWeight:'800'},absent:{color:'#b42318',fontWeight:'800'},late:{color:'#b46a00',fontWeight:'800'},leave:{color:'#1764a5',fontWeight:'800'}});

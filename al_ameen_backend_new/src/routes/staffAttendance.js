@@ -55,4 +55,16 @@ router.get('/monthly', asyncHandler(async(req,res) => {
     GROUP BY t.id,t.staff_id,t.name ORDER BY t.name,t.id`, [month+'-01']);
   res.json({success:true,staff:result.rows});
 }));
+router.get('/monthly-grid', asyncHandler(async(req,res) => {
+  const month = req.query.month;
+  if (typeof month !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || !validDate(month+'-01')) return res.status(400).json({message:'Enter a valid month (YYYY-MM).'});
+  await schema();
+  const days = await pool.query(`SELECT d::date AS date, trim(to_char(d,'Dy')) AS day, extract(day from d)::int AS number
+    FROM generate_series($1::date, $1::date + INTERVAL '1 month - 1 day', INTERVAL '1 day') d`, [month+'-01']);
+  const staff = await pool.query(`SELECT t.id,t.staff_id,t.name,t.photo_url,t.designation,
+    COALESCE(json_object_agg(to_char(a.attendance_date,'YYYY-MM-DD'),a.status) FILTER(WHERE a.attendance_date IS NOT NULL),'{}'::json) AS attendance
+    FROM teachers t LEFT JOIN staff_attendance a ON a.teacher_id=t.id AND a.attendance_date >= $1::date AND a.attendance_date < $1::date + INTERVAL '1 month'
+    GROUP BY t.id,t.staff_id,t.name,t.photo_url,t.designation ORDER BY t.name,t.id`, [month+'-01']);
+  res.json({success:true,days:days.rows,staff:staff.rows});
+}));
 module.exports = router;
