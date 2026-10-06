@@ -1923,7 +1923,24 @@ router.get(
     });
 
   })
-);// ========================================
+);
+
+// ADMIN / SUPER ADMIN: transaction statement by registration number and/or date
+router.get('/admin/deposit-fund-statement', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
+  const registrationNo = String(req.query.registration_no || '').trim();
+  const date = String(req.query.date || '').trim();
+  if (!registrationNo && !date) return res.status(400).json({success:false,message:'Registration number or date is required'});
+  const params=[];const filters=[];
+  if(registrationNo){params.push(registrationNo);filters.push(`s.registration_no=$${params.length}`)}
+  if(date){params.push(date);filters.push(`t.transaction_date=$${params.length}::date`)}
+  const rows=(await pool.query(`SELECT t.id,t.student_id,t.transaction_date,t.transaction_type,t.amount,t.details,t.reference_no,s.registration_no,s.student_name,s.class_name,s.roll_no FROM student_deposit_transactions t JOIN students s ON s.id=t.student_id WHERE ${filters.join(' AND ')} ORDER BY t.transaction_date,t.id`,params)).rows;
+  const student=registrationNo?(await pool.query('SELECT id,registration_no,student_name,class_name,roll_no,guardian_mobile,father_mobile,mother_mobile,mobile_number FROM students WHERE registration_no=$1 LIMIT 1',[registrationNo])).rows[0]:null;
+  const summary={deposit:rows.filter(x=>x.transaction_type==='deposit').reduce((n,x)=>n+Number(x.amount||0),0),withdrawal:rows.filter(x=>x.transaction_type==='expense').reduce((n,x)=>n+Number(x.amount||0),0)};
+  summary.balance=summary.deposit-summary.withdrawal;summary.advance=Math.max(0,summary.balance);summary.due=Math.max(0,-summary.balance);
+  const balances=(await pool.query(`SELECT s.registration_no,s.student_name,s.class_name,COALESCE(SUM(CASE WHEN t.transaction_type='deposit' THEN t.amount WHEN t.transaction_type='expense' THEN -t.amount ELSE 0 END),0) AS balance FROM students s LEFT JOIN student_deposit_transactions t ON t.student_id=s.id WHERE s.is_active=TRUE ${registrationNo?'AND s.registration_no=$1':''} GROUP BY s.id ORDER BY s.class_name,s.student_name`,registrationNo?[registrationNo]:[])).rows.map(x=>({...x,balance:Number(x.balance||0),advance:Math.max(0,Number(x.balance||0)),due:Math.max(0,-Number(x.balance||0))}));
+  res.json({success:true,registration_no:registrationNo||null,date:date||null,student,transactions:rows,balances,summary});
+}));
+// ========================================
 // ADMIN / SUPER ADMIN:
 // STUDENT DEPOSIT FUND DETAILS
 // ========================================

@@ -6,6 +6,8 @@ import React, {
 
 import {
   Alert,
+  Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -81,6 +83,10 @@ export default function DepositFund() {
     setSaving
   ] = useState(false);
 
+  const [dashboard, setDashboard] = useState<any>(null);
+  const [statementDate, setStatementDate] = useState('');
+  const [statement, setStatement] = useState<any>(null);
+
 
   // =====================================
   // LOAD STUDENTS
@@ -114,7 +120,26 @@ export default function DepositFund() {
 
   useEffect(() => {
     loadStudents();
+    api('/api/guardians/admin/deposit-fund-report').then(setDashboard).catch(() => {});
   }, []);
+
+  const searchStatement = async () => {
+    if (!selectedStudent && !statementDate.trim()) return Alert.alert('Required', 'Select a student or enter a date.');
+    try {
+      const query = new URLSearchParams();
+      if (selectedStudent?.registration_no) query.set('registration_no', String(selectedStudent.registration_no));
+      if (statementDate.trim()) query.set('date', statementDate.trim());
+      setStatement(await api('/api/guardians/admin/deposit-fund-statement?' + query.toString()));
+    } catch (e: any) { Alert.alert('Statement', e.message); }
+  };
+
+  const printStatement = () => {
+    if (Platform.OS !== 'web' || !statement) return Alert.alert('Print', 'Statement print is available on web.');
+    const esc = (v:any) => String(v ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c] || c));
+    const rows = (statement.transactions || []).map((x:any) => `<tr><td>${esc(x.registration_no)}</td><td>${esc(x.student_name)}</td><td>${esc(String(x.transaction_date).slice(0,10))}</td><td>${x.transaction_type==='deposit'?'Deposit':'Withdrawal'}</td><td>${Number(x.amount||0).toFixed(2)}</td><td>${esc(x.details)}</td></tr>`).join('');
+    const w = window.open('', '_blank'); if (!w) return;
+    w.document.write(`<html><head><title>Deposit Fund Statement</title><style>body{font-family:Arial;padding:24px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:7px;text-align:left}h2{margin-bottom:4px}.summary{margin:12px 0}</style></head><body><h2>Student Deposit Fund Statement</h2><div>Student: ${esc(statement.student?.student_name || 'All students')} | Registration: ${esc(statement.student?.registration_no || statement.registration_no || 'All')} | Date: ${esc(statement.date || 'All dates')}</div><div class=summary>Deposit: ₹${Number(statement.summary?.deposit||0).toFixed(2)} | Withdrawal: ₹${Number(statement.summary?.withdrawal||0).toFixed(2)} | Advance: ₹${Number(statement.summary?.advance||0).toFixed(2)} | Due: ₹${Number(statement.summary?.due||0).toFixed(2)}</div><table><thead><tr><th>Reg.</th><th>Student</th><th>Date</th><th>Type</th><th>Amount</th><th>Details</th></tr></thead><tbody>${rows}</tbody></table></body></html>`); w.document.close(); setTimeout(() => w.print(), 300);
+  };
 
 
   // =====================================
@@ -310,7 +335,7 @@ export default function DepositFund() {
 
             ? 'Deposit added successfully.'
 
-            : 'Expense added successfully.'
+            : 'Withdrawal added successfully.'
         );
 
 
@@ -362,6 +387,26 @@ export default function DepositFund() {
         <H1>
           Student Deposit Fund
         </H1>
+
+        <Card>
+          <Text style={styles.heading}>Dashboard Balance</Text>
+          <Text style={styles.dashboardText}>Total Advance: ₹{Number(dashboard?.summary?.total_positive_balance || 0).toFixed(2)}</Text>
+          <Text style={styles.dashboardText}>Total Due: ₹{Number(dashboard?.summary?.total_due || 0).toFixed(2)}</Text>
+          <Text style={styles.dashboardText}>Net Balance: ₹{Number(dashboard?.summary?.net_fund_balance || 0).toFixed(2)}</Text>
+        </Card>
+
+        <Card>
+          <Text style={styles.heading}>Date Statement / Print</Text>
+          <Text style={styles.help}>Select a student above, or enter only a date to see all students' transactions.</Text>
+          <Field placeholder="Date (YYYY-MM-DD)" value={statementDate} onChangeText={setStatementDate} />
+          <Button title="View Statement" onPress={searchStatement} />
+          {statement && <>
+            <Text style={styles.dashboardText}>Deposit: ₹{Number(statement.summary?.deposit || 0).toFixed(2)} | Withdrawal: ₹{Number(statement.summary?.withdrawal || 0).toFixed(2)}</Text>
+            <Text style={styles.dashboardText}>Advance: ₹{Number(statement.summary?.advance || 0).toFixed(2)} | Due: ₹{Number(statement.summary?.due || 0).toFixed(2)}</Text>
+            {(statement.balances || []).map((row:any) => <View key={row.registration_no} style={styles.statementRow}><Text style={styles.statementName}>{row.student_name} · Reg. {row.registration_no}</Text><Text>Advance: ₹{Number(row.advance || 0).toFixed(2)} | Due: ₹{Number(row.due || 0).toFixed(2)}</Text></View>)}
+            <Button title="Print Statement" onPress={printStatement} />
+          </>}
+        </Card>
 
 
         <Text
@@ -682,7 +727,7 @@ export default function DepositFund() {
                     styles.summaryLabel
                   }
                 >
-                  Total Expense
+                  Total Withdrawal
                 </Text>
 
                 <Text
@@ -783,7 +828,7 @@ export default function DepositFund() {
                         styles.typeSelectedText
                     ]}
                   >
-                    Expense
+                    Withdrawal
                   </Text>
 
                 </TouchableOpacity>
@@ -819,7 +864,7 @@ export default function DepositFund() {
 
                     ? 'Details (e.g. Guardian Deposit)'
 
-                    : 'Expense Details (e.g. Medicine)'
+                    : 'Withdrawal Details (e.g. Medicine)'
                 }
 
                 value={details}
@@ -857,7 +902,7 @@ export default function DepositFund() {
 
                     ? 'Add Deposit'
 
-                    : 'Add Expense'
+                    : 'Add Withdrawal'
                 }
 
                 onPress={
@@ -920,7 +965,7 @@ export default function DepositFund() {
                         {item.transaction_type ===
                         'deposit'
                           ? 'Deposit'
-                          : 'Expense'}
+                          : 'Withdrawal'}
                       </Text>
 
 
@@ -1082,6 +1127,22 @@ netBalanceStatus: {
       color: '#667085',
       marginTop: 5,
       marginBottom: 15,
+    },
+
+    dashboardText: {
+      fontSize: 16,
+      fontWeight: '800',
+      marginVertical: 3,
+    },
+
+    statementRow: {
+      borderTopWidth: 1,
+      borderTopColor: '#e5e7eb',
+      paddingVertical: 7,
+    },
+
+    statementName: {
+      fontWeight: '800',
     },
 
     heading: {

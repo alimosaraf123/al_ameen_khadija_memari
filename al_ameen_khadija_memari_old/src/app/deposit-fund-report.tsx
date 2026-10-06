@@ -250,6 +250,11 @@ export default function DepositFundReport() {
           student.due || 0
         );
 
+      const advance = Number(student.available_balance || 0);
+      const balanceLine = due > 0
+        ? `Deposit Fund Due: ₹${due.toFixed(2)}`
+        : `Deposit Fund Advance Balance: ₹${advance.toFixed(2)}`;
+
 
       const message =
 `Al-Ameen Mission
@@ -261,7 +266,7 @@ Student: ${student.student_name || '-'}
 Registration No: ${student.registration_no || '-'}
 Class: ${student.class_name || '-'}
 
-Deposit Fund Due: ₹${due.toFixed(2)}
+${balanceLine}
 
 অনুগ্রহ করে প্রয়োজনীয় Student Deposit Fund জমা করার ব্যবস্থা করুন।
 
@@ -950,7 +955,7 @@ Thank you.`;
                 </Text>
 
 
-                {balance < 0 && (
+                {balance !== 0 && (
 
                   <TouchableOpacity
                     style={
