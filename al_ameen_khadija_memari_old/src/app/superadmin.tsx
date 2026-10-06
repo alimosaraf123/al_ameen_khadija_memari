@@ -27,7 +27,7 @@ import { api } from '../lib/api';
 
 
 const menuPermission:Record<string,string>={
- '/students':'students','/teachers':'teachers','/hostel-menu':'rooms','/academy-menu':'marks','/service-staff':'service_staff','/office':'office_panel','/library':'library_panel','/dining-stock':'dining_stock','/guardians':'guardians','/rooms':'rooms','/room-assignments':'room_assignments','/attendance':'attendance','/behavior':'behavior','/gate-pass':'gate_passes','/visits':'visits','/student-lifecycle':'student_lifecycle','/illness':'illness','/marks':'marks','/terminal-exams':'terminal_exams','/class-results':'published_results','/problems':'problems','/routines':'routines','/notices':'notices','/deposit-fund':'deposit_fund','/audit-log':'audit_log'
+ '/students':'students','/teachers':'teachers','/hostel-menu':'rooms','/academy-menu':'marks','/service-staff':'service_staff','/office':'office_panel','/library':'library_panel','/dining-stock':'dining_stock','/guardians':'guardians','/rooms':'rooms','/room-assignments':'room_assignments','/attendance':'attendance','/behavior':'behavior','/asset-register':'asset_register','/gate-pass':'gate_passes','/visits':'visits','/student-lifecycle':'student_lifecycle','/illness':'illness','/marks':'marks','/terminal-exams':'terminal_exams','/class-results':'published_results','/problems':'problems','/routines':'routines','/notices':'notices','/deposit-fund':'deposit_fund','/audit-log':'audit_log'
 };
 
 const menus: any[] = [
@@ -47,6 +47,7 @@ const menus: any[] = [
   ['Visiting Day Record / Permission', '/visits'],
 
   ['Student Deposit Fund', '/deposit-fund'],
+  ['Asset Register', '/asset-register'],
 
   ['Activity Audit Log', '/audit-log'],
 
