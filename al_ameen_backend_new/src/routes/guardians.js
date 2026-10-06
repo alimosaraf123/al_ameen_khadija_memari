@@ -1941,6 +1941,7 @@ router.get('/admin/deposit-fund-statement', auth, allow('super_admin', 'admin'),
   const summary={deposit:rows.filter(x=>x.transaction_type==='deposit').reduce((n,x)=>n+Number(x.amount||0),0),withdrawal:rows.filter(x=>x.transaction_type==='expense').reduce((n,x)=>n+Number(x.amount||0),0)};
   summary.balance=summary.deposit-summary.withdrawal;summary.advance=Math.max(0,summary.balance);summary.due=Math.max(0,-summary.balance);
   const balances=(await pool.query(`SELECT s.registration_no,s.student_name,s.class_name,COALESCE(SUM(CASE WHEN t.transaction_type='deposit' THEN t.amount WHEN t.transaction_type='expense' THEN -t.amount ELSE 0 END),0) AS balance FROM students s LEFT JOIN student_deposit_transactions t ON t.student_id=s.id WHERE s.is_active=TRUE ${registrationNo?'AND s.registration_no=$1':''} GROUP BY s.id ORDER BY s.class_name,s.student_name`,registrationNo?[registrationNo]:[])).rows.map(x=>({...x,balance:Number(x.balance||0),advance:Math.max(0,Number(x.balance||0)),due:Math.max(0,-Number(x.balance||0))}));
+  summary.balance=balances.reduce((total,row)=>total+Number(row.balance||0),0);summary.advance=Math.max(0,summary.balance);summary.due=Math.max(0,-summary.balance);
   res.json({success:true,registration_no:registrationNo||null,date:fromDate&&toDate&&fromDate===toDate?fromDate:null,from_date:fromDate||null,to_date:toDate||null,student,transactions:rows,balances,summary});
 }));
 // ========================================
