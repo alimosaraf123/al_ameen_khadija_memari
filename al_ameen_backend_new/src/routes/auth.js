@@ -74,7 +74,7 @@ router.post(
         is_active,
         password_change_required
       FROM users
-      WHERE login_id=$1
+      WHERE login_id=$1 OR id IN (SELECT user_id FROM teachers WHERE staff_id=$1)
       LIMIT 1
       `,
       [String(login_id).trim()]
