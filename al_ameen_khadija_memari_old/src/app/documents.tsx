@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import {
   ScrollView,
   Text,
@@ -47,6 +47,8 @@ const DOCUMENT_TYPES = [
   { key: 'obc_certificate', label: 'OBC Certificate' },
   { key: 'ph_certificate', label: 'P.H. Certificate' },
   { key: 'xi_registration', label: 'XI Registration' },
+  { key: 'xi_admission_slip', label: 'XI Admission Slip' },
+  { key: 'xi_marksheet', label: 'XI Marksheet' },
   { key: 'hs_admit_3rd', label: 'HS Admit 3rd Semester' },
   { key: 'hs_admit_4th', label: 'HS Admit 4th Semester' },
   { key: 'hs_marksheet', label: 'H.S Marksheet' },
@@ -1069,6 +1071,14 @@ export default function Documents() {
           : '-'}
       </Text>
 
+      {!/\.pdf(?:[?#]|$)/i.test(String(doc.file_url || '')) && (
+        <Image
+          source={{ uri: doc.file_url }}
+          resizeMode="contain"
+          style={styles.documentPreview}
+        />
+      )}
+
       <View style={styles.actionRow}>
         <SmallButton
           title="View"
@@ -1152,450 +1162,8 @@ export default function Documents() {
         {selectedStudent ? (
           <>
             <Card>
-              <Text style={styles.studentName}>
-                {selectedStudent.student_name}
-              </Text>
-
-              {studentLoading && (
-                <Muted>
-                  Loading full student details...
-                </Muted>
-              )}
-
-              <InfoSection title="Student Necessary Details">
-                <InfoRow
-                  label="Registration No"
-                  value={selectedStudent.registration_no}
-                />
-                <InfoRow
-                  label="Student Name"
-                  value={selectedStudent.student_name}
-                />
-                <InfoRow
-                  label="Admission Date"
-                  value={showDate(selectedStudent.admission_date)}
-                />
-                <InfoRow
-                  label="Class"
-                  value={selectedStudent.class_name}
-                />
-                <InfoRow
-                  label="Session From"
-                  value={selectedStudent.session_from}
-                />
-                <InfoRow
-                  label="Session To"
-                  value={selectedStudent.session_to}
-                />
-                <InfoRow
-                  label="Monthly Fees"
-                  value={selectedStudent.monthly_fees}
-                />
-                <InfoRow
-                  label="Mobile Number"
-                  value={selectedStudent.mobile_number}
-                />
-                <InfoRow
-                  label="WhatsApp Number"
-                  value={selectedStudent.whatsapp_number}
-                />
-                <InfoRow
-                  label="Email ID"
-                  value={selectedStudent.email}
-                />
-                <InfoRow
-                  label="Room No"
-                  value={
-                    selectedStudent.room_no ||
-                    selectedStudent.room_name
-                  }
-                />
-                <InfoRow
-                  label="Gender"
-                  value={selectedStudent.gender}
-                />
-                <InfoRow
-                  label="Roll No"
-                  value={selectedStudent.roll_no}
-                />
-                <InfoRow
-                  label="Admission No"
-                  value={selectedStudent.admission_no}
-                />
-                <InfoRow
-                  label="Student Type"
-                  value={selectedStudent.student_type}
-                />
-              </InfoSection>
-
-              <InfoSection title="Student Information">
-                <InfoRow
-                  label="Date of Birth"
-                  value={showDate(selectedStudent.date_of_birth)}
-                />
-                <InfoRow
-                  label="Aadhaar No"
-                  value={selectedStudent.aadhaar_no}
-                />
-                <InfoRow
-                  label="Caste"
-                  value={selectedStudent.caste_name}
-                />
-                <InfoRow
-                  label="Blood Group"
-                  value={selectedStudent.blood_group}
-                />
-                <InfoRow
-                  label="Admitted School"
-                  value={selectedStudent.admitted_school_name}
-                />
-                <InfoRow
-                  label="Stream"
-                  value={selectedStudent.stream}
-                />
-                <InfoRow
-                  label="Handicapped"
-                  value={selectedStudent.is_handicapped}
-                />
-                <InfoRow
-                  label="Orphan"
-                  value={selectedStudent.is_orphan}
-                />
-                <InfoRow
-                  label="Previous Branch"
-                  value={selectedStudent.previous_branch_name}
-                />
-                <InfoRow
-                  label="Banglarshiksha ID"
-                  value={selectedStudent.banglarshiksha_id}
-                />
-                <InfoRow
-                  label="Kanyashree ID"
-                  value={selectedStudent.kanyashree_id}
-                />
-                <InfoRow
-                  label="Aikyashree ID"
-                  value={selectedStudent.aikyashree_id}
-                />
-              </InfoSection>
-
-              <InfoSection title="Father Information">
-                <InfoRow
-                  label="Father Name"
-                  value={selectedStudent.father_name}
-                />
-                <InfoRow
-                  label="Father Aadhaar"
-                  value={selectedStudent.father_aadhaar_no}
-                />
-                <InfoRow
-                  label="Qualification"
-                  value={selectedStudent.father_qualification}
-                />
-                <InfoRow
-                  label="Occupation"
-                  value={selectedStudent.father_occupation}
-                />
-                <InfoRow
-                  label="Annual Income"
-                  value={selectedStudent.father_annual_income}
-                />
-                <InfoRow
-                  label="Father Mobile"
-                  value={selectedStudent.father_mobile}
-                />
-              </InfoSection>
-
-              <InfoSection title="Mother Information">
-                <InfoRow
-                  label="Mother Name"
-                  value={selectedStudent.mother_name}
-                />
-                <InfoRow
-                  label="Mother Aadhaar"
-                  value={selectedStudent.mother_aadhaar_no}
-                />
-                <InfoRow
-                  label="Qualification"
-                  value={selectedStudent.mother_qualification}
-                />
-                <InfoRow
-                  label="Occupation"
-                  value={selectedStudent.mother_occupation}
-                />
-                <InfoRow
-                  label="Annual Income"
-                  value={selectedStudent.mother_annual_income}
-                />
-                <InfoRow
-                  label="Mother Mobile"
-                  value={selectedStudent.mother_mobile}
-                />
-              </InfoSection>
-
-              <InfoSection title="Guardian Information">
-                <InfoRow
-                  label="Guardian Name"
-                  value={selectedStudent.guardian_name}
-                />
-                <InfoRow
-                  label="Guardian Mobile"
-                  value={selectedStudent.guardian_mobile}
-                />
-                <InfoRow
-                  label="Alternate Mobile"
-                  value={
-                    selectedStudent.alternate_mobile ||
-                    selectedStudent.guardian_alternate_mobile
-                  }
-                />
-              </InfoSection>
-
-              <InfoSection title="Present Address">
-                <InfoRow
-                  label="Village"
-                  value={selectedStudent.present_village}
-                />
-                <InfoRow
-                  label="Police Station"
-                  value={selectedStudent.present_police_station}
-                />
-                <InfoRow
-                  label="PIN"
-                  value={selectedStudent.present_pin_code}
-                />
-                <InfoRow
-                  label="Post Office"
-                  value={selectedStudent.present_post_office}
-                />
-                <InfoRow
-                  label="Block"
-                  value={selectedStudent.present_block}
-                />
-                <InfoRow
-                  label="District"
-                  value={selectedStudent.present_district}
-                />
-                <InfoRow
-                  label="State"
-                  value={selectedStudent.present_state}
-                />
-              </InfoSection>
-
-              <InfoSection title="Permanent Address">
-                <InfoRow
-                  label="Village"
-                  value={selectedStudent.permanent_village}
-                />
-                <InfoRow
-                  label="Police Station"
-                  value={selectedStudent.permanent_police_station}
-                />
-                <InfoRow
-                  label="PIN"
-                  value={selectedStudent.permanent_pin_code}
-                />
-                <InfoRow
-                  label="Post Office"
-                  value={selectedStudent.permanent_post_office}
-                />
-                <InfoRow
-                  label="Block"
-                  value={selectedStudent.permanent_block}
-                />
-                <InfoRow
-                  label="District"
-                  value={selectedStudent.permanent_district}
-                />
-                <InfoRow
-                  label="State"
-                  value={selectedStudent.permanent_state}
-                />
-              </InfoSection>
-
-              <InfoSection title="Student Bank Account">
-                <InfoRow
-                  label="Account No"
-                  value={selectedStudent.bank_account_no}
-                />
-                <InfoRow
-                  label="IFSC"
-                  value={selectedStudent.bank_ifsc_code}
-                />
-                <InfoRow
-                  label="Bank Name"
-                  value={selectedStudent.bank_name}
-                />
-                <InfoRow
-                  label="Branch Name"
-                  value={selectedStudent.bank_branch_name}
-                />
-                <InfoRow
-                  label="Branch Address"
-                  value={selectedStudent.bank_branch_address}
-                />
-              </InfoSection>
-
-              <InfoSection title="Visitor 1">
-                <InfoRow
-                  label="Name"
-                  value={
-                    visitor1?.visitor_name ||
-                    selectedStudent.visitor1_name
-                  }
-                />
-                <InfoRow
-                  label="Relation"
-                  value={
-                    visitor1?.relation ||
-                    selectedStudent.visitor1_relation
-                  }
-                />
-                <InfoRow
-                  label="Mobile"
-                  value={
-                    visitor1?.mobile_number ||
-                    selectedStudent.visitor1_mobile
-                  }
-                />
-                <InfoRow
-                  label="Email"
-                  value={
-                    visitor1?.email ||
-                    selectedStudent.visitor1_email
-                  }
-                />
-                <InfoRow
-                  label="Village"
-                  value={
-                    visitor1?.village ||
-                    selectedStudent.visitor1_village
-                  }
-                />
-                <InfoRow
-                  label="Police Station"
-                  value={
-                    visitor1?.police_station ||
-                    selectedStudent.visitor1_police_station
-                  }
-                />
-                <InfoRow
-                  label="PIN"
-                  value={
-                    visitor1?.pin_code ||
-                    selectedStudent.visitor1_pin_code
-                  }
-                />
-                <InfoRow
-                  label="Post Office"
-                  value={
-                    visitor1?.post_office ||
-                    selectedStudent.visitor1_post_office
-                  }
-                />
-                <InfoRow
-                  label="Block"
-                  value={
-                    visitor1?.block ||
-                    selectedStudent.visitor1_block
-                  }
-                />
-                <InfoRow
-                  label="District"
-                  value={
-                    visitor1?.district ||
-                    selectedStudent.visitor1_district
-                  }
-                />
-                <InfoRow
-                  label="State"
-                  value={
-                    visitor1?.state ||
-                    selectedStudent.visitor1_state
-                  }
-                />
-              </InfoSection>
-
-              <InfoSection title="Visitor 2">
-                <InfoRow
-                  label="Name"
-                  value={
-                    visitor2?.visitor_name ||
-                    selectedStudent.visitor2_name
-                  }
-                />
-                <InfoRow
-                  label="Relation"
-                  value={
-                    visitor2?.relation ||
-                    selectedStudent.visitor2_relation
-                  }
-                />
-                <InfoRow
-                  label="Mobile"
-                  value={
-                    visitor2?.mobile_number ||
-                    selectedStudent.visitor2_mobile
-                  }
-                />
-                <InfoRow
-                  label="Email"
-                  value={
-                    visitor2?.email ||
-                    selectedStudent.visitor2_email
-                  }
-                />
-                <InfoRow
-                  label="Village"
-                  value={
-                    visitor2?.village ||
-                    selectedStudent.visitor2_village
-                  }
-                />
-                <InfoRow
-                  label="Police Station"
-                  value={
-                    visitor2?.police_station ||
-                    selectedStudent.visitor2_police_station
-                  }
-                />
-                <InfoRow
-                  label="PIN"
-                  value={
-                    visitor2?.pin_code ||
-                    selectedStudent.visitor2_pin_code
-                  }
-                />
-                <InfoRow
-                  label="Post Office"
-                  value={
-                    visitor2?.post_office ||
-                    selectedStudent.visitor2_post_office
-                  }
-                />
-                <InfoRow
-                  label="Block"
-                  value={
-                    visitor2?.block ||
-                    selectedStudent.visitor2_block
-                  }
-                />
-                <InfoRow
-                  label="District"
-                  value={
-                    visitor2?.district ||
-                    selectedStudent.visitor2_district
-                  }
-                />
-                <InfoRow
-                  label="State"
-                  value={
-                    visitor2?.state ||
-                    selectedStudent.visitor2_state
-                  }
-                />
-              </InfoSection>
-
+              <Text style={styles.studentName}>{selectedStudent.student_name}</Text>
+              <Text style={styles.selectedStudentReg}>Registration No: {selectedStudent.registration_no || '-'}</Text>
               <TouchableOpacity
                 style={styles.changeStudentButton}
                 onPress={() => {
@@ -1606,9 +1174,7 @@ export default function Documents() {
                   setSearch('');
                 }}
               >
-                <Text style={styles.changeStudentText}>
-                  Change Student
-                </Text>
+                <Text style={styles.changeStudentText}>Change Student</Text>
               </TouchableOpacity>
             </Card>
           </>
@@ -1665,23 +1231,8 @@ export default function Documents() {
           </>
         )}
 
-        <Card>
-          <Text style={styles.documentTypeTitle}>Bulk Class XII Documents</Text>
-          <Muted>Select the multi-page PDF. Each page is matched by the registration number printed at the bottom and saved to the matching Class XII student.</Muted>
-          <Button title={bulkXiBusy ? 'Uploading PDF pages...' : 'Upload Class XII Birth Certificate PDF'} onPress={bulkUploadBirthCertificate} />
-          <Button title={bulkXiBusy ? 'Uploading PDF pages...' : 'Upload XI Registration PDF'} onPress={bulkUploadXiRegistration} />
-        </Card>
-
         {selectedStudent && (
           <>
-            <Card>
-              <Text style={styles.documentTypeTitle}>Import from Legacy Website</Text>
-              <Muted>Documents are matched by registration number. Password is used once and is not saved.</Muted>
-              <Field placeholder="Legacy login ID" value={legacyEmail} onChangeText={setLegacyEmail} autoCapitalize="none" />
-              <Field placeholder="Legacy password" value={legacyPassword} onChangeText={setLegacyPassword} secureTextEntry />
-              <Field placeholder="Legacy session year" value={legacySession} onChangeText={setLegacySession} keyboardType="numeric" />
-              <Button title={legacyBusy?'Importing...':'Import Available Documents'} onPress={importLegacyDocuments} />
-            </Card>
             <Text style={styles.sectionTitle}>
               Family & Visitor Photos
             </Text>
@@ -1719,6 +1270,7 @@ export default function Documents() {
               <Muted>Loading documents...</Muted>
             )}
 
+            <View style={styles.documentsGrid}>
             {DOCUMENT_TYPES
               .filter((item) => item.key !== 'other' && !['father_photo', 'mother_photo', 'visitor1_photo', 'visitor2_photo'].includes(item.key))
               .map((item) => {
@@ -1726,7 +1278,7 @@ export default function Documents() {
                   getDocumentByType(item.key);
 
                 return (
-                  <Card key={item.key}>
+                  <View key={item.key} style={styles.documentCard}>
                     <Text style={styles.documentTypeTitle}>
                       {item.label}
                     </Text>
@@ -1757,9 +1309,10 @@ export default function Documents() {
                         </View>
                       </>
                     )}
-                  </Card>
+                  </View>
                 );
               })}
+            </View>
 
             <Card>
               <Text style={styles.documentTypeTitle}>
@@ -1917,6 +1470,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
+  selectedStudentReg: {
+    color: '#475569',
+    fontSize: 15,
+    marginBottom: 4,
+  },
+
   infoSection: {
     marginTop: 14,
     borderWidth: 1,
@@ -1995,6 +1554,31 @@ const styles = StyleSheet.create({
 
   existingBox: {
     marginTop: 4,
+  },
+
+  documentPreview: {
+    width: '100%',
+    height: 150,
+    marginBottom: 10,
+    backgroundColor: '#f8fafc',
+  },
+
+  documentsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 12,
+  },
+
+  documentCard: {
+    width: '15.7%',
+    minWidth: 245,
+    minHeight: 250,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 12,
+    padding: 13,
   },
 
   fileTitle: {
@@ -2081,7 +1665,8 @@ const styles = StyleSheet.create({
   },
 
   familyPhotoCard: {
-    width: 245,
+    width: '15.7%',
+    minWidth: 245,
     minHeight: 220,
     backgroundColor: '#fff',
     borderWidth: 1,
@@ -2160,3 +1745,4 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
 });
+

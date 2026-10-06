@@ -42,6 +42,11 @@ type Student = {
   class_name?: string;
   roll_no?: string;
   father_name?: string;
+  whatsapp_number?: string;
+  guardian_mobile?: string;
+  father_mobile?: string;
+  mother_mobile?: string;
+  mobile_number?: string;
 };
 
 
@@ -90,7 +95,7 @@ export default function DepositFund() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [statement, setStatement] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'statement' | 'transactions'>('statement');
+  const [activeTab, setActiveTab] = useState<'statement' | 'transactions'>('transactions');
 
 
   // =====================================
@@ -374,6 +379,31 @@ export default function DepositFund() {
 
     };
 
+  const sendDueReminder = async () => {
+    if (!selectedStudent) return;
+    const rawMobile = String(
+      selectedStudent.whatsapp_number ||
+      selectedStudent.guardian_mobile ||
+      selectedStudent.father_mobile ||
+      selectedStudent.mother_mobile ||
+      selectedStudent.mobile_number ||
+      ''
+    ).trim();
+    let mobile = rawMobile.replace(/\D/g, '');
+    if (mobile.length === 10) mobile = `91${mobile}`;
+    if (mobile.length < 12) {
+      Alert.alert('WhatsApp Number Missing', 'এই Student-এর WhatsApp/Guardian mobile number পাওয়া যায়নি।');
+      return;
+    }
+    const due = Math.abs(Number(fundData?.summary?.net_balance || 0));
+    const message = `Student Deposit Fund Due Reminder\nAssalamualaikum, Dear ${selectedStudent.student_name || '-'}\nRegistration No: ${selectedStudent.registration_no || '-'}\nClass: ${selectedStudent.class_name || '-'}\n\nDeposit Fund Due: ₹${due.toFixed(2)}\n\nঅনুগ্রহ করে প্রয়োজনীয় Student Deposit Fund ক্যাশ এ জমা করার ব্যবস্থা করুন।\nif already paid please ignore it.\nThank you.\nAl-Ameen Mission Memari Khadija Campus`;
+    try {
+      await Linking.openURL(`https://wa.me/${mobile}?text=${encodeURIComponent(message)}`);
+    } catch {
+      Alert.alert('WhatsApp Error', 'WhatsApp খুলতে পারছি না।');
+    }
+  };
+
 
   return (
 
@@ -398,11 +428,11 @@ export default function DepositFund() {
           Student Deposit Fund
         </H1>
         <View style={styles.tabRow}>
-          <TouchableOpacity onPress={() => setActiveTab('statement')} style={[styles.tabButton, activeTab === 'statement' && styles.tabActive]}>
-            <Text style={styles.tabText}>Statement</Text>
-          </TouchableOpacity>
           <TouchableOpacity onPress={() => setActiveTab('transactions')} style={[styles.tabButton, activeTab === 'transactions' && styles.tabActive]}>
             <Text style={styles.tabText}>Deposit / Withdrawal</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setActiveTab('statement')} style={[styles.tabButton, activeTab === 'statement' && styles.tabActive]}>
+            <Text style={styles.tabText}>Statement</Text>
           </TouchableOpacity>
         </View><Text style={styles.totalDue}>Total Due: ₹{Number(dashboard?.summary?.total_due || 0).toFixed(2)}</Text>
 
@@ -687,6 +717,12 @@ export default function DepositFund() {
       : 'Fund Balance Zero'}
 
   </Text>
+
+  {Number(fundData?.summary?.net_balance || 0) < 0 && (
+    <TouchableOpacity style={styles.whatsappButton} onPress={sendDueReminder}>
+      <Text style={styles.whatsappText}>Send Due Reminder on WhatsApp</Text>
+    </TouchableOpacity>
+  )}
 
 </View>
 
@@ -1058,6 +1094,20 @@ netBalanceStatus: {
   marginTop: 6,
   color: '#667085',
   textAlign: 'center',
+},
+
+whatsappButton: {
+  marginTop: 12,
+  backgroundColor: '#128c4a',
+  paddingHorizontal: 14,
+  paddingVertical: 11,
+  borderRadius: 8,
+  alignItems: 'center',
+},
+
+whatsappText: {
+  color: '#fff',
+  fontWeight: '800',
 },
     page: {
       flex: 1,

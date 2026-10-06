@@ -37,6 +37,8 @@ const DOCUMENT_SLOTS = [
   ['birth_certificate','Date Of Birth'], ['mp_admit','MP Admit'], ['mp_marksheet','MP Marksheet'],
   ['aadhaar','Aadhaar'], ['bank_passbook','Passbook'], ['obc_certificate','OBC'],
   ['ph_certificate','P.H. Certificate'], ['xi_registration','XI Registration'],
+  ['xi_admission_slip','XI Admission Slip'],
+  ['xi_marksheet','XI Marksheet'],
   ['hs_admit_3rd','HS Admit 3rd Semester'], ['hs_admit_4th','HS Admit 4th Semester'],
   ['hs_marksheet','H.S Marksheet'], ['hs_certificate','H.S Certificate'], ['admission_slip','Admission Slip'],
   ['signature','Signature'], ['transfer_certificate','T.C.'], ['other','Others'],
@@ -113,6 +115,68 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
   const chooseDocument = async (type: string) => {
     const picked = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'], copyToCacheDirectory: true });
     if (!picked.canceled) setPendingDocuments(current => ({ ...current, [type]: picked.assets[0] }));
+  };
+
+  const uploadStudentPhoto = async () => {
+    if (!documentStudent) return;
+    const picked = await DocumentPicker.getDocumentAsync({ type: ['image/*'], copyToCacheDirectory: true });
+    if (picked.canceled) return;
+    const file: any = picked.assets[0];
+    setDocumentBusy('photo');
+    try {
+      const body = new FormData();
+      const filename = `${documentStudent.registration_no || 'student'}.jpg`;
+      if (Platform.OS === 'web' && file.file) body.append('photos', file.file, filename);
+      else body.append('photos', { uri: file.uri, name: filename, type: file.mimeType || 'image/jpeg' } as any);
+      await api('/api/student-transfer/photos', { method: 'POST', body });
+      const refreshedStudent = await api(`/api/students/${documentStudent.id}`);
+      setDocumentStudent(refreshedStudent.student || { ...documentStudent, photo_url: refreshedStudent.student?.photo_url });
+      onRefresh();
+      Alert.alert('Uploaded', 'Student photo uploaded successfully.');
+    } catch (error: any) {
+      Alert.alert('Upload failed', error.message || 'Unable to upload student photo.');
+    } finally { setDocumentBusy(null); }
+  };
+
+  const handleStudentPhoto = async (mode: 'view' | 'download' | 'print') => {
+    const photoUrl = documentStudent?.photo_url;
+    if (!photoUrl) return;
+    const url = /^https?:\/\//.test(photoUrl) ? photoUrl : API_BASE + photoUrl;
+    let browserWindow: any = null;
+    try {
+      setDocumentBusy('photo-' + mode);
+      if (Platform.OS === 'web') {
+        if (mode === 'download') {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error('Could not load the student photo');
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          const anchor = window.document.createElement('a');
+          anchor.href = objectUrl;
+          anchor.download = `${documentStudent.registration_no || 'student'}-photo.jpg`;
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+        } else {
+          browserWindow = window.open('about:blank', '_blank');
+          if (!browserWindow) throw new Error('Browser blocked the new window');
+          browserWindow.document.write(`<html><body style="margin:0;text-align:center"><img src="${url}" style="max-width:100%;max-height:100vh" /></body></html>`);
+          browserWindow.document.close();
+          if (mode === 'print') setTimeout(() => { try { browserWindow.focus(); browserWindow.print(); } catch {} }, 800);
+        }
+      } else {
+        if (!FileSystem.cacheDirectory) throw new Error('Temporary storage is unavailable');
+        const target = FileSystem.cacheDirectory + Date.now() + '-student-photo.jpg';
+        const result = await FileSystem.downloadAsync(url, target);
+        if (mode === 'print') await Print.printAsync({ uri: result.uri });
+        else if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(result.uri);
+        else Alert.alert('Saved', result.uri);
+      }
+    } catch (error: any) {
+      if (browserWindow) browserWindow.close();
+      Alert.alert('Student Photo', error.message || 'Photo action failed');
+    } finally { setDocumentBusy(null); }
   };
 
   const uploadSelectedDocuments = async () => {
@@ -240,7 +304,7 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
         <View style={s.documentTopBar}><TouchableOpacity style={s.documentCloseButton} onPress={() => setDocumentsOpen(false)}><Text style={s.whiteText}>Close</Text></TouchableOpacity><Text style={s.lastUpdated}>Last Updated{documents[0]?.uploaded_at ? '\n' + String(documents[0].uploaded_at).slice(0, 16).replace('T', ' ') : ''}</Text></View>
         <Text style={s.registrationLine}>Reg. No. {documentStudent?.registration_no || '-'}</Text>
         {documentsLoading ? <ActivityIndicator style={{margin:30}}/> : documentsError ? <Text style={s.error}>{documentsError}</Text> : <ScrollView contentContainerStyle={s.documentGrid}>
-           <View style={s.documentTile}><Text style={s.tileTitle}>Photo</Text><View style={s.previewBox}>{documentStudent?.photo_url?<Image source={{uri:/^https?:/.test(documentStudent.photo_url)?documentStudent.photo_url:API_BASE+documentStudent.photo_url}} resizeMode="contain" style={s.documentPreview}/>:<Text style={s.noPreview}>No photo</Text>}</View><View style={s.chooseButton}><Text style={s.chooseText}>Student Profile Photo</Text></View><View style={s.tileActions}><TouchableOpacity accessibilityLabel="View student photo" disabled={!documentStudent?.photo_url} style={[s.iconButton,s.viewIcon,!documentStudent?.photo_url&&s.disabled]} onPress={()=>documentStudent?.photo_url&&Linking.openURL(/^https?:/.test(documentStudent.photo_url)?documentStudent.photo_url:API_BASE+documentStudent.photo_url)}><Text style={s.iconText}>{String.fromCodePoint(0x1F441)}</Text></TouchableOpacity></View></View>
+           <View style={s.documentTile}><Text style={s.tileTitle}>Photo</Text><View style={s.previewBox}>{documentStudent?.photo_url?<Image source={{uri:/^https?:/.test(documentStudent.photo_url)?documentStudent.photo_url:API_BASE+documentStudent.photo_url}} resizeMode="contain" style={s.documentPreview}/>:<Text style={s.noPreview}>No photo</Text>}</View><TouchableOpacity disabled={documentBusy!==null} style={s.chooseButton} onPress={uploadStudentPhoto}><Text style={s.chooseText}>{documentBusy==='photo'?'Uploading...':'Upload / Change Photo'}</Text></TouchableOpacity><View style={s.tileActions}><TouchableOpacity accessibilityLabel="View student photo" disabled={!documentStudent?.photo_url||documentBusy!==null} style={[s.iconButton,s.viewIcon,!documentStudent?.photo_url&&s.disabled]} onPress={()=>handleStudentPhoto('view')}><Text style={s.iconText}>{String.fromCodePoint(0x1F441)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel="Print student photo" disabled={!documentStudent?.photo_url||documentBusy!==null} style={[s.iconButton,s.printIcon,!documentStudent?.photo_url&&s.disabled]} onPress={()=>handleStudentPhoto('print')}><Text style={s.iconText}>{String.fromCodePoint(0x1F5A8)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel="Download student photo" disabled={!documentStudent?.photo_url||documentBusy!==null} style={[s.iconButton,s.downloadIcon,!documentStudent?.photo_url&&s.disabled]} onPress={()=>handleStudentPhoto('download')}><Text style={s.iconText}>{String.fromCodePoint(0x2B07)}</Text></TouchableOpacity></View></View>
            {DOCUMENT_SLOTS.map(([type,label])=>{const doc=documentFor(type),pending=pendingDocuments[type],preview=pending?.uri||previewUrl(doc),displayLabel=label.replace(' Photo','').replace('Visitor-','Visitor_');return <View key={type} style={s.documentTile}><Text numberOfLines={1} style={s.tileTitle}>{displayLabel}</Text><View style={s.previewBox}>{preview?<Image source={{uri:preview}} resizeMode="contain" style={s.documentPreview}/>:<Text style={s.noPreview}>{doc?'PDF / File':'No document'}</Text>}</View><TouchableOpacity disabled={documentBusy!==null} style={s.chooseButton} onPress={()=>chooseDocument(type)}><Text numberOfLines={1} style={s.chooseText}>{pending?pending.name:'Choose File'}</Text></TouchableOpacity><View style={s.tileActions}><TouchableOpacity accessibilityLabel={'View '+displayLabel} disabled={!doc||documentBusy!==null} style={[s.iconButton,s.viewIcon,!doc&&s.disabled]} onPress={()=>doc&&handleDocument(doc,'view')}><Text style={s.iconText}>{String.fromCodePoint(0x1F441)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel={'Print '+displayLabel} disabled={!doc||documentBusy!==null} style={[s.iconButton,s.printIcon,!doc&&s.disabled]} onPress={()=>doc&&handleDocument(doc,'print')}><Text style={s.iconText}>{String.fromCodePoint(0x1F5A8)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel={'Download '+displayLabel} disabled={!doc||documentBusy!==null} style={[s.iconButton,s.downloadIcon,!doc&&s.disabled]} onPress={()=>doc&&handleDocument(doc,'download')}><Text style={s.iconText}>{String.fromCodePoint(0x2B07)}</Text></TouchableOpacity></View></View>})}
         </ScrollView>}
         <TouchableOpacity disabled={documentBusy!==null} onPress={uploadSelectedDocuments} style={[s.uploadAllButton,documentBusy!==null&&s.disabled]}><Text style={s.whiteText}>{documentBusy==='upload'?'Uploading...':'Upload Selected Documents'}</Text></TouchableOpacity>

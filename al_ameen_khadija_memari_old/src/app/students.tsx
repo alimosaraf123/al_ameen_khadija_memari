@@ -42,6 +42,8 @@ const STUDENT_DOCUMENT_TYPES = [
   { key: 'obc_certificate', label: 'OBC Certificate' },
   { key: 'ph_certificate', label: 'PH Certificate' },
   { key: 'xi_registration', label: 'XI Registration' },
+  { key: 'xi_admission_slip', label: 'XI Admission Slip' },
+  { key: 'xi_marksheet', label: 'XI Marksheet' },
   { key: 'hs_admit_3rd', label: 'HS Admit 3rd Semester' },
   { key: 'hs_admit_4th', label: 'HS Admit 4th Semester' },
   { key: 'hs_marksheet', label: 'HS Marksheet' },

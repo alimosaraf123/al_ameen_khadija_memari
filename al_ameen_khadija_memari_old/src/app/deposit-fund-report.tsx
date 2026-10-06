@@ -183,6 +183,7 @@ export default function DepositFundReport() {
     (student: any) => {
 
       return (
+        student.whatsapp_number ||
         student.guardian_mobile ||
         student.father_mobile ||
         student.mother_mobile ||
@@ -957,7 +958,7 @@ Thank you.`;
                 </Text>
 
 
-                {balance !== 0 && (
+                {Number(student.due || 0) > 0 && (
 
                   <TouchableOpacity
                     style={
@@ -975,7 +976,7 @@ Thank you.`;
                         styles.whatsappText
                       }
                     >
-                      Send WhatsApp Reminder
+                      Send Due Reminder on WhatsApp
                     </Text>
 
                   </TouchableOpacity>
