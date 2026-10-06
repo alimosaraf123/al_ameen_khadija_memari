@@ -143,7 +143,8 @@ export default function DepositFund() {
     const esc = (v:any) => String(v ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c] || c));
     const rows = (statement.transactions || []).map((x:any) => `<tr><td>${esc(x.registration_no)}</td><td>${esc(x.student_name)}</td><td>${esc(String(x.transaction_date).slice(0,10))}</td><td>${x.transaction_type==='deposit'?'Deposit':'Withdrawal'}</td><td>${Number(x.amount||0).toFixed(2)}</td><td>${esc(x.details)}</td></tr>`).join('');
     const w = window.open('', '_blank'); if (!w) return;
-    w.document.write(`<html><head><title>Deposit Fund Statement</title><style>body{font-family:Arial;padding:24px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:7px;text-align:left}h2{margin-bottom:4px}.summary{margin:12px 0}</style></head><body><h2>Student Deposit Fund Statement</h2><div>Student: ${esc(statement.student?.student_name || 'All students')} | Registration: ${esc(statement.student?.registration_no || statement.registration_no || 'All')} | Period: ${esc(statement.from_date || 'All')} to ${esc(statement.to_date || 'All')}</div><div class=summary>Deposit: ₹${Number(statement.summary?.deposit||0).toFixed(2)} | Withdrawal: ₹${Number(statement.summary?.withdrawal||0).toFixed(2)} | Advance: ₹${Number(statement.summary?.advance||0).toFixed(2)} | Due: ₹${Number(statement.summary?.due||0).toFixed(2)}</div><table><thead><tr><th>Reg.</th><th>Student</th><th>Date</th><th>Type</th><th>Amount</th><th>Details</th></tr></thead><tbody>${rows}</tbody></table></body></html>`); w.document.close(); setTimeout(() => w.print(), 300);
+    const signed = Number(statement.summary?.balance || 0); const sign = signed > 0 ? '+' : signed < 0 ? '-' : '';
+    w.document.write(`<html><head><title>Deposit Fund Statement</title><style>body{font-family:Arial;padding:24px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:7px;text-align:left}h2{margin-bottom:4px}.summary{margin:12px 0}</style></head><body><h2>Student Deposit Fund Statement</h2><div>Student: ${esc(statement.student?.student_name || 'All students')} | Registration: ${esc(statement.student?.registration_no || statement.registration_no || 'All')} | Period: ${esc(statement.from_date || 'All')} to ${esc(statement.to_date || 'All')}</div><div class=summary>Balance: ${sign}₹${Math.abs(signed).toFixed(2)}</div><table><thead><tr><th>Reg.</th><th>Student</th><th>Date</th><th>Type</th><th>Amount</th><th>Details</th></tr></thead><tbody>${rows}</tbody></table></body></html>`); w.document.close(); setTimeout(() => w.print(), 300);
   };
 
 
@@ -402,9 +403,8 @@ export default function DepositFund() {
           <View style={styles.dateRow}><DatePickerField label="From Date" value={fromDate} onChange={setFromDate} /><DatePickerField label="To Date" value={toDate} onChange={setToDate} /></View>
           <Button title="View Statement" onPress={searchStatement} />
           {statement && <>
-            <Text style={styles.dashboardText}>Deposit: ₹{Number(statement.summary?.deposit || 0).toFixed(2)} | Withdrawal: ₹{Number(statement.summary?.withdrawal || 0).toFixed(2)}</Text>
-            <Text style={styles.dashboardText}>Advance: ₹{Number(statement.summary?.advance || 0).toFixed(2)} | Due: ₹{Number(statement.summary?.due || 0).toFixed(2)}</Text>
-            {(statement.balances || []).map((row:any) => <View key={row.registration_no} style={styles.statementRow}><Text style={styles.statementName}>{row.student_name} · Reg. {row.registration_no}</Text><Text>Advance: ₹{Number(row.advance || 0).toFixed(2)} | Due: ₹{Number(row.due || 0).toFixed(2)}</Text></View>)}
+            <Text style={styles.dashboardText}>Balance: {Number(statement.summary?.balance || 0) > 0 ? '+' : Number(statement.summary?.balance || 0) < 0 ? '-' : ''}₹{Math.abs(Number(statement.summary?.balance || 0)).toFixed(2)}</Text>
+            {(statement.balances || []).map((row:any) => <View key={row.registration_no} style={styles.statementRow}><Text style={styles.statementName}>{row.student_name} · Reg. {row.registration_no}</Text><Text>Balance: {Number(row.balance || 0) > 0 ? '+' : Number(row.balance || 0) < 0 ? '-' : ''}₹{Math.abs(Number(row.balance || 0)).toFixed(2)}</Text></View>)}
             <Button title="Print Statement" onPress={printStatement} />
           </>}
         </Card>
