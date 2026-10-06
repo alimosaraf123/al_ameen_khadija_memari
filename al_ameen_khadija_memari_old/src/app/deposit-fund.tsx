@@ -404,7 +404,7 @@ export default function DepositFund() {
           <Button title="View Statement" onPress={searchStatement} />
           {statement && <>
             <Text style={styles.dashboardText}>Balance: {Number(statement.summary?.balance || 0) > 0 ? '+' : Number(statement.summary?.balance || 0) < 0 ? '-' : ''}₹{Math.abs(Number(statement.summary?.balance || 0)).toFixed(2)}</Text>
-            {(statement.balances || []).map((row:any) => <View key={row.registration_no} style={styles.statementRow}><Text style={styles.statementName}>{row.student_name} · Reg. {row.registration_no}</Text><Text>Balance: {Number(row.balance || 0) > 0 ? '+' : Number(row.balance || 0) < 0 ? '-' : ''}₹{Math.abs(Number(row.balance || 0)).toFixed(2)}</Text></View>)}
+            {(statement.balances || []).filter((row:any) => Number(row.balance || 0) !== 0).map((row:any) => <View key={row.registration_no} style={styles.statementRow}><Text style={styles.statementName}>{row.student_name} · Reg. {row.registration_no}</Text><Text>Balance: {Number(row.balance || 0) > 0 ? '+' : '-'}₹{Math.abs(Number(row.balance || 0)).toFixed(2)}</Text></View>)}
             <Button title="Print Statement" onPress={printStatement} />
           </>}
         </Card>
