@@ -45,6 +45,9 @@ export default function Guardian() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [showMpinPanel, setShowMpinPanel] = useState(false);
   const [mpinPassword, setMpinPassword] = useState('');
@@ -908,24 +911,9 @@ export default function Guardian() {
 
               {showPasswordPanel && (
                 <View style={styles.settingsBox}>
-                  <Field
-                    placeholder="Current Password"
-                    value={currentPassword}
-                    onChangeText={setCurrentPassword}
-                    secureTextEntry
-                  />
-                  <Field
-                    placeholder="New Password"
-                    value={newPassword}
-                    onChangeText={setNewPassword}
-                    secureTextEntry
-                  />
-                  <Field
-                    placeholder="Re-enter New Password"
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry
-                  />
+                  <View style={styles.passwordRow}><Field placeholder="Current Password" value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry={!showCurrentPassword} style={styles.passwordField} /><TouchableOpacity onPress={() => setShowCurrentPassword(v => !v)} style={styles.eyeButton}><Text>{showCurrentPassword ? 'Hide' : 'Show'}</Text></TouchableOpacity></View>
+                  <View style={styles.passwordRow}><Field placeholder="New Password" value={newPassword} onChangeText={setNewPassword} secureTextEntry={!showNewPassword} style={styles.passwordField} /><TouchableOpacity onPress={() => setShowNewPassword(v => !v)} style={styles.eyeButton}><Text>{showNewPassword ? 'Hide' : 'Show'}</Text></TouchableOpacity></View>
+                  <View style={styles.passwordRow}><Field placeholder="Re-enter New Password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry={!showConfirmPassword} style={styles.passwordField} /><TouchableOpacity onPress={() => setShowConfirmPassword(v => !v)} style={styles.eyeButton}><Text>{showConfirmPassword ? 'Hide' : 'Show'}</Text></TouchableOpacity></View>
                   <Button
                     title={changingPassword ? 'Changing...' : 'Save New Password'}
                     onPress={changePassword}
@@ -1434,6 +1422,9 @@ const styles = StyleSheet.create({
     color: '#667085',
     marginBottom: 12,
   },
+  passwordRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  passwordField: { flex: 1, marginBottom: 0 },
+  eyeButton: { marginLeft: 8, minWidth: 54, paddingVertical: 12, paddingHorizontal: 8, alignItems: 'center', borderWidth: 1, borderColor: '#1764a5', borderRadius: 8 },
   card: { backgroundColor: '#ffffff', borderRadius: 18, padding: 18, marginBottom: 12, borderWidth: 1, borderColor: '#e0e7ff' },
   gateHeader:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',gap:10},gateStatus:{backgroundColor:'#fff0b8',color:'#7c5200',fontWeight:'800',fontSize:11,paddingHorizontal:9,paddingVertical:5,borderRadius:12},gateReturned:{backgroundColor:'#dcfce7',color:'#166534'},gateCancelled:{backgroundColor:'#fee2e2',color:'#991b1b'},
     noticeCard: { backgroundColor: '#fffbeb', borderColor: '#fde68a', borderLeftWidth: 4, borderLeftColor: '#f59e0b' },
