@@ -10,7 +10,8 @@ async function teacherCanAccess(req,id){if(['admin','super_admin'].includes(req.
 
 const teacherDetailsSchemaReady = pool.query([
   "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS profile_details JSONB NOT NULL DEFAULT '{}'::jsonb",
-  "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS education_details JSONB NOT NULL DEFAULT '[]'::jsonb"
+  "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS education_details JSONB NOT NULL DEFAULT '[]'::jsonb",
+  "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS profile_edit_count INTEGER NOT NULL DEFAULT 0"
 ].join(';'));
 
 function firstNameLogin(name) {
@@ -21,7 +22,8 @@ function firstNameLogin(name) {
     .replace(/[^a-z0-9]/g, '');
 }
 
-router.get('/me', auth, allow('teacher'), asyncHandler(async(req,res)=>{const result=await pool.query(`SELECT t.*,u.full_name,u.login_id FROM teachers t JOIN users u ON u.id=t.user_id WHERE t.user_id=$1 LIMIT 1`,[req.user.userId]);if(!result.rowCount)return res.status(404).json({success:false,message:'Teacher profile not found'});res.json({success:true,teacher:result.rows[0]});}));
+router.get('/me', auth, allow('teacher'), asyncHandler(async(req,res)=>{await teacherDetailsSchemaReady;const result=await pool.query(`SELECT t.*,u.full_name,u.login_id FROM teachers t JOIN users u ON u.id=t.user_id WHERE t.user_id=$1 LIMIT 1`,[req.user.userId]);if(!result.rowCount)return res.status(404).json({success:false,message:'Teacher profile not found'});res.json({success:true,teacher:result.rows[0],profile_edit_count:result.rows[0].profile_edit_count||0,profile_edits_remaining:Math.max(0,2-(result.rows[0].profile_edit_count||0))});}));
+router.patch('/me', auth, allow('teacher'), asyncHandler(async(req,res)=>{await teacherDetailsSchemaReady;const b=req.body||{};const allowed=['name','designation','mobile','whatsapp','email','address','gender','date_of_birth'];const set=[],values=[];for(const f of allowed)if(b[f]!==undefined){values.push(String(b[f]||'').trim()||null);set.push(`${f}=$${values.length}`)}if(!set.length)return res.status(400).json({success:false,message:'No profile changes supplied'});const result=await pool.query(`UPDATE teachers SET ${set.join(',')},profile_edit_count=profile_edit_count+1 WHERE user_id=$${values.length+1} AND profile_edit_count<2 RETURNING *`,[...values,req.user.userId]);if(!result.rowCount)return res.status(403).json({success:false,message:'Profile edit limit reached. You can update your profile only twice.'});res.json({success:true,teacher:result.rows[0],profile_edit_count:result.rows[0].profile_edit_count,profile_edits_remaining:Math.max(0,2-result.rows[0].profile_edit_count)});}));
 
 router.get('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res)=>{
   await teacherDetailsSchemaReady;
