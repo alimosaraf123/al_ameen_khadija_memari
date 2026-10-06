@@ -680,14 +680,14 @@ export default function Login() {
         <Text
           style={styles.title}
         >
-          Al-Ameen Mission
+          Al-Ameen Mission Academy Memari
         </Text>
 
 
         <Text
           style={styles.sub}
         >
-          Memari Khadija Campus
+          Memari Khadija Campus (Bengali Medium)
         </Text>
 
 
