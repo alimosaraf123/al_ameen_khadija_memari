@@ -5,6 +5,7 @@ const pool = require('../db');
 const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
 const router = express.Router();
+async function teacherCanAccess(req,id){if(['admin','super_admin'].includes(req.user.role))return true;const r=await pool.query('SELECT 1 FROM teachers WHERE id=$1 AND user_id=$2',[id,req.user.userId]);return !!r.rowCount;}
 
 const teacherDetailsSchemaReady = pool.query([
   "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS profile_details JSONB NOT NULL DEFAULT '{}'::jsonb",
@@ -145,7 +146,7 @@ router.patch('/:id/status', auth, allow('super_admin','admin'), asyncHandler(asy
 
 
 const photoUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:8*1024*1024}}).single('photo');
-router.post('/:id/photo',auth,allow('super_admin','admin'),(req,res,next)=>photoUpload(req,res,error=>error?res.status(400).json({success:false,message:'Photo must be under 8 MB'}):next()),asyncHandler(async(req,res)=>{
+router.post('/:id/photo',auth,allow('super_admin','admin','teacher'),(req,res,next)=>photoUpload(req,res,error=>error?res.status(400).json({success:false,message:'Photo must be under 8 MB'}):next()),asyncHandler(async(req,res)=>{
  if(!req.file||!req.file.mimetype.startsWith('image/'))return res.status(400).json({success:false,message:'Choose an image file'});
  const current=await pool.query('SELECT photo_url FROM teachers WHERE id=$1',[req.params.id]);
  if(!current.rowCount)return res.status(404).json({success:false,message:'Teacher not found'});
@@ -161,14 +162,14 @@ router.post('/:id/photo',auth,allow('super_admin','admin'),(req,res,next)=>photo
 const documentUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:10*1024*1024},fileFilter:(req,file,cb)=>{const allowed=file.mimetype.startsWith('image/')||file.mimetype==='application/pdf';cb(allowed?null:new Error('Only image and PDF files are allowed'),allowed);}}).single('file');
 const acceptDocument=(req,res,next)=>documentUpload(req,res,error=>error?res.status(400).json({success:false,message:error.message||'Document must be under 10 MB'}):next());
 
-router.get('/:id/documents',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+router.get('/:id/documents',auth,allow('super_admin','admin','teacher'),asyncHandler(async(req,res)=>{
  const teacher=await pool.query('SELECT id FROM teachers WHERE id=$1',[req.params.id]);
  if(!teacher.rowCount)return res.status(404).json({success:false,message:'Teacher not found'});
  const result=await pool.query('SELECT * FROM teacher_documents WHERE teacher_id=$1 ORDER BY uploaded_at DESC',[req.params.id]);
  res.json({success:true,documents:result.rows});
 }));
 
-router.post('/:id/documents',auth,allow('super_admin','admin'),acceptDocument,asyncHandler(async(req,res)=>{
+router.post('/:id/documents',auth,allow('super_admin','admin','teacher'),acceptDocument,asyncHandler(async(req,res)=>{
  if(!req.file)return res.status(400).json({success:false,message:'Choose an image or PDF file'});
  const teacher=await pool.query('SELECT id FROM teachers WHERE id=$1',[req.params.id]);
  if(!teacher.rowCount)return res.status(404).json({success:false,message:'Teacher not found'});

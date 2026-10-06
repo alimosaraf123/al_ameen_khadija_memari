@@ -23,8 +23,8 @@ function EditableSelect({placeholder,value,onChange,options}:{placeholder:string
 export default function Teachers(){
  const {mode}=useLocalSearchParams<{mode?:string}>();
  const [list,setList]=useState<any[]>([]),[form,setForm]=useState<any>(emptyForm),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[editingId,setEditingId]=useState<number|null>(null),[documentTeacher,setDocumentTeacher]=useState<any>(null),[documents,setDocuments]=useState<any[]>([]),[documentsLoading,setDocumentsLoading]=useState(false),[pendingDocuments,setPendingDocuments]=useState<Record<string,any>>({}),[pendingPhoto,setPendingPhoto]=useState<any>(null),[documentsSaving,setDocumentsSaving]=useState(false);
- const load=async()=>{setLoading(true);try{const data=await api('/api/teachers');setList(data.teachers||[])}catch(e:any){Alert.alert('Error',e.message)}finally{setLoading(false)}};
- useEffect(()=>{load()},[]);const set=(key:string,value:any)=>setForm((x:any)=>({...x,[key]:value}));
+ const load=async()=>{setLoading(true);try{const data=await api(mode==='documents'?'/api/teachers/me':'/api/teachers');setList(mode==='documents'?(data.teacher?[data.teacher]:[]):(data.teachers||[]))}catch(e:any){Alert.alert('Error',e.message)}finally{setLoading(false)}};
+ useEffect(()=>{load()},[mode]);const set=(key:string,value:any)=>setForm((x:any)=>({...x,[key]:value}));
  const setDetail=(key:string,value:string)=>setForm((x:any)=>({...x,profile_details:{...(x.profile_details||{}),[key]:value}}));
  const setEducation=(index:number,key:string,value:string)=>setForm((x:any)=>({...x,education_details:(x.education_details||[]).map((row:any,i:number)=>i===index?{...row,[key]:value}:row)}));
  const addEducation=()=>setForm((x:any)=>({...x,education_details:[...(x.education_details||[]),{...emptyEducation}]}));
