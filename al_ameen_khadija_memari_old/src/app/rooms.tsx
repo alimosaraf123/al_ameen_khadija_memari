@@ -8,6 +8,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 
 import { api } from '../lib/api';
 import {
@@ -93,6 +94,7 @@ export default function Rooms() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={{flexDirection:'row',gap:8,padding:15}}><TouchableOpacity onPress={()=>router.back()} style={styles.navButton}><Text>Back</Text></TouchableOpacity><TouchableOpacity onPress={()=>router.push('/superadmin')} style={styles.navButton}><Text>Home</Text></TouchableOpacity></View>
       <ScrollView contentContainerStyle={styles.content}>
 
         <H1>Rooms</H1>
@@ -168,6 +170,7 @@ export default function Rooms() {
 }
 
 const styles = StyleSheet.create({
+  navButton:{backgroundColor:'#e4eef8',paddingHorizontal:14,paddingVertical:9,borderRadius:8},
   container: {
     flex: 1,
     backgroundColor: '#f3f6f9',
