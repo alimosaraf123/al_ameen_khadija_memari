@@ -83,6 +83,7 @@ export default function DepositFund() {
     setSaving
   ] = useState(false);
 
+  const [dashboard, setDashboard] = useState<any>(null);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [statement, setStatement] = useState<any>(null);
@@ -120,6 +121,7 @@ export default function DepositFund() {
 
   useEffect(() => {
     loadStudents();
+    api('/api/guardians/admin/deposit-fund-report').then(setDashboard).catch(() => {});
   }, []);
 
   const searchStatement = async () => {
@@ -386,7 +388,7 @@ export default function DepositFund() {
 
         <H1>
           Student Deposit Fund
-        </H1>
+        </H1><Text style={styles.totalDue}>Total Due: ₹{Number(dashboard?.summary?.total_due || 0).toFixed(2)}</Text>
 
         <Card>
           <Text style={styles.heading}>Date Statement / Print</Text>
@@ -1056,6 +1058,15 @@ netBalanceStatus: {
       fontSize: 16,
       fontWeight: '800',
       marginVertical: 3,
+    },
+
+    totalDue: {
+      position: 'absolute',
+      top: 18,
+      left: '35%',
+      fontSize: 19,
+      fontWeight: '900',
+      color: '#c62828',
     },
 
     statementRow: {
