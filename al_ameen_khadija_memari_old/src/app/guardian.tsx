@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
@@ -31,7 +31,7 @@ export default function Guardian() {
   const [tab, setTab] = useState<TabName>('home');
   const [student, setStudent] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
-  const [childData, setChildData] = useState<any>(null);
+  const [childData, setChildData] = useState<any>(null);\n  const [terminalResults, setTerminalResults] = useState<any[]>([]);
   const [depositData, setDepositData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -113,7 +113,7 @@ export default function Guardian() {
       setMonthlyFeeData(result);
     } catch (e: any) {
       setMonthlyFeeData(null);
-      setMonthlyFeeError(e.message || 'Monthly Fee Due পাওয়া যাচ্ছে না।');
+      setMonthlyFeeError(e.message || 'Monthly Fee Due à¦ªà¦¾à¦“à§Ÿà¦¾ à¦¯à¦¾à¦šà§à¦›à§‡ à¦¨à¦¾à¥¤');
     } finally {
       setMonthlyFeeLoading(false);
     }
@@ -132,7 +132,7 @@ export default function Guardian() {
       }
 
       setStudent(firstStudent);
-      const studentId = firstStudent.id;
+      const studentId = firstStudent.id;\n      try { const published=await api('/api/terminal-exams/published'); const detailed=await Promise.all((published.exams||[]).map((e:any)=>api('/api/terminal-exams/published/'+e.id))); setTerminalResults(detailed.flatMap((d:any)=>{const st=(d.students||[]).find((x:any)=>Number(x.id)===Number(studentId)); return st?[{id:d.exam.id,exam_name:d.exam.exam_name,subject_name:'Published terminal result',marks_obtained:Object.values(st.marks||{}).filter((v:any)=>v!=='Absent').join(', ')}]:[]})); } catch { setTerminalResults([]); }
 
       const [profileResult, childResult, depositResult] = await Promise.allSettled([
         api(`/api/guardians/student/${studentId}/profile`),
@@ -184,17 +184,17 @@ export default function Guardian() {
 
   const changePassword = async () => {
     if (!currentPassword) {
-      Alert.alert('Required', 'Current Password লিখুন।');
+      Alert.alert('Required', 'Current Password à¦²à¦¿à¦–à§à¦¨à¥¤');
       return;
     }
 
     if (newPassword.length < 6) {
-      Alert.alert('Required', 'New Password কমপক্ষে 6 characters হতে হবে।');
+      Alert.alert('Required', 'New Password à¦•à¦®à¦ªà¦•à§à¦·à§‡ 6 characters à¦¹à¦¤à§‡ à¦¹à¦¬à§‡à¥¤');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert('Password mismatch', 'New Password এবং Confirm Password একই নয়।');
+      Alert.alert('Password mismatch', 'New Password à¦à¦¬à¦‚ Confirm Password à¦à¦•à¦‡ à¦¨à§Ÿà¥¤');
       return;
     }
 
@@ -224,17 +224,17 @@ export default function Guardian() {
 
   const saveMpin = async () => {
     if (!mpinPassword) {
-      Alert.alert('Required', 'Current Password লিখুন।');
+      Alert.alert('Required', 'Current Password à¦²à¦¿à¦–à§à¦¨à¥¤');
       return;
     }
 
     if (!/^\d{6}$/.test(mpin)) {
-      Alert.alert('Invalid mPIN', 'mPIN ঠিক 6 সংখ্যার হতে হবে।');
+      Alert.alert('Invalid mPIN', 'mPIN à¦ à¦¿à¦• 6 à¦¸à¦‚à¦–à§à¦¯à¦¾à¦° à¦¹à¦¤à§‡ à¦¹à¦¬à§‡à¥¤');
       return;
     }
 
     if (mpin !== confirmMpin) {
-      Alert.alert('mPIN mismatch', 'mPIN এবং Confirm mPIN একই নয়।');
+      Alert.alert('mPIN mismatch', 'mPIN à¦à¦¬à¦‚ Confirm mPIN à¦à¦•à¦‡ à¦¨à§Ÿà¥¤');
       return;
     }
 
@@ -263,7 +263,7 @@ export default function Guardian() {
 
   const enableFingerprint = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('Mobile Only', 'Fingerprint Login mobile app-এ ব্যবহার করুন।');
+      Alert.alert('Mobile Only', 'Fingerprint Login mobile app-à¦ à¦¬à§à¦¯à¦¬à¦¹à¦¾à¦° à¦•à¦°à§à¦¨à¥¤');
       return;
     }
 
@@ -272,7 +272,7 @@ export default function Guardian() {
 
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       if (!hasHardware) {
-        Alert.alert('Not Available', 'এই ফোনে biometric hardware পাওয়া যায়নি।');
+        Alert.alert('Not Available', 'à¦à¦‡ à¦«à§‹à¦¨à§‡ biometric hardware à¦ªà¦¾à¦“à§Ÿà¦¾ à¦¯à¦¾à§Ÿà¦¨à¦¿à¥¤');
         return;
       }
 
@@ -280,7 +280,7 @@ export default function Guardian() {
       if (!enrolled) {
         Alert.alert(
           'Fingerprint Not Set',
-          'আগে ফোনের Settings থেকে Fingerprint সেট করুন।'
+          'à¦†à¦—à§‡ à¦«à§‹à¦¨à§‡à¦° Settings à¦¥à§‡à¦•à§‡ Fingerprint à¦¸à§‡à¦Ÿ à¦•à¦°à§à¦¨à¥¤'
         );
         return;
       }
@@ -434,7 +434,7 @@ export default function Guardian() {
   const s = { ...student, ...childData?.student, ...profile?.student };
   const netBalance = Number(depositData?.summary?.net_balance || 0);
   const notices = childData?.notices || [];
-  const marks = childData?.marks || [];
+  const marks = terminalResults.length ? terminalResults : (childData?.marks || []);
   const documents = childData?.documents || [];
   const gatePasses = childData?.gate_passes || [];
   const photoUrl = getPhotoUrl();
@@ -569,7 +569,7 @@ export default function Guardian() {
                         </View>
 
                         <Text style={[styles.value, styles.monthlyDueAmount]}>
-                          ₹{Number(item.amount || 0).toFixed(2)}
+                          â‚¹{Number(item.amount || 0).toFixed(2)}
                         </Text>
                       </View>
                     ))
@@ -588,7 +588,7 @@ export default function Guardian() {
                             : styles.positive,
                         ]}
                       >
-                        ₹{Number(monthlyFeeData?.total_due || 0).toFixed(2)}
+                        â‚¹{Number(monthlyFeeData?.total_due || 0).toFixed(2)}
                       </Text>
                     </View>
                   </View>
@@ -633,15 +633,15 @@ export default function Guardian() {
                 ]}
               >
                 {depositData
-                  ? `${netBalance > 0 ? '+ ' : netBalance < 0 ? '- ' : ''}₹${Math.abs(netBalance).toFixed(2)}`
-                  : 'তথ্য পাওয়া যায়নি'}
+                  ? `${netBalance > 0 ? '+ ' : netBalance < 0 ? '- ' : ''}â‚¹${Math.abs(netBalance).toFixed(2)}`
+                  : 'à¦¤à¦¥à§à¦¯ à¦ªà¦¾à¦“à§Ÿà¦¾ à¦¯à¦¾à§Ÿà¦¨à¦¿'}
               </Text>
 
               <Text style={styles.fundStatus}>
-                {!depositData ? 'Fund-এর তথ্য লোড করা যায়নি' : netBalance > 0
-                  ? 'Fund-এ টাকা জমা আছে'
+                {!depositData ? 'Fund-à¦à¦° à¦¤à¦¥à§à¦¯ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¯à¦¾à§Ÿà¦¨à¦¿' : netBalance > 0
+                  ? 'Fund-à¦ à¦Ÿà¦¾à¦•à¦¾ à¦œà¦®à¦¾ à¦†à¦›à§‡'
                   : netBalance < 0
-                  ? 'Fund-এ Due / ঘাটতি আছে'
+                  ? 'Fund-à¦ Due / à¦˜à¦¾à¦Ÿà¦¤à¦¿ à¦†à¦›à§‡'
                   : 'Fund Balance Zero'}
               </Text>
             </View>
@@ -669,7 +669,7 @@ export default function Guardian() {
                           : styles.negative,
                       ]}
                     >
-                      {item.transaction_type === 'deposit' ? '+ ' : '- '}₹
+                      {item.transaction_type === 'deposit' ? '+ ' : '- '}â‚¹
                       {Number(item.amount || 0).toFixed(2)}
                     </Text>
                   </View>
@@ -981,8 +981,8 @@ export default function Guardian() {
                 <Text style={styles.settingsTitle}>Fingerprint Login</Text>
                 <Text style={styles.settingsHelp}>
                   {biometricEnabled
-                    ? 'Fingerprint Login এই device-এ চালু আছে।'
-                    : 'Fingerprint Login এই device-এ বন্ধ আছে।'}
+                    ? 'Fingerprint Login à¦à¦‡ device-à¦ à¦šà¦¾à¦²à§ à¦†à¦›à§‡à¥¤'
+                    : 'Fingerprint Login à¦à¦‡ device-à¦ à¦¬à¦¨à§à¦§ à¦†à¦›à§‡à¥¤'}
                 </Text>
 
                 {!biometricEnabled ? (
