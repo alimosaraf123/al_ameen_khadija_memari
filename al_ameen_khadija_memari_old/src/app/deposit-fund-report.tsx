@@ -36,6 +36,7 @@ import {
   H1,
   Muted,
 } from '../components/ui';
+import PageNavigation from '../components/PageNavigation';
 
 
 type FilterType =
@@ -580,6 +581,7 @@ Thank you.`;
         }
         keyboardShouldPersistTaps="handled"
       >
+        <PageNavigation />
 
         <H1>
           Deposit Fund Report

@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import PageNavigation from '../components/PageNavigation';
 
 import { api } from '../lib/api';
 import {
@@ -96,6 +97,7 @@ export default function Rooms() {
     <SafeAreaView style={styles.container}>
       <View style={{flexDirection:'row',gap:8,padding:15}}><TouchableOpacity onPress={()=>router.back()} style={styles.navButton}><Text>Back</Text></TouchableOpacity><TouchableOpacity onPress={()=>router.push('/superadmin')} style={styles.navButton}><Text>Home</Text></TouchableOpacity></View>
       <ScrollView contentContainerStyle={styles.content}>
+        <PageNavigation />
 
         <H1>Rooms</H1>
 

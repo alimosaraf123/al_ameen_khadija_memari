@@ -20,6 +20,7 @@ import { Platform } from 'react-native';
 import { api, API_BASE } from '../lib/api';
 import { getToken } from '../lib/auth';
 import { Field, Button, Card, H1, Muted } from '../components/ui';
+import PageNavigation from '../components/PageNavigation';
 
 type StudentDocument = {
   id: number;
@@ -1141,6 +1142,7 @@ export default function Documents() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
+        <PageNavigation />
         <H1>Student Documents</H1>
 
         <Text style={styles.sectionTitle}>
