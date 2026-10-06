@@ -596,6 +596,27 @@ export default function Documents() {
     }
   };
 
+  const bulkUploadBirthCertificate = async () => {
+    try {
+      setBulkXiBusy(true);
+      const picked = await pickFile();
+      if (!picked) return;
+      if (!String(picked.mimeType || '').toLowerCase().includes('pdf') && !String(picked.name || '').toLowerCase().endsWith('.pdf')) throw new Error('Please select the Class XII Birth Certificate PDF file.');
+      const token = await getToken();
+      const fd = new FormData();
+      await appendPickedFile(fd, picked);
+      const response = await sendMultipart(`${API_BASE}/api/documents/bulk/xi-registration?document_type=birth_certificate`, fd, token);
+      const data = await responseMessage(response as any);
+      if (!response.ok) throw new Error(data.message || 'Bulk upload failed');
+      const result = data.result || {};
+      Alert.alert('Birth Certificate bulk upload', `Uploaded: ${result.uploaded?.length || 0}\nSkipped: ${result.skipped?.length || 0}\nUnmatched: ${result.unmatched?.length || 0}`);
+    } catch (e: any) {
+      Alert.alert('Bulk upload', e.message || 'Bulk upload failed');
+    } finally {
+      setBulkXiBusy(false);
+    }
+  };
+
   const replaceDocument = async (
     doc: StudentDocument
   ) => {
@@ -1689,6 +1710,7 @@ export default function Documents() {
               <Text style={styles.documentTypeTitle}>Class XII - XI Registration Bulk Upload</Text>
               <Muted>Select the multi-page PDF. Each page is matched by registration number and saved to the matching Class XII student's XI Registration document.</Muted>
               <Button title={bulkXiBusy ? 'Uploading PDF pages...' : 'Upload XI Registration PDF'} onPress={bulkUploadXiRegistration} />
+              <Button title={bulkXiBusy ? 'Uploading PDF pages...' : 'Upload Class XII Birth Certificate PDF'} onPress={bulkUploadBirthCertificate} />
             </Card>
 
             {loading && (
