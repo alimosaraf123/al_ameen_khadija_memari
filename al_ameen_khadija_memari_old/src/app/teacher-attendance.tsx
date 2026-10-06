@@ -1,10 +1,10 @@
-import React, {useState} from 'react';
-import {ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import React, {useEffect, useState} from 'react';
+import {Image, ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {router} from 'expo-router';
 import AcademyHeader from '../components/AcademyHeader';
 import {Field} from '../components/ui';
-import {api} from '../lib/api';
+import {api,API_BASE} from '../lib/api';
 
 type Staff = {id:number; staff_id:string; name:string; photo_url?:string; designation?:string; status?:string; attendance?:Record<string,string>; present?:number; absent?:number; late?:number; leave?:number; recorded?:number};
 const statuses = ['Present','Absent','Late','Leave'];
@@ -27,6 +27,7 @@ export default function TeacherAttendance() {
       if(monthly){setReport(data.staff);setDays(data.days||[]);setReportMonth(month);}else{setStaff(data.staff);setLoadedDate(date);}
     }catch(e:any){setError(e.message);}finally{setBusy(false);}
   };
+  useEffect(()=>{void load(true);},[]);
   const save=async()=>{
     if(staff.some(p=>!p.status)){setError('Select a status for every staff member.');return;}
     setBusy(true);setError('');setMessage('');
