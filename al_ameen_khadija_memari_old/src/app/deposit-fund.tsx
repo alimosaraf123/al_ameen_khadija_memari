@@ -389,7 +389,7 @@ export default function DepositFund() {
       >
 
         <AcademyHeader />
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}><Text style={styles.backText}>← Back</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/superadmin')} style={styles.backButton}><Text style={styles.backText}>← Back</Text></TouchableOpacity>
 
         <H1>
           Student Deposit Fund
