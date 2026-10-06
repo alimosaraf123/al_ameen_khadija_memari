@@ -5,6 +5,7 @@ const pool = require('../db');
 const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
 const router = express.Router();
+router.use('/attendance', require('./staffAttendance'));
 async function teacherCanAccess(req,id){if(['admin','super_admin'].includes(req.user.role))return true;const r=await pool.query('SELECT 1 FROM teachers WHERE id=$1 AND user_id=$2',[id,req.user.userId]);return !!r.rowCount;}
 
 const teacherDetailsSchemaReady = pool.query([

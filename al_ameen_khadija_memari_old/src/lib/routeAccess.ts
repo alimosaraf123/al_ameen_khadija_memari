@@ -1,5 +1,5 @@
 export const PRIVATE_ROUTES = [
-  'visits','terminal-exams','teachers','teacher','teacher-security','system-admin',
+  'visits','terminal-exams','teachers','teacher-attendance','teacher','teacher-security','system-admin',
   'superadmin','students','student-transfer','student-lifecycle','settings',
   'service-staff','routines','rooms','room-assignments','problems','office','notices',
   'marks','library','illness','id-cards','guardians','guardian','guardian-student',
@@ -10,6 +10,7 @@ export function canOpenRoute(route:string,user:any) {
   if(!user?.is_active || !user?.role)return false;
   if(user.password_change_required && route!=='settings')return false;
   if(route==='superadmin')return ['admin','super_admin'].includes(user.role);
+  if(route==='teacher-attendance')return ['admin','super_admin'].includes(user.role);
   if(route==='system-admin')return user.role==='super_admin';
   if(['guardian','guardian-student'].includes(route))return user.role==='guardian';
   if(route==='teacher')return ['teacher','admin','super_admin'].includes(user.role);
