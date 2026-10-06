@@ -90,6 +90,7 @@ export default function DepositFund() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [statement, setStatement] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'statement' | 'transactions'>('statement');
 
 
   // =====================================
@@ -395,9 +396,18 @@ export default function DepositFund() {
 
         <H1>
           Student Deposit Fund
-        </H1><Text style={styles.totalDue}>Total Due: ₹{Number(dashboard?.summary?.total_due || 0).toFixed(2)}</Text>
+        </H1>
+        <View style={styles.tabRow}>
+          <TouchableOpacity onPress={() => setActiveTab('statement')} style={[styles.tabButton, activeTab === 'statement' && styles.tabActive]}>
+            <Text style={styles.tabText}>Statement</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setActiveTab('transactions')} style={[styles.tabButton, activeTab === 'transactions' && styles.tabActive]}>
+            <Text style={styles.tabText}>Deposit / Withdrawal</Text>
+          </TouchableOpacity>
+        </View><Text style={styles.totalDue}>Total Due: ₹{Number(dashboard?.summary?.total_due || 0).toFixed(2)}</Text>
 
-        <Card>
+        {activeTab === 'statement' && (
+          <Card>
           <Text style={styles.heading}>Date Statement / Print</Text>
           <Text style={styles.help}>Select a student above, or enter a date range to see all students' transactions.</Text>
           <View style={styles.dateRow}><DatePickerField label="From Date" value={fromDate} onChange={setFromDate} /><DatePickerField label="To Date" value={toDate} onChange={setToDate} /></View>
@@ -407,9 +417,12 @@ export default function DepositFund() {
             {(statement.balances || []).filter((row:any) => Number(row.balance || 0) !== 0).map((row:any) => <View key={row.registration_no} style={styles.statementRow}><Text style={styles.statementName}>{row.student_name} · Reg. {row.registration_no}</Text><Text>Balance: {Number(row.balance || 0) > 0 ? '+' : '-'}₹{Math.abs(Number(row.balance || 0)).toFixed(2)}</Text></View>)}
             <Button title="Print Statement" onPress={printStatement} />
           </>}
-        </Card>
+          </Card>
+        )}
 
 
+        {activeTab === 'transactions' && (
+          <>
         <Text
           style={styles.help}
         >
@@ -996,6 +1009,9 @@ export default function DepositFund() {
 
         )}
 
+          </>
+        )}
+
       </ScrollView>
 
     </SafeAreaView>
@@ -1103,6 +1119,11 @@ netBalanceStatus: {
       flexDirection: 'row',
       gap: 8,
     },
+
+    tabRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+    tabButton: { backgroundColor: '#e5eef8', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 7 },
+    tabActive: { backgroundColor: '#1768c5' },
+    tabText: { color: '#173d6b', fontWeight: '800' },
 
     heading: {
       fontSize: 19,
