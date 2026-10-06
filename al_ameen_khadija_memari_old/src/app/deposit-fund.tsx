@@ -24,6 +24,7 @@ import {
 } from '../lib/api';
 import {router} from 'expo-router';
 import AcademyHeader from '../components/AcademyHeader';
+import DatePickerField from '../components/DatePickerField';
 
 import {
   Field,
@@ -398,7 +399,7 @@ export default function DepositFund() {
         <Card>
           <Text style={styles.heading}>Date Statement / Print</Text>
           <Text style={styles.help}>Select a student above, or enter a date range to see all students' transactions.</Text>
-          <View style={styles.dateRow}><Field placeholder="From Date (YYYY-MM-DD)" value={fromDate} onChangeText={setFromDate} /><Field placeholder="To Date (YYYY-MM-DD)" value={toDate} onChangeText={setToDate} /></View>
+          <View style={styles.dateRow}><DatePickerField label="From Date" value={fromDate} onChange={setFromDate} /><DatePickerField label="To Date" value={toDate} onChange={setToDate} /></View>
           <Button title="View Statement" onPress={searchStatement} />
           {statement && <>
             <Text style={styles.dashboardText}>Deposit: ₹{Number(statement.summary?.deposit || 0).toFixed(2)} | Withdrawal: ₹{Number(statement.summary?.withdrawal || 0).toFixed(2)}</Text>
