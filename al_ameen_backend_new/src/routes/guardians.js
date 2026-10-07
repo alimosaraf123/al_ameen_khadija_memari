@@ -2923,6 +2923,12 @@ router.get(
   })
 );
 
+router.get('/student/:studentId/library-loans', auth, allow('guardian'), asyncHandler(async (req, res) => {
+  if (!(await guardianOwnsStudent(req.user.userId, req.params.studentId))) return res.status(403).json({ success: false, message: 'Not allowed' });
+  const result = await pool.query(`SELECT l.id,l.issued_at,l.due_date,l.returned_at,b.accession_no,b.book_number,b.title,b.author FROM library_loans l JOIN library_books b ON b.id=l.book_id WHERE l.student_id=$1 ORDER BY l.returned_at NULLS FIRST,l.issued_at DESC`, [req.params.studentId]);
+  res.json({ success: true, loans: result.rows });
+}));
+
 router.patch(
   '/admin/student/:studentId/deposit-fund-book',
   auth,

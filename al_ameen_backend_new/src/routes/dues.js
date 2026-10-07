@@ -1,5 +1,16 @@
 const express=require('express');const pool=require('../db');const {auth,allow}=require('../middleware/auth');const asyncHandler=require('../utils/asyncHandler');const router=express.Router();
 router.get('/student/:id',auth,asyncHandler(async(req,res)=>{const r=await pool.query(`SELECT * FROM student_dues WHERE student_id=$1 ORDER BY created_at DESC`,[req.params.id]);res.json({success:true,dues:r.rows});}));
+router.get('/student/:id/summary',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+  const student=(await pool.query(`SELECT id,registration_no,student_name,class_name,sdf_book_no FROM students WHERE id=$1`,[req.params.id])).rows[0];
+  if(!student)return res.status(404).json({success:false,message:'Student not found'});
+  const dues=(await pool.query(`SELECT id,due_title,amount,due_date,remarks,status FROM student_dues WHERE student_id=$1 AND status='due' AND amount>0 ORDER BY due_date NULLS LAST,created_at`,[req.params.id])).rows;
+  const isSdf=x=>/\bs\.?d\.?f\b|student development fund/i.test(String(x.due_title||''));
+  const monthlyDues=dues.filter(x=>/monthly|tuition|school fee|fees?/i.test(String(x.due_title||''))&&!isSdf(x));
+  const sdfDues=dues.filter(isSdf);
+  const tx=(await pool.query(`SELECT COALESCE(SUM(CASE WHEN transaction_type='deposit' THEN amount ELSE 0 END),0) total_deposit,COALESCE(SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END),0) total_expense FROM student_deposit_transactions WHERE student_id=$1`,[req.params.id])).rows[0];
+  const totalDeposit=Number(tx.total_deposit||0),totalExpense=Number(tx.total_expense||0);
+  res.json({success:true,student,monthly_dues:monthlyDues,monthly_due_total:monthlyDues.reduce((n,x)=>n+Number(x.amount||0),0),sdf_dues:sdfDues,sdf_due:Math.max(0,totalExpense-totalDeposit),sdf_balance:totalDeposit-totalExpense,total_deposit:totalDeposit,total_expense:totalExpense});
+}));
 router.post('/',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{const b=req.body;const r=await pool.query(`INSERT INTO student_dues(student_id,due_title,amount,due_date,status,remarks,entered_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,[b.student_id,b.due_title,b.amount,b.due_date||null,b.status||'due',b.remarks||null,req.user.userId]);res.status(201).json({success:true,due:r.rows[0]});}));
 router.patch('/:id',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{const b=req.body;const r=await pool.query(`UPDATE student_dues SET due_title=$1,amount=$2,due_date=$3,status=$4,remarks=$5,updated_at=NOW() WHERE id=$6 RETURNING *`,[b.due_title,b.amount,b.due_date||null,b.status||'due',b.remarks||null,req.params.id]);res.json({success:true,due:r.rows[0]});}));
 module.exports=router;

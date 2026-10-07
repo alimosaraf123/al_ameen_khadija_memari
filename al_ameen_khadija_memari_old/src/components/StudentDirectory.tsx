@@ -283,13 +283,13 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
           <View style={[s.row, s.tableHead]}>{columns.map(([key, title, width]) => <TouchableOpacity key={key} disabled={['serial', 'photo', 'action'].includes(key)} accessibilityRole="button" style={[s.cell, { width }]} onPress={() => setSort({ key, ascending: sort.key === key ? !sort.ascending : true })}><Text style={s.columnTitle}>{title}{sort.key === key ? (sort.ascending ? ' -' : ' -') : ''}</Text></TouchableOpacity>)}</View>
           {rows.map((student, index) => <View key={student.id} style={[s.row, index % 2 === 0 && s.striped]}>
             {columns.map(([key, , width]) => <View key={key} style={[s.cell, { width }]}>
-              {key === 'serial' ? <Text>{start + index + 1}</Text> : key === 'photo' ? <Photo student={student} /> : key === 'action' ? <View style={s.inline}>
+              {key === 'serial' ? <Text style={s.numberText}>{start + index + 1}</Text> : key === 'photo' ? <Photo student={student} /> : key === 'action' ? <View style={s.inline}>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Edit ${student.student_name}`} style={[s.action, s.edit]} onPress={() => onEdit(student)}><Text>Edit</Text></TouchableOpacity>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel={`View ${student.student_name}`} style={[s.action, s.view]} onPress={() => openDetails(student)}><Text>View</Text></TouchableOpacity>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel={'Documents for ' + student.student_name} style={[s.action, s.documents]} onPress={() => openDocuments(student)}><Text style={s.documentIcon}>{String.fromCodePoint(0x1F4C4)}</Text></TouchableOpacity>
                 {student.is_active && <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Mark ${student.student_name} as dropout`} style={[s.action, s.remove]} onPress={() => onDeactivate(student)}><Text style={{ color: '#fff' }}>-</Text></TouchableOpacity>}
               </View> : key === 'is_active' ? <Text style={{ color: student.is_active ? '#166534' : '#b91c1c', fontWeight: '700' }}>{student.is_active ? 'Active' : 'Dropout'}</Text>
-                : <Text selectable style={s.cellText}>{String(student[key] ?? '-')}</Text>}
+                : <Text selectable style={[s.cellText, ['registration_no','monthly_fees','mobile_number','whatsapp_number','room_name'].includes(key) && s.numberText]}>{String(student[key] ?? '-')}</Text>}
             </View>)}
           </View>)}
         </View>
@@ -336,10 +336,10 @@ const s = StyleSheet.create({
   directory: { backgroundColor: '#fff', padding: 12, borderWidth: 1, borderColor: '#ccd5df', borderRadius: 6 },
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, backgroundColor: '#add8e6', padding: 8, borderRadius: 4 },
   select: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 4, paddingHorizontal: 12, paddingVertical: 10, minHeight: 42, justifyContent: 'center' },
-  selectText: { color: '#111827', fontSize: 15 }, toolbar: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingVertical: 12 },
-  inline: { flexDirection: 'row', alignItems: 'center', gap: 6 }, search: { borderWidth: 1, borderColor: '#aeb5bd', borderRadius: 3, width: 190, padding: 9, fontSize: 15, color: '#111827' },
+  selectText: { color: '#000000', fontSize: 17, fontFamily: 'Constantia' }, toolbar: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  inline: { flexDirection: 'row', alignItems: 'center', gap: 6 }, search: { borderWidth: 1, borderColor: '#aeb5bd', borderRadius: 3, width: 190, padding: 9, fontSize: 17, color: '#000000', fontFamily: 'Constantia' },
   row: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#c3c7cc', minHeight: 48, alignItems: 'center' }, tableHead: { backgroundColor: '#cfe2ff', minHeight: 38 },
-  cell: { paddingHorizontal: 7, paddingVertical: 6 }, cellText: { fontSize: 14, color: '#111111' }, columnTitle: { fontSize: 14, fontWeight: '900', color: '#000000' }, striped: { backgroundColor: '#f1f1f1' },
+  cell: { paddingHorizontal: 7, paddingVertical: 6 }, cellText: { fontSize: 16, color: '#000000', fontFamily: 'Constantia' }, numberText: { fontFamily: 'Arial' }, columnTitle: { fontSize: 16, fontWeight: '900', color: '#000000', fontFamily: 'Constantia' }, striped: { backgroundColor: '#f1f1f1' },
   photo: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: '#94a3b8' }, avatar: { backgroundColor: '#e0e7ff', alignItems: 'center', justifyContent: 'center' },
   action: { paddingHorizontal: 7, minHeight: 36, justifyContent: 'center', borderRadius: 4 }, edit: { backgroundColor: '#ffc107' }, view: { backgroundColor: '#22d3ee' }, documents: { backgroundColor: '#0ea5e9', minWidth: 36, alignItems: 'center' }, documentIcon: { color: '#fff', fontSize: 20, fontWeight: '900' }, remove: { backgroundColor: '#e11d48' },
   empty: { padding: 24, textAlign: 'center', color: '#64748b' }, disabled: { opacity: 0.4 }, error: { padding: 16, color: '#b91c1c' },

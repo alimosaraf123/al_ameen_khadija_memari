@@ -24,7 +24,7 @@ import {
 } from '../lib/guardianDevice';
 import { Field, Button, Muted } from '../components/ui';
 
-type TabName = 'home' | 'result' | 'gatepass' | 'visits' | 'details' | 'documents' | 'notifications' | 'settings';
+type TabName = 'home' | 'result' | 'gatepass' | 'visits' | 'details' | 'documents' | 'library' | 'notifications' | 'settings';
 
 
 export default function Guardian() {
@@ -60,6 +60,7 @@ export default function Guardian() {
   const [biometricBusy, setBiometricBusy] = useState(false);
   const [documentPreviews, setDocumentPreviews] = useState<Record<string,string>>({});
   const [visitorEntries, setVisitorEntries] = useState<any[]>([]);
+  const [libraryLoans, setLibraryLoans] = useState<any[]>([]);
   useEffect(() => { const timer = setInterval(() => setNoticeBlink(value => !value), 700); return () => clearInterval(timer); }, []);
   useEffect(() => {
     let cancelled = false;
@@ -144,19 +145,21 @@ export default function Guardian() {
       // Do not fetch class-wide terminal result payloads into the guardian app.
       setTerminalResults([]);
 
-      const [profileResult, childResult, depositResult, visitorEntriesResult] = await Promise.allSettled([
+      const [profileResult, childResult, depositResult, visitorEntriesResult, libraryResult] = await Promise.allSettled([
         api(`/api/guardians/student/${studentId}/profile`),
         api(`/api/guardians/student/${studentId}`),
         api(`/api/guardians/student/${studentId}/deposit-fund`),
         api(`/api/guardians/student/${studentId}/visitor-entries`),
+        api(`/api/guardians/student/${studentId}/library-loans`),
       ]);
 
       setProfile(profileResult.status === 'fulfilled' ? profileResult.value : null);
       setChildData(childResult.status === 'fulfilled' ? childResult.value : null);
       setDepositData(depositResult.status === 'fulfilled' ? depositResult.value : null);
       setVisitorEntries(visitorEntriesResult.status === 'fulfilled' ? (visitorEntriesResult.value.entries || []) : []);
+      setLibraryLoans(libraryResult.status === 'fulfilled' ? (libraryResult.value.loans || []) : []);
 
-      const failed = [profileResult, childResult, depositResult, visitorEntriesResult].find(
+      const failed = [profileResult, childResult, depositResult, visitorEntriesResult, libraryResult].find(
         (result) => result.status === 'rejected'
       );
       if (failed?.status === 'rejected') {
@@ -512,6 +515,11 @@ export default function Guardian() {
           onPress={() => setTab('documents')}
         />
         <Tab
+          title="Library"
+          active={tab === 'library'}
+          onPress={() => setTab('library')}
+        />
+        <Tab
           title="Notifications"
           active={tab === 'notifications'}
           onPress={() => setTab('notifications')}
@@ -685,6 +693,20 @@ export default function Guardian() {
             )}
           </>
         )}
+
+        <Text style={styles.heading}>Library Books</Text>
+        <Card>
+          {!libraryLoans.length ? <Muted>No library book issue or return record.</Muted> : libraryLoans.map((loan: any) => (
+            <View key={loan.id} style={styles.transactionCard}>
+              <View style={styles.transactionTop}>
+                <Text style={styles.transactionDetails}>{loan.title || 'Library Book'}</Text>
+                <Text style={loan.returned_at ? styles.positive : styles.negative}>{loan.returned_at ? 'Returned' : 'Issued'}</Text>
+              </View>
+              <Text style={styles.dateText}>Book No: {loan.book_number || loan.accession_no || '-'}{loan.author ? `  |  ${loan.author}` : ''}</Text>
+              <Text style={styles.dateText}>Issued: {String(loan.issued_at || '').slice(0, 10)}  |  Due: {String(loan.due_date || '').slice(0, 10)}{loan.returned_at ? `  |  Returned: ${String(loan.returned_at).slice(0, 10)}` : ''}</Text>
+            </View>
+          ))}
+        </Card>
 
         {/* RESULT */}
         {tab === 'notifications' && (
@@ -927,6 +949,25 @@ export default function Guardian() {
             )}
 
 
+          </>
+        )}
+
+        {/* LIBRARY */}
+        {tab === 'library' && (
+          <>
+            <Text style={styles.heading}>Library Books</Text>
+            <Card>
+              {!libraryLoans.length ? <Muted>No library book issue or return record.</Muted> : libraryLoans.map((loan: any) => (
+                <View key={loan.id} style={styles.transactionCard}>
+                  <View style={styles.transactionTop}>
+                    <Text style={styles.transactionDetails}>{loan.title || 'Library Book'}</Text>
+                    <Text style={loan.returned_at ? styles.positive : styles.negative}>{loan.returned_at ? 'Returned' : 'Issued'}</Text>
+                  </View>
+                  <Text style={styles.dateText}>Book No: {loan.book_number || loan.accession_no || '-'}{loan.author ? `  |  ${loan.author}` : ''}</Text>
+                  <Text style={styles.dateText}>Issued: {String(loan.issued_at || '').slice(0, 10)}  |  Due: {String(loan.due_date || '').slice(0, 10)}{loan.returned_at ? `  |  Returned: ${String(loan.returned_at).slice(0, 10)}` : ''}</Text>
+                </View>
+              ))}
+            </Card>
           </>
         )}
 

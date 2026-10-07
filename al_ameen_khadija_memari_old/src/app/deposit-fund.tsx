@@ -82,6 +82,7 @@ export default function DepositFund() {
     useState('Cash');
 
   const [sdfBookNo, setSdfBookNo] = useState('');
+  const [bookNoEditing, setBookNoEditing] = useState(true);
 
   const [
     referenceNo,
@@ -226,6 +227,7 @@ export default function DepositFund() {
 
         setFundData(data);
         setSdfBookNo(String(data.student?.sdf_book_no || ''));
+        setBookNoEditing(!String(data.student?.sdf_book_no || '').trim());
 
       } catch (e: any) {
 
@@ -279,6 +281,7 @@ export default function DepositFund() {
         body: JSON.stringify({ sdf_book_no: sdfBookNo.trim() }),
       });
       setFundData((current: any) => current ? { ...current, student: { ...current.student, sdf_book_no: sdfBookNo.trim() } } : current);
+      setBookNoEditing(false);
       Alert.alert('Saved', 'SDF Book No. updated successfully.');
     } catch (e: any) {
       Alert.alert('SDF Book No.', e.message || 'Could not update SDF Book No.');
@@ -588,6 +591,7 @@ export default function DepositFund() {
           <>
 
             <Card>
+              <View style={styles.studentCardInner}>
 
               <Text
                 style={
@@ -599,7 +603,7 @@ export default function DepositFund() {
                     .student_name
                 }
                 {'  ·  SDF Book No: '}
-                {sdfBookNo || '-'}
+                <Text style={sdfBookNo.trim() ? styles.savedBookNo : undefined}>{sdfBookNo || '-'}</Text>
               </Text>
 
               <View style={styles.bookNoRow}>
@@ -607,9 +611,10 @@ export default function DepositFund() {
                   placeholder="SDF Book No."
                   value={sdfBookNo}
                   onChangeText={setSdfBookNo}
+                  style={styles.bookNoInput}
                 />
-                <TouchableOpacity style={styles.bookNoSave} onPress={saveSdfBookNo}>
-                  <Text style={styles.bookNoSaveText}>Save Book No.</Text>
+                <TouchableOpacity style={styles.bookNoSave} onPress={() => bookNoEditing ? saveSdfBookNo() : setBookNoEditing(true)}>
+                  <Text style={styles.bookNoSaveText}>{bookNoEditing ? 'Save Book No.' : 'Edit Book No.'}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -680,7 +685,7 @@ export default function DepositFund() {
                 </Text>
 
               </TouchableOpacity>
-
+              </View>
             </Card>
 
 
@@ -1226,23 +1231,46 @@ whatsappText: {
       fontWeight: '800',
     },
 
+    studentCardInner: {
+      position: 'relative',
+      paddingTop: 2,
+      paddingRight: 180,
+      minHeight: 112,
+    },
+
+    savedBookNo: {
+      color: '#1565c0',
+      fontWeight: '900',
+    },
+
     bookNoRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
-      marginTop: 10,
+      position: 'absolute',
+      right: 0,
+      top: 0,
+    },
+
+    bookNoInput: {
+      width: 64,
+      paddingVertical: 7,
+      paddingHorizontal: 8,
+      marginBottom: 0,
+      fontSize: 14,
     },
 
     bookNoSave: {
       backgroundColor: '#1565c0',
       borderRadius: 8,
-      paddingVertical: 12,
-      paddingHorizontal: 14,
+      paddingVertical: 8,
+      paddingHorizontal: 10,
     },
 
     bookNoSaveText: {
       color: '#fff',
       fontWeight: '800',
+      fontSize: 12,
     },
 
     studentMeta: {
