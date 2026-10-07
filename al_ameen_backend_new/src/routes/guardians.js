@@ -13,6 +13,7 @@ const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
 const temporarySchemaReady=pool.query(fs.readFileSync(path.join(__dirname,'../../sql/guardian-temporary-credentials.sql'),'utf8'));
+const depositFundSchemaReady = pool.query('ALTER TABLE students ADD COLUMN IF NOT EXISTS sdf_book_no VARCHAR(100)');
 router.get('/temporary-passwords',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
  await temporarySchemaReady;
  const r=await pool.query("SELECT u.id,u.login_id,t.encrypted_password FROM guardian_temporary_credentials t JOIN users u ON u.id=t.user_id WHERE u.role='guardian' AND u.password_change_required=TRUE");
@@ -115,6 +116,8 @@ router.get(
   auth,
   allow('guardian'),
   asyncHandler(async (req, res) => {
+
+    await depositFundSchemaReady;
     if (!(await guardianOwnsStudent(req.user.userId, req.params.studentId))) {
       return res.status(403).json({ success: false, message: 'This student is not linked to your Guardian account' });
     }
@@ -1220,6 +1223,69 @@ router.get(
 // GUARDIAN CHILD DETAILS
 // ========================================
 
+router.get('/student/:studentId/visitor-entries', auth, allow('guardian'), asyncHandler(async (req, res) => {
+  const studentId = req.params.studentId;
+  if (!(await guardianOwnsStudent(req.user.userId, studentId))) {
+    return res.status(403).json({ success: false, message: 'Not allowed' });
+  }
+  const result = await pool.query(`
+    SELECT e.id,e.visitor_name,e.visitor_relation,e.entry_mode,e.is_active,e.entered_at,
+           s.registration_no,u.full_name entered_by_name
+    FROM gate_guardian_visit_entries e
+    JOIN students s ON s.id=e.student_id
+    LEFT JOIN users u ON u.id=e.entered_by
+    WHERE e.student_id=$1
+    ORDER BY e.entered_at DESC
+    LIMIT 100
+  `, [studentId]);
+  res.json({ success: true, entries: result.rows });
+}));
+
+// Guardian sees only the selected child's published weekly-test marks.
+router.get(
+  '/student/:studentId/weekly-tests',
+  auth,
+  allow('guardian'),
+  asyncHandler(async (req, res) => {
+    const studentId = req.params.studentId;
+    if (!(await guardianOwnsStudent(req.user.userId, studentId))) {
+      return res.status(403).json({ success: false, message: 'Not allowed' });
+    }
+    const result = await pool.query(`
+      WITH published_marks AS (
+        SELECT
+          b.id AS batch_id,
+          e.exam_date,
+          su.subject_name,
+          b.full_marks,
+          sm.student_id,
+          sm.obtained_marks,
+          RANK() OVER (
+            PARTITION BY sm.exam_id, sm.subject_id
+            ORDER BY sm.obtained_marks DESC NULLS LAST
+          ) AS mark_rank,
+          COUNT(*) FILTER (WHERE sm.obtained_marks IS NOT NULL) OVER (
+            PARTITION BY sm.exam_id, sm.subject_id
+          ) AS ranked_count
+        FROM mark_entry_batches b
+        JOIN exams e ON e.id = b.exam_id AND e.is_published = TRUE
+        JOIN subjects su ON su.id = b.subject_id
+        JOIN student_marks sm
+          ON sm.exam_id = b.exam_id
+         AND sm.subject_id = b.subject_id
+         AND sm.verification_status = 'verified'
+        WHERE b.locked = TRUE
+      )
+      SELECT batch_id, exam_date, subject_name, full_marks,
+             obtained_marks, mark_rank, ranked_count
+      FROM published_marks
+      WHERE student_id = $1
+      ORDER BY exam_date DESC NULLS LAST, batch_id DESC
+    `, [studentId]);
+    res.json({ success: true, tests: result.rows });
+  })
+);
+
 router.get(
   '/student/:studentId',
 
@@ -1382,36 +1448,28 @@ router.get(
 
           pool.query(
             `
-            SELECT
-              sm.*,
-              e.exam_name,
-              e.is_published,
-              su.subject_name
-
-            FROM student_marks sm
-
-            JOIN exams e
-              ON e.id =
-                 sm.exam_id
-
-            JOIN subjects su
-              ON su.id =
-                 sm.subject_id
-
-            WHERE
-              sm.student_id=$1
-
-              AND
-              sm.verification_status=
-              'verified'
-
-              AND
-              e.is_published=TRUE
-
-            ORDER BY
-              e.exam_date DESC
-              NULLS LAST,
-              su.subject_name
+            WITH verified_marks AS (
+              SELECT sm.*, e.exam_name, e.exam_date, e.is_published,
+                     su.subject_name, es.full_marks,
+                     RANK() OVER (
+                       PARTITION BY sm.exam_id, sm.subject_id
+                       ORDER BY sm.obtained_marks DESC NULLS LAST
+                     ) AS mark_rank,
+                     COUNT(*) FILTER (WHERE sm.obtained_marks IS NOT NULL) OVER (
+                       PARTITION BY sm.exam_id, sm.subject_id
+                     ) AS ranked_count,
+                     MAX(sm.obtained_marks) FILTER (WHERE sm.obtained_marks IS NOT NULL) OVER (
+                       PARTITION BY sm.exam_id, sm.subject_id
+                     ) AS highest_marks
+              FROM student_marks sm
+              JOIN exams e ON e.id=sm.exam_id AND e.is_published=TRUE
+              JOIN subjects su ON su.id=sm.subject_id
+              LEFT JOIN exam_subjects es ON es.exam_id=sm.exam_id AND es.subject_id=sm.subject_id
+              WHERE sm.verification_status='verified'
+            )
+            SELECT * FROM verified_marks
+            WHERE student_id=$1
+            ORDER BY exam_date DESC NULLS LAST, subject_name
             `,
             [
               studentId
@@ -1440,7 +1498,7 @@ router.get(
             WHERE n.is_active=TRUE AND (
               nt.target_type='all'
               OR (nt.target_type='role' AND nt.target_value='guardian')
-              OR (nt.target_type='class' AND nt.target_value=(SELECT class_name FROM students WHERE id=$1))
+              OR (nt.target_type='class' AND LOWER(TRIM(nt.target_value))=LOWER(TRIM((SELECT class_name FROM students WHERE id=$1))))
               OR (nt.target_type='student' AND nt.target_value=$1::text)
               OR (nt.target_type='guardian' AND nt.target_value IN (SELECT gp.id::text FROM guardian_profiles gp WHERE gp.user_id=$2))
             )
@@ -1958,6 +2016,8 @@ router.get(
 
   asyncHandler(async (req, res) => {
 
+    await depositFundSchemaReady;
+
     const studentId =
       req.params.studentId;
 
@@ -1974,7 +2034,8 @@ router.get(
           registration_no,
           student_name,
           class_name,
-          roll_no
+          roll_no,
+          sdf_book_no
         FROM students
         WHERE id=$1
         LIMIT 1
@@ -2162,6 +2223,8 @@ router.post(
   allow('super_admin', 'admin'),
 
   asyncHandler(async (req, res) => {
+
+    await depositFundSchemaReady;
 
     const studentId =
       req.params.studentId;
@@ -2857,6 +2920,22 @@ router.get(
 
     }
 
+  })
+);
+
+router.patch(
+  '/admin/student/:studentId/deposit-fund-book',
+  auth,
+  allow('super_admin', 'admin'),
+  asyncHandler(async (req, res) => {
+    await depositFundSchemaReady;
+    const bookNo = String(req.body?.sdf_book_no || '').trim().slice(0, 100) || null;
+    const result = await pool.query(
+      'UPDATE students SET sdf_book_no=$1, updated_at=NOW() WHERE id=$2 RETURNING id, sdf_book_no',
+      [bookNo, req.params.studentId]
+    );
+    if (!result.rowCount) return res.status(404).json({ success: false, message: 'Student not found' });
+    res.json({ success: true, sdf_book_no: result.rows[0].sdf_book_no });
   })
 );
 module.exports = router;

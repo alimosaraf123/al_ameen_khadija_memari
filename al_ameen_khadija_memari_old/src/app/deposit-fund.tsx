@@ -79,7 +79,9 @@ export default function DepositFund() {
     useState('');
 
   const [details, setDetails] =
-    useState('');
+    useState('Cash');
+
+  const [sdfBookNo, setSdfBookNo] = useState('');
 
   const [
     referenceNo,
@@ -223,6 +225,7 @@ export default function DepositFund() {
           );
 
         setFundData(data);
+        setSdfBookNo(String(data.student?.sdf_book_no || ''));
 
       } catch (e: any) {
 
@@ -253,7 +256,7 @@ export default function DepositFund() {
 
       setAmount('');
 
-      setDetails('');
+      setDetails('Cash');
 
       setReferenceNo('');
 
@@ -267,6 +270,20 @@ export default function DepositFund() {
   // =====================================
   // SAVE TRANSACTION
   // =====================================
+
+  const saveSdfBookNo = async () => {
+    if (!selectedStudent) return;
+    try {
+      await api(`/api/guardians/admin/student/${selectedStudent.id}/deposit-fund-book`, {
+        method: 'PATCH',
+        body: JSON.stringify({ sdf_book_no: sdfBookNo.trim() }),
+      });
+      setFundData((current: any) => current ? { ...current, student: { ...current.student, sdf_book_no: sdfBookNo.trim() } } : current);
+      Alert.alert('Saved', 'SDF Book No. updated successfully.');
+    } catch (e: any) {
+      Alert.alert('SDF Book No.', e.message || 'Could not update SDF Book No.');
+    }
+  };
 
   const saveTransaction =
     async () => {
@@ -353,7 +370,7 @@ export default function DepositFund() {
 
         setAmount('');
 
-        setDetails('');
+        setDetails('Cash');
 
         setReferenceNo('');
 
@@ -581,7 +598,20 @@ export default function DepositFund() {
                   selectedStudent
                     .student_name
                 }
+                {'  ·  SDF Book No: '}
+                {sdfBookNo || '-'}
               </Text>
+
+              <View style={styles.bookNoRow}>
+                <Field
+                  placeholder="SDF Book No."
+                  value={sdfBookNo}
+                  onChangeText={setSdfBookNo}
+                />
+                <TouchableOpacity style={styles.bookNoSave} onPress={saveSdfBookNo}>
+                  <Text style={styles.bookNoSaveText}>Save Book No.</Text>
+                </TouchableOpacity>
+              </View>
 
 
               <Text
@@ -1193,6 +1223,25 @@ whatsappText: {
 
     studentName: {
       fontSize: 18,
+      fontWeight: '800',
+    },
+
+    bookNoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginTop: 10,
+    },
+
+    bookNoSave: {
+      backgroundColor: '#1565c0',
+      borderRadius: 8,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+    },
+
+    bookNoSaveText: {
+      color: '#fff',
       fontWeight: '800',
     },
 

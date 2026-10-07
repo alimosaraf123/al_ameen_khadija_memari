@@ -24,11 +24,12 @@ import {
 } from '../lib/guardianDevice';
 import { Field, Button, Muted } from '../components/ui';
 
-type TabName = 'home' | 'result' | 'gatepass' | 'visits' | 'details' | 'documents' | 'settings';
+type TabName = 'home' | 'result' | 'gatepass' | 'visits' | 'details' | 'documents' | 'notifications' | 'settings';
 
 
 export default function Guardian() {
   const [tab, setTab] = useState<TabName>('home');
+  const [noticeBlink, setNoticeBlink] = useState(true);
   const [student, setStudent] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [childData, setChildData] = useState<any>(null);
@@ -58,6 +59,8 @@ export default function Guardian() {
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricBusy, setBiometricBusy] = useState(false);
   const [documentPreviews, setDocumentPreviews] = useState<Record<string,string>>({});
+  const [visitorEntries, setVisitorEntries] = useState<any[]>([]);
+  useEffect(() => { const timer = setInterval(() => setNoticeBlink(value => !value), 700); return () => clearInterval(timer); }, []);
   useEffect(() => {
     let cancelled = false;
     const loadPreviews = async () => {
@@ -137,19 +140,23 @@ export default function Guardian() {
 
       setStudent(firstStudent);
       const studentId = firstStudent.id;
-      try { const published=await api('/api/terminal-exams/published'); const detailed=await Promise.all((published.exams||[]).map((e:any)=>api('/api/terminal-exams/published/'+e.id))); setTerminalResults(detailed.flatMap((d:any)=>{const st=(d.students||[]).find((x:any)=>Number(x.id)===Number(studentId)); return st?[{id:d.exam.id,exam_name:d.exam.exam_name,subject_name:'Published terminal result',marks_obtained:Object.values(st.marks||{}).filter((v:any)=>v!=='Absent').join(', ')}]:[]})); } catch { setTerminalResults([]); }
+      // Weekly marks are loaded through the guardian-scoped child endpoint below.
+      // Do not fetch class-wide terminal result payloads into the guardian app.
+      setTerminalResults([]);
 
-      const [profileResult, childResult, depositResult] = await Promise.allSettled([
+      const [profileResult, childResult, depositResult, visitorEntriesResult] = await Promise.allSettled([
         api(`/api/guardians/student/${studentId}/profile`),
         api(`/api/guardians/student/${studentId}`),
         api(`/api/guardians/student/${studentId}/deposit-fund`),
+        api(`/api/guardians/student/${studentId}/visitor-entries`),
       ]);
 
       setProfile(profileResult.status === 'fulfilled' ? profileResult.value : null);
       setChildData(childResult.status === 'fulfilled' ? childResult.value : null);
       setDepositData(depositResult.status === 'fulfilled' ? depositResult.value : null);
+      setVisitorEntries(visitorEntriesResult.status === 'fulfilled' ? (visitorEntriesResult.value.entries || []) : []);
 
-      const failed = [profileResult, childResult, depositResult].find(
+      const failed = [profileResult, childResult, depositResult, visitorEntriesResult].find(
         (result) => result.status === 'rejected'
       );
       if (failed?.status === 'rejected') {
@@ -505,6 +512,11 @@ export default function Guardian() {
           onPress={() => setTab('documents')}
         />
         <Tab
+          title="Notifications"
+          active={tab === 'notifications'}
+          onPress={() => setTab('notifications')}
+        />
+        <Tab
           title="Settings"
           active={tab === 'settings'}
           onPress={() => setTab('settings')}
@@ -522,33 +534,19 @@ export default function Guardian() {
         {/* HOME */}
         {tab === 'home' && (
           <>
-            <Text style={styles.heading}>Notifications</Text>
-
+            <Text style={styles.heading}>Latest Notifications</Text>
             {notices.length === 0 ? (
-              <Card tone="notice">
-                <Muted>No new notification.</Muted>
-              </Card>
-            ) : (
-              notices.slice(0, 1).map((notice: any, index: number) => (
-                <Card key={notice.id || index} tone="notice">
-                  <Text style={styles.noticeTitle}>
-                    {notice.title || notice.notice_title || 'Notice'}
-                  </Text>
-
-                  {!!(notice.notice_text || notice.message || notice.content || notice.description) && (
-                    <Text style={styles.noticeText}>
-                      {notice.notice_text || notice.message || notice.content || notice.description}
-                    </Text>
-                  )}
-
-                  {!!(notice.published_at || notice.created_at) && (
-                    <Text style={styles.dateText}>
-                      {String(notice.published_at || notice.created_at).slice(0, 10)}
-                    </Text>
-                  )}
-                </Card>
-              ))
-            )}
+              <Card><Muted>No new notification.</Muted></Card>
+            ) : notices.slice(0, 2).map((notice: any, index: number) => {
+              const published = new Date(notice.published_at || notice.created_at || '').getTime();
+              const isNew = Number.isFinite(published) && published > 0 && Date.now() - published <= 72 * 60 * 60 * 1000;
+              return <Card key={`home-notice-${notice.id || index}`}>
+                <View style={styles.dashboardNoticeRow}>
+                  <Text numberOfLines={1} ellipsizeMode="tail" style={styles.dashboardNoticeText}>{notice.title || notice.notice_title || 'Notice'}{(notice.notice_text || notice.message) ? ` · ${notice.notice_text || notice.message}` : ''}</Text>
+                  {isNew && <Text style={[styles.newBadge, !noticeBlink && styles.newBadgeHidden]}>NEW</Text>}
+                </View>
+              </Card>;
+            })}
 
             {/* MONTHLY FEES */}
             <Text style={styles.heading}>Monthly Fees</Text>
@@ -574,7 +572,7 @@ export default function Guardian() {
                         </View>
 
                         <Text style={[styles.value, styles.monthlyDueAmount]}>
-                          â‚¹{Number(item.amount || 0).toFixed(2)}
+                          Rs. {Number(item.amount || 0).toFixed(2)}
                         </Text>
                       </View>
                     ))
@@ -593,7 +591,7 @@ export default function Guardian() {
                             : styles.positive,
                         ]}
                       >
-                        â‚¹{Number(monthlyFeeData?.total_due || 0).toFixed(2)}
+                        Rs. {Number(monthlyFeeData?.total_due || 0).toFixed(2)}
                       </Text>
                     </View>
                   </View>
@@ -638,7 +636,7 @@ export default function Guardian() {
                 ]}
               >
                 {depositData
-                  ? `${netBalance > 0 ? '+ ' : netBalance < 0 ? '- ' : ''}â‚¹${Math.abs(netBalance).toFixed(2)}`
+                  ? `${netBalance > 0 ? '+ ' : netBalance < 0 ? '- ' : ''}Rs. ${Math.abs(netBalance).toFixed(2)}`
                   : 'à¦¤à¦¥à§à¦¯ à¦ªà¦¾à¦“à§Ÿà¦¾ à¦¯à¦¾à§Ÿà¦¨à¦¿'}
               </Text>
 
@@ -674,7 +672,7 @@ export default function Guardian() {
                           : styles.negative,
                       ]}
                     >
-                      {item.transaction_type === 'deposit' ? '+ ' : '- '}â‚¹
+                      {item.transaction_type === 'deposit' ? '+ ' : '- '}Rs.
                       {Number(item.amount || 0).toFixed(2)}
                     </Text>
                   </View>
@@ -689,33 +687,60 @@ export default function Guardian() {
         )}
 
         {/* RESULT */}
+        {tab === 'notifications' && (
+          <>
+            <Text style={styles.heading}>Notifications</Text>
+            {notices.length === 0 ? (
+              <Card tone="notice"><Muted>No new notification.</Muted></Card>
+            ) : notices.map((notice: any, index: number) => (
+              <Card key={notice.id || index} tone="notice">
+                <Text style={styles.noticeTitle}>{notice.title || notice.notice_title || 'Notice'}</Text>
+                {!!(notice.notice_text || notice.message || notice.content || notice.description) && (
+                  <Text style={styles.noticeText}>{notice.notice_text || notice.message || notice.content || notice.description}</Text>
+                )}
+                {!!(notice.published_at || notice.created_at) && (
+                  <Text style={styles.dateText}>{String(notice.published_at || notice.created_at).slice(0, 10)}</Text>
+                )}
+              </Card>
+            ))}
+          </>
+        )}
+
         {tab === 'result' && (
           <>
             <Text style={styles.heading}>Published Result</Text>
-            <TouchableOpacity style={{backgroundColor:'#1764a5',padding:12,borderRadius:9,marginBottom:12}} onPress={()=>router.push('/class-results')}><Text style={{color:'#fff',fontWeight:'900',textAlign:'center'}}>View Full Class Results</Text></TouchableOpacity>
+
+            <Text style={styles.settingsHelp}>Weekly Test Marks</Text>
 
             {marks.length === 0 ? (
               <Card>
                 <Muted>No published result available.</Muted>
               </Card>
             ) : (
-              marks.map((mark: any, index: number) => (
-                <Card key={mark.id || index}>
-                  <Text style={styles.resultExam}>{mark.exam_name || 'Exam'}</Text>
-
-                  <View style={styles.row}>
-                    <Text style={styles.label}>Subject</Text>
-                    <Text style={styles.value}>{mark.subject_name || '-'}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator persistentScrollbar>
+                <View style={styles.weeklyTable}>
+                  <View style={[styles.weeklyRow, styles.weeklyHeader]}>
+                    <Text style={[styles.weeklyCell, styles.weeklySl]}>Sl</Text>
+                    <Text style={[styles.weeklyCell, styles.weeklyDate]}>Date</Text>
+                    <Text style={[styles.weeklyCell, styles.weeklySubject]}>Sub</Text>
+                    <Text style={styles.weeklyCell}>FM</Text>
+                    <Text style={styles.weeklyCell}>HM</Text>
+                    <Text style={styles.weeklyCell}>MO</Text>
+                    <Text style={styles.weeklyCell}>Rank</Text>
                   </View>
-
-                  <View style={styles.row}>
-                    <Text style={styles.label}>Marks</Text>
-                    <Text style={styles.value}>
-                      {mark.marks_obtained ?? mark.marks ?? mark.score ?? '-'}
-                    </Text>
-                  </View>
-                </Card>
-              ))
+                  {marks.map((mark: any, index: number) => (
+                    <View key={mark.id || `${mark.exam_id}-${mark.subject_id}-${index}`} style={styles.weeklyRow}>
+                      <Text style={[styles.weeklyCell, styles.weeklySl]}>{index + 1}</Text>
+                      <Text style={[styles.weeklyCell, styles.weeklyDate]}>{String(mark.exam_date || '').slice(0, 10).split('-').reverse().join('-') || '-'}</Text>
+                      <Text style={[styles.weeklyCell, styles.weeklySubject]}>{mark.subject_name || '-'}</Text>
+                      <Text style={styles.weeklyCell}>{mark.full_marks ?? '-'}</Text>
+                      <Text style={styles.weeklyCell}>{mark.highest_marks ?? '-'}</Text>
+                      <Text style={styles.weeklyCell}>{mark.obtained_marks ?? 'Absent'}</Text>
+                      <Text style={styles.weeklyCell}>{mark.obtained_marks == null ? '-' : `${mark.mark_rank}/${mark.ranked_count}`}</Text>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
             )}
           </>
         )}
@@ -738,6 +763,16 @@ export default function Guardian() {
                 <Text style={styles.noticeTitle}>{notice.title || 'Visit Permission Approved'}</Text>
                 <Text style={styles.noticeText}>{notice.notice_text || notice.message || ''}</Text>
                 <Text style={styles.dateText}>{String(notice.published_at || notice.created_at || '').slice(0, 16).replace('T', ' ')}</Text>
+              </Card>
+            ))}
+            <Text style={styles.heading}>Visitor Entry Records</Text>
+            {visitorEntries.length === 0 ? (
+              <Card><Muted>No visitor entry recorded.</Muted></Card>
+            ) : visitorEntries.map((entry: any) => (
+              <Card key={`visitor-entry-${entry.id}`}>
+                <Text style={styles.noticeTitle}>{entry.visitor_name} ({entry.visitor_relation})</Text>
+                <Text style={styles.noticeText}>{entry.entry_mode === 'with_permission' ? 'With Permission' : 'Without Permission'}</Text>
+                <Text style={styles.dateText}>{new Date(entry.entered_at).toLocaleString()} · {entry.is_active ? 'Active' : 'Inactive'}</Text>
               </Card>
             ))}
           </>
@@ -1221,6 +1256,32 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
+  dashboardNoticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  dashboardNoticeText: {
+    flex: 1,
+    fontWeight: '800',
+    color: '#172b4d',
+  },
+
+  newBadge: {
+    backgroundColor: '#d92d20',
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '900',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 5,
+  },
+
+  newBadgeHidden: {
+    opacity: 0,
+  },
+
   dateText: {
     marginTop: 5,
     color: '#64748b',
@@ -1379,6 +1440,39 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
 
+  weeklyTable: {
+    minWidth: 620,
+    borderWidth: 1,
+    borderColor: '#8b98a8',
+    backgroundColor: '#fff',
+  },
+
+  weeklyRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#cbd5e1',
+    minHeight: 42,
+    alignItems: 'center',
+  },
+
+  weeklyHeader: {
+    backgroundColor: '#e6eef7',
+  },
+
+  weeklyCell: {
+    width: 78,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    textAlign: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#cbd5e1',
+    fontWeight: '700',
+  },
+
+  weeklySl: { width: 44 },
+  weeklyDate: { width: 112 },
+  weeklySubject: { width: 120, textAlign: 'left' },
+
   infoRow: {
     flexDirection: 'row',
     paddingVertical: 6,
@@ -1430,3 +1524,4 @@ const styles = StyleSheet.create({
     noticeCard: { backgroundColor: '#fffbeb', borderColor: '#fde68a', borderLeftWidth: 4, borderLeftColor: '#f59e0b' },
   feesCard: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
 });
+

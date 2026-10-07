@@ -4,6 +4,17 @@ import{CameraView,useCameraPermissions}from'expo-camera';
 
 function registrationFromQr(raw:string){
  const value=String(raw||'').trim();
+ const values=[value];
+ try{const decoded=decodeURIComponent(value);if(decoded!==value)values.push(decoded)}catch{}
+ for(const candidate of values){
+  try{
+   const parsed=JSON.parse(candidate);
+   for(const key of ['registration_no','registration','reg_no','reg','student']){
+    const value=String(parsed?.[key]??'').trim();
+    if(/^\d{4,8}$/.test(value))return value;
+   }
+  }catch{}
+ }
  try{
   const url=new URL(value);
   for(const key of ['registration_no','registration','reg_no','reg','student']){
