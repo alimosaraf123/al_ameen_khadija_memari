@@ -694,20 +694,6 @@ export default function Guardian() {
           </>
         )}
 
-        <Text style={styles.heading}>Library Books</Text>
-        <Card>
-          {!libraryLoans.length ? <Muted>No library book issue or return record.</Muted> : libraryLoans.map((loan: any) => (
-            <View key={loan.id} style={styles.transactionCard}>
-              <View style={styles.transactionTop}>
-                <Text style={styles.transactionDetails}>{loan.title || 'Library Book'}</Text>
-                <Text style={loan.returned_at ? styles.positive : styles.negative}>{loan.returned_at ? 'Returned' : 'Issued'}</Text>
-              </View>
-              <Text style={styles.dateText}>Book No: {loan.book_number || loan.accession_no || '-'}{loan.author ? `  |  ${loan.author}` : ''}</Text>
-              <Text style={styles.dateText}>Issued: {String(loan.issued_at || '').slice(0, 10)}  |  Due: {String(loan.due_date || '').slice(0, 10)}{loan.returned_at ? `  |  Returned: ${String(loan.returned_at).slice(0, 10)}` : ''}</Text>
-            </View>
-          ))}
-        </Card>
-
         {/* RESULT */}
         {tab === 'notifications' && (
           <>
