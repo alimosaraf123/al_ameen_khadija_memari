@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const pool = require('../db');
 const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
+const { loginRateLimit } = require('../middleware/security');
 
 const router = express.Router();
 const passwordSchemaReady=pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_change_required BOOLEAN NOT NULL DEFAULT FALSE");
@@ -48,6 +49,7 @@ async function issueToken(user,deviceId){
 
 router.post(
   '/login',
+  loginRateLimit,
   asyncHandler(async (req, res) => {
     await passwordSchemaReady;
 
@@ -423,6 +425,7 @@ router.post(
 
 router.post(
   '/mpin-login',
+  loginRateLimit,
 
   asyncHandler(async (req, res) => {
 
