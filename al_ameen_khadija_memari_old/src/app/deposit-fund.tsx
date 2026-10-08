@@ -489,7 +489,7 @@ export default function DepositFund() {
           <TouchableOpacity onPress={() => setActiveTab('statement')} style={[styles.tabButton, activeTab === 'statement' && styles.tabActive]}>
             <Text style={styles.tabText}>Statement</Text>
           </TouchableOpacity>
-          <TouchableOpacity accessibilityRole="button" onPress={() => router.replace('/dues' as any)} style={styles.tabButton}>
+          <TouchableOpacity accessibilityRole="button" onPress={() => router.push('/dues' as any)} style={styles.tabButton}>
             <Text style={styles.tabText}>Bulk SDF Due Entry</Text>
           </TouchableOpacity>
           <TouchableOpacity accessibilityRole="button" onPress={() => router.replace('/deposit-fund-report' as any)} style={styles.tabButton}>
