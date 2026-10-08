@@ -518,6 +518,18 @@ export default function DepositFund() {
           <View style={styles.dateRow}><DatePickerField label="From Date" value={fromDate} onChange={setFromDate} /><DatePickerField label="To Date" value={toDate} onChange={setToDate} /></View>
           <Button title="View Statement" onPress={searchStatement} />
           {statement && <>
+            <View style={styles.statementSummaryBox}>
+              <View style={styles.statementSummaryItem}><Text style={styles.statementSummaryLabel}>Total Deposit</Text><Text style={styles.statementDepositValue}>{'\u20B9'}{Number(statement.summary?.deposit || 0).toFixed(2)}</Text></View>
+              <View style={styles.statementSummaryItem}><Text style={styles.statementSummaryLabel}>Total Withdrawal</Text><Text style={styles.statementWithdrawalValue}>{'\u20B9'}{Number(statement.summary?.withdrawal || 0).toFixed(2)}</Text></View>
+              <View style={styles.statementBalanceBox}>
+                <Text style={Number(statement.summary?.balance || 0) >= 0 ? styles.statementAdvanceLabel : styles.statementDueLabel}>
+                  {Number(statement.summary?.balance || 0) >= 0 ? 'SDF Advance' : 'SDF Due'}
+                </Text>
+                <Text style={Number(statement.summary?.balance || 0) >= 0 ? styles.statementAdvanceValue : styles.statementDueValue}>
+                  {'\u20B9'}{Math.abs(Number(statement.summary?.balance || 0)).toFixed(2)}
+                </Text>
+              </View>
+            </View>
             <Text style={styles.statementHistoryTitle}>Transaction History</Text>
             {(statement.transactions || []).map((item:any) => <View key={item.id} style={styles.statementTransaction}>
               <View style={styles.transactionTop}><Text style={styles.transactionType}>ID: {item.id}</Text><Text style={item.transaction_type === 'deposit' ? styles.depositAmount : styles.expenseAmount}>{item.transaction_type === 'deposit' ? '+' : '-'} {'\u20B9'}{Number(item.amount || 0).toFixed(2)}</Text></View>
@@ -1210,6 +1222,71 @@ whatsappText: {
       borderTopWidth: 1,
       borderTopColor: '#e5e7eb',
       paddingVertical: 10,
+    },
+
+    statementSummaryBox: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+      marginTop: 12,
+      marginBottom: 8,
+    },
+
+    statementSummaryItem: {
+      flex: 1,
+      minWidth: 170,
+      backgroundColor: '#f8fafc',
+      borderRadius: 8,
+      padding: 10,
+    },
+
+    statementSummaryLabel: {
+      color: '#52677d',
+      fontWeight: '700',
+    },
+
+    statementDepositValue: {
+      color: '#087f5b',
+      fontWeight: '900',
+      fontSize: 18,
+      marginTop: 4,
+    },
+
+    statementWithdrawalValue: {
+      color: '#c62828',
+      fontWeight: '900',
+      fontSize: 18,
+      marginTop: 4,
+    },
+
+    statementBalanceBox: {
+      flex: 1,
+      minWidth: 190,
+      padding: 10,
+    },
+
+    statementAdvanceLabel: {
+      color: '#1565c0',
+      fontWeight: '900',
+    },
+
+    statementDueLabel: {
+      color: '#c62828',
+      fontWeight: '900',
+    },
+
+    statementAdvanceValue: {
+      color: '#1565c0',
+      fontWeight: '900',
+      fontSize: 22,
+      marginTop: 3,
+    },
+
+    statementDueValue: {
+      color: '#c62828',
+      fontWeight: '900',
+      fontSize: 22,
+      marginTop: 3,
     },
 
     dateRow: {
