@@ -2110,9 +2110,17 @@ router.get(
       );
 
 
-    const netBalance =
-      totalDeposit -
-      totalExpense;
+    const dueResult = await pool.query(
+      `SELECT id, due_title, amount, due_date, remarks
+       FROM student_dues
+       WHERE student_id=$1 AND status='due' AND amount>0
+         AND due_title ~* '(s[.]?d[.]?f|student development fund|bus fare|admission fee|registration fee)'
+       ORDER BY due_date NULLS LAST, created_at`,
+      [studentId]
+    );
+    const sdfDues = dueResult.rows;
+    const sdfDueTotal = sdfDues.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const netBalance = totalDeposit - totalExpense - sdfDueTotal;
 
 
     // ----------------------------
@@ -2189,6 +2197,9 @@ router.get(
         total_expense:
           totalExpense,
 
+        sdf_due:
+          sdfDueTotal,
+
         net_balance:
           netBalance,
 
@@ -2206,6 +2217,8 @@ router.get(
 
       transactions:
         transactionResult.rows,
+
+      sdf_dues: sdfDues,
 
     });
 
