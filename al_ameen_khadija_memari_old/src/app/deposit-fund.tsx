@@ -963,6 +963,17 @@ export default function DepositFund() {
               Transaction History
             </Text>
 
+            {fundData?.sdf_dues?.map((item: any) => (
+              <View key={`due-${item.id}`} style={styles.transactionCard}>
+                <View style={styles.transactionTop}>
+                  <Text style={styles.transactionType}>Due</Text>
+                  <Text style={styles.expenseAmount}>- ₹{Number(item.amount || 0).toFixed(2)}</Text>
+                </View>
+                <Text style={styles.transactionDetails}>{item.due_title || 'SDF Due'}{item.session_name ? ` · Session ${item.session_name}` : ''}</Text>
+                <Text style={styles.transactionMeta}>Due date: {item.due_date ? String(item.due_date).slice(0, 10) : '-'}</Text>
+              </View>
+            ))}
+
 
             {!fundData
               ?.transactions

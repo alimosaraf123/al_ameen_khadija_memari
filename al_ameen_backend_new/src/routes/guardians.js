@@ -2111,7 +2111,7 @@ router.get(
 
 
     const dueResult = await pool.query(
-      `SELECT id, due_title, amount, due_date, remarks
+      `SELECT id, due_title, amount, due_date, remarks, session_name
        FROM student_dues d
        WHERE student_id=$1 AND status='due' AND amount>0
          AND due_title ~* '(s[.]?d[.]?f|student development fund|bus fare|admission fee|registration fee)'
