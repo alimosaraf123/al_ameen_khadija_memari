@@ -855,7 +855,43 @@ Thank you.`;
         )}
 
 
-        {students.map(
+        <ScrollView horizontal showsHorizontalScrollIndicator style={styles.reportTableScroll}>
+          <View style={styles.reportTable}>
+            <View style={[styles.reportRow, styles.reportHeader]}>
+              <Text style={[styles.reportCell, styles.slCell]}>S.L.</Text>
+              <Text style={[styles.reportCell, styles.regCell]}>Reg</Text>
+              <Text style={[styles.reportCell, styles.nameCell]}>Name</Text>
+              <Text style={[styles.reportCell, styles.dateCell]}>Last Date</Text>
+              <Text style={[styles.reportCell, styles.amountCell]}>Last Tran.</Text>
+              <Text style={[styles.reportCell, styles.amountCell]}>Balance</Text>
+              <Text style={[styles.reportCell, styles.statusCell]}>A/C Status</Text>
+              <Text style={[styles.reportCell, styles.actionCell]}>Action</Text>
+            </View>
+            {students.map((student: any, index: number) => {
+              const balance = Number(student.net_balance || 0);
+              const lastTransactionAmount = Number(student.last_transaction_amount || 0);
+              const lastTransaction = student.last_transaction_type === 'expense'
+                ? -lastTransactionAmount
+                : lastTransactionAmount;
+              return (
+                <View key={student.id} style={styles.reportRow}>
+                  <Text style={[styles.reportCell, styles.slCell]}>{index + 1}</Text>
+                  <Text style={[styles.reportCell, styles.regCell]}>{student.registration_no || '-'}</Text>
+                  <Text style={[styles.reportCell, styles.nameCell]}>{student.student_name || '-'}</Text>
+                  <Text style={[styles.reportCell, styles.dateCell]}>{student.last_transaction_date ? String(student.last_transaction_date).slice(0, 10) : '-'}</Text>
+                  <Text style={[styles.reportCell, styles.amountCell, lastTransaction < 0 ? styles.negative : null]}>{lastTransaction < 0 ? '- ' : '+ '}â‚¹{Math.abs(lastTransaction).toFixed(2)}</Text>
+                  <Text style={[styles.reportCell, styles.amountCell, balance < 0 ? styles.negative : styles.positive]}>{balance < 0 ? '- ' : '+ '}â‚¹{Math.abs(balance).toFixed(2)}</Text>
+                  <Text style={[styles.reportCell, styles.statusCell, student.status === 'due' ? styles.negative : styles.positive]}>{student.status === 'due' ? 'Active' : student.status === 'deposit' ? 'Active' : 'Clear'}</Text>
+                  <View style={[styles.reportCell, styles.actionCell]}>
+                    {Number(student.due || 0) > 0 && <TouchableOpacity style={styles.reminderButton} onPress={() => sendWhatsApp(student)}><Text style={styles.reminderText}>Send Due Reminder</Text></TouchableOpacity>}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
+
+        {false && students.map(
           (student: any) => {
 
             const balance =
@@ -1220,6 +1256,61 @@ const styles =
       color: '#fff',
       textAlign: 'center',
       fontWeight: '800',
+    },
+
+    reportTableScroll: {
+      marginTop: 8,
+      marginBottom: 14,
+    },
+
+    reportTable: {
+      minWidth: 1080,
+      backgroundColor: '#fff',
+      borderWidth: 1,
+      borderColor: '#aab4c2',
+    },
+
+    reportRow: {
+      flexDirection: 'row',
+      minHeight: 52,
+      borderTopWidth: 1,
+      borderTopColor: '#aab4c2',
+      alignItems: 'stretch',
+    },
+
+    reportHeader: {
+      backgroundColor: '#dbe8fb',
+      borderTopWidth: 0,
+    },
+
+    reportCell: {
+      paddingHorizontal: 8,
+      paddingVertical: 10,
+      borderRightWidth: 1,
+      borderRightColor: '#aab4c2',
+      justifyContent: 'center',
+    },
+
+    slCell: { width: 55 },
+    regCell: { width: 105 },
+    nameCell: { width: 210 },
+    dateCell: { width: 145 },
+    amountCell: { width: 145, textAlign: 'right' },
+    statusCell: { width: 125 },
+    actionCell: { width: 220 },
+
+    reminderButton: {
+      backgroundColor: '#138a55',
+      paddingVertical: 8,
+      paddingHorizontal: 10,
+      borderRadius: 7,
+      alignSelf: 'flex-start',
+    },
+
+    reminderText: {
+      color: '#fff',
+      fontWeight: '800',
+      fontSize: 12,
     },
 
   });
