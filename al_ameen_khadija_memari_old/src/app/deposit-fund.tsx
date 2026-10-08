@@ -26,8 +26,6 @@ import {router} from 'expo-router';
 import {useLocalSearchParams} from 'expo-router';
 import AcademyHeader from '../components/AcademyHeader';
 import DatePickerField from '../components/DatePickerField';
-import { Select } from '../components/StudentDirectory';
-import { STUDENT_CLASSES } from '../lib/studentClasses';
 
 import {
   Field,
@@ -60,7 +58,6 @@ export default function DepositFund() {
 
   const [search, setSearch] =
     useState('');
-  const [classFilter, setClassFilter] = useState('*');
 
   const [
     selectedStudent,
@@ -192,8 +189,6 @@ export default function DepositFund() {
       return students
         .filter((student) => {
 
-          if (classFilter !== '*' && String(student.class_name || '') !== classFilter) return false;
-
           const fields = [
 
             student.registration_no,
@@ -222,7 +217,6 @@ export default function DepositFund() {
     }, [
       search,
       students,
-      classFilter,
     ]);
 
 
@@ -465,15 +459,6 @@ export default function DepositFund() {
     return byDate || Number(b.id || 0) - Number(a.id || 0);
   });
 
-  const visibleStatementTransactions = (statement?.transactions || []).filter((item: any) => classFilter === '*' || String(item.class_name || '') === classFilter);
-  const visibleStatementBalances = (statement?.balances || []).filter((row: any) => classFilter === '*' || String(row.class_name || '') === classFilter);
-  const statementClassSummary = visibleStatementTransactions.reduce((summary: any, item: any) => {
-    if (item.transaction_type === 'deposit') summary.deposit += Number(item.amount || 0);
-    if (item.transaction_type === 'expense') summary.withdrawal += Number(item.amount || 0);
-    return summary;
-  }, {deposit: 0, withdrawal: 0});
-  statementClassSummary.balance = statementClassSummary.deposit - statementClassSummary.withdrawal;
-
 
   return (
 
@@ -533,26 +518,26 @@ export default function DepositFund() {
           <Button title="View Statement" onPress={searchStatement} />
           {statement && <>
             <View style={styles.statementSummaryBox}>
-              <View style={styles.statementSummaryItem}><Text style={styles.statementSummaryLabel}>Total Deposit</Text><Text style={styles.statementDepositValue}>{'\u20B9'}{statementClassSummary.deposit.toFixed(2)}</Text></View>
-              <View style={styles.statementSummaryItem}><Text style={styles.statementSummaryLabel}>Total Withdrawal</Text><Text style={styles.statementWithdrawalValue}>{'\u20B9'}{statementClassSummary.withdrawal.toFixed(2)}</Text></View>
+              <View style={styles.statementSummaryItem}><Text style={styles.statementSummaryLabel}>Total Deposit</Text><Text style={styles.statementDepositValue}>{'\u20B9'}{Number(statement.summary?.deposit || 0).toFixed(2)}</Text></View>
+              <View style={styles.statementSummaryItem}><Text style={styles.statementSummaryLabel}>Total Withdrawal</Text><Text style={styles.statementWithdrawalValue}>{'\u20B9'}{Number(statement.summary?.withdrawal || 0).toFixed(2)}</Text></View>
               <View style={styles.statementBalanceBox}>
-                <Text style={statementClassSummary.balance >= 0 ? styles.statementAdvanceLabel : styles.statementDueLabel}>
-                  {statementClassSummary.balance >= 0 ? 'SDF Advance' : 'SDF Due'}
+                <Text style={Number(statement.summary?.balance || 0) >= 0 ? styles.statementAdvanceLabel : styles.statementDueLabel}>
+                  {Number(statement.summary?.balance || 0) >= 0 ? 'SDF Advance' : 'SDF Due'}
                 </Text>
-                <Text style={statementClassSummary.balance >= 0 ? styles.statementAdvanceValue : styles.statementDueValue}>
-                  {'\u20B9'}{Math.abs(statementClassSummary.balance).toFixed(2)}
+                <Text style={Number(statement.summary?.balance || 0) >= 0 ? styles.statementAdvanceValue : styles.statementDueValue}>
+                  {'\u20B9'}{Math.abs(Number(statement.summary?.balance || 0)).toFixed(2)}
                 </Text>
               </View>
             </View>
             <Text style={styles.statementHistoryTitle}>Transaction History</Text>
-            {visibleStatementTransactions.map((item:any) => <View key={item.id} style={styles.statementTransaction}>
+            {(statement.transactions || []).map((item:any) => <View key={item.id} style={styles.statementTransaction}>
               <View style={styles.transactionTop}><Text style={styles.transactionType}>ID: {item.id}</Text><Text style={item.transaction_type === 'deposit' ? styles.depositAmount : styles.expenseAmount}>{item.transaction_type === 'deposit' ? '+' : '-'} {'\u20B9'}{Number(item.amount || 0).toFixed(2)}</Text></View>
               <Text style={styles.transactionDetails}>{String(item.transaction_date || '').slice(0, 10)} · Reg. {item.registration_no || '-'} · {item.details || '-'}</Text>
               {!!item.reference_no && <Text style={styles.transactionMeta}>Reference: {item.reference_no}</Text>}
               <Text style={styles.balanceText}>Balance after transaction: {'\u20B9'}{Number(item.running_balance || 0).toFixed(2)}</Text>
             </View>)}
-            <Text style={styles.dashboardText}>Present Balance: {statementClassSummary.balance > 0 ? '+' : statementClassSummary.balance < 0 ? '-' : ''}{'\u20B9'}{Math.abs(statementClassSummary.balance).toFixed(2)}</Text>
-            {visibleStatementBalances.filter((row:any) => Number(row.balance || 0) !== 0).map((row:any) => <TouchableOpacity key={row.registration_no} accessibilityRole="button" onPress={() => { void openStatementStudent(row); }} style={styles.statementRow}><Text style={styles.statementName}>{row.student_name} · Reg. {row.registration_no}</Text><Text>Balance: {Number(row.balance || 0) > 0 ? '+' : '-'}₹{Math.abs(Number(row.balance || 0)).toFixed(2)}</Text><Text style={styles.statementLink}>Open student account</Text></TouchableOpacity>)}
+            <Text style={styles.dashboardText}>Present Balance: {Number(statement.summary?.balance || 0) > 0 ? '+' : Number(statement.summary?.balance || 0) < 0 ? '-' : ''}{'\u20B9'}{Math.abs(Number(statement.summary?.balance || 0)).toFixed(2)}</Text>
+            {(statement.balances || []).filter((row:any) => Number(row.balance || 0) !== 0).map((row:any) => <TouchableOpacity key={row.registration_no} accessibilityRole="button" onPress={() => { void openStatementStudent(row); }} style={styles.statementRow}><Text style={styles.statementName}>{row.student_name} · Reg. {row.registration_no}</Text><Text>Balance: {Number(row.balance || 0) > 0 ? '+' : '-'}₹{Math.abs(Number(row.balance || 0)).toFixed(2)}</Text><Text style={styles.statementLink}>Open student account</Text></TouchableOpacity>)}
             <Button title="Print Statement" onPress={printStatement} />
           </>}
           </Card>
