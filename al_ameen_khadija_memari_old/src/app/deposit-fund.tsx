@@ -454,6 +454,9 @@ export default function DepositFund() {
           <TouchableOpacity onPress={() => setActiveTab('statement')} style={[styles.tabButton, activeTab === 'statement' && styles.tabActive]}>
             <Text style={styles.tabText}>Statement</Text>
           </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/dues')} style={styles.tabButton}>
+            <Text style={styles.tabText}>Bulk SDF Due Entry</Text>
+          </TouchableOpacity>
         </View><View style={styles.sdfSummary}>
           {Number(dashboard?.summary?.total_due || 0) > 0 ? (
             <Text style={styles.sdfDue}>Total SDF Due: ₹{Number(dashboard?.summary?.total_due || 0).toFixed(2)}</Text>
