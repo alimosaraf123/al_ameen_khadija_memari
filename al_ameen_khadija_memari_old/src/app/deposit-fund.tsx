@@ -268,6 +268,13 @@ export default function DepositFund() {
 
     };
 
+  const openStatementStudent = async (row: any) => {
+    const found = students.find((item) => String(item.registration_no) === String(row.registration_no));
+    if (!found) return Alert.alert('Student', 'Student account could not be found.');
+    setActiveTab('transactions');
+    await selectStudent(found);
+  };
+
 
   // =====================================
   // SAVE TRANSACTION
@@ -473,7 +480,7 @@ export default function DepositFund() {
           <Button title="View Statement" onPress={searchStatement} />
           {statement && <>
             <Text style={styles.dashboardText}>Balance: {Number(statement.summary?.balance || 0) > 0 ? '+' : Number(statement.summary?.balance || 0) < 0 ? '-' : ''}₹{Math.abs(Number(statement.summary?.balance || 0)).toFixed(2)}</Text>
-            {(statement.balances || []).filter((row:any) => Number(row.balance || 0) !== 0).map((row:any) => <View key={row.registration_no} style={styles.statementRow}><Text style={styles.statementName}>{row.student_name} · Reg. {row.registration_no}</Text><Text>Balance: {Number(row.balance || 0) > 0 ? '+' : '-'}₹{Math.abs(Number(row.balance || 0)).toFixed(2)}</Text></View>)}
+            {(statement.balances || []).filter((row:any) => Number(row.balance || 0) !== 0).map((row:any) => <TouchableOpacity key={row.registration_no} accessibilityRole="button" onPress={() => { void openStatementStudent(row); }} style={styles.statementRow}><Text style={styles.statementName}>{row.student_name} · Reg. {row.registration_no}</Text><Text>Balance: {Number(row.balance || 0) > 0 ? '+' : '-'}₹{Math.abs(Number(row.balance || 0)).toFixed(2)}</Text><Text style={styles.statementLink}>Open student account</Text></TouchableOpacity>)}
             <Button title="Print Statement" onPress={printStatement} />
           </>}
           </Card>
@@ -1224,6 +1231,12 @@ whatsappText: {
 
     statementName: {
       fontWeight: '800',
+    },
+
+    statementLink: {
+      color: '#1768c5',
+      fontWeight: '800',
+      marginTop: 3,
     },
 
     dateRow: {
