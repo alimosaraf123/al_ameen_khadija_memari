@@ -481,14 +481,15 @@ export default function DepositFund() {
           <TouchableOpacity accessibilityRole="button" onPress={() => router.replace('/dues' as any)} style={styles.tabButton}>
             <Text style={styles.tabText}>Bulk SDF Due Entry</Text>
           </TouchableOpacity>
+        </View>
         <View style={styles.sdfSummary}>
           <View style={styles.sdfSummaryCard}>
             <Text style={styles.sdfLabel}>Total SDF Due</Text>
-            <Text style={styles.sdfDue}>₹{Number(dashboard?.summary?.total_due || 0).toFixed(2)}</Text>
+            <Text style={styles.sdfDue}>{'\u20B9'}{Number(dashboard?.summary?.total_due || 0).toFixed(2)}</Text>
           </View>
           <View style={styles.sdfSummaryCard}>
             <Text style={styles.sdfLabel}>Total SDF Advance</Text>
-            <Text style={styles.sdfAdvance}>₹{Number(dashboard?.summary?.total_positive_balance || 0).toFixed(2)}</Text>
+            <Text style={styles.sdfAdvance}>{'\u20B9'}{Number(dashboard?.summary?.total_positive_balance || 0).toFixed(2)}</Text>
           </View>
         </View>
 
