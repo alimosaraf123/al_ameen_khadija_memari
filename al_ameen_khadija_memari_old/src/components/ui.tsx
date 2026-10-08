@@ -7,7 +7,10 @@ export function Field(props: any) {
 export function Button({ title, onPress, danger=false }: any) {
   return <TouchableOpacity onPress={onPress} style={[styles.button, danger && styles.danger]}><Text style={styles.buttonText}>{title}</Text></TouchableOpacity>;
 }
-export function Card({ children }: any) { return <View style={styles.card}>{children}</View>; }
+export function Card({ children }: any) {
+  const safeChildren = React.Children.toArray(children).filter((child) => React.isValidElement(child));
+  return <View style={styles.card}>{safeChildren}</View>;
+}
 export function H1({ children }: any) { return <Text style={styles.h1}>{children}</Text>; }
 export function Muted({ children }: any) { return <Text style={styles.muted}>{children}</Text>; }
 
