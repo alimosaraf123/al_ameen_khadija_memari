@@ -278,13 +278,13 @@ export default function DepositFund() {
     try {
       await api(`/api/guardians/admin/student/${selectedStudent.id}/deposit-fund-book`, {
         method: 'PATCH',
-        body: JSON.stringify({ sdf_book_no: sdfBookNo.trim() }),
+        body: JSON.stringify({ sdf_page_no: sdfBookNo.trim() }),
       });
       setFundData((current: any) => current ? { ...current, student: { ...current.student, sdf_book_no: sdfBookNo.trim() } } : current);
       setBookNoEditing(false);
-      Alert.alert('Saved', 'SDF Book No. updated successfully.');
+      Alert.alert('Saved', 'SDF Page No. updated successfully.');
     } catch (e: any) {
-      Alert.alert('SDF Book No.', e.message || 'Could not update SDF Book No.');
+      Alert.alert('SDF Page No.', e.message || 'Could not update SDF Page No.');
     }
   };
 
@@ -612,13 +612,13 @@ export default function DepositFund() {
                   selectedStudent
                     .student_name
                 }
-                {'  ·  SDF Book No: '}
+                {'  ·  SDF Page No: '}
                 <Text style={sdfBookNo.trim() ? styles.savedBookNo : undefined}>{sdfBookNo || '-'}</Text>
               </Text>
 
               <View style={styles.bookNoRow}>
                 <Field
-                  placeholder="SDF Book No."
+                  placeholder="SDF Page No."
                   value={sdfBookNo}
                   onChangeText={setSdfBookNo}
                   onSubmitEditing={() => bookNoEditing ? saveSdfBookNo() : setBookNoEditing(true)}

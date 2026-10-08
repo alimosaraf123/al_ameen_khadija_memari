@@ -2938,13 +2938,13 @@ router.patch(
   allow('super_admin', 'admin'),
   asyncHandler(async (req, res) => {
     await depositFundSchemaReady;
-    const bookNo = String(req.body?.sdf_book_no || '').trim().slice(0, 100) || null;
+    const bookNo = String(req.body?.sdf_page_no ?? req.body?.sdf_book_no ?? '').trim().slice(0, 100) || null;
     const result = await pool.query(
       'UPDATE students SET sdf_book_no=$1, updated_at=NOW() WHERE id=$2 RETURNING id, sdf_book_no',
       [bookNo, req.params.studentId]
     );
     if (!result.rowCount) return res.status(404).json({ success: false, message: 'Student not found' });
-    res.json({ success: true, sdf_book_no: result.rows[0].sdf_book_no });
+    res.json({ success: true, sdf_page_no: result.rows[0].sdf_book_no, sdf_book_no: result.rows[0].sdf_book_no });
   })
 );
 module.exports = router;
