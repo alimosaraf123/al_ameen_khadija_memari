@@ -601,7 +601,7 @@ Thank you.`;
           <TouchableOpacity onPress={() => router.replace('/deposit-fund' as any)} style={styles.sdfMenuButton}><Text style={styles.sdfMenuText}>Statement</Text></TouchableOpacity>
           <TouchableOpacity onPress={() => router.replace('/dues' as any)} style={styles.sdfMenuButton}><Text style={styles.sdfMenuText}>Bulk SDF Due Entry</Text></TouchableOpacity>
           <TouchableOpacity style={[styles.sdfMenuButton, styles.sdfMenuActive]}><Text style={styles.sdfMenuActiveText}>Due Reminder</Text></TouchableOpacity>
-          <TouchableOpacity onPress={() => router.replace('/deposit-fund?tab=daybook' as any)} style={styles.sdfMenuButton}><Text style={styles.sdfMenuText}>Day Book</Text></TouchableOpacity>
+
         </View>
 
         <H1>
@@ -1050,7 +1050,7 @@ Thank you.`;
           }
         )}
 
-        <Text style={styles.heading}>Transaction Day Book</Text>
+        {false && (<>        <Text style={styles.heading}>Transaction Day Book</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View style={styles.reportTable}>
             <View style={[styles.reportRow, styles.reportHeader]}>
@@ -1089,7 +1089,7 @@ Thank you.`;
               <Text style={[styles.reportCell, { width: 270 }]}></Text>
             </View>
           </View>
-        </ScrollView>
+        </ScrollView></>)}
 
       </ScrollView>
 

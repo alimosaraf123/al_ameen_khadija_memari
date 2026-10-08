@@ -510,9 +510,6 @@ export default function DepositFund() {
           <TouchableOpacity accessibilityRole="button" onPress={() => router.replace('/deposit-fund-report' as any)} style={styles.tabButton}>
             <Text style={styles.tabText}>Due Reminder</Text>
           </TouchableOpacity>
-          <TouchableOpacity accessibilityRole="button" onPress={() => setActiveTab('statement')} style={styles.tabButton}>
-            <Text style={styles.tabText}>Day Book</Text>
-          </TouchableOpacity>
         </View>
         <View style={styles.sdfSummary}>
           {selectedStudent && fundData ? (
