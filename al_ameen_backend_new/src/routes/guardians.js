@@ -2114,7 +2114,7 @@ router.get(
       `SELECT id, due_title, amount, due_date, remarks, session_name
        FROM student_dues d
        WHERE student_id=$1 AND status='due' AND amount>0
-         AND due_title ~* '(s[.]?d[.]?f|student development fund|bus fare|admission fee|registration fee)'
+         AND (due_title ~* '(s[.]?d[.]?f|student development fund|bus fare|admission fee|registration fee)' OR session_name IS NOT NULL)
          AND NOT (due_title ILIKE 'Bus fare for the third-semester examination.' AND EXISTS (SELECT 1 FROM student_dues d2 WHERE d2.student_id=d.student_id AND d2.due_title ILIKE 'Bus fare for the 3rd semester examination' AND d2.amount=d.amount AND d2.due_date IS NOT DISTINCT FROM d.due_date))
        ORDER BY due_date NULLS LAST, created_at`,
       [studentId]
@@ -2488,7 +2488,7 @@ router.get(
             WHERE d.student_id=s.id
               AND d.status='due'
               AND d.amount>0
-              AND d.due_title ~* '(s[.]?d[.]?f|student development fund|bus fare|admission fee|registration fee)'
+              AND (d.due_title ~* '(s[.]?d[.]?f|student development fund|bus fare|admission fee|registration fee)' OR d.session_name IS NOT NULL)
               AND NOT (d.due_title ILIKE 'Bus fare for the third-semester examination.' AND EXISTS (
                 SELECT 1 FROM student_dues d2
                 WHERE d2.student_id=d.student_id
