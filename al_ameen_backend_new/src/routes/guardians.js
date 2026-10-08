@@ -2626,6 +2626,10 @@ router.get(
 
     let totalDue = 0;
 
+    let grossSdfDue = 0;
+
+    let grossSdfAdvance = 0;
+
     let dueStudents = 0;
 
     let positiveStudents = 0;
@@ -2643,6 +2647,9 @@ router.get(
 
       totalExpense +=
         student.total_expense;
+
+      grossSdfDue += Number(student.student_due || 0);
+      grossSdfAdvance += Math.max(0, Number(student.net_balance || 0) + Number(student.student_due || 0));
 
 
       if (
@@ -2694,6 +2701,12 @@ router.get(
 
         total_due:
           totalDue,
+
+        gross_sdf_due:
+          grossSdfDue,
+
+        gross_sdf_advance:
+          grossSdfAdvance,
 
         net_fund_balance:
           totalDeposit -
