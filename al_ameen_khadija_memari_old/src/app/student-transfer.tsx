@@ -132,7 +132,7 @@ export default function StudentTransfer() {
     </View>
     <View style={s.card}>
       <Text style={s.heading}>Excel Upload</Text>
-      <Text style={s.help}>Template-এর Students sheet পূরণ করুন। Registration number ও student name আবশ্যক। একই registration number থাকলে দেওয়া তথ্য আপডেট হবে; খালি ঘর পুরোনো তথ্য মুছবে না। সর্বোচ্চ ২০০০ ছাত্র / 10 MB।</Text>
+      <Text style={s.help}>Complete the Students sheet in the template. Registration number and student name are required. Existing registration numbers will be updated; blank cells will keep old values. Maximum 2,000 students / 10 MB.</Text>
       {action('Choose Excel & Preview', chooseExcel)}
       {preview && <View style={s.preview}>
         <Text style={s.heading}>{excel?.name}</Text>
@@ -143,7 +143,7 @@ export default function StudentTransfer() {
     </View>
     <View style={s.card}>
       <Text style={s.heading}>Bulk Student Photos</Text>
-      <Text style={s.help}>প্রতিটি ছবির নাম registration number দিয়ে রাখুন: 75276.jpg, 75566.png। JPG, PNG বা WebP; প্রতি ছবি সর্বোচ্চ 5 MB। একবারে ১০০টি ছবি বেছে নিতে পারবেন। নম্বর মিলে গেলে আগের profile photo বদলে যাবে।</Text>
+      <Text style={s.help}>Name each photo with its registration number: 75276.jpg, 75566.png. JPG, PNG, or WebP; maximum 5 MB per photo. You can select up to 100 photos at once. A matching number will replace the existing profile photo.</Text>
       {action('Choose Photos', choosePhotos)}
       {!!photos.length && <><Text style={s.help}>{photos.length} photos selected</Text><Text style={s.help}>{photos.map(photo => photo.name).join(', ')}</Text>{action('Upload ' + photos.length + ' Photos', uploadPhotos)}</>}
       {photoResults.map((result, index) => <Text key={index} style={result.success ? s.success : s.error}>{result.file}: {result.success ? 'Uploaded' : result.message}</Text>)}

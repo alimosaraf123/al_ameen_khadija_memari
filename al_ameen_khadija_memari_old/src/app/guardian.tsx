@@ -1,9 +1,11 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
   Linking,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -26,14 +28,29 @@ import { Field, Button, Muted } from '../components/ui';
 
 type TabName = 'home' | 'result' | 'gatepass' | 'visits' | 'details' | 'documents' | 'library' | 'notifications' | 'settings';
 
+const xmlText = (value: any) => String(value ?? '-').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const resultImageUri = (title: string, headers: string[], rows: string[][]) => {
+  const width = Math.max(760, headers.length * 92);
+  const rowHeight = 34;
+  const height = 80 + (rows.length + 1) * rowHeight;
+  const cells = [headers, ...rows].map((row, r) => row.map((cell, c) => `<rect x="${c * (width / headers.length)}" y="${r * rowHeight + 58}" width="${width / headers.length}" height="${rowHeight}" fill="${r === 0 ? '#dbeafe' : '#ffffff'}" stroke="#94a3b8"/><text x="${c * (width / headers.length) + width / headers.length / 2}" y="${r * rowHeight + 80}" text-anchor="middle" font-family="Arial" font-size="13" font-weight="${r === 0 ? '700' : '400'}" fill="#172b4d">${xmlText(cell)}</text>`).join('')).join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#ffffff"/><text x="${width / 2}" y="28" text-anchor="middle" font-family="Arial" font-size="18" font-weight="700" fill="#174f75">${xmlText(title)}</text>${cells}</svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+};
+
 
 export default function Guardian() {
   const [tab, setTab] = useState<TabName>('home');
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [noticeBlink, setNoticeBlink] = useState(true);
+  const [viewedNoticeIds, setViewedNoticeIds] = useState<Record<string, boolean>>({});
   const [student, setStudent] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [childData, setChildData] = useState<any>(null);
   const [terminalResults, setTerminalResults] = useState<any[]>([]);
+  const [publishedTerminalResults, setPublishedTerminalResults] = useState<any[]>([]);
+  const [selectedTerminalResult, setSelectedTerminalResult] = useState<any>(null);
+  const [terminalResultLoadingId, setTerminalResultLoadingId] = useState<number | null>(null);
   const [depositData, setDepositData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -62,6 +79,25 @@ export default function Guardian() {
   const [visitorEntries, setVisitorEntries] = useState<any[]>([]);
   const [libraryLoans, setLibraryLoans] = useState<any[]>([]);
   useEffect(() => { const timer = setInterval(() => setNoticeBlink(value => !value), 700); return () => clearInterval(timer); }, []);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    try {
+      const raw = localStorage.getItem('guardian_viewed_notice_ids');
+      if (raw) setViewedNoticeIds(JSON.parse(raw) || {});
+    } catch {
+      setViewedNoticeIds({});
+    }
+  }, []);
+
+  const markNoticeViewed = (noticeId: any) => {
+    const id = String(noticeId);
+    const next = { ...viewedNoticeIds, [id]: true };
+    setViewedNoticeIds(next);
+    if (Platform.OS === 'web') {
+      try { localStorage.setItem('guardian_viewed_notice_ids', JSON.stringify(next)); } catch { /* storage may be unavailable */ }
+    }
+    setTab('notifications');
+  };
   useEffect(() => {
     let cancelled = false;
     const loadPreviews = async () => {
@@ -121,9 +157,21 @@ export default function Guardian() {
       setMonthlyFeeData(result);
     } catch (e: any) {
       setMonthlyFeeData(null);
-      setMonthlyFeeError(e.message || 'Monthly Fee Due à¦ªà¦¾à¦“à§Ÿà¦¾ à¦¯à¦¾à¦šà§à¦›à§‡ à¦¨à¦¾à¥¤');
+      setMonthlyFeeError(e.message || 'Monthly Fee Due পাওয়া যাচ্ছে না।');
     } finally {
       setMonthlyFeeLoading(false);
+    }
+  };
+
+  const openTerminalResult = async (examId: number) => {
+    try {
+      setTerminalResultLoadingId(examId);
+      const result = await api(`/api/terminal-exams/published/${examId}`);
+      setSelectedTerminalResult(result);
+    } catch (e: any) {
+      Alert.alert('Terminal Result', e.message || 'Unable to load terminal result.');
+    } finally {
+      setTerminalResultLoadingId(null);
     }
   };
 
@@ -145,12 +193,13 @@ export default function Guardian() {
       // Do not fetch class-wide terminal result payloads into the guardian app.
       setTerminalResults([]);
 
-      const [profileResult, childResult, depositResult, visitorEntriesResult, libraryResult] = await Promise.allSettled([
+      const [profileResult, childResult, depositResult, visitorEntriesResult, libraryResult, terminalResult] = await Promise.allSettled([
         api(`/api/guardians/student/${studentId}/profile`),
         api(`/api/guardians/student/${studentId}`),
         api(`/api/guardians/student/${studentId}/deposit-fund`),
         api(`/api/guardians/student/${studentId}/visitor-entries`),
         api(`/api/guardians/student/${studentId}/library-loans`),
+        api('/api/terminal-exams/published'),
       ]);
 
       setProfile(profileResult.status === 'fulfilled' ? profileResult.value : null);
@@ -158,8 +207,9 @@ export default function Guardian() {
       setDepositData(depositResult.status === 'fulfilled' ? depositResult.value : null);
       setVisitorEntries(visitorEntriesResult.status === 'fulfilled' ? (visitorEntriesResult.value.entries || []) : []);
       setLibraryLoans(libraryResult.status === 'fulfilled' ? (libraryResult.value.loans || []) : []);
+      setPublishedTerminalResults(terminalResult.status === 'fulfilled' ? (terminalResult.value.exams || []) : []);
 
-      const failed = [profileResult, childResult, depositResult, visitorEntriesResult, libraryResult].find(
+      const failed = [profileResult, childResult, depositResult, visitorEntriesResult, libraryResult, terminalResult].find(
         (result) => result.status === 'rejected'
       );
       if (failed?.status === 'rejected') {
@@ -199,17 +249,17 @@ export default function Guardian() {
 
   const changePassword = async () => {
     if (!currentPassword) {
-      Alert.alert('Required', 'Current Password à¦²à¦¿à¦–à§à¦¨à¥¤');
+      Alert.alert('Required', 'Current Password লিখুন।');
       return;
     }
 
     if (newPassword.length < 6) {
-      Alert.alert('Required', 'New Password à¦•à¦®à¦ªà¦•à§à¦·à§‡ 6 characters à¦¹à¦¤à§‡ à¦¹à¦¬à§‡à¥¤');
+      Alert.alert('Required', 'New Password কমপক্ষে 6 characters হতে হবে।');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert('Password mismatch', 'New Password à¦à¦¬à¦‚ Confirm Password à¦à¦•à¦‡ à¦¨à§Ÿà¥¤');
+      Alert.alert('Password mismatch', 'New Password এবং Confirm Password একই নয়।');
       return;
     }
 
@@ -239,17 +289,17 @@ export default function Guardian() {
 
   const saveMpin = async () => {
     if (!mpinPassword) {
-      Alert.alert('Required', 'Current Password à¦²à¦¿à¦–à§à¦¨à¥¤');
+      Alert.alert('Required', 'Current Password লিখুন।');
       return;
     }
 
     if (!/^\d{6}$/.test(mpin)) {
-      Alert.alert('Invalid mPIN', 'mPIN à¦ à¦¿à¦• 6 à¦¸à¦‚à¦–à§à¦¯à¦¾à¦° à¦¹à¦¤à§‡ à¦¹à¦¬à§‡à¥¤');
+      Alert.alert('Invalid mPIN', 'mPIN ঠিক 6 সংখ্যার হতে হবে।');
       return;
     }
 
     if (mpin !== confirmMpin) {
-      Alert.alert('mPIN mismatch', 'mPIN à¦à¦¬à¦‚ Confirm mPIN à¦à¦•à¦‡ à¦¨à§Ÿà¥¤');
+      Alert.alert('mPIN mismatch', 'mPIN এবং Confirm mPIN একই নয়।');
       return;
     }
 
@@ -278,7 +328,7 @@ export default function Guardian() {
 
   const enableFingerprint = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('Mobile Only', 'Fingerprint Login mobile app-à¦ à¦¬à§à¦¯à¦¬à¦¹à¦¾à¦° à¦•à¦°à§à¦¨à¥¤');
+      Alert.alert('Mobile Only', 'Fingerprint Login mobile app-এ ব্যবহার করুন।');
       return;
     }
 
@@ -287,7 +337,7 @@ export default function Guardian() {
 
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       if (!hasHardware) {
-        Alert.alert('Not Available', 'à¦à¦‡ à¦«à§‹à¦¨à§‡ biometric hardware à¦ªà¦¾à¦“à§Ÿà¦¾ à¦¯à¦¾à§Ÿà¦¨à¦¿à¥¤');
+        Alert.alert('Not Available', 'এই ফোনে biometric hardware পাওয়া যায়নি।');
         return;
       }
 
@@ -295,7 +345,7 @@ export default function Guardian() {
       if (!enrolled) {
         Alert.alert(
           'Fingerprint Not Set',
-          'à¦†à¦—à§‡ à¦«à§‹à¦¨à§‡à¦° Settings à¦¥à§‡à¦•à§‡ Fingerprint à¦¸à§‡à¦Ÿ à¦•à¦°à§à¦¨à¥¤'
+          'আগে ফোনের Settings থেকে Fingerprint সেট করুন।'
         );
         return;
       }
@@ -466,9 +516,7 @@ export default function Guardian() {
         />
         <View style={{ flex: 1 }}>
           <Text style={styles.brandName}>Al-Ameen Mission Academy Memari</Text>
-          <Text style={[styles.studentMeta, { marginTop: 6, fontWeight: '700' }]}>
-            Reg: {s?.registration_no || '-'} | {s?.student_name || '-'}
-          </Text>
+          <Text style={styles.phoneContact}>{'\u260E'} 7479020073  |  {'\u260E'} 7479020091</Text>
         </View>
       </View>
       {/* STUDENT HEADER */}
@@ -483,57 +531,57 @@ export default function Guardian() {
 
         <View style={{ flex: 1 }}>
           <Text style={styles.studentName}>{s?.student_name || '-'}</Text>
-          <Text style={styles.studentMeta}>Reg: {s?.registration_no || '-'}</Text>
           <Text style={styles.studentMeta}>
-            Class: {s?.class_name || '-'}
+            Reg: {s?.registration_no || '-'} | Class: {s?.class_name || '-'}
           </Text>
-          {!!s?.room_number && (
-            <Text style={styles.studentMeta}>Room: {s.room_number}</Text>
-          )}
         </View>
       </View>
 
       {/* MAIN TABS */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.tabBar}
-        contentContainerStyle={styles.tabContent}
-      >
-        <Tab title="Home" active={tab === 'home'} onPress={() => setTab('home')} />
-        <Tab title="Result" active={tab === 'result'} onPress={() => setTab('result')} />
-        <Tab title="Gate Pass" active={tab === 'gatepass'} onPress={() => setTab('gatepass')} />
-        <Tab title="Visiting Day Permission" active={tab === 'visits'} onPress={() => setTab('visits')} />
-        <Tab
-          title="Student Details"
-          active={tab === 'details'}
-          onPress={() => setTab('details')}
-        />
-        <Tab
-          title="Documents"
-          active={tab === 'documents'}
-          onPress={() => setTab('documents')}
-        />
-        <Tab
-          title="Library"
-          active={tab === 'library'}
-          onPress={() => setTab('library')}
-        />
-        <Tab
-          title="Notifications"
-          active={tab === 'notifications'}
-          onPress={() => setTab('notifications')}
-        />
-        <Tab
-          title="Settings"
-          active={tab === 'settings'}
-          onPress={() => setTab('settings')}
-        />
-
-        <TouchableOpacity style={styles.logoutTab} onPress={logout}>
-          <Text style={styles.logoutTabText}>Logout</Text>
-        </TouchableOpacity>
-      </ScrollView>
+      <View style={styles.menuWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator
+          style={styles.tabBar}
+          contentContainerStyle={styles.tabContent}
+        >
+          <Tab title="Home" active={tab === 'home'} onPress={() => { setTab('home'); setShowMoreMenu(false); }} />
+          <Tab title="Result" active={tab === 'result'} onPress={() => { setTab('result'); setShowMoreMenu(false); }} />
+          <Tab title="Library" active={tab === 'library'} onPress={() => { setTab('library'); setShowMoreMenu(false); }} />
+          <Tab title="Gate Pass" active={tab === 'gatepass'} onPress={() => { setTab('gatepass'); setShowMoreMenu(false); }} />
+          <TouchableOpacity
+            style={[styles.tab, showMoreMenu && styles.tabActive]}
+            onPress={() => setShowMoreMenu(value => !value)}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.tabText, showMoreMenu && styles.tabTextActive]}>More...</Text>
+          </TouchableOpacity>
+        </ScrollView>
+        <Modal visible={showMoreMenu} transparent animationType="fade" onRequestClose={() => setShowMoreMenu(false)}>
+          <Pressable style={styles.moreModalBackdrop} onPress={() => setShowMoreMenu(false)}>
+            <View style={styles.moreModal} onStartShouldSetResponder={() => true}>
+              <View style={styles.moreModalHeader}>
+                <Text style={styles.moreModalTitle}>More Menu</Text>
+                <TouchableOpacity onPress={() => setShowMoreMenu(false)}><Text style={styles.moreModalClose}>X</Text></TouchableOpacity>
+              </View>
+              {[
+                ['Visit Permission', 'visits'],
+                ['Student Details', 'details'],
+                ['Documents', 'documents'],
+                ['Notifications', 'notifications'],
+                ['Settings', 'settings'],
+              ].map(([label, target]) => (
+                <Pressable key={target} style={styles.moreModalItem} onPress={() => { setTab(target as TabName); setShowMoreMenu(false); }}>
+                  <Text style={styles.moreModalItemText}>{label}</Text>
+                </Pressable>
+              ))}
+              <Pressable style={[styles.moreModalItem, styles.moreModalLogout]} onPress={logout}>
+                <Text style={[styles.moreModalItemText, styles.moreModalLogoutText]}>Logout</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Modal>
+      </View>
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -545,16 +593,17 @@ export default function Guardian() {
             <Text style={styles.heading}>Latest Notifications</Text>
             {notices.length === 0 ? (
               <Card><Muted>No new notification.</Muted></Card>
-            ) : notices.slice(0, 2).map((notice: any, index: number) => {
+            ) : <Card compact><View style={styles.latestNoticeContainer}>{notices.slice(0, 2).map((notice: any, index: number) => {
               const published = new Date(notice.published_at || notice.created_at || '').getTime();
-              const isNew = Number.isFinite(published) && published > 0 && Date.now() - published <= 72 * 60 * 60 * 1000;
-              return <Card key={`home-notice-${notice.id || index}`}>
+              const noticeKey = notice.id || index;
+              const isNew = Number.isFinite(published) && published > 0 && Date.now() - published <= 72 * 60 * 60 * 1000 && !viewedNoticeIds[String(noticeKey)];
+              return <TouchableOpacity key={`home-notice-touch-${noticeKey}`} onPress={() => markNoticeViewed(noticeKey)} activeOpacity={0.8}><Card compact>
                 <View style={styles.dashboardNoticeRow}>
-                  <Text numberOfLines={1} ellipsizeMode="tail" style={styles.dashboardNoticeText}>{notice.title || notice.notice_title || 'Notice'}{(notice.notice_text || notice.message) ? ` · ${notice.notice_text || notice.message}` : ''}</Text>
+                  <Text numberOfLines={1} ellipsizeMode="tail" style={styles.dashboardNoticeText}>{String(notice.title || notice.notice_title || 'Notice').replace(/[^\x20-\x7E]/g, '-')}{(notice.notice_text || notice.message) ? ' - ' + String(notice.notice_text || notice.message).replace(/[^\x20-\x7E]/g, '-') : ''}</Text>
                   {isNew && <Text style={[styles.newBadge, !noticeBlink && styles.newBadgeHidden]}>NEW</Text>}
                 </View>
-              </Card>;
-            })}
+              </Card></TouchableOpacity>;
+            })}</View></Card>}
 
             {/* MONTHLY FEES */}
             <Text style={styles.heading}>Monthly Fees</Text>
@@ -645,14 +694,14 @@ export default function Guardian() {
               >
                 {depositData
                   ? `${netBalance > 0 ? '+ ' : netBalance < 0 ? '- ' : ''}Rs. ${Math.abs(netBalance).toFixed(2)}`
-                  : 'à¦¤à¦¥à§à¦¯ à¦ªà¦¾à¦“à§Ÿà¦¾ à¦¯à¦¾à§Ÿà¦¨à¦¿'}
+                  : 'তথ্য পাওয়া যায়নি'}
               </Text>
 
               <Text style={styles.fundStatus}>
-                {!depositData ? 'Fund-à¦à¦° à¦¤à¦¥à§à¦¯ à¦²à§‹à¦¡ à¦•à¦°à¦¾ à¦¯à¦¾à§Ÿà¦¨à¦¿' : netBalance > 0
-                  ? 'Fund-à¦ à¦Ÿà¦¾à¦•à¦¾ à¦œà¦®à¦¾ à¦†à¦›à§‡'
+                {!depositData ? 'Fund-এর তথ্য লোড করা যায়নি' : netBalance > 0
+                  ? 'Fund-এ টাকা জমা আছে'
                   : netBalance < 0
-                  ? 'Fund-à¦ Due / à¦˜à¦¾à¦Ÿà¦¤à¦¿ à¦†à¦›à§‡'
+                  ? 'Fund-এ Due / ঘাটতি আছে'
                   : 'Fund Balance Zero'}
               </Text>
             </View>
@@ -718,6 +767,87 @@ export default function Guardian() {
           <>
             <Text style={styles.heading}>Published Result</Text>
 
+            <View style={{ flexDirection: 'column-reverse' }}>
+            <View>
+            <Text style={styles.settingsHelp}>Terminal Exam Results</Text>
+            {selectedTerminalResult ? (
+              <Card>
+                <TouchableOpacity onPress={() => setSelectedTerminalResult(null)}>
+                  <Text style={styles.link}>← Back to results</Text>
+                </TouchableOpacity>
+                <Text style={styles.previewLabel}>Result Preview</Text>
+                <Text style={styles.noticeTitle}>{selectedTerminalResult.exam?.exam_name || 'Terminal Exam'} - {selectedTerminalResult.exam?.class_name}</Text>
+                <Text style={styles.noticeText}>Published {String(selectedTerminalResult.exam?.published_at || '').slice(0, 10)}</Text>
+                {(() => {
+                  const own = (selectedTerminalResult.students || []).find((item: any) => Number(item.id) === Number(student?.id));
+                  const subjects = selectedTerminalResult.subjects || [];
+                  const hasOral = subjects.some((subject: any) => Number(subject.oral_marks || 0) > 0);
+                  const students = selectedTerminalResult.students || [];
+                  const totalFor = (item: any) => subjects.reduce((sum: number, subject: any) => sum + (Number(item?.marks?.[subject.id]) || 0), 0);
+                  const ownTotal = totalFor(own);
+                  const rank = own ? 1 + students.filter((item: any) => totalFor(item) > ownTotal).length : '-';
+                  const imageHeaders = ['Subject', 'Th. FM', ...(hasOral ? ['Oral FM'] : []), 'FM', 'Th. MO', ...(hasOral ? ['Oral MO'] : []), 'Total', '%'];
+                  const imageRows = subjects.map((subject: any) => { const value = own?.marks?.[subject.id]; const total = value === 'Absent' || value == null ? null : Number(value); return [subject.subject_name, subject.theory_marks ?? '-', ...(hasOral ? [subject.oral_marks ?? '-'] : []), subject.full_marks ?? '-', own?.written_marks?.[subject.id] ?? '-', ...(hasOral ? [own?.oral_obtained?.[subject.id] ?? '-'] : []), total ?? 'Absent', total == null || !Number(subject.full_marks) ? '-' : `${((total / Number(subject.full_marks)) * 100).toFixed(2)}%`]; });
+                  void imageHeaders;
+                  void imageRows;
+                  return null;
+                })()}
+                {(() => {
+                  const own = (selectedTerminalResult.students || []).find((item: any) => Number(item.id) === Number(student?.id));
+                  const subjects = selectedTerminalResult.subjects || [];
+                  const students = selectedTerminalResult.students || [];
+                  const totalFor = (item: any) => subjects.reduce((sum: number, subject: any) => sum + (Number(item?.marks?.[subject.id]) || 0), 0);
+                  const ownTotal = totalFor(own);
+                  const rank = own ? 1 + students.filter((item: any) => totalFor(item) > ownTotal).length : '-';
+                  const hasOral = subjects.some((subject: any) => Number(subject.oral_marks || 0) > 0);
+                  return (
+                    <ScrollView horizontal showsHorizontalScrollIndicator>
+                      <View style={styles.terminalResultTable}>
+                        <View style={[styles.weeklyRow, styles.weeklyHeader]}>
+                          {['Subject', 'Th. FM', ...(hasOral ? ['Oral FM'] : []), 'FM', 'Th. MO', ...(hasOral ? ['Oral MO'] : []), 'Total', '%'].map(label => <Text key={label} style={[styles.weeklyCell, styles.terminalResultCell]}>{label}</Text>)}
+                        </View>
+                        {subjects.map((subject: any, index: number) => {
+                          const value = own?.marks?.[subject.id];
+                          const written = own?.written_marks?.[subject.id];
+                          const oral = own?.oral_obtained?.[subject.id];
+                          const total = value === 'Absent' || value == null ? null : Number(value);
+                          const percentage = total == null || !Number(subject.full_marks) ? '-' : `${((total / Number(subject.full_marks)) * 100).toFixed(2)}%`;
+                          return (
+                            <View key={subject.id} style={[styles.weeklyRow, index % 2 === 0 && styles.resultAltRow]}>
+                              <Text style={[styles.weeklyCell, styles.terminalResultCell]}>{subject.subject_name}</Text>
+                              <Text style={[styles.weeklyCell, styles.terminalResultCell]}>{subject.theory_marks ?? '-'}</Text>
+                              {hasOral && <Text style={[styles.weeklyCell, styles.terminalResultCell]}>{subject.oral_marks ?? '-'}</Text>}
+                              <Text style={[styles.weeklyCell, styles.terminalResultCell]}>{subject.full_marks ?? '-'}</Text>
+                              <Text style={[styles.weeklyCell, styles.terminalResultCell]}>{written ?? '-'}</Text>
+                              {hasOral && <Text style={[styles.weeklyCell, styles.terminalResultCell]}>{oral ?? '-'}</Text>}
+                              <Text style={[styles.weeklyCell, styles.terminalResultCell]}>{total ?? 'Absent'}</Text>
+                              <Text style={[styles.weeklyCell, styles.terminalResultCell]}>{percentage}</Text>
+                            </View>
+                          );
+                        })}
+                        <Text style={styles.overallResultSummary}>Overall Total: {ownTotal}  |  Overall Percentage: {subjects.reduce((sum: number, subject: any) => sum + Number(subject.full_marks || 0), 0) ? `${((ownTotal / subjects.reduce((sum: number, subject: any) => sum + Number(subject.full_marks || 0), 0)) * 100).toFixed(2)}%` : '-'}  |  Overall Rank: {rank}</Text>
+                      </View>
+                    </ScrollView>
+                  );
+                })()}
+              </Card>
+            ) : publishedTerminalResults.length === 0 ? (
+              <Card><Muted>No published terminal result available.</Muted></Card>
+            ) : (
+              <ScrollView style={styles.terminalResultsContainer} nestedScrollEnabled>
+                {[...publishedTerminalResults].sort((a: any, b: any) => String(b.published_at || '').localeCompare(String(a.published_at || '')) || Number(b.id) - Number(a.id)).map((exam: any) => (
+                  <TouchableOpacity key={'guardian-terminal-result-' + exam.id} onPress={() => openTerminalResult(exam.id)} disabled={terminalResultLoadingId !== null} style={styles.card}>
+                    <Text style={styles.noticeTitle}>{exam.exam_name || 'Terminal Exam'} - {exam.class_name}</Text>
+                    <Text style={styles.noticeText}>{exam.subject_count || 0} subjects - Published {String(exam.published_at || '').slice(0, 10)}</Text>
+                    <Text style={styles.link}>{terminalResultLoadingId === Number(exam.id) ? 'Loading...' : 'View terminal result'}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+
+            </View>
+
+            <View>
             <Text style={styles.settingsHelp}>Weekly Test Marks</Text>
 
             {marks.length === 0 ? (
@@ -727,6 +857,7 @@ export default function Guardian() {
             ) : (
               <ScrollView horizontal showsHorizontalScrollIndicator persistentScrollbar>
                 <View style={styles.weeklyTable}>
+                  <Text style={styles.previewLabel}>Result Preview</Text>
                   <View style={[styles.weeklyRow, styles.weeklyHeader]}>
                     <Text style={[styles.weeklyCell, styles.weeklySl]}>Sl</Text>
                     <Text style={[styles.weeklyCell, styles.weeklyDate]}>Date</Text>
@@ -737,7 +868,7 @@ export default function Guardian() {
                     <Text style={styles.weeklyCell}>Rank</Text>
                   </View>
                   {marks.map((mark: any, index: number) => (
-                    <View key={mark.id || `${mark.exam_id}-${mark.subject_id}-${index}`} style={styles.weeklyRow}>
+                    <View key={mark.id || `${mark.exam_id}-${mark.subject_id}-${index}`} style={[styles.weeklyRow, index % 2 === 0 && styles.resultAltRow]}>
                       <Text style={[styles.weeklyCell, styles.weeklySl]}>{index + 1}</Text>
                       <Text style={[styles.weeklyCell, styles.weeklyDate]}>{String(mark.exam_date || '').slice(0, 10).split('-').reverse().join('-') || '-'}</Text>
                       <Text style={[styles.weeklyCell, styles.weeklySubject]}>{mark.subject_name || '-'}</Text>
@@ -750,6 +881,8 @@ export default function Guardian() {
                 </View>
               </ScrollView>
             )}
+            </View>
+            </View>
           </>
         )}
 
@@ -780,7 +913,7 @@ export default function Guardian() {
               <Card key={`visitor-entry-${entry.id}`}>
                 <Text style={styles.noticeTitle}>{entry.visitor_name} ({entry.visitor_relation})</Text>
                 <Text style={styles.noticeText}>{entry.entry_mode === 'with_permission' ? 'With Permission' : 'Without Permission'}</Text>
-                <Text style={styles.dateText}>{new Date(entry.entered_at).toLocaleString()} · {entry.is_active ? 'Active' : 'Inactive'}</Text>
+                <Text style={styles.dateText}>{new Date(entry.entered_at).toLocaleString()} � {entry.is_active ? 'Active' : 'Inactive'}</Text>
               </Card>
             ))}
           </>
@@ -1033,8 +1166,8 @@ export default function Guardian() {
                 <Text style={styles.settingsTitle}>Fingerprint Login</Text>
                 <Text style={styles.settingsHelp}>
                   {biometricEnabled
-                    ? 'Fingerprint Login à¦à¦‡ device-à¦ à¦šà¦¾à¦²à§ à¦†à¦›à§‡à¥¤'
-                    : 'Fingerprint Login à¦à¦‡ device-à¦ à¦¬à¦¨à§à¦§ à¦†à¦›à§‡à¥¤'}
+                    ? 'Fingerprint Login এই device-এ চালু আছে।'
+                    : 'Fingerprint Login এই device-এ বন্ধ আছে।'}
                 </Text>
 
                 {!biometricEnabled ? (
@@ -1082,12 +1215,12 @@ function Tab({
   );
 }
 
-function Card({ children, tone = 'default' }: {
+function Card({ children, tone = 'default', compact = false }: {
   children: React.ReactNode;
   tone?: 'default' | 'notice' | 'fees';
 }) {
   return (
-    <View style={[styles.card, tone === 'notice' && styles.noticeCard, tone === 'fees' && styles.feesCard]}>
+    <View style={[styles.card, compact && styles.compactCard, tone === 'notice' && styles.noticeCard, tone === 'fees' && styles.feesCard]}>
       {children}
     </View>
   );
@@ -1137,6 +1270,7 @@ const styles = StyleSheet.create({
   },
   brandLogo: { width: 54, height: 56 },
   brandName: { color: '#166534', fontSize: 17, fontWeight: '800' },
+  phoneContact: { color: '#000000', fontSize: 16, fontWeight: '900', marginTop: 5 },
   page: {
     flex: 1,
     backgroundColor: '#f4f3ff',
@@ -1195,6 +1329,27 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+  menuWrap: {
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#d9deea',
+    paddingTop: 8,
+  },
+
+  menuTitle: {
+    paddingHorizontal: 16,
+    color: '#1f2f5c',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+
+  menuHint: {
+    paddingHorizontal: 16,
+    marginTop: 2,
+    color: '#667085',
+    fontSize: 11,
+  },
+
   tabBar: {
     height: 62,
     minHeight: 62,
@@ -1206,6 +1361,16 @@ const styles = StyleSheet.create({
     borderBottomColor: '#d9deea',
     zIndex: 2,
   },
+
+  moreModalBackdrop: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.35)', justifyContent: 'center', alignItems: 'center', padding: 22 },
+  moreModal: { width: '100%', maxWidth: 420, backgroundColor: '#ffffff', borderRadius: 16, padding: 14, elevation: 8 },
+  moreModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  moreModalTitle: { color: '#1f2f5c', fontSize: 18, fontWeight: '900' },
+  moreModalClose: { color: '#b42318', fontSize: 16, fontWeight: '900', padding: 6 },
+  moreModalItem: { paddingVertical: 13, paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#eef4ff', marginTop: 7, borderLeftWidth: 4, borderLeftColor: '#4338ca' },
+  moreModalItemText: { color: '#1f2f5c', fontWeight: '800', fontSize: 15 },
+  moreModalLogout: { backgroundColor: '#fff1f2', borderLeftColor: '#c62828' },
+  moreModalLogoutText: { color: '#c62828' },
 
   tabContent: {
     minHeight: 62,
@@ -1277,13 +1442,61 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  resultSubjectRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingVertical: 9,
+  },
+
+  previewLabel: {
+    color: '#174f75',
+    fontWeight: '900',
+    fontSize: 13,
+    marginBottom: 7,
+  },
+
+  resultImage: {
+    width: '100%',
+    minWidth: 760,
+    height: 220,
+    backgroundColor: '#fff',
+    marginBottom: 10,
+  },
+
+  terminalResultTable: {
+    minWidth: 760,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+
+  terminalResultsContainer: {
+    maxHeight: 360,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#dbe4ed',
+    padding: 8,
+  },
+
+  terminalResultCell: {
+    width: 82,
+    textAlign: 'center',
+  },
+
   noticeText: {
     marginTop: 6,
     color: '#475467',
     lineHeight: 20,
   },
 
-  dashboardNoticeRow: {
+  overallResultSummary: {
+    marginTop: 6,
+    color: '#172b4d',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+
+  latestNoticeContainer:{backgroundColor:'#fff',borderRadius:12,overflow:'hidden'},dashboardNoticeRow:{
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -1486,6 +1699,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#e6eef7',
   },
 
+  resultAltRow: {
+    backgroundColor: '#eaf1df',
+  },
+
   weeklyCell: {
     width: 78,
     paddingHorizontal: 8,
@@ -1547,6 +1764,7 @@ const styles = StyleSheet.create({
   passwordField: { flex: 1, marginBottom: 0 },
   eyeButton: { marginLeft: 8, minWidth: 54, paddingVertical: 12, paddingHorizontal: 8, alignItems: 'center', borderWidth: 1, borderColor: '#1764a5', borderRadius: 8 },
   card: { backgroundColor: '#ffffff', borderRadius: 18, padding: 18, marginBottom: 12, borderWidth: 1, borderColor: '#e0e7ff' },
+  compactCard: { paddingVertical: 8, paddingHorizontal: 12, marginBottom: 4, borderRadius: 10 },
   gateHeader:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',gap:10},gateStatus:{backgroundColor:'#fff0b8',color:'#7c5200',fontWeight:'800',fontSize:11,paddingHorizontal:9,paddingVertical:5,borderRadius:12},gateReturned:{backgroundColor:'#dcfce7',color:'#166534'},gateCancelled:{backgroundColor:'#fee2e2',color:'#991b1b'},
     noticeCard: { backgroundColor: '#fffbeb', borderColor: '#fde68a', borderLeftWidth: 4, borderLeftColor: '#f59e0b' },
   feesCard: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },

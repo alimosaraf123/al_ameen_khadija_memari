@@ -6,6 +6,7 @@ import React, {
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   Alert,
   TouchableOpacity,
@@ -132,9 +133,10 @@ export default function Login() {
               loginId
             );
 
-            // Show the password form first so an admin-reset password can be used immediately.
+            // Show guardian quick login first when this device is already configured.
+            // Password login remains available from the quick-login screen.
             setUserId(loginId);
-            setUsePasswordLogin(true);
+            setUsePasswordLogin(false);
 
           }
 
@@ -478,7 +480,7 @@ export default function Login() {
 
           Alert.alert(
             'Fingerprint Login',
-            'Fingerprint Login এই device-এ enabled নেই।'
+            'Fingerprint Login is not enabled on this device.'
           );
 
           setFingerprintAvailable(
@@ -499,7 +501,7 @@ export default function Login() {
 
           Alert.alert(
             'Not Available',
-            'এই ফোনে biometric hardware পাওয়া যায়নি।'
+            'Biometric hardware was not found on this phone.'
           );
 
           return;
@@ -516,7 +518,7 @@ export default function Login() {
 
           Alert.alert(
             'Fingerprint Not Set',
-            'ফোনের Settings থেকে Fingerprint সেট করুন।'
+            'Set up Fingerprint from your phone Settings.'
           );
 
           return;
@@ -628,7 +630,7 @@ export default function Login() {
       Alert.alert(
         'Forget Guardian Account?',
 
-        'এই device থেকে Guardian quick login বন্ধ হবে। আবার Registration No + Password দিয়ে login করতে হবে।',
+        'Guardian quick login will be disabled on this device. You will need to log in again with Registration No + Password.',
 
         [
           {
@@ -669,13 +671,18 @@ export default function Login() {
 
   return (
 
-    <SafeAreaView
-      style={styles.page}
-    >
+    <SafeAreaView style={styles.page}>
 
       <View
         style={styles.card}
       >
+
+        <Image
+          source={require('../../assets/images/al-ameen-logo.jpg')}
+          resizeMode="contain"
+          accessibilityLabel="Al-Ameen Mission Academy Memari logo"
+          style={styles.loginLogo}
+        />
 
         <Text
           style={styles.title}
@@ -706,7 +713,7 @@ export default function Login() {
             <Text
               style={styles.quickHelp}
             >
-              mPIN অথবা Fingerprint দিয়ে login করুন।
+              Log in with mPIN or Fingerprint.
             </Text>
 
 
@@ -955,28 +962,41 @@ const styles =
       flex: 1,
       backgroundColor: '#f2f5f8',
       justifyContent: 'center',
-      padding: 20,
+      padding: 12,
+      width: '100%',
     },
 
     card: {
-      backgroundColor: '#fff',
-      padding: 24,
+      width: '100%',
+      maxWidth: 520,
+      alignSelf: 'center',
+      backgroundColor: 'rgba(255,255,255,0.94)',
+      padding: 20,
       borderRadius: 18,
       elevation: 5,
     },
 
+    loginLogo: {
+      width: 64,
+      height: 64,
+      alignSelf: 'center',
+      marginBottom: 4,
+    },
+
     title: {
-      fontSize: 28,
+      fontSize: 24,
+      lineHeight: 30,
       fontWeight: '800',
       textAlign: 'center',
     },
 
     sub: {
-      fontSize: 17,
+      fontSize: 14,
+      lineHeight: 20,
       color: '#666',
       textAlign: 'center',
       marginTop: 6,
-      marginBottom: 28,
+      marginBottom: 20,
     },
 
     quickTitle: {

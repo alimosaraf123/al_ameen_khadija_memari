@@ -307,7 +307,7 @@ export default function DepositFund() {
 
         Alert.alert(
           'Invalid Amount',
-          'সঠিক Amount লিখুন।'
+          'Enter a valid amount.'
         );
 
         return;
@@ -319,7 +319,7 @@ export default function DepositFund() {
 
         Alert.alert(
           'Required',
-          'Details / Purpose লিখুন।'
+          'Enter details or purpose.'
         );
 
         return;
@@ -412,15 +412,15 @@ export default function DepositFund() {
     let mobile = rawMobile.replace(/\D/g, '');
     if (mobile.length === 10) mobile = `91${mobile}`;
     if (mobile.length < 12) {
-      Alert.alert('WhatsApp Number Missing', 'এই Student-এর WhatsApp/Guardian mobile number পাওয়া যায়নি।');
+      Alert.alert('WhatsApp Number Missing', 'WhatsApp/guardian mobile number was not found for this student.');
       return;
     }
     const due = Math.abs(Number(fundData?.summary?.net_balance || 0));
-    const message = `Student Deposit Fund Due Reminder\nAssalamualaikum, Dear ${selectedStudent.student_name || '-'}\nRegistration No: ${selectedStudent.registration_no || '-'}\nClass: ${selectedStudent.class_name || '-'}\n\nDeposit Fund Due: ₹${due.toFixed(2)}\n\nঅনুগ্রহ করে প্রয়োজনীয় Student Deposit Fund ক্যাশ এ জমা করার ব্যবস্থা করুন।\nif already paid please ignore it.\nThank you.\nAl-Ameen Mission Memari Khadija Campus`;
+    const message = `Student Deposit Fund Due Reminder\nAssalamualaikum, Dear ${selectedStudent.student_name || '-'}\nRegistration No: ${selectedStudent.registration_no || '-'}\nClass: ${selectedStudent.class_name || '-'}\n\nDeposit Fund Due: ₹${due.toFixed(2)}\n\nPlease arrange payment of the required Student Deposit Fund in cash.\nif already paid please ignore it.\nThank you.\nAl-Ameen Mission Memari Khadija Campus`;
     try {
       await Linking.openURL(`https://wa.me/${mobile}?text=${encodeURIComponent(message)}`);
     } catch {
-      Alert.alert('WhatsApp Error', 'WhatsApp খুলতে পারছি না।');
+      Alert.alert('WhatsApp Error', 'Unable to open WhatsApp.');
     }
   };
 
@@ -454,7 +454,13 @@ export default function DepositFund() {
           <TouchableOpacity onPress={() => setActiveTab('statement')} style={[styles.tabButton, activeTab === 'statement' && styles.tabActive]}>
             <Text style={styles.tabText}>Statement</Text>
           </TouchableOpacity>
-        </View><Text style={styles.totalDue}>Total Due: ₹{Number(dashboard?.summary?.total_due || 0).toFixed(2)}</Text>
+        </View><View style={styles.sdfSummary}>
+          {Number(dashboard?.summary?.total_due || 0) > 0 ? (
+            <Text style={styles.sdfDue}>Total SDF Due: ₹{Number(dashboard?.summary?.total_due || 0).toFixed(2)}</Text>
+          ) : Number(dashboard?.summary?.total_positive_balance || 0) > 0 ? (
+            <Text style={styles.sdfAdvance}>Total SDF Advance: ₹{Number(dashboard?.summary?.total_positive_balance || 0).toFixed(2)}</Text>
+          ) : null}
+        </View>
 
         {activeTab === 'statement' && (
           <Card>
@@ -476,7 +482,7 @@ export default function DepositFund() {
         <Text
           style={styles.help}
         >
-          Registration No অথবা Student Name দিয়ে Student খুঁজুন।
+          Search for a student by registration number or student name.
         </Text>
 
 
@@ -497,6 +503,10 @@ export default function DepositFund() {
               onChangeText={
                 setSearch
               }
+              onSubmitEditing={() => {
+                if (filteredStudents[0]) selectStudent(filteredStudents[0]);
+              }}
+              returnKeyType="search"
 
             />
 
@@ -611,6 +621,8 @@ export default function DepositFund() {
                   placeholder="SDF Book No."
                   value={sdfBookNo}
                   onChangeText={setSdfBookNo}
+                  onSubmitEditing={() => bookNoEditing ? saveSdfBookNo() : setBookNoEditing(true)}
+                  returnKeyType="done"
                   style={styles.bookNoInput}
                 />
                 <TouchableOpacity style={styles.bookNoSave} onPress={() => bookNoEditing ? saveSdfBookNo() : setBookNoEditing(true)}>
@@ -744,11 +756,11 @@ export default function DepositFund() {
     {Number(
       fundData?.summary?.net_balance || 0
     ) > 0
-      ? 'Student-এর Fund-এ টাকা জমা আছে'
+      ? 'The student has a fund balance.'
       : Number(
           fundData?.summary?.net_balance || 0
         ) < 0
-      ? 'Student-এর Fund-এ ঘাটতি / Due আছে'
+      ? 'The student has a fund shortfall / due.'
       : 'Fund Balance Zero'}
 
   </Text>
@@ -867,6 +879,8 @@ export default function DepositFund() {
                 }
 
                 keyboardType="decimal-pad"
+                onSubmitEditing={saveTransaction}
+                returnKeyType="done"
 
               />
 
@@ -1181,13 +1195,22 @@ whatsappText: {
       marginVertical: 3,
     },
 
-    totalDue: {
-      position: 'absolute',
-      top: 18,
-      left: '35%',
-      fontSize: 19,
+    sdfSummary: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 18,
+      marginVertical: 14,
+      paddingHorizontal: 4,
+    },
+    sdfDue: {
+      fontSize: 18,
       fontWeight: '900',
       color: '#c62828',
+    },
+    sdfAdvance: {
+      fontSize: 18,
+      fontWeight: '900',
+      color: '#087f5b',
     },
 
     statementRow: {

@@ -140,7 +140,7 @@ function normalizeValue(field, value) {
 function prepareBody(body) {
   const b = { ...body };
 
-  // Old fields-এর compatibility রাখার জন্য
+  // Keep compatibility with old fields.
   if (
     b.village === undefined &&
     b.present_village !== undefined

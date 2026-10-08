@@ -211,7 +211,7 @@ export default function DepositFundReport() {
 
         Alert.alert(
           'Mobile Number Missing',
-          'এই Student-এর Guardian/Father/Mother mobile number পাওয়া যায়নি।'
+          'Guardian, father, or mother mobile number was not found for this student.'
         );
 
         return;
@@ -239,7 +239,7 @@ export default function DepositFundReport() {
 
         Alert.alert(
           'Invalid Mobile',
-          'সঠিক WhatsApp mobile number পাওয়া যায়নি।'
+          'A valid WhatsApp mobile number was not found.'
         );
 
         return;
@@ -270,7 +270,7 @@ Class: ${student.class_name || '-'}
 
 ${balanceLine}
 
-অনুগ্রহ করে প্রয়োজনীয় Student Deposit Fund জমা করার ব্যবস্থা করুন।
+Please arrange payment of the required Student Deposit Fund.
 
 Thank you.`;
 
@@ -289,7 +289,7 @@ Thank you.`;
 
         Alert.alert(
           'WhatsApp Error',
-          'WhatsApp খুলতে পারছি না।'
+          'Unable to open WhatsApp.'
         );
 
       }
@@ -425,7 +425,7 @@ Thank you.`;
 
         Alert.alert(
           'No Data',
-          'Download করার মতো data নেই।'
+          'There is no data available to download.'
         );
 
         return;

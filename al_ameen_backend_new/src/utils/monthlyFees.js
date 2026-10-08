@@ -166,7 +166,7 @@ function findFeesClassId(
   const candidates = [];
 
 
-  // Stream থাকলে আগে combined class try করবে.
+  // If stream is present, try the combined class first.
   if (cls && str) {
 
     candidates.push(
@@ -346,7 +346,7 @@ async function getMonthlyFeeDue(student, {throughMonth}={}) {
       );
 
 
-      // Screenshot-এ search blank value যাচ্ছে
+      // The screenshot search is receiving a blank value.
       formData.set(
         'search',
         ''
@@ -505,7 +505,7 @@ async function getMonthlyFeeDue(student, {throughMonth}={}) {
 
 
       // Fallback:
-      // total parse না হলে monthly rows add করবে
+      // Add monthly rows when the total cannot be parsed.
       if (
         !totalDue &&
         monthlyDues.length

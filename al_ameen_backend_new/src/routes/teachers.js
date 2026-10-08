@@ -162,6 +162,13 @@ router.put('/:id', auth, allow('super_admin','admin'), asyncHandler(async (req,r
   }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }));
 
+router.patch('/:id/profile-edit-reset', auth, allow('super_admin','admin'), asyncHandler(async (req,res) => {
+  await teacherDetailsSchemaReady;
+  const result = await pool.query('UPDATE teachers SET profile_edit_count=0 WHERE id=$1 RETURNING id,profile_edit_count', [req.params.id]);
+  if (!result.rowCount) return res.status(404).json({success:false,message:'Teacher not found'});
+  res.json({success:true,teacher_id:result.rows[0].id,profile_edit_count:0,profile_edits_remaining:2});
+}));
+
 router.patch('/:id/password-reset', auth, allow('super_admin','admin'), asyncHandler(async(req,res)=>{const temporaryPassword='Temp@'+Math.floor(100000+Math.random()*900000);const t=(await pool.query('SELECT user_id,login_id FROM teachers JOIN users ON users.id=teachers.user_id WHERE teachers.id=$1',[req.params.id])).rows[0];if(!t)return res.status(404).json({success:false,message:'Teacher not found'});await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2',[await bcrypt.hash(temporaryPassword,12),t.user_id]);res.json({success:true,login_id:t.login_id,temporary_password:temporaryPassword});}));
 
 router.patch('/:id/status', auth, allow('super_admin','admin'), asyncHandler(async(req,res)=>{

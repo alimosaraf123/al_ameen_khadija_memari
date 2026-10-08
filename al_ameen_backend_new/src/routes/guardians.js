@@ -1274,7 +1274,10 @@ router.get(
           ON sm.exam_id = b.exam_id
          AND sm.subject_id = b.subject_id
          AND sm.verification_status = 'verified'
+        JOIN students st
+          ON st.id = sm.student_id
         WHERE b.locked = TRUE
+          AND e.session_name = CONCAT(st.session_from::text, '-', st.session_to::text)
       )
       SELECT batch_id, exam_date, subject_name, full_marks,
              obtained_marks, mark_rank, ranked_count
@@ -2914,7 +2917,7 @@ router.get(
         success: false,
 
         message:
-          'Monthly fee website থেকে Due আনা যাচ্ছে না। কিছুক্ষণ পরে আবার চেষ্টা করুন।',
+          'Unable to load the monthly fee due from the website. Please try again later.',
 
       });
 

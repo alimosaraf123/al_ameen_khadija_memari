@@ -9,7 +9,7 @@ const {governance}=require('./src/middleware/governance');
 const app=express();
 const PORT=process.env.PORT||3000;
 app.set('trust proxy', 1);
-const allowedOrigins=String(process.env.CORS_ORIGINS||'https://al-ameen-khadija.onrender.com,https://al-ameen-khadija-memari.onrender.com,http://localhost:8081,http://127.0.0.1:8081').split(',').map(x=>x.trim()).filter(Boolean);
+const allowedOrigins=String(process.env.CORS_ORIGINS||'https://al-ameen-khadija.onrender.com,https://al-ameen-khadija-memari.onrender.com,http://localhost:8081,http://127.0.0.1:8081,http://localhost:8082,http://127.0.0.1:8082,http://localhost:8083,http://127.0.0.1:8083').split(',').map(x=>x.trim()).filter(Boolean);
 app.use(cors({origin:(origin,callback)=>{if(!origin||allowedOrigins.includes(origin))return callback(null,true);return callback(new Error('Origin not allowed'));}}));
 app.disable('x-powered-by');
 app.use((req,res,next)=>{res.set({'X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'strict-origin-when-cross-origin','Permissions-Policy':'camera=(), microphone=(), geolocation=()'});next();});

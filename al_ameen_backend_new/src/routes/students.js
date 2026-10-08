@@ -32,8 +32,22 @@ async function exitClearance(studentId) {
   return {student,exit,dues,sdf_dues:sdfDues,library_dues:libraryDues,monthly_fee_dues:monthlyDues,monthly_fee_due_total:monthlyDues.reduce((n,x)=>n+Number(x.amount||0),0),tc_blocked:sdfDues.length>0||libraryDues.length>0};
 }
 
+async function deactivateGuardiansWhenNoActiveStudent(client, studentId) {
+  await client.query(`
+    UPDATE users u SET is_active=FALSE
+    FROM guardian_profiles gp
+    JOIN student_guardians sg ON sg.guardian_id=gp.id
+    WHERE gp.user_id=u.id AND u.role='guardian' AND sg.student_id=$1
+      AND NOT EXISTS (
+        SELECT 1 FROM student_guardians other_sg
+        JOIN students other_st ON other_st.id=other_sg.student_id
+        WHERE other_sg.guardian_id=gp.id AND other_st.is_active=TRUE
+      )
+  `, [studentId]);
+}
+
 router.get('/:id/exit-clearance',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{const data=await exitClearance(req.params.id);if(!data)return res.status(404).json({success:false,message:'Student not found'});res.json({success:true,...data});}));
-router.post('/:id/dropout',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{await exitSchemaReady;const date=String(req.body?.dropout_date||'').trim(),reason=String(req.body?.dropout_reason||'').trim();if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!reason)return res.status(400).json({success:false,message:'Dropout date and reason are required'});const client=await pool.connect();try{await client.query('BEGIN');const student=(await client.query('UPDATE students SET is_active=FALSE,updated_at=NOW() WHERE id=$1 RETURNING id,student_name',[req.params.id])).rows[0];if(!student){await client.query('ROLLBACK');return res.status(404).json({success:false,message:'Student not found'});}const exit=(await client.query(`INSERT INTO student_exit_records(student_id,dropout_date,dropout_reason,created_by) VALUES($1,$2,$3,$4) ON CONFLICT(student_id) DO UPDATE SET dropout_date=EXCLUDED.dropout_date,dropout_reason=EXCLUDED.dropout_reason,tc_issued_at=NULL,tc_issued_by=NULL,reactivated_at=NULL,reactivated_by=NULL,updated_at=NOW() RETURNING *`,[req.params.id,date,reason,req.user.userId])).rows[0];await client.query('COMMIT');res.json({success:true,student,exit});}catch(e){await client.query('ROLLBACK');throw e}finally{client.release();}}));
+router.post('/:id/dropout',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{await exitSchemaReady;const date=String(req.body?.dropout_date||'').trim(),reason=String(req.body?.dropout_reason||'').trim();if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!reason)return res.status(400).json({success:false,message:'Dropout date and reason are required'});const client=await pool.connect();try{await client.query('BEGIN');const student=(await client.query('UPDATE students SET is_active=FALSE,updated_at=NOW() WHERE id=$1 RETURNING id,student_name',[req.params.id])).rows[0];if(!student){await client.query('ROLLBACK');return res.status(404).json({success:false,message:'Student not found'});}const exit=(await client.query(`INSERT INTO student_exit_records(student_id,dropout_date,dropout_reason,created_by) VALUES($1,$2,$3,$4) ON CONFLICT(student_id) DO UPDATE SET dropout_date=EXCLUDED.dropout_date,dropout_reason=EXCLUDED.dropout_reason,tc_issued_at=NULL,tc_issued_by=NULL,reactivated_at=NULL,reactivated_by=NULL,updated_at=NOW() RETURNING *`,[req.params.id,date,reason,req.user.userId])).rows[0];await deactivateGuardiansWhenNoActiveStudent(client,req.params.id);await client.query('COMMIT');res.json({success:true,student,exit});}catch(e){await client.query('ROLLBACK');throw e}finally{client.release();}}));
 router.post('/:id/transfer-certificate',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{const data=await exitClearance(req.params.id);if(!data)return res.status(404).json({success:false,message:'Student not found'});if(!data.exit)return res.status(409).json({success:false,message:'Save dropout date and reason before issuing TC'});if(data.student.is_active)return res.status(409).json({success:false,message:'TC can only be issued for a dropout/inactive student'});if(data.tc_blocked)return res.status(409).json({success:false,message:'TC cannot be issued until SDF and Library Book dues are cleared',sdf_dues:data.sdf_dues,library_dues:data.library_dues});const exit=(await pool.query('UPDATE student_exit_records SET tc_issued_at=COALESCE(tc_issued_at,NOW()),tc_issued_by=COALESCE(tc_issued_by,$1),updated_at=NOW() WHERE student_id=$2 RETURNING *',[req.user.userId,req.params.id])).rows[0];res.json({success:true,...data,exit});}));
 
 
@@ -68,7 +82,7 @@ async function saveVisitor(
     return;
   }
 
-  // visitor=null পাঠালে visitor delete হবে
+  // Passing visitor=null will delete the visitor.
   if (visitor === null) {
     await client.query(
       `
@@ -114,7 +128,7 @@ async function saveVisitor(
     data.state,
   ].some(Boolean);
 
-  // সব field ফাঁকা হলে visitor record remove
+  // Remove the visitor record when all fields are empty.
   if (!hasData) {
     await client.query(
       `
@@ -262,8 +276,8 @@ router.get(
       }
 
       ORDER BY
-        s.class_name,
-        s.roll_no,
+        NULLIF(regexp_replace(s.registration_no, '[^0-9]', '', 'g'), '')::numeric NULLS LAST,
+        s.registration_no,
         s.student_name
     `;
 
@@ -649,6 +663,7 @@ router.delete(
       });
     }
 
+    await deactivateGuardiansWhenNoActiveStudent(pool,req.params.id);
     res.json({
       success: true,
       message:

@@ -31,7 +31,7 @@ export default function Illness() {
   return <SafeAreaView style={s.page}><ScrollView contentContainerStyle={s.content}>
     <AcademyHeader />
     <Text style={s.title}>Student Illness / Problem</Text>
-    <Text style={s.help}>Room নির্বাচন প্রয়োজন নেই—শুধু Registration Number লিখুন।</Text>
+    <Text style={s.help}>Room selection is not required; enter only the registration number.</Text>
     <View style={s.searchRow}><Field placeholder="Registration number" value={registrationNo} onChangeText={setRegistrationNo} style={s.searchInput}/><TouchableOpacity onPress={search} style={s.searchButton}><Text style={s.buttonText}>{loading?'Searching...':'Search'}</Text></TouchableOpacity></View>
     {loading&&<ActivityIndicator color="#c05a18"/>}
     {student&&<>

@@ -18,7 +18,7 @@ function RoutineImage({url}:{url:string}){
 }
 export function RoutineCard({item}:{item:any}){
  const url=/^https?:/.test(item.file_url)?item.file_url:`${API_BASE}${item.file_url}`;
- return <TouchableOpacity style={s.routineItem} onPress={()=>Linking.openURL(url)}><Text style={s.routineTitle}>{item.title||'Published Routine'}</Text><Text style={s.routineMeta}>{routineDate(item)}</Text><RoutineImage url={url}/><Text style={s.routineOpen}>Open JPG</Text></TouchableOpacity>;
+ return <View style={s.routineItem}><Text style={s.routineTitle}>{item.title||'Published Routine'}</Text><Text style={s.routineMeta}>{routineDate(item)}</Text><RoutineImage url={url}/><TouchableOpacity accessibilityRole="link" style={s.openButton} onPress={()=>Linking.openURL(url)}><Text style={s.routineOpen}>Open JPG</Text></TouchableOpacity></View>;
 }
 
 export default function TeacherRoutineHistory(){
@@ -49,5 +49,6 @@ const s=StyleSheet.create({
  routineTitle:{color:'#173d2b',fontSize:17,fontWeight:'900'},
  routineMeta:{color:'#728077',marginTop:3},
  routineImage:{width:'100%',backgroundColor:'#fff',borderRadius:7,marginTop:8},
+ openButton:{marginTop:2},
  routineOpen:{color:'#1768c5',marginTop:8,fontWeight:'900',textAlign:'center'}
 });
