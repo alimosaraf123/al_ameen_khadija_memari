@@ -529,7 +529,6 @@ export default function DepositFund() {
           <Card>
           <Text style={styles.heading}>Date Statement / Print</Text>
           <Text style={styles.help}>Select a student above, or enter a date range to see all students' transactions.</Text>
-          <Select label="Class" value={classFilter} onChange={setClassFilter} options={[{value:'*',label:'All Classes'}, ...STUDENT_CLASSES.map(value => ({value,label:value}))]} />
           <View style={styles.dateRow}><DatePickerField label="From Date" value={fromDate} onChange={setFromDate} /><DatePickerField label="To Date" value={toDate} onChange={setToDate} /></View>
           <Button title="View Statement" onPress={searchStatement} />
           {statement && <>
@@ -568,7 +567,7 @@ export default function DepositFund() {
           Search for a student by registration number or student name.
         </Text>
 
-        <Select label="Class" value={classFilter} onChange={setClassFilter} options={[{value:'*',label:'All Classes'}, ...STUDENT_CLASSES.map(value => ({value,label:value}))]} />
+
 
 
         {/* =================================
