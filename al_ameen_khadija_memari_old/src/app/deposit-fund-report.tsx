@@ -38,6 +38,8 @@ import {
   Muted,
 } from '../components/ui';
 import PageNavigation from '../components/PageNavigation';
+import { Select } from '../components/StudentDirectory';
+import { STUDENT_CLASSES } from '../lib/studentClasses';
 
 
 type FilterType =
@@ -60,6 +62,8 @@ export default function DepositFundReport() {
 
   const [filter, setFilter] =
     useState<FilterType>('all');
+
+  const [classFilter, setClassFilter] = useState('*');
 
   const [transactions, setTransactions] = useState<any[]>([]);
 
@@ -132,6 +136,8 @@ export default function DepositFundReport() {
               : student.status ===
                 filter;
 
+          const matchesClass = classFilter === '*' || String(student.class_name || '') === classFilter;
+
 
           const matchesSearch =
             !q
@@ -166,6 +172,7 @@ export default function DepositFundReport() {
 
           return (
             matchesFilter &&
+            matchesClass &&
             matchesSearch
           );
 
@@ -175,6 +182,7 @@ export default function DepositFundReport() {
     }, [
       data,
       filter,
+      classFilter,
       search,
     ]);
 
@@ -785,6 +793,8 @@ Thank you.`;
           }
         />
 
+        <Select label="Class" value={classFilter} onChange={setClassFilter} options={[{value:'*',label:'All Classes'}, ...STUDENT_CLASSES.map(value => ({value,label:value}))]} />
+
 
         <ScrollView
           horizontal
@@ -873,6 +883,7 @@ Thank you.`;
               <Text style={[styles.reportCell, styles.slCell]}>S.L.</Text>
               <Text style={[styles.reportCell, styles.regCell]}>Reg</Text>
               <Text style={[styles.reportCell, styles.nameCell]}>Name</Text>
+              <Text style={[styles.reportCell, styles.classCell]}>Class</Text>
               <Text style={[styles.reportCell, styles.dateCell]}>Last Date</Text>
               <Text style={[styles.reportCell, styles.amountCell]}>Last Tran.</Text>
               <Text style={[styles.reportCell, styles.amountCell]}>Balance</Text>
@@ -890,6 +901,7 @@ Thank you.`;
                   <Text style={[styles.reportCell, styles.slCell]}>{index + 1}</Text>
                   <Text style={[styles.reportCell, styles.regCell]}>{student.registration_no || '-'}</Text>
                   <Text style={[styles.reportCell, styles.nameCell]}>{student.student_name || '-'}</Text>
+                  <Text style={[styles.reportCell, styles.classCell]}>{student.class_name || '-'}</Text>
                   <Text style={[styles.reportCell, styles.dateCell]}>{student.last_transaction_date ? String(student.last_transaction_date).slice(0, 10) : '-'}</Text>
                   <Text style={[styles.reportCell, styles.amountCell, lastTransaction < 0 ? styles.negative : null]}>{lastTransaction < 0 ? '- ' : '+ '}₹{Math.abs(lastTransaction).toFixed(2)}</Text>
                   <Text style={[styles.reportCell, styles.amountCell, balance < 0 ? styles.negative : styles.positive]}>{balance < 0 ? '- ' : '+ '}₹{Math.abs(balance).toFixed(2)}</Text>
@@ -1375,6 +1387,7 @@ const styles =
     slCell: { width: 55 },
     regCell: { width: 105 },
     nameCell: { width: 210 },
+    classCell: { width: 110 },
     dateCell: { width: 145 },
     amountCell: { width: 145, textAlign: 'right' },
     statusCell: { width: 125 },
