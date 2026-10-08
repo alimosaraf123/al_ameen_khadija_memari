@@ -2112,9 +2112,10 @@ router.get(
 
     const dueResult = await pool.query(
       `SELECT id, due_title, amount, due_date, remarks
-       FROM student_dues
+       FROM student_dues d
        WHERE student_id=$1 AND status='due' AND amount>0
          AND due_title ~* '(s[.]?d[.]?f|student development fund|bus fare|admission fee|registration fee)'
+         AND NOT (due_title ILIKE 'Bus fare for the third-semester examination.' AND EXISTS (SELECT 1 FROM student_dues d2 WHERE d2.student_id=d.student_id AND d2.due_title ILIKE 'Bus fare for the 3rd semester examination' AND d2.amount=d.amount AND d2.due_date IS NOT DISTINCT FROM d.due_date))
        ORDER BY due_date NULLS LAST, created_at`,
       [studentId]
     );

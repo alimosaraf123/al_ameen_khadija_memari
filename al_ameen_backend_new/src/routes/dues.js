@@ -5,7 +5,7 @@ router.get('/student/:id/summary',auth,allow('super_admin','admin'),asyncHandler
   await schemaReady;
   const student=(await pool.query(`SELECT id,registration_no,student_name,class_name,sdf_book_no FROM students WHERE id=$1`,[req.params.id])).rows[0];
   if(!student)return res.status(404).json({success:false,message:'Student not found'});
-  const dues=(await pool.query(`SELECT id,due_title,amount,due_date,remarks,status FROM student_dues WHERE student_id=$1 AND status='due' AND amount>0 ORDER BY due_date NULLS LAST,created_at`,[req.params.id])).rows;
+  const dues=(await pool.query(`SELECT id,due_title,amount,due_date,remarks,status,session_name FROM student_dues d WHERE student_id=$1 AND status='due' AND amount>0 AND NOT (due_title ILIKE 'Bus fare for the third-semester examination.' AND EXISTS (SELECT 1 FROM student_dues d2 WHERE d2.student_id=d.student_id AND d2.due_title ILIKE 'Bus fare for the 3rd semester examination' AND d2.amount=d.amount AND d2.due_date IS NOT DISTINCT FROM d.due_date)) ORDER BY due_date NULLS LAST,created_at`,[req.params.id])).rows;
   const isSdf=x=>/\bs\.?d\.?f\b|student development fund|bus fare|admission fee|registration fee/i.test(String(x.due_title||''));
   const monthlyDues=dues.filter(x=>/monthly|tuition|school fee|fees?/i.test(String(x.due_title||''))&&!isSdf(x));
   const sdfDues=dues.filter(isSdf);
