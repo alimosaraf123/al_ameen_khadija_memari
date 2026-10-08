@@ -144,6 +144,7 @@ export default function DepositFund() {
 
   const totalSdfDue = Number(dashboard?.summary?.total_due || 0);
   const totalSdfAdvance = Number(dashboard?.summary?.total_positive_balance || 0);
+  const selectedNetBalance = Number(fundData?.summary?.net_balance || 0);
 
   const searchStatement = async () => {
     if (!selectedStudent && !fromDate.trim() && !toDate.trim()) return Alert.alert('Required', 'Select a student or enter a date range.');
@@ -498,7 +499,12 @@ export default function DepositFund() {
           </TouchableOpacity>
         </View>
         <View style={styles.sdfSummary}>
-          {totalSdfDue > 0 ? (
+          {selectedStudent && fundData ? (
+            <View style={styles.sdfSummaryCard}>
+              <Text style={styles.sdfLabel}>{selectedNetBalance >= 0 ? 'SDF Advance (Selected Student)' : 'SDF Due (Selected Student)'}</Text>
+              <Text style={selectedNetBalance >= 0 ? styles.sdfAdvance : styles.sdfDue}>{'\u20B9'}{Math.abs(selectedNetBalance).toFixed(2)}</Text>
+            </View>
+          ) : totalSdfDue > 0 ? (
             <View style={styles.sdfSummaryCard}>
               <Text style={styles.sdfLabel}>Total SDF Due (All Students)</Text>
               <Text style={styles.sdfDue}>{'\u20B9'}{totalSdfDue.toFixed(2)}</Text>
