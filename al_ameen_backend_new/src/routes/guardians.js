@@ -1997,7 +1997,7 @@ router.get('/admin/deposit-fund-statement', auth, allow('super_admin', 'admin'),
   if(registrationNo){params.push(registrationNo);filters.push(`s.registration_no=$${params.length}`)}
   if(fromDate){params.push(fromDate);filters.push(`t.transaction_date>=$${params.length}::date`)}
   if(toDate){params.push(toDate);filters.push(`t.transaction_date<=$${params.length}::date`)}
-  const rows=(await pool.query(`SELECT t.id,t.student_id,t.transaction_date,t.transaction_type,t.amount,t.details,t.reference_no,s.registration_no,s.student_name,s.class_name,s.roll_no FROM student_deposit_transactions t JOIN students s ON s.id=t.student_id WHERE ${filters.join(' AND ')} ORDER BY t.transaction_date,t.id`,params)).rows;
+  const rows=(await pool.query(`SELECT t.id,t.student_id,t.transaction_date,t.transaction_type,t.amount,t.details,t.reference_no,t.created_by,s.registration_no,s.student_name,s.class_name,s.roll_no, SUM(CASE WHEN t.transaction_type='deposit' THEN t.amount WHEN t.transaction_type='expense' THEN -t.amount ELSE 0 END) OVER (ORDER BY t.transaction_date,t.id ROWS UNBOUNDED PRECEDING) AS running_balance FROM student_deposit_transactions t JOIN students s ON s.id=t.student_id WHERE ${filters.join(' AND ')} ORDER BY t.transaction_date,t.id`,params)).rows;
   const student=registrationNo?(await pool.query('SELECT id,registration_no,student_name,class_name,roll_no,guardian_mobile,father_mobile,mother_mobile,mobile_number FROM students WHERE registration_no=$1 LIMIT 1',[registrationNo])).rows[0]:null;
   const summary={deposit:rows.filter(x=>x.transaction_type==='deposit').reduce((n,x)=>n+Number(x.amount||0),0),withdrawal:rows.filter(x=>x.transaction_type==='expense').reduce((n,x)=>n+Number(x.amount||0),0)};
   summary.balance=summary.deposit-summary.withdrawal;summary.advance=Math.max(0,summary.balance);summary.due=Math.max(0,-summary.balance);
@@ -2711,6 +2711,7 @@ router.get(
       },
 
       students,
+      transactions: transactionResult.rows,
 
     });
 
