@@ -996,13 +996,13 @@ export default function DepositFund() {
                     {item.transaction_type === 'deposit' ? 'Deposit' : 'Withdrawal'}
                   </Text>
                   <Text style={item.transaction_type === 'deposit' ? styles.depositAmount : styles.expenseAmount}>
-                    {item.transaction_type === 'deposit' ? '+ ' : '- '}â‚¹{Number(item.amount || 0).toFixed(2)}
+                    {item.transaction_type === 'deposit' ? '+ ' : '- '}<Text style={styles.currency}>₹</Text>{Number(item.amount || 0).toFixed(2)}
                   </Text>
                 </View>
                 <Text style={styles.transactionDetails}>{item.details || '-'}</Text>
                 <Text style={styles.transactionMeta}>Date: {String(item.transaction_date || '').slice(0, 10)}</Text>
                 {!!item.reference_no && <Text style={styles.transactionMeta}>Ref: {item.reference_no}</Text>}
-                <Text style={styles.balanceText}>Balance after transaction: â‚¹{Number(item.running_balance || 0).toFixed(2)}</Text>
+                <Text style={styles.balanceText}>Balance after transaction: <Text style={styles.currency}>₹</Text>{Number(item.running_balance || 0).toFixed(2)}</Text>
               </View>
             ))}
 
@@ -1347,6 +1347,10 @@ whatsappText: {
     balanceText: {
       marginTop: 7,
       fontWeight: '700',
+    },
+
+    currency: {
+      fontFamily: 'Arial',
     },
 
   });

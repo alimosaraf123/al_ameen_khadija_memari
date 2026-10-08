@@ -882,8 +882,8 @@ Thank you.`;
                   <Text style={[styles.reportCell, styles.regCell]}>{student.registration_no || '-'}</Text>
                   <Text style={[styles.reportCell, styles.nameCell]}>{student.student_name || '-'}</Text>
                   <Text style={[styles.reportCell, styles.dateCell]}>{student.last_transaction_date ? String(student.last_transaction_date).slice(0, 10) : '-'}</Text>
-                  <Text style={[styles.reportCell, styles.amountCell, lastTransaction < 0 ? styles.negative : null]}>{lastTransaction < 0 ? '- ' : '+ '}â‚¹{Math.abs(lastTransaction).toFixed(2)}</Text>
-                  <Text style={[styles.reportCell, styles.amountCell, balance < 0 ? styles.negative : styles.positive]}>{balance < 0 ? '- ' : '+ '}â‚¹{Math.abs(balance).toFixed(2)}</Text>
+                  <Text style={[styles.reportCell, styles.amountCell, lastTransaction < 0 ? styles.negative : null]}>{lastTransaction < 0 ? '- ' : '+ '}₹{Math.abs(lastTransaction).toFixed(2)}</Text>
+                  <Text style={[styles.reportCell, styles.amountCell, balance < 0 ? styles.negative : styles.positive]}>{balance < 0 ? '- ' : '+ '}₹{Math.abs(balance).toFixed(2)}</Text>
                   <Text style={[styles.reportCell, styles.statusCell, student.status === 'due' ? styles.negative : styles.positive]}>{student.status === 'due' ? 'Active' : student.status === 'deposit' ? 'Active' : 'Clear'}</Text>
                   <View style={[styles.reportCell, styles.actionCell]}>
                     {Number(student.due || 0) > 0 && <TouchableOpacity style={styles.reminderButton} onPress={() => sendWhatsApp(student)}><Text style={styles.reminderText}>Send Due Reminder</Text></TouchableOpacity>}
@@ -1053,18 +1053,18 @@ Thank you.`;
                 <Text style={[styles.reportCell, styles.dateCell]}>{String(item.transaction_date || '').slice(0, 10)}</Text>
                 <Text style={[styles.reportCell, styles.regCell]}>{item.registration_no || '-'}</Text>
                 <Text style={[styles.reportCell, styles.nameCell]}>{item.details || '-'}</Text>
-                <Text style={[styles.reportCell, styles.amountCell]}>{expense ? `- â‚¹${expense.toFixed(2)}` : '-'}</Text>
-                <Text style={[styles.reportCell, styles.amountCell]}>{deposit ? `â‚¹${deposit.toFixed(2)}` : '-'}</Text>
-                <Text style={[styles.reportCell, styles.amountCell]}>{`â‚¹${Number(item.running_balance || 0).toFixed(2)}`}</Text>
+                <Text style={[styles.reportCell, styles.amountCell]}>{expense ? `- ₹${expense.toFixed(2)}` : '-'}</Text>
+                <Text style={[styles.reportCell, styles.amountCell]}>{deposit ? `₹${deposit.toFixed(2)}` : '-'}</Text>
+                <Text style={[styles.reportCell, styles.amountCell]}>{`₹${Number(item.running_balance || 0).toFixed(2)}`}</Text>
                 <Text style={[styles.reportCell, styles.nameCell]}>{item.reference_no || '-'}</Text>
                 <Text style={[styles.reportCell, styles.statusCell]}>{item.created_by || '-'}</Text>
               </View>;
             })}
             <View style={[styles.reportRow, styles.reportHeader]}>
               <Text style={[styles.reportCell, { width: 475, textAlign: 'right', fontWeight: '800' }]}>Total</Text>
-              <Text style={[styles.reportCell, styles.amountCell, styles.negative]}>{`- â‚¹${transactions.filter((x: any) => x.transaction_type === 'expense').reduce((n: number, x: any) => n + Number(x.amount || 0), 0).toFixed(2)}`}</Text>
-              <Text style={[styles.reportCell, styles.amountCell, styles.positive]}>{`â‚¹${transactions.filter((x: any) => x.transaction_type === 'deposit').reduce((n: number, x: any) => n + Number(x.amount || 0), 0).toFixed(2)}`}</Text>
-              <Text style={[styles.reportCell, styles.amountCell]}>{transactions.length ? `â‚¹${Number(transactions[transactions.length - 1].running_balance || 0).toFixed(2)}` : '-'}</Text>
+              <Text style={[styles.reportCell, styles.amountCell, styles.negative]}>{`- ₹${transactions.filter((x: any) => x.transaction_type === 'expense').reduce((n: number, x: any) => n + Number(x.amount || 0), 0).toFixed(2)}`}</Text>
+              <Text style={[styles.reportCell, styles.amountCell, styles.positive]}>{`₹${transactions.filter((x: any) => x.transaction_type === 'deposit').reduce((n: number, x: any) => n + Number(x.amount || 0), 0).toFixed(2)}`}</Text>
+              <Text style={[styles.reportCell, styles.amountCell]}>{transactions.length ? `₹${Number(transactions[transactions.length - 1].running_balance || 0).toFixed(2)}` : '-'}</Text>
               <Text style={[styles.reportCell, { width: 270 }]}></Text>
             </View>
           </View>
