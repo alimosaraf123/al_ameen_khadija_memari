@@ -1164,7 +1164,8 @@ whatsappText: {
       padding: 12,
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
+      justifyContent: 'flex-start',
+      gap: 18,
     },
     sdfLabel: {
       color: '#667085',
