@@ -23,7 +23,7 @@ async function exitClearance(studentId) {
   const student=(await pool.query(`SELECT s.*,r.room_name FROM students s LEFT JOIN rooms r ON r.id=s.room_id WHERE s.id=$1`,[studentId])).rows[0];
   if(!student)return null;
   const dues=(await pool.query(`SELECT id,due_title,amount,due_date,remarks FROM student_dues WHERE student_id=$1 AND status='due' AND amount>0 ORDER BY due_date NULLS LAST,created_at`,[studentId])).rows;
-  const isSdf=x=>/\bs\.?d\.?f\b|student development fund|bus fare|admission fee|registration fee/i.test(String(x.due_title||''));
+  const isSdf=x=>Boolean(x.session_name)||/\bs\.?d\.?f\b|student development fund|bus fare|admission fee|registration fee/i.test(String(x.due_title||''));
   const isLibrary=x=>/library|book/i.test(String(x.due_title||''));
   const isMonthly=x=>/monthly|tuition|school fee|fees?/i.test(String(x.due_title||''))&&!isSdf(x);
   const libraryLoans=(await pool.query(`SELECT l.id,b.accession_no,b.title,l.issued_at,l.due_date,'Library Book: '||b.title AS due_title FROM library_loans l JOIN library_books b ON b.id=l.book_id WHERE l.student_id=$1 AND l.returned_at IS NULL ORDER BY l.due_date`,[studentId])).rows;
