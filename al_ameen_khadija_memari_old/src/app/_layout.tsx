@@ -10,6 +10,19 @@ export default function Layout() {
  const request=useRef(0);
  const pathname=usePathname();
  useEffect(()=>{
+  if(Platform.OS==='web'&&typeof document!=='undefined'){
+   document.title='Al-Ameen Mission Academy Memari';
+   let iconLink=document.querySelector("link[rel*='icon']") as HTMLLinkElement | null;
+   if(!iconLink){
+    iconLink=document.createElement('link');
+    iconLink.rel='icon';
+    document.head.appendChild(iconLink);
+   }
+   iconLink.type='image/png';
+   iconLink.href='/favicon.png';
+  }
+ },[]);
+ useEffect(()=>{
   let active=true;
   const verify=async()=>{
    const current=++request.current;
