@@ -2478,6 +2478,10 @@ router.get(
             t.transaction_date
           ) AS last_transaction_date,
 
+          (ARRAY_AGG(t.amount ORDER BY t.transaction_date DESC NULLS LAST, t.id DESC))[1] AS last_transaction_amount,
+
+          (ARRAY_AGG(t.transaction_type ORDER BY t.transaction_date DESC NULLS LAST, t.id DESC))[1] AS last_transaction_type,
+
           COALESCE((
             SELECT SUM(d.amount)
             FROM student_dues d
