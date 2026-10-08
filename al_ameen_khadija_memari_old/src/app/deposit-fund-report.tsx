@@ -60,6 +60,8 @@ export default function DepositFundReport() {
   const [filter, setFilter] =
     useState<FilterType>('all');
 
+  const [transactions, setTransactions] = useState<any[]>([]);
+
 
   // =====================================
   // LOAD REPORT
@@ -72,12 +74,13 @@ export default function DepositFundReport() {
 
         setLoading(true);
 
-        const result =
-          await api(
-            '/api/guardians/admin/deposit-fund-report'
-          );
+        const [result, statement] = await Promise.all([
+          api('/api/guardians/admin/deposit-fund-report'),
+          api('/api/guardians/admin/deposit-fund-statement?from_date=2000-01-01&to_date=2099-12-31'),
+        ]);
 
         setData(result);
+        setTransactions(statement.transactions || []);
 
       } catch (e: any) {
 
@@ -1025,6 +1028,47 @@ Thank you.`;
 
           }
         )}
+
+        <Text style={styles.heading}>Transaction Day Book</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator>
+          <View style={styles.reportTable}>
+            <View style={[styles.reportRow, styles.reportHeader]}>
+              <Text style={[styles.reportCell, styles.slCell]}>#</Text>
+              <Text style={[styles.reportCell, styles.regCell]}>T. ID</Text>
+              <Text style={[styles.reportCell, styles.dateCell]}>Date</Text>
+              <Text style={[styles.reportCell, styles.regCell]}>Reg.</Text>
+              <Text style={[styles.reportCell, styles.nameCell]}>Particulars</Text>
+              <Text style={[styles.reportCell, styles.amountCell]}>Withdrawal</Text>
+              <Text style={[styles.reportCell, styles.amountCell]}>Deposit</Text>
+              <Text style={[styles.reportCell, styles.amountCell]}>Balance</Text>
+              <Text style={[styles.reportCell, styles.nameCell]}>Remarks</Text>
+              <Text style={[styles.reportCell, styles.statusCell]}>Exe. By</Text>
+            </View>
+            {transactions.map((item: any, index: number) => {
+              const expense = item.transaction_type === 'expense' ? Number(item.amount || 0) : 0;
+              const deposit = item.transaction_type === 'deposit' ? Number(item.amount || 0) : 0;
+              return <View key={item.id} style={styles.reportRow}>
+                <Text style={[styles.reportCell, styles.slCell]}>{index + 1}</Text>
+                <Text style={[styles.reportCell, styles.regCell]}>{item.id}</Text>
+                <Text style={[styles.reportCell, styles.dateCell]}>{String(item.transaction_date || '').slice(0, 10)}</Text>
+                <Text style={[styles.reportCell, styles.regCell]}>{item.registration_no || '-'}</Text>
+                <Text style={[styles.reportCell, styles.nameCell]}>{item.details || '-'}</Text>
+                <Text style={[styles.reportCell, styles.amountCell]}>{expense ? `- â‚¹${expense.toFixed(2)}` : '-'}</Text>
+                <Text style={[styles.reportCell, styles.amountCell]}>{deposit ? `â‚¹${deposit.toFixed(2)}` : '-'}</Text>
+                <Text style={[styles.reportCell, styles.amountCell]}>{`â‚¹${Number(item.running_balance || 0).toFixed(2)}`}</Text>
+                <Text style={[styles.reportCell, styles.nameCell]}>{item.reference_no || '-'}</Text>
+                <Text style={[styles.reportCell, styles.statusCell]}>{item.created_by || '-'}</Text>
+              </View>;
+            })}
+            <View style={[styles.reportRow, styles.reportHeader]}>
+              <Text style={[styles.reportCell, { width: 475, textAlign: 'right', fontWeight: '800' }]}>Total</Text>
+              <Text style={[styles.reportCell, styles.amountCell, styles.negative]}>{`- â‚¹${transactions.filter((x: any) => x.transaction_type === 'expense').reduce((n: number, x: any) => n + Number(x.amount || 0), 0).toFixed(2)}`}</Text>
+              <Text style={[styles.reportCell, styles.amountCell, styles.positive]}>{`â‚¹${transactions.filter((x: any) => x.transaction_type === 'deposit').reduce((n: number, x: any) => n + Number(x.amount || 0), 0).toFixed(2)}`}</Text>
+              <Text style={[styles.reportCell, styles.amountCell]}>{transactions.length ? `â‚¹${Number(transactions[transactions.length - 1].running_balance || 0).toFixed(2)}` : '-'}</Text>
+              <Text style={[styles.reportCell, { width: 270 }]}></Text>
+            </View>
+          </View>
+        </ScrollView>
 
       </ScrollView>
 
