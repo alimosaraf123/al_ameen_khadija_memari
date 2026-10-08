@@ -18,6 +18,7 @@ import {
 import {
   SafeAreaView,
 } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 
 import * as FileSystem
   from 'expo-file-system/legacy';
@@ -586,6 +587,14 @@ Thank you.`;
         keyboardShouldPersistTaps="handled"
       >
         <PageNavigation />
+
+        <View style={styles.sdfMenu}>
+          <TouchableOpacity onPress={() => router.replace('/deposit-fund' as any)} style={styles.sdfMenuButton}><Text style={styles.sdfMenuText}>Deposit / Withdrawal</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => router.replace('/deposit-fund' as any)} style={styles.sdfMenuButton}><Text style={styles.sdfMenuText}>Statement</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => router.replace('/dues' as any)} style={styles.sdfMenuButton}><Text style={styles.sdfMenuText}>Bulk SDF Due Entry</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.sdfMenuButton, styles.sdfMenuActive]}><Text style={styles.sdfMenuActiveText}>Due Reminder</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => router.replace('/deposit-fund' as any)} style={styles.sdfMenuButton}><Text style={styles.sdfMenuText}>Day Book</Text></TouchableOpacity>
+        </View>
 
         <H1>
           Deposit Fund Report
@@ -1299,6 +1308,34 @@ const styles =
     whatsappText: {
       color: '#fff',
       textAlign: 'center',
+      fontWeight: '800',
+    },
+
+    sdfMenu: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginBottom: 12,
+    },
+
+    sdfMenuButton: {
+      backgroundColor: '#e5eef8',
+      paddingHorizontal: 12,
+      paddingVertical: 9,
+      borderRadius: 7,
+    },
+
+    sdfMenuActive: {
+      backgroundColor: '#1769c2',
+    },
+
+    sdfMenuText: {
+      color: '#164b7a',
+      fontWeight: '800',
+    },
+
+    sdfMenuActiveText: {
+      color: '#fff',
       fontWeight: '800',
     },
 
