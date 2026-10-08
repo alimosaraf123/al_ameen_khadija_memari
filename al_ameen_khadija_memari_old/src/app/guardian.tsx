@@ -498,6 +498,10 @@ export default function Guardian() {
 
   const s = { ...student, ...childData?.student, ...profile?.student };
   const netBalance = Number(depositData?.summary?.net_balance || 0);
+  const recentFundItems = [
+    ...(depositData?.transactions || []).map((item: any) => ({ ...item, itemType: 'transaction', sortDate: String(item.transaction_date || item.created_at || '') })),
+    ...(depositData?.sdf_dues || []).map((item: any) => ({ ...item, itemType: 'due', sortDate: String(item.due_date || item.created_at || '') })),
+  ].sort((a: any, b: any) => String(b.sortDate).localeCompare(String(a.sortDate))).slice(0, 10);
   const notices = childData?.notices || [];
   const marks = terminalResults.length ? terminalResults : (childData?.marks || []);
   const documents = childData?.documents || [];
@@ -708,34 +712,36 @@ export default function Guardian() {
 
             <Text style={styles.subHeading}>Recent Transactions</Text>
 
-            {!depositData?.transactions?.length ? (
+            {!recentFundItems.length ? (
               <Card>
                 <Muted>{depositData ? 'No transaction yet.' : 'Transaction information unavailable.'}</Muted>
               </Card>
             ) : (
-              depositData.transactions.slice(0, 10).map((item: any) => (
-                <View key={item.id} style={styles.transactionCard}>
+              recentFundItems.map((item: any) => (
+                <View key={`${item.itemType}-${item.id}`} style={styles.transactionCard}>
                   <View style={styles.transactionTop}>
                     <Text style={styles.transactionDetails}>
-                      {item.details ||
-                        (item.transaction_type === 'deposit' ? 'Deposit' : 'Expense')}
+                      {item.itemType === 'due'
+                        ? item.due_title || 'SDF Due'
+                        : item.details ||
+                          (item.transaction_type === 'deposit' ? 'Deposit' : 'Expense')}
                     </Text>
 
                     <Text
                       style={[
                         styles.transactionAmount,
-                        item.transaction_type === 'deposit'
-                          ? styles.positive
-                          : styles.negative,
+                        item.itemType === 'due' || item.transaction_type !== 'deposit'
+                          ? styles.negative
+                          : styles.positive,
                       ]}
                     >
-                      {item.transaction_type === 'deposit' ? '+ ' : '- '}Rs.
+                      {item.itemType === 'due' || item.transaction_type !== 'deposit' ? '- ' : '+ '}Rs.
                       {Number(item.amount || 0).toFixed(2)}
                     </Text>
                   </View>
 
                   <Text style={styles.dateText}>
-                    {String(item.transaction_date || '').slice(0, 10)}
+                    {String(item.itemType === 'due' ? item.due_date : item.transaction_date || '').slice(0, 10)}
                   </Text>
                 </View>
               ))
