@@ -145,6 +145,7 @@ export default function DepositFund() {
   const totalSdfDue = Number(dashboard?.summary?.total_due || 0);
   const totalSdfAdvance = Number(dashboard?.summary?.total_positive_balance || 0);
   const selectedNetBalance = Number(fundData?.summary?.net_balance || 0);
+  const aggregateSdfBalance = totalSdfAdvance - totalSdfDue;
 
   const searchStatement = async () => {
     if (!selectedStudent && !fromDate.trim() && !toDate.trim()) return Alert.alert('Required', 'Select a student or enter a date range.');
@@ -501,18 +502,13 @@ export default function DepositFund() {
         <View style={styles.sdfSummary}>
           {selectedStudent && fundData ? (
             <View style={styles.sdfSummaryCard}>
-              <Text style={styles.sdfLabel}>{selectedNetBalance >= 0 ? 'SDF Advance (Selected Student)' : 'SDF Due (Selected Student)'}</Text>
+              <Text style={styles.sdfLabel}>SDF Balance (Selected Student)</Text>
               <Text style={selectedNetBalance >= 0 ? styles.sdfAdvance : styles.sdfDue}>{'\u20B9'}{Math.abs(selectedNetBalance).toFixed(2)}</Text>
-            </View>
-          ) : totalSdfDue > 0 ? (
-            <View style={styles.sdfSummaryCard}>
-              <Text style={styles.sdfLabel}>Total SDF Due (All Students)</Text>
-              <Text style={styles.sdfDue}>{'\u20B9'}{totalSdfDue.toFixed(2)}</Text>
             </View>
           ) : (
             <View style={styles.sdfSummaryCard}>
-              <Text style={styles.sdfLabel}>Total SDF Advance (All Students)</Text>
-              <Text style={styles.sdfAdvance}>{'\u20B9'}{totalSdfAdvance.toFixed(2)}</Text>
+              <Text style={styles.sdfLabel}>SDF Balance (All Students)</Text>
+              <Text style={aggregateSdfBalance >= 0 ? styles.sdfAdvance : styles.sdfDue}>{'\u20B9'}{Math.abs(aggregateSdfBalance).toFixed(2)}</Text>
             </View>
           )}
         </View>
