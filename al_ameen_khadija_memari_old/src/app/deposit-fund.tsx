@@ -431,6 +431,23 @@ export default function DepositFund() {
     }
   };
 
+  // Show outstanding SDF dues and cash transactions in one chronological history.
+  const historyItems = [
+    ...(fundData?.sdf_dues || []).map((item: any) => ({
+      ...item,
+      historyType: 'due',
+      historyDate: item.due_date || item.created_at || '',
+    })),
+    ...(fundData?.transactions || []).map((item: any) => ({
+      ...item,
+      historyType: 'transaction',
+      historyDate: item.transaction_date || item.created_at || '',
+    })),
+  ].sort((a: any, b: any) => {
+    const byDate = String(b.historyDate).localeCompare(String(a.historyDate));
+    return byDate || Number(b.id || 0) - Number(a.id || 0);
+  });
+
 
   return (
 
@@ -963,7 +980,7 @@ export default function DepositFund() {
               Transaction History
             </Text>
 
-            {fundData?.sdf_dues?.map((item: any) => (
+            {historyItems.map((item: any) => item.historyType === 'due' ? (
               <View key={`due-${item.id}`} style={styles.transactionCard}>
                 <View style={styles.transactionTop}>
                   <Text style={styles.transactionType}>Due</Text>
@@ -972,12 +989,25 @@ export default function DepositFund() {
                 <Text style={styles.transactionDetails}>{item.due_title || 'SDF Due'}{item.session_name ? ` · Session ${item.session_name}` : ''}</Text>
                 <Text style={styles.transactionMeta}>Due date: {item.due_date ? String(item.due_date).slice(0, 10) : '-'}</Text>
               </View>
+            ) : (
+              <View key={`transaction-${item.id}`} style={styles.transactionCard}>
+                <View style={styles.transactionTop}>
+                  <Text style={styles.transactionType}>
+                    {item.transaction_type === 'deposit' ? 'Deposit' : 'Withdrawal'}
+                  </Text>
+                  <Text style={item.transaction_type === 'deposit' ? styles.depositAmount : styles.expenseAmount}>
+                    {item.transaction_type === 'deposit' ? '+ ' : '- '}â‚¹{Number(item.amount || 0).toFixed(2)}
+                  </Text>
+                </View>
+                <Text style={styles.transactionDetails}>{item.details || '-'}</Text>
+                <Text style={styles.transactionMeta}>Date: {String(item.transaction_date || '').slice(0, 10)}</Text>
+                {!!item.reference_no && <Text style={styles.transactionMeta}>Ref: {item.reference_no}</Text>}
+                <Text style={styles.balanceText}>Balance after transaction: â‚¹{Number(item.running_balance || 0).toFixed(2)}</Text>
+              </View>
             ))}
 
 
-            {!fundData
-              ?.transactions
-              ?.length && (
+            {!historyItems.length && (
 
               <Muted>
                 No transactions yet.
@@ -985,138 +1015,12 @@ export default function DepositFund() {
 
             )}
 
-
-            {fundData
-              ?.transactions
-              ?.map(
-                (item: any) => (
-
-                  <View
-
-                    key={item.id}
-
-                    style={
-                      styles.transactionCard
-                    }
-
-                  >
-
-                    <View
-                      style={
-                        styles.transactionTop
-                      }
-                    >
-
-                      <Text
-                        style={
-                          styles.transactionType
-                        }
-                      >
-                        {item.transaction_type ===
-                        'deposit'
-                          ? 'Deposit'
-                          : 'Withdrawal'}
-                      </Text>
-
-
-                      <Text
-                        style={
-                          item.transaction_type ===
-                          'deposit'
-
-                            ? styles.depositAmount
-
-                            : styles.expenseAmount
-                        }
-                      >
-
-                        {item.transaction_type ===
-                        'deposit'
-                          ? '+ '
-                          : '- '}
-
-                        ₹
-                        {Number(
-                          item.amount ||
-                          0
-                        ).toFixed(2)}
-
-                      </Text>
-
-                    </View>
-
-
-                    <Text
-                      style={
-                        styles.transactionDetails
-                      }
-                    >
-                      {
-                        item.details ||
-                        '-'
-                      }
-                    </Text>
-
-
-                    <Text
-                      style={
-                        styles.transactionMeta
-                      }
-                    >
-                      Date:{' '}
-                      {
-                        String(
-                          item.transaction_date ||
-                          ''
-                        ).slice(
-                          0,
-                          10
-                        )
-                      }
-                    </Text>
-
-
-                    {!!item.reference_no && (
-
-                      <Text
-                        style={
-                          styles.transactionMeta
-                        }
-                      >
-                        Ref:{' '}
-                        {
-                          item.reference_no
-                        }
-                      </Text>
-
-                    )}
-
-
-                    <Text
-                      style={
-                        styles.balanceText
-                      }
-                    >
-                      Balance after transaction:
-                      {' '}
-                      ₹
-                      {Number(
-                        item.running_balance ||
-                        0
-                      ).toFixed(2)}
-                    </Text>
-
-                  </View>
-
-                )
-              )}
-
           </>
-
         )}
 
           </>
         )}
+
 
       </ScrollView>
 
