@@ -48,6 +48,8 @@ type FilterType =
   | 'deposit'
   | 'clear';
 
+type SortKey = 'registration_no' | 'student_name' | 'class_name' | 'last_transaction_date' | 'last_transaction_amount' | 'net_balance';
+
 
 export default function DepositFundReport() {
 
@@ -64,6 +66,8 @@ export default function DepositFundReport() {
     useState<FilterType>('all');
 
   const [classFilter, setClassFilter] = useState('*');
+  const [sortKey, setSortKey] = useState<SortKey>('student_name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   const [transactions, setTransactions] = useState<any[]>([]);
 
@@ -185,6 +189,40 @@ export default function DepositFundReport() {
       classFilter,
       search,
     ]);
+
+  const sortedStudents = useMemo(() => {
+    const valueFor = (student: any) => {
+      if (sortKey === 'last_transaction_amount') {
+        const amount = Number(student.last_transaction_amount || 0);
+        return student.last_transaction_type === 'expense' ? -amount : amount;
+      }
+      if (sortKey === 'net_balance') return Number(student.net_balance || 0);
+      return String(student[sortKey] || '').toLowerCase();
+    };
+    return [...students].sort((a: any, b: any) => {
+      const av = valueFor(a);
+      const bv = valueFor(b);
+      const an = typeof av === 'number' ? av : Number(av);
+      const bn = typeof bv === 'number' ? bv : Number(bv);
+      const comparison = Number.isNaN(an) || Number.isNaN(bn)
+        ? String(av).localeCompare(String(bv), undefined, {numeric: true, sensitivity: 'base'})
+        : an - bn;
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [students, sortKey, sortDirection]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDirection(current => current === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDirection('asc'); }
+  };
+
+  const sortMark = (key: SortKey) => sortKey === key ? (sortDirection === 'asc' ? ' ▲' : ' ▼') : ' ↕';
+
+  const sortableHeader = (label: string, key: SortKey, style: any) => (
+    <TouchableOpacity onPress={() => toggleSort(key)} style={[styles.reportCell, style]} accessibilityRole="button">
+      <Text>{label}{sortMark(key)}</Text>
+    </TouchableOpacity>
+  );
 
 
   // =====================================
@@ -881,16 +919,16 @@ Thank you.`;
           <View style={styles.reportTable}>
             <View style={[styles.reportRow, styles.reportHeader]}>
               <Text style={[styles.reportCell, styles.slCell]}>S.L.</Text>
-              <Text style={[styles.reportCell, styles.regCell]}>Reg</Text>
-              <Text style={[styles.reportCell, styles.nameCell]}>Name</Text>
-              <Text style={[styles.reportCell, styles.classCell]}>Class</Text>
-              <Text style={[styles.reportCell, styles.dateCell]}>Last Date</Text>
-              <Text style={[styles.reportCell, styles.amountCell]}>Last Tran.</Text>
-              <Text style={[styles.reportCell, styles.amountCell]}>Balance</Text>
+              {sortableHeader('Reg', 'registration_no', styles.regCell)}
+              {sortableHeader('Name', 'student_name', styles.nameCell)}
+              {sortableHeader('Class', 'class_name', styles.classCell)}
+              {sortableHeader('Last Date', 'last_transaction_date', styles.dateCell)}
+              {sortableHeader('Last Tran.', 'last_transaction_amount', styles.amountCell)}
+              {sortableHeader('Balance', 'net_balance', styles.amountCell)}
               <Text style={[styles.reportCell, styles.statusCell]}>A/C Status</Text>
               <Text style={[styles.reportCell, styles.actionCell]}>Action</Text>
             </View>
-            {students.map((student: any, index: number) => {
+            {sortedStudents.map((student: any, index: number) => {
               const balance = Number(student.net_balance || 0);
               const lastTransactionAmount = Number(student.last_transaction_amount || 0);
               const lastTransaction = student.last_transaction_type === 'expense'
