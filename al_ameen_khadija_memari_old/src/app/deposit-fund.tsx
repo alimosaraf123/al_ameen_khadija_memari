@@ -136,6 +136,9 @@ export default function DepositFund() {
     api('/api/guardians/admin/deposit-fund-report').then(setDashboard).catch(() => {});
   }, []);
 
+  const totalSdfDue = (dashboard?.students || []).reduce((sum: number, student: any) => sum + Number(student.due || 0), 0) || Number(dashboard?.summary?.total_due || 0);
+  const totalSdfAdvance = (dashboard?.students || []).reduce((sum: number, student: any) => sum + Number(student.available_balance || 0), 0) || Number(dashboard?.summary?.total_positive_balance || 0);
+
   const searchStatement = async () => {
     if (!selectedStudent && !fromDate.trim() && !toDate.trim()) return Alert.alert('Required', 'Select a student or enter a date range.');
     try {
@@ -489,14 +492,17 @@ export default function DepositFund() {
           </TouchableOpacity>
         </View>
         <View style={styles.sdfSummary}>
-          <View style={styles.sdfSummaryCard}>
-            <Text style={styles.sdfLabel}>Total SDF Due</Text>
-            <Text style={styles.sdfDue}>{'\u20B9'}{Number(dashboard?.summary?.total_due || 0).toFixed(2)}</Text>
-          </View>
-          <View style={styles.sdfSummaryCard}>
-            <Text style={styles.sdfLabel}>Total SDF Advance</Text>
-            <Text style={styles.sdfAdvance}>{'\u20B9'}{Number(dashboard?.summary?.total_positive_balance || 0).toFixed(2)}</Text>
-          </View>
+          {totalSdfDue > 0 ? (
+            <View style={styles.sdfSummaryCard}>
+              <Text style={styles.sdfLabel}>Total SDF Due (All Students)</Text>
+              <Text style={styles.sdfDue}>{'\u20B9'}{totalSdfDue.toFixed(2)}</Text>
+            </View>
+          ) : (
+            <View style={styles.sdfSummaryCard}>
+              <Text style={styles.sdfLabel}>Total SDF Advance (All Students)</Text>
+              <Text style={styles.sdfAdvance}>{'\u20B9'}{totalSdfAdvance.toFixed(2)}</Text>
+            </View>
+          )}
         </View>
 
         {activeTab === 'statement' && (
