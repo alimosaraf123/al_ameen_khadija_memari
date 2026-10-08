@@ -481,12 +481,15 @@ export default function DepositFund() {
           <TouchableOpacity accessibilityRole="button" onPress={() => router.replace('/dues' as any)} style={styles.tabButton}>
             <Text style={styles.tabText}>Bulk SDF Due Entry</Text>
           </TouchableOpacity>
-        </View><View style={styles.sdfSummary}>
-          {Number(dashboard?.summary?.total_due || 0) > 0 ? (
-            <Text style={styles.sdfDue}>Total SDF Due: ₹{Number(dashboard?.summary?.total_due || 0).toFixed(2)}</Text>
-          ) : Number(dashboard?.summary?.total_positive_balance || 0) > 0 ? (
-            <Text style={styles.sdfAdvance}>Total SDF Advance: ₹{Number(dashboard?.summary?.total_positive_balance || 0).toFixed(2)}</Text>
-          ) : null}
+        <View style={styles.sdfSummary}>
+          <View style={styles.sdfSummaryCard}>
+            <Text style={styles.sdfLabel}>Total SDF Due</Text>
+            <Text style={styles.sdfDue}>₹{Number(dashboard?.summary?.total_due || 0).toFixed(2)}</Text>
+          </View>
+          <View style={styles.sdfSummaryCard}>
+            <Text style={styles.sdfLabel}>Total SDF Advance</Text>
+            <Text style={styles.sdfAdvance}>₹{Number(dashboard?.summary?.total_positive_balance || 0).toFixed(2)}</Text>
+          </View>
         </View>
 
         {activeTab === 'statement' && (
@@ -1126,6 +1129,18 @@ whatsappText: {
       gap: 18,
       marginVertical: 14,
       paddingHorizontal: 4,
+    },
+    sdfSummaryCard: {
+      flex: 1,
+      minWidth: 180,
+      backgroundColor: '#fff',
+      borderRadius: 10,
+      padding: 12,
+    },
+    sdfLabel: {
+      color: '#667085',
+      fontWeight: '700',
+      marginBottom: 5,
     },
     sdfDue: {
       fontSize: 18,
