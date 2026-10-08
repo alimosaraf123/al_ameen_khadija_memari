@@ -1162,11 +1162,13 @@ whatsappText: {
       backgroundColor: '#fff',
       borderRadius: 10,
       padding: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
     },
     sdfLabel: {
       color: '#667085',
       fontWeight: '700',
-      marginBottom: 5,
     },
     sdfDue: {
       fontSize: 18,
