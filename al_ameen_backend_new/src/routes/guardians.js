@@ -2711,7 +2711,6 @@ router.get(
       },
 
       students,
-      transactions: transactionResult.rows,
 
     });
 
