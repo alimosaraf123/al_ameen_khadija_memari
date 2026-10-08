@@ -23,6 +23,7 @@ import {
   api,
 } from '../lib/api';
 import {router} from 'expo-router';
+import {useLocalSearchParams} from 'expo-router';
 import AcademyHeader from '../components/AcademyHeader';
 import DatePickerField from '../components/DatePickerField';
 
@@ -99,6 +100,11 @@ export default function DepositFund() {
   const [toDate, setToDate] = useState('');
   const [statement, setStatement] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'statement' | 'transactions'>('transactions');
+  const {tab} = useLocalSearchParams<{tab?: string}>();
+
+  useEffect(() => {
+    if (tab === 'daybook') setActiveTab('statement');
+  }, [tab]);
 
 
   // =====================================
