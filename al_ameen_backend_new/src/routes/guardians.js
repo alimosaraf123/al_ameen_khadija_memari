@@ -2476,7 +2476,23 @@ router.get(
 
           MAX(
             t.transaction_date
-          ) AS last_transaction_date
+          ) AS last_transaction_date,
+
+          COALESCE((
+            SELECT SUM(d.amount)
+            FROM student_dues d
+            WHERE d.student_id=s.id
+              AND d.status='due'
+              AND d.amount>0
+              AND d.due_title ~* '(s[.]?d[.]?f|student development fund|bus fare|admission fee|registration fee)'
+              AND NOT (d.due_title ILIKE 'Bus fare for the third-semester examination.' AND EXISTS (
+                SELECT 1 FROM student_dues d2
+                WHERE d2.student_id=d.student_id
+                  AND d2.due_title ILIKE 'Bus fare for the 3rd semester examination'
+                  AND d2.amount=d.amount
+                  AND d2.due_date IS NOT DISTINCT FROM d.due_date
+              ))
+          ),0) AS student_due
 
         FROM students s
 
@@ -2541,7 +2557,7 @@ router.get(
           const netBalance =
             Number(
               row.net_balance || 0
-            );
+            ) - Number(row.student_due || 0);
 
 
           let status =
@@ -2567,6 +2583,9 @@ router.get(
 
             total_expense:
               totalExpense,
+
+            student_due:
+              Number(row.student_due || 0),
 
             net_balance:
               netBalance,
