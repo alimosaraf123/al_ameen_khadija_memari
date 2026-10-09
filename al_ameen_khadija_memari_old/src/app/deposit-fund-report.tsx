@@ -702,6 +702,16 @@ Thank you.`;
             }
           />
 
+          <SummaryBox
+            label="Advance Students"
+            value={
+              String(
+                summary.positive_students ||
+                0
+              )
+            }
+          />
+
         </View>
 
 
@@ -730,35 +740,6 @@ Thank you.`;
           />
 
         </View>
-
-
-        <View
-          style={styles.summaryRow}
-        >
-
-          <SummaryBox
-            label="Positive Balance"
-            value={
-              `₹${Number(
-                summary.total_positive_balance ||
-                0
-              ).toFixed(2)}`
-            }
-          />
-
-          <SummaryBox
-            label="Total Due"
-            value={
-              `₹${Number(
-                summary.total_due ||
-                0
-              ).toFixed(2)}`
-            }
-          />
-
-        </View>
-
-
         <View
           style={
             styles.netBox

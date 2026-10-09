@@ -2658,10 +2658,6 @@ router.get(
 
     let totalDeposit = 0;
 
-    let totalExpense = 0;
-
-    let totalPositiveBalance = 0;
-
     let totalDue = 0;
 
     let grossSdfDue = 0;
@@ -2680,12 +2676,6 @@ router.get(
       of students
     ) {
 
-      totalDeposit +=
-        student.total_deposit;
-
-      totalExpense +=
-        student.total_expense;
-
       grossSdfDue += Number(student.student_due || 0);
       grossSdfAdvance += Math.max(0, Number(student.net_balance || 0) + Number(student.student_due || 0));
 
@@ -2694,8 +2684,7 @@ router.get(
         student.net_balance > 0
       ) {
 
-        totalPositiveBalance +=
-          student.net_balance;
+        totalDeposit += Number(student.net_balance || 0);
 
         positiveStudents++;
 
@@ -2703,10 +2692,7 @@ router.get(
         student.net_balance < 0
       ) {
 
-        totalDue +=
-          Math.abs(
-            student.net_balance
-          );
+        totalDue += Math.abs(Number(student.net_balance || 0));
 
         dueStudents++;
 
@@ -2732,10 +2718,10 @@ router.get(
           totalDeposit,
 
         total_expense:
-          totalExpense,
+          totalDue,
 
         total_positive_balance:
-          totalPositiveBalance,
+          totalDeposit,
 
         total_due:
           totalDue,
@@ -2747,8 +2733,8 @@ router.get(
           grossSdfAdvance,
 
         net_fund_balance:
-          totalDeposit -
-          totalExpense,
+          totalDue -
+          totalDeposit,
 
         positive_students:
           positiveStudents,
