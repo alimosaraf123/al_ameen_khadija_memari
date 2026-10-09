@@ -75,7 +75,7 @@ export default function DepositFund() {
     setTransactionType
   ] = useState<
     'deposit' | 'expense'
-  >('deposit');
+  >('expense');
 
   const [amount, setAmount] =
     useState('');
@@ -291,6 +291,8 @@ export default function DepositFund() {
       setSearch('');
 
       setAmount('');
+
+      setTransactionType('expense');
 
       setDetails('Cash');
 
@@ -995,6 +997,9 @@ export default function DepositFund() {
                   setDetails
                 }
 
+                onSubmitEditing={saveTransaction}
+                returnKeyType="done"
+
               />
 
 
@@ -1009,6 +1014,9 @@ export default function DepositFund() {
                 onChangeText={
                   setReferenceNo
                 }
+
+                onSubmitEditing={saveTransaction}
+                returnKeyType="done"
 
               />
 
