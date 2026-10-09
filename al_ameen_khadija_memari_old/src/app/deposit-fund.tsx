@@ -181,13 +181,33 @@ export default function DepositFund() {
     } catch (e: any) { Alert.alert('Statement', e.message); }
   };
 
+  const getStatementRows = () => [...(statement?.transactions || []).map((x:any) => ({...x, statementType: x.transaction_type === 'deposit' ? 'Deposit' : 'Withdrawal', deposit: x.transaction_type === 'deposit' ? Number(x.amount || 0) : 0, withdrawal: x.transaction_type === 'expense' ? Number(x.amount || 0) : 0})), ...(statement?.due_entries || []).map((x:any) => ({...x, statementType: 'Due', deposit: 0, withdrawal: Number(x.amount || 0), running_balance: ''}))].sort((a:any,b:any) => String(a.transaction_date || '').localeCompare(String(b.transaction_date || '')) || Number(a.id || 0) - Number(b.id || 0));
+  const formatStatementDate = (value:any) => { const text = String(value || '').slice(0, 10); const parts = text.split('-'); return parts.length === 3 && parts[0].length === 4 ? `${parts[2]}-${parts[1]}-${parts[0]}` : (text || 'All'); };
+  const getStatementTotals = () => getStatementRows().reduce((total:any, row:any) => ({deposit: total.deposit + Number(row.deposit || 0), withdrawal: total.withdrawal + Number(row.withdrawal || 0), balance: total.balance + Number(row.deposit || 0) - Number(row.withdrawal || 0)}), {deposit: 0, withdrawal: 0, balance: 0});
+
   const printStatement = () => {
     if (Platform.OS !== 'web' || !statement) return Alert.alert('Print', 'Statement print is available on web.');
     const esc = (v:any) => String(v ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c] || c));
-    const rows = (statement.transactions || []).map((x:any) => `<tr><td>${esc(x.registration_no)}</td><td>${esc(x.student_name)}</td><td>${esc(String(x.transaction_date).slice(0,10))}</td><td>${x.transaction_type==='deposit'?'Deposit':'Withdrawal'}</td><td>${Number(x.amount||0).toFixed(2)}</td><td>${esc(x.details)}</td></tr>`).join('');
+    const rows = getStatementRows().map((x:any) => `<tr><td>${esc(x.registration_no)}</td><td>${esc(x.student_name)}</td><td>${esc(String(x.transaction_date || '').slice(0,10))}</td><td>${esc(x.statementType)}</td><td>${x.deposit ? Number(x.deposit).toFixed(2) : ''}</td><td>${x.withdrawal ? Number(x.withdrawal).toFixed(2) : ''}</td><td>${x.running_balance === '' ? '' : Number(x.running_balance || 0).toFixed(2)}</td><td>${esc(x.details)}</td></tr>`).join('');
+    const totals = getStatementTotals();
     const w = window.open('', '_blank'); if (!w) return;
     const signed = Number(statement.summary?.balance || 0); const sign = signed > 0 ? '+' : signed < 0 ? '-' : '';
-    w.document.write(`<html><head><title>Deposit Fund Statement</title><style>body{font-family:Arial;padding:24px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:7px;text-align:left}h2{margin-bottom:4px}.summary{margin:12px 0}</style></head><body><h2>Student Deposit Fund Statement</h2><div>Student: ${esc(statement.student?.student_name || 'All students')} | Registration: ${esc(statement.student?.registration_no || statement.registration_no || 'All')} | Period: ${esc(statement.from_date || 'All')} to ${esc(statement.to_date || 'All')}</div><div class=summary>Balance: ${sign}₹${Math.abs(signed).toFixed(2)}</div><table><thead><tr><th>Reg.</th><th>Student</th><th>Date</th><th>Type</th><th>Amount</th><th>Details</th></tr></thead><tbody>${rows}</tbody></table></body></html>`); w.document.close(); setTimeout(() => w.print(), 300);
+    w.document.write(`<html><head><title>Deposit Fund Statement</title><style>body{font-family:Arial;padding:24px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:7px;text-align:left}th{background:#f1f5f9}h2{margin-bottom:4px}.range{font-weight:700;margin:8px 0}.summary{margin:12px 0}</style></head><body><h2>Student Deposit Fund Statement</h2><div class=range>Download Range: ${esc(formatStatementDate(statement.from_date || fromDate))} to ${esc(formatStatementDate(statement.to_date || toDate))}</div><div>Student: ${esc(statement.student?.student_name || 'All students')} | Registration: ${esc(statement.student?.registration_no || statement.registration_no || 'All')}</div><div class=summary>Balance: ${sign}₹${Math.abs(signed).toFixed(2)}</div><table><thead><tr><th>Reg.</th><th>Student</th><th>Date</th><th>Type</th><th>Deposit</th><th>Withdrawal</th><th>Balance</th><th>Details</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><th colspan="4">Total</th><th>${totals.deposit.toFixed(2)}</th><th>${totals.withdrawal.toFixed(2)}</th><th>${totals.balance.toFixed(2)}</th><th></th></tr></tfoot></table></body></html>`); w.document.close(); setTimeout(() => w.print(), 300);
+  };
+
+  const downloadStatementExcel = () => {
+    if (Platform.OS !== 'web' || !statement) return Alert.alert('Excel', 'Excel download is available on web.');
+    const esc = (v:any) => String(v ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c] || c));
+    const rows = getStatementRows().map((x:any) => `<tr><td>${esc(x.registration_no)}</td><td>${esc(x.student_name)}</td><td>${esc(String(x.transaction_date || '').slice(0,10))}</td><td>${esc(x.statementType)}</td><td>${x.deposit ? Number(x.deposit).toFixed(2) : ''}</td><td>${x.withdrawal ? Number(x.withdrawal).toFixed(2) : ''}</td><td>${x.running_balance === '' ? '' : Number(x.running_balance || 0).toFixed(2)}</td><td>${esc(x.details)}</td></tr>`).join('');
+    const totals = getStatementTotals();
+    const html = `<html><head><meta charset="UTF-8"><style>table{border-collapse:collapse}th,td{border:1px solid #999;padding:6px;text-align:left}th{background:#eaf0f6}.range{font-weight:700;margin:8px 0}</style></head><body><h2>Student Deposit Fund Statement</h2><div class="range">Download Range: ${esc(formatStatementDate(statement.from_date || fromDate))} to ${esc(formatStatementDate(statement.to_date || toDate))}</div><table><thead><tr><th>Reg.</th><th>Student</th><th>Date</th><th>Type</th><th>Deposit</th><th>Withdrawal</th><th>Balance</th><th>Details</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><th colspan="4">Total</th><th>${totals.deposit.toFixed(2)}</th><th>${totals.withdrawal.toFixed(2)}</th><th>${totals.balance.toFixed(2)}</th><th></th></tr></tfoot></table></body></html>`;
+    const blob = new Blob([html], {type: 'application/vnd.ms-excel;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `sdf-statement-${statement.registration_no || 'all'}-${new Date().toISOString().slice(0,10)}.xls`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
 
@@ -562,8 +582,23 @@ export default function DepositFund() {
               <Text style={styles.balanceText}>Balance after transaction: {'\u20B9'}{Number(item.running_balance || 0).toFixed(2)}</Text>
               {userRole === 'super_admin' && String(selectedStudent?.id || '') === String(item.student_id || '') && <TouchableOpacity onPress={() => void deleteTransaction(item)} style={styles.deleteTransactionButton}><Text style={styles.deleteTransactionText}>Delete Transaction</Text></TouchableOpacity>}
             </View>)}
+            {!!(statement.due_entries || []).length && <>
+              <Text style={styles.statementHistoryTitle}>Due Entries</Text>
+              {(statement.due_entries || []).map((item:any) => <View key={`due-${item.id}`} style={styles.statementTransaction}>
+                <View style={styles.transactionTop}><Text style={styles.transactionType}>Due</Text><Text style={styles.expenseAmount}>- {'\u20B9'}{Number(item.amount || 0).toFixed(2)}</Text></View>
+                <Text style={styles.transactionDetails}>{String(item.transaction_date || '').slice(0, 10)} · Reg. {item.registration_no || '-'} · {item.details || 'SDF Due'}</Text>
+                <Text style={styles.transactionMeta}>Class: {item.class_name || '-'}</Text>
+              </View>)}
+            </>}
+            {(() => { const totals = getStatementTotals(); return <View style={styles.statementTotalsRow}>
+              <Text style={styles.statementTotalsLabel}>Total</Text>
+              <Text style={styles.statementTotalsValue}>Deposit: {'\u20B9'}{totals.deposit.toFixed(2)}</Text>
+              <Text style={styles.statementTotalsValue}>Withdrawal: {'\u20B9'}{totals.withdrawal.toFixed(2)}</Text>
+              <Text style={[styles.statementTotalsValue, totals.balance < 0 ? styles.statementDueValue : styles.statementAdvanceValue]}>Balance: {totals.balance < 0 ? '-' : '+'}{'\u20B9'}{Math.abs(totals.balance).toFixed(2)}</Text>
+            </View>; })()}
             <Text style={styles.dashboardText}>Present Balance: {Number(statement.summary?.balance || 0) > 0 ? '+' : Number(statement.summary?.balance || 0) < 0 ? '-' : ''}{'\u20B9'}{Math.abs(Number(statement.summary?.balance || 0)).toFixed(2)}</Text>
             {(statement.balances || []).filter((row:any) => Number(row.balance || 0) !== 0).map((row:any) => <TouchableOpacity key={row.registration_no} accessibilityRole="button" onPress={() => { void openStatementStudent(row); }} style={styles.statementRow}><Text style={styles.statementName}>{row.student_name} · Reg. {row.registration_no}</Text><Text>Balance: {Number(row.balance || 0) > 0 ? '+' : '-'}₹{Math.abs(Number(row.balance || 0)).toFixed(2)}</Text><Text style={styles.statementLink}>Open student account</Text></TouchableOpacity>)}
+            <Button title="Download Excel" onPress={downloadStatementExcel} />
             <Button title="Print Statement" onPress={printStatement} />
           </>}
           </Card>
@@ -1256,6 +1291,29 @@ whatsappText: {
       borderTopWidth: 1,
       borderTopColor: '#e5e7eb',
       paddingVertical: 10,
+    },
+
+    statementTotalsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: 10,
+      marginTop: 8,
+      padding: 12,
+      backgroundColor: '#eef4fa',
+      borderWidth: 1,
+      borderColor: '#9fb4c8',
+      borderRadius: 6,
+    },
+
+    statementTotalsLabel: {
+      fontWeight: '900',
+      minWidth: 70,
+    },
+
+    statementTotalsValue: {
+      fontWeight: '900',
+      color: '#173d6b',
     },
 
     statementSummaryBox: {
