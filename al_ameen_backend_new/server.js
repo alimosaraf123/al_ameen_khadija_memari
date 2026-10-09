@@ -43,6 +43,7 @@ app.use('/api/behavior',...moduleAccess('behavior'),require('./src/routes/behavi
 app.use('/api/illness',...moduleAccess('illness'),require('./src/routes/illness'));
 app.use('/api/problems',...moduleAccess('problems'),require('./src/routes/problems'));
 app.use('/api/notices',...moduleAccess('notices'),require('./src/routes/notices'));
+app.use('/api/push',require('./src/routes/push'));
 app.use('/api/routines',...moduleAccess('routines'),require('./src/routes/routines'));
 app.use('/api/gate-passes',...moduleAccess('gate_passes'),require('./src/routes/gatePasses'));
 app.use('/api/visits',...moduleAccess('visits'),require('./src/routes/visits'));

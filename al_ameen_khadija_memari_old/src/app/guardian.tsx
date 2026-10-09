@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as LocalAuthentication from 'expo-local-authentication';
 
 import { api, API_BASE } from '../lib/api';
@@ -40,7 +40,9 @@ const resultImageUri = (title: string, headers: string[], rows: string[][]) => {
 
 
 export default function Guardian() {
+  const params = useLocalSearchParams<{tab?: string}>();
   const [tab, setTab] = useState<TabName>('home');
+  useEffect(() => { if (params.tab === 'result' || params.tab === 'notifications') setTab(params.tab as TabName); }, [params.tab]);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [noticeBlink, setNoticeBlink] = useState(true);
   const [viewedNoticeIds, setViewedNoticeIds] = useState<Record<string, boolean>>({});

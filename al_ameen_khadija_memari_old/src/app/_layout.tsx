@@ -1,9 +1,10 @@
 import React, {useEffect,useRef,useState} from 'react';
-import {ActivityIndicator,AppState,Platform,View} from 'react-native';
+import {ActivityIndicator,AppState,Platform,View,Text} from 'react-native';
 import {Stack,usePathname} from 'expo-router';
 import {api} from '../lib/api';
 import {clearSession,getToken,subscribeSession} from '../lib/auth';
 import {canOpenRoute,PRIVATE_ROUTES} from '../lib/routeAccess';
+import {registerPushNotifications,subscribeToPushNavigation} from '../lib/pushNotifications';
 
 export default function Layout() {
  const [session,setSession]=useState<{checked:boolean;user:any}>({checked:false,user:null});
@@ -40,6 +41,11 @@ export default function Layout() {
   return()=>{active=false;unsubscribe();};
  },[pathname]);
  useEffect(()=>{
+  if(!session.user)return;
+  void registerPushNotifications().catch(()=>{});
+  return subscribeToPushNavigation();
+ },[session.user?.id]);
+ useEffect(()=>{
   if(!['super_admin','admin','office'].includes(String(session.user?.role||'')))return;
   const timeoutMs=5*60*1000;
   let timer:ReturnType<typeof setTimeout>;
@@ -56,4 +62,11 @@ export default function Layout() {
   <Stack.Screen name="index"/>
   {PRIVATE_ROUTES.map(name=><Stack.Protected key={name} guard={canOpenRoute(name,session.user)}><Stack.Screen name={name}/></Stack.Protected>)}
  </Stack>;
+}
+
+export function ErrorBoundary({error}: {error: Error}) {
+ return <View style={{flex:1,alignItems:'center',justifyContent:'center',padding:24,backgroundColor:'#f3f6f9'}}>
+  <Text style={{fontSize:20,fontWeight:'800',marginBottom:12}}>Application error</Text>
+  <Text selectable style={{textAlign:'center',color:'#b42318'}}>{error?.message || 'The application could not start.'}</Text>
+ </View>;
 }

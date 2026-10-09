@@ -1,6 +1,7 @@
 const express=require('express');
 const fs=require('fs');
 const path=require('path');
+const {sendPushForNotice}=require('../utils/pushNotifications');
 const sharp=require('sharp');
 const pool=require('../db');
 const {auth,allow}=require('../middleware/auth');
@@ -120,6 +121,7 @@ router.post('/manager',auth,allow('super_admin','admin'),asyncHandler(async(req,
  if(isMaster)await pool.query(`UPDATE routine_manager_grids SET is_master=FALSE WHERE group_name=$1
   AND routine_kind='master' AND id<>$2 AND EXTRACT(DOW FROM routine_date)=EXTRACT(DOW FROM $3::date)`,[b.group_name,r.rows[0].id,b.routine_date]);
  const publishedImageUrl=isMaster?null:await publishRoutineJpg({group:b.group_name,date:b.routine_date,data:b.grid_data||{},userId:req.user.userId});
+ if(!isMaster){const notice=(await pool.query(`INSERT INTO notices(title,notice_text,notice_type,published_by) VALUES($1,$2,'routine',$3) RETURNING id`,[`New ${b.group_name} routine published`,`Routine for ${b.group_name} on ${b.routine_date} is now available.`,req.user.userId])).rows[0];await pool.query(`INSERT INTO notice_targets(notice_id,target_type,target_value) VALUES($1,'role','teacher'),($1,'role','guardian')`,[notice.id]);sendPushForNotice(notice.id).catch(error=>console.error('Routine push notification failed:',error.message));}
  res.json({success:true,routine:r.rows[0],published_image_url:publishedImageUrl,message:isMaster?'Weekday Master routine saved':'Final routine published as JPG'});
 }));
 
