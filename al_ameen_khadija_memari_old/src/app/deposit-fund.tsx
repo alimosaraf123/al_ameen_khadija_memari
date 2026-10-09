@@ -457,7 +457,7 @@ export default function DepositFund() {
       return;
     }
     const due = Math.abs(Number(fundData?.summary?.net_balance || 0));
-    const message = `Student Deposit Fund Due Reminder\nAssalamualaikum, Dear ${selectedStudent.student_name || '-'}\nRegistration No: ${selectedStudent.registration_no || '-'}\nClass: ${selectedStudent.class_name || '-'}\n\nDeposit Fund Due: ₹${due.toFixed(2)}\n\nPlease arrange payment of the required Student Deposit Fund in cash.\nif already paid please ignore it.\nThank you.\nAl-Ameen Mission Memari Khadija Campus`;
+    const message = `Al-Ameen Mission\nMemari Khadija Campus\n\nStudent Deposit Fund Reminder\nAssalamualaikum, Dear\nStudent: ${selectedStudent.student_name || '-'}\nRegistration No: ${selectedStudent.registration_no || '-'}\nClass: ${selectedStudent.class_name || '-'}\n\nDeposit Fund Due: ₹${due.toFixed(2)}\n\nPlease arrange to pay the required 'Student Deposit Fund' amount in cash only.\n(If you have already made the payment, please ignore this message.)\n\nThank you.`;
     try {
       await Linking.openURL(`https://wa.me/${mobile}?text=${encodeURIComponent(message)}`);
     } catch {

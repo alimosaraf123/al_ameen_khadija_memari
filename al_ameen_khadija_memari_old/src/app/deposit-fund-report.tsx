@@ -313,14 +313,15 @@ export default function DepositFundReport() {
 Memari Khadija Campus
 
 Student Deposit Fund Reminder
-
+Assalamualaikum, Dear
 Student: ${student.student_name || '-'}
 Registration No: ${student.registration_no || '-'}
 Class: ${student.class_name || '-'}
 
 ${balanceLine}
 
-Please arrange payment of the required Student Deposit Fund.
+Please arrange to pay the required 'Student Deposit Fund' amount in cash only.
+(If you have already made the payment, please ignore this message.)
 
 Thank you.`;
 
