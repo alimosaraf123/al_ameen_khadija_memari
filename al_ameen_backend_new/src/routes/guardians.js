@@ -2244,6 +2244,26 @@ router.get(
   })
 );
 
+// Only Super Admin may permanently remove an SDF transaction.
+router.delete(
+  '/admin/student/:studentId/deposit-fund/:transactionId',
+  auth,
+  allow('super_admin'),
+  asyncHandler(async (req, res) => {
+    await depositFundSchemaReady;
+    const result = await pool.query(
+      `DELETE FROM student_deposit_transactions
+       WHERE id=$1 AND student_id=$2
+       RETURNING id, student_id, transaction_type, amount, transaction_date, details`,
+      [req.params.transactionId, req.params.studentId]
+    );
+    if (!result.rowCount) {
+      return res.status(404).json({ success: false, message: 'SDF transaction not found' });
+    }
+    res.json({ success: true, deleted: result.rows[0] });
+  })
+);
+
 
 // ========================================
 // ADMIN / SUPER ADMIN:

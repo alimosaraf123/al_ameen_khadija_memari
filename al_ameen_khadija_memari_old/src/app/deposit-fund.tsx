@@ -22,6 +22,7 @@ import {
 import {
   api,
 } from '../lib/api';
+import {getUser} from '../lib/auth';
 import {router} from 'expo-router';
 import {useLocalSearchParams} from 'expo-router';
 import AcademyHeader from '../components/AcademyHeader';
@@ -100,6 +101,7 @@ export default function DepositFund() {
   const [toDate, setToDate] = useState('');
   const [statement, setStatement] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'statement' | 'transactions'>('transactions');
+  const [userRole, setUserRole] = useState('');
   const {tab} = useLocalSearchParams<{tab?: string}>();
 
   useEffect(() => {
@@ -139,8 +141,29 @@ export default function DepositFund() {
 
   useEffect(() => {
     loadStudents();
+    void getUser<any>().then(user => setUserRole(String(user?.role || '')));
     api('/api/guardians/admin/deposit-fund-report').then(setDashboard).catch(() => {});
   }, []);
+
+  const deleteTransaction = async (item: any) => {
+    if (userRole !== 'super_admin' || !selectedStudent?.id) return;
+    const label = `${item.transaction_type === 'deposit' ? 'Advance/Deposit' : 'Withdrawal'} ₹${Number(item.amount || 0).toFixed(2)} on ${String(item.transaction_date || '').slice(0, 10)}`;
+    const confirmed = Platform.OS === 'web'
+      ? window.confirm(`Delete this SDF transaction permanently?\n${label}`)
+      : await new Promise<boolean>(resolve => Alert.alert('Delete SDF transaction', `Delete permanently?\n${label}`, [{text: 'Cancel', style: 'cancel', onPress: () => resolve(false)}, {text: 'Delete', style: 'destructive', onPress: () => resolve(true)}]));
+    if (!confirmed) return;
+    try {
+      await api(`/api/guardians/admin/student/${selectedStudent.id}/deposit-fund/${item.id}`, {method: 'DELETE'});
+      const refreshed = await api(`/api/guardians/admin/student/${selectedStudent.id}/deposit-fund`);
+      setFundData(refreshed);
+      if (statement) await searchStatement();
+      if (Platform.OS === 'web') window.alert('SDF transaction deleted.');
+      else Alert.alert('Deleted', 'SDF transaction deleted.');
+    } catch (e: any) {
+      if (Platform.OS === 'web') window.alert(`Delete failed\n${e.message}`);
+      else Alert.alert('Delete failed', e.message);
+    }
+  };
 
   const totalSdfDue = Number(dashboard?.summary?.total_due || 0);
   const totalSdfAdvance = Number(dashboard?.summary?.total_positive_balance || 0);
@@ -535,6 +558,7 @@ export default function DepositFund() {
               <Text style={styles.transactionDetails}>{String(item.transaction_date || '').slice(0, 10)} · Reg. {item.registration_no || '-'} · {item.details || '-'}</Text>
               {!!item.reference_no && <Text style={styles.transactionMeta}>Reference: {item.reference_no}</Text>}
               <Text style={styles.balanceText}>Balance after transaction: {'\u20B9'}{Number(item.running_balance || 0).toFixed(2)}</Text>
+              {userRole === 'super_admin' && String(selectedStudent?.id || '') === String(item.student_id || '') && <TouchableOpacity onPress={() => void deleteTransaction(item)} style={styles.deleteTransactionButton}><Text style={styles.deleteTransactionText}>Delete Transaction</Text></TouchableOpacity>}
             </View>)}
             <Text style={styles.dashboardText}>Present Balance: {Number(statement.summary?.balance || 0) > 0 ? '+' : Number(statement.summary?.balance || 0) < 0 ? '-' : ''}{'\u20B9'}{Math.abs(Number(statement.summary?.balance || 0)).toFixed(2)}</Text>
             {(statement.balances || []).filter((row:any) => Number(row.balance || 0) !== 0).map((row:any) => <TouchableOpacity key={row.registration_no} accessibilityRole="button" onPress={() => { void openStatementStudent(row); }} style={styles.statementRow}><Text style={styles.statementName}>{row.student_name} · Reg. {row.registration_no}</Text><Text>Balance: {Number(row.balance || 0) > 0 ? '+' : '-'}₹{Math.abs(Number(row.balance || 0)).toFixed(2)}</Text><Text style={styles.statementLink}>Open student account</Text></TouchableOpacity>)}
@@ -1044,6 +1068,7 @@ export default function DepositFund() {
                 <Text style={styles.transactionDetails}>{item.details || '-'}</Text>
                 <Text style={styles.transactionMeta}>Date: {String(item.transaction_date || '').slice(0, 10)}</Text>
                 {!!item.reference_no && <Text style={styles.transactionMeta}>Ref: {item.reference_no}</Text>}
+                {userRole === 'super_admin' && <TouchableOpacity onPress={() => void deleteTransaction(item)} style={styles.deleteTransactionButton}><Text style={styles.deleteTransactionText}>Delete Transaction</Text></TouchableOpacity>}
                 <Text style={styles.balanceText}>Balance after transaction: <Text style={styles.currency}>₹</Text>{Number(item.running_balance || 0).toFixed(2)}</Text>
               </View>
             ))}
@@ -1483,6 +1508,21 @@ whatsappText: {
     balanceText: {
       marginTop: 7,
       fontWeight: '700',
+    },
+
+    deleteTransactionButton: {
+      alignSelf: 'flex-start',
+      marginTop: 8,
+      backgroundColor: '#b42318',
+      paddingVertical: 7,
+      paddingHorizontal: 10,
+      borderRadius: 6,
+    },
+
+    deleteTransactionText: {
+      color: '#fff',
+      fontWeight: '800',
+      fontSize: 12,
     },
 
     currency: {
