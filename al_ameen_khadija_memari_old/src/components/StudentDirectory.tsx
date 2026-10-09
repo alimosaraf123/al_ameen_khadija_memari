@@ -35,13 +35,12 @@ const DOCUMENT_SLOTS = [
   ['father_photo','Father Photo'], ['mother_photo','Mother Photo'],
   ['visitor1_photo','Visitor-1 Photo'], ['visitor2_photo','Visitor-2 Photo'],
   ['birth_certificate','Date Of Birth'], ['aadhaar','Aadhaar'], ['bank_passbook','Passbook'], ['obc_certificate','OBC'],
-  ['ph_certificate','P.H. Certificate'], ['ix_registration','MP Registration'], ['mp_admit','MP Admit'], ['mp_marksheet','MP Marksheet'],
-  ['xi_registration','XI Registration'],
-  ['xi_admission_slip','XI Admission Slip'],
-  ['xi_marksheet','XI Marksheet'],
+  ['ix_registration','MP Registration'], ['mp_admit','MP Admit'], ['mp_marksheet','MP Marksheet'],
+  ['transfer_certificate','T.C.'], ['xi_registration','HS Registration'],
   ['hs_admit_3rd','HS Admit 3rd Semester'], ['hs_admit_4th','HS Admit 4th Semester'],
-  ['hs_marksheet','H.S Marksheet'], ['hs_certificate','H.S Certificate'], ['admission_slip','Admission Slip'],
-  ['signature','Signature'], ['transfer_certificate','T.C.'], ['other','Others'],
+  ['xi_admission_slip','XI Admission Slip'], ['signature','Signature'],
+  ['ph_certificate','P.H. Certificate'], ['xi_marksheet','XI Marksheet'],
+  ['hs_marksheet','H.S Marksheet'], ['hs_certificate','H.S Certificate'], ['admission_slip','Admission Slip'], ['other','Others'],
   ['other_2','Others-2'], ['other_3','Others-3'],
 ] as const;
 
