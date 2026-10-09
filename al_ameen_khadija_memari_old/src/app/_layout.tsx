@@ -30,7 +30,10 @@ export default function Layout() {
    let user=null;
    try {
     if(await getToken()) {
-     const data=await api('/api/me');
+     const data=await Promise.race([
+      api('/api/me'),
+      new Promise<never>((_,reject)=>setTimeout(()=>reject(new Error('Session check timed out')),6000)),
+     ]);
      if(data.user?.is_active)user=data.user;
     }
    } catch { /* Verify the session with the server before granting access. */ }
