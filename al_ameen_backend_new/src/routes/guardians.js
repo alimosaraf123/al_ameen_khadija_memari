@@ -1498,7 +1498,7 @@ router.get(
             `
             SELECT DISTINCT n.* FROM notices n
             JOIN notice_targets nt ON nt.notice_id=n.id
-            WHERE n.is_active=TRUE AND (
+            WHERE n.is_active=TRUE AND n.notice_type <> 'routine' AND (
               nt.target_type='all'
               OR (nt.target_type='role' AND nt.target_value='guardian')
               OR (nt.target_type='class' AND LOWER(TRIM(nt.target_value))=LOWER(TRIM((SELECT class_name FROM students WHERE id=$1))))
