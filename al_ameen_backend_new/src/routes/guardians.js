@@ -2697,6 +2697,7 @@ router.get(
         student.net_balance < 0
       ) {
 
+        // Total Due is the outstanding amount after applying deposits.
         totalDue += Math.abs(Number(student.net_balance || 0));
 
         dueStudents++;
