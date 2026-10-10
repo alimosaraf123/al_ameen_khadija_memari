@@ -2,13 +2,13 @@ import React from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const options = [
-  ['entry', 'Entry'], ['details', 'Details'], ['forms', 'Form & I-Card'], ['behavior', 'Behavior'],
+  ['entry', 'Entry'], ['details', 'Details'], ['summary', 'Student Summary'], ['forms', 'Form & I-Card'], ['behavior', 'Behavior'],
   ['attendance', 'Attendance'], ['visit', 'Visit Permission'], ['gatepass', 'Gate Pass'], ['marks', 'Marksheet'], ['documents', 'Documents'], ['dues', 'Dues'],
   ['lifecycle', 'Promotion / TC / Re-Activation'], ['verification', 'Verification'], ['passwords', 'Passwords'],
   ['data', 'Excel & Bulk Photos'], ['tc', 'T.C'], ['reactivation', 'Re-Activation Request'], ['transfer', 'Transfer'],
 ];
 const enabled = new Set([
-  'entry', 'details', 'forms', 'behavior', 'attendance', 'visit', 'gatepass', 'marks', 'documents', 'dues', 'lifecycle', 'passwords', 'data',
+  'entry', 'details', 'summary', 'forms', 'behavior', 'attendance', 'visit', 'gatepass', 'marks', 'documents', 'dues', 'lifecycle', 'passwords', 'data',
 ]);
 
 export default function StudentMenu({ visible, onClose, onSelect }: { visible: boolean; onClose: () => void; onSelect: (key: string) => void }) {

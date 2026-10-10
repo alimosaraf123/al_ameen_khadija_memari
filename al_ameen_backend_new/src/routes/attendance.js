@@ -135,6 +135,24 @@ router.get('/room/:roomNumber', auth, allow('super_admin','admin','teacher'), as
   });
 }));
 
+router.get('/student-summary', auth, allow('super_admin','admin'), asyncHandler(async (req, res) => {
+  const result = await pool.query(`
+    SELECT COALESCE(NULLIF(TRIM(s.class_name), ''), 'Unassigned') AS class_name,
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE EXISTS (
+             SELECT 1 FROM student_gate_passes gp
+             WHERE gp.student_id=s.id AND gp.status='pending' AND gp.printed_at IS NOT NULL
+           ))::int AS absent
+    FROM students s
+    WHERE s.is_active=TRUE
+    GROUP BY 1
+    ORDER BY CASE WHEN COALESCE(NULLIF(TRIM(s.class_name), ''), 'Unassigned') ~ '^[0-9]+$' THEN 0 ELSE 1 END,
+             CASE WHEN COALESCE(NULLIF(TRIM(s.class_name), ''), 'Unassigned') ~ '^[0-9]+$' THEN COALESCE(NULLIF(TRIM(s.class_name), ''), '0')::int ELSE 999 END,
+             class_name
+  `);
+  res.json({ success: true, summary: result.rows.map(row => ({ ...row, present: Number(row.total) - Number(row.absent) })) });
+}));
+
 router.post('/batch', auth, allow('super_admin','admin','teacher'), asyncHandler(async (req, res) => {
   const { room_number: roomNumber, attendance_date: attendanceDate, entries } = req.body || {};
   if (!roomNumber || !isValidDate(attendanceDate) || !Array.isArray(entries)) {
