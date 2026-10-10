@@ -14,7 +14,21 @@ function confirmAction(title:string,message:string):Promise<boolean> {
 }
 function notify(message:string) {if(Platform.OS==='web')window.alert(message);else Alert.alert('Guardian Login',message);}
 function whatsappNumber(value:any){const digits=String(value||'').replace(/\D/g,'');return digits.length===10?'91'+digits:/^91\d{10}$/.test(digits)?digits:'';}
-const GUARDIAN_WHATSAPP_GROUP='https://chat.whatsapp.com/GNUjwROoO0ULdnmws13S9v';
+const GUARDIAN_WHATSAPP_GROUPS:Record<string,string>={
+ v:'https://chat.whatsapp.com/DJAmEnz806aLKwDeHJWAbA',
+ vi:'https://chat.whatsapp.com/E88K0FhqQ79LsP4Chsj5QG',
+ vii:'https://chat.whatsapp.com/JheyvGRu9qUI76bmvdJQ6F',
+ viii:'https://chat.whatsapp.com/If8ZQCcJZwqJ43aHIJplmH',
+ ix:'https://chat.whatsapp.com/CjfZ4JxSzF897zONZhhsQw',
+ x:'https://chat.whatsapp.com/LC63a3C1QJh3NyMN2hXpI0',
+ xi:'https://chat.whatsapp.com/DJIJmG6OmPb8qqra9WVDnI',
+ xii:'https://chat.whatsapp.com/GNUjwROoO0ULdnmws13S9v',
+};
+function guardianWhatsAppGroup(className:any){
+ const value=String(className||'').trim().toLowerCase().replace(/^class\s+/,'');
+ const key=(value.match(/^(xii|xi|viii|vii|vi|ix|x|v)(?:\b|-)/)||[])[1]||'';
+ return GUARDIAN_WHATSAPP_GROUPS[key]||'';
+}
 export default function Guardians(){
  const [students,setStudents]=useState<any[]>([]),[guardians,setGuardians]=useState<any[]>([]),[search,setSearch]=useState(''),[size,setSize]=useState('25'),[page,setPage]=useState(1),[busy,setBusy]=useState<number|null>(null),[error,setError]=useState(''),[passwords,setPasswords]=useState<Record<string,Credentials>>({});
  const load=useCallback(async()=>{const [s,g,c]=await Promise.all([api('/api/students'),api('/api/guardians'),api('/api/guardians/temporary-passwords')]);setStudents(s.students||[]);setGuardians(g.guardians||[]);setPasswords(Object.fromEntries((c.credentials||[]).map((x:Credentials)=>[x.login_id,x])));},[]);
@@ -55,7 +69,9 @@ export default function Guardians(){
   if(Platform.OS==='web'&&!opened)return notify('Please allow pop-ups and try again.');
   setBusy(student.id);try{
    if(!credentials)credentials=await issue(student);
-   const message=`As-salamu alaykum, Respected Guardian.\nWelcome to Al-Ameen Mission Academy, Memari.\n\nStudent: ${student.student_name}\nRegistration No: ${student.registration_no}\n\n*Guardian Login ID: ${credentials.login_id}*\n\n*Temporary Password: ${credentials.password}*\n\nWhatsApp Group: ${GUARDIAN_WHATSAPP_GROUP}\n\nPlease change this temporary password after your first login. Do not share your login details with anyone.\n\nThank you,\nAl-Ameen Mission Academy, Memari`;
+   const groupLink=guardianWhatsAppGroup(student.class_name);
+   const groupLine=groupLink?`\nWhatsApp Group: ${groupLink}\n`:'';
+   const message=`As-salamu alaykum, Respected Guardian.\nWelcome to Al-Ameen Mission Academy, Memari.\n\nStudent: ${student.student_name}\nRegistration No: ${student.registration_no}\n\n*Guardian Login ID: ${credentials.login_id}*\n\n*Temporary Password: ${credentials.password}*\n${groupLine}\nPlease change this temporary password after your first login. Do not share your login details with anyone.\n\nThank you,\nAl-Ameen Mission Academy, Memari`;
    const url='https://wa.me/'+phone+'?text='+encodeURIComponent(message);
    if(opened)opened.location.href=url;else await Linking.openURL(url);
   }catch(e:any){opened?.close();notify(e.message)}finally{setBusy(null)}
