@@ -505,6 +505,8 @@ export default function DepositFund() {
   });
 
 
+  const statementTotals = getStatementTotals();
+
   return (
 
     <SafeAreaView
@@ -545,12 +547,12 @@ export default function DepositFund() {
           {selectedStudent && fundData ? (
             <View style={styles.sdfSummaryCard}>
               <Text style={styles.sdfLabel}>SDF Balance (Selected Student)</Text>
-              <Text style={selectedNetBalance >= 0 ? styles.sdfAdvance : styles.sdfDue}>{'\u20B9'}{Math.abs(selectedNetBalance).toFixed(2)}</Text>
+              <Text style={selectedNetBalance >= 0 ? styles.sdfAdvance : styles.sdfDue}>{selectedNetBalance < 0 ? '-' : '+'}{'\u20B9'}{Math.abs(selectedNetBalance).toFixed(2)}</Text>
             </View>
           ) : (
             <View style={styles.sdfSummaryCard}>
               <Text style={styles.sdfLabel}>SDF Balance (All Students)</Text>
-              <Text style={aggregateSdfBalance >= 0 ? styles.sdfAdvance : styles.sdfDue}>{'\u20B9'}{Math.abs(aggregateSdfBalance).toFixed(2)}</Text>
+              <Text style={aggregateSdfBalance < 0 ? styles.sdfDue : styles.sdfAdvance}>{aggregateSdfBalance < 0 ? '-' : '+'}{'\u20B9'}{Math.abs(aggregateSdfBalance).toFixed(2)}</Text>
             </View>
           )}
         </View>
@@ -564,13 +566,13 @@ export default function DepositFund() {
           {statement && <>
             <View style={styles.statementSummaryBox}>
               <View style={styles.statementSummaryItem}><Text style={styles.statementSummaryLabel}>Total Deposit</Text><Text style={styles.statementDepositValue}>{'\u20B9'}{Number(statement.summary?.deposit || 0).toFixed(2)}</Text></View>
-              <View style={styles.statementSummaryItem}><Text style={styles.statementSummaryLabel}>Total Withdrawal</Text><Text style={styles.statementWithdrawalValue}>{'\u20B9'}{Number(statement.summary?.withdrawal || 0).toFixed(2)}</Text></View>
+              <View style={styles.statementSummaryItem}><Text style={styles.statementSummaryLabel}>Total Due (Combined)</Text><Text style={styles.statementWithdrawalValue}>{'\u20B9'}{statementTotals.withdrawal.toFixed(2)}</Text></View>
               <View style={styles.statementBalanceBox}>
-                <Text style={Number(statement.summary?.balance || 0) >= 0 ? styles.statementAdvanceLabel : styles.statementDueLabel}>
-                  {Number(statement.summary?.balance || 0) >= 0 ? 'SDF Advance' : 'SDF Due'}
+                <Text style={statementTotals.balance >= 0 ? styles.statementAdvanceLabel : styles.statementDueLabel}>
+                  {statementTotals.balance >= 0 ? 'SDF Advance' : 'SDF Due'}
                 </Text>
-                <Text style={Number(statement.summary?.balance || 0) >= 0 ? styles.statementAdvanceValue : styles.statementDueValue}>
-                  {'\u20B9'}{Math.abs(Number(statement.summary?.balance || 0)).toFixed(2)}
+                <Text style={statementTotals.balance >= 0 ? styles.statementAdvanceValue : styles.statementDueValue}>
+                  {statementTotals.balance < 0 ? '-' : '+'}{'\u20B9'}{Math.abs(statementTotals.balance).toFixed(2)}
                 </Text>
               </View>
             </View>
@@ -590,13 +592,13 @@ export default function DepositFund() {
                 <Text style={styles.transactionMeta}>Class: {item.class_name || '-'}</Text>
               </View>)}
             </>}
-            {(() => { const totals = getStatementTotals(); return <View style={styles.statementTotalsRow}>
+            {(() => { const totals = statementTotals; return <View style={styles.statementTotalsRow}>
               <Text style={styles.statementTotalsLabel}>Total</Text>
               <Text style={styles.statementTotalsValue}>Deposit: {'\u20B9'}{totals.deposit.toFixed(2)}</Text>
-              <Text style={styles.statementTotalsValue}>Withdrawal: {'\u20B9'}{totals.withdrawal.toFixed(2)}</Text>
+              <Text style={styles.statementTotalsValue}>Due (Combined): {'\u20B9'}{totals.withdrawal.toFixed(2)}</Text>
               <Text style={[styles.statementTotalsValue, totals.balance < 0 ? styles.statementDueValue : styles.statementAdvanceValue]}>Balance: {totals.balance < 0 ? '-' : '+'}{'\u20B9'}{Math.abs(totals.balance).toFixed(2)}</Text>
             </View>; })()}
-            <Text style={styles.dashboardText}>Present Balance: {Number(statement.summary?.balance || 0) > 0 ? '+' : Number(statement.summary?.balance || 0) < 0 ? '-' : ''}{'\u20B9'}{Math.abs(Number(statement.summary?.balance || 0)).toFixed(2)}</Text>
+            <Text style={styles.dashboardText}>Present Balance: {statementTotals.balance > 0 ? '+' : statementTotals.balance < 0 ? '-' : ''}{'\u20B9'}{Math.abs(statementTotals.balance).toFixed(2)}</Text>
             {(statement.balances || []).filter((row:any) => Number(row.balance || 0) !== 0).map((row:any) => <TouchableOpacity key={row.registration_no} accessibilityRole="button" onPress={() => { void openStatementStudent(row); }} style={styles.statementRow}><Text style={styles.statementName}>{row.student_name} · Reg. {row.registration_no}</Text><Text>Balance: {Number(row.balance || 0) > 0 ? '+' : '-'}₹{Math.abs(Number(row.balance || 0)).toFixed(2)}</Text><Text style={styles.statementLink}>Open student account</Text></TouchableOpacity>)}
             <Button title="Download Excel" onPress={downloadStatementExcel} />
             <Button title="Print Statement" onPress={printStatement} />

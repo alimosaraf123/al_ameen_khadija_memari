@@ -730,7 +730,7 @@ Thank you.`;
           />
 
           <SummaryBox
-            label="Total Expense"
+            label="Total Due (Combined)"
             value={
               `₹${Number(
                 summary.total_expense ||

@@ -2016,12 +2016,17 @@ router.get('/admin/deposit-fund-statement', auth, allow('super_admin', 'admin'),
   if(fromDate){params.push(fromDate);filters.push(`t.transaction_date>=$${params.length}::date`)}
   if(toDate){params.push(toDate);filters.push(`t.transaction_date<=$${params.length}::date`)}
   const rows=(await pool.query(`SELECT t.id,t.student_id,t.transaction_date,t.transaction_type,t.amount,t.details,t.reference_no,t.created_by,s.registration_no,s.student_name,s.class_name,s.roll_no, SUM(CASE WHEN t.transaction_type='deposit' THEN t.amount WHEN t.transaction_type='expense' THEN -t.amount ELSE 0 END) OVER (ORDER BY t.transaction_date,t.id ROWS UNBOUNDED PRECEDING) AS running_balance FROM student_deposit_transactions t JOIN students s ON s.id=t.student_id WHERE ${filters.join(' AND ')} ORDER BY t.transaction_date,t.id`,params)).rows;
+  const dueParams=[];const dueFilters=[`d.status='due'`,`d.amount>0`];
+  if(registrationNo){dueParams.push(registrationNo);dueFilters.push(`s.registration_no=$${dueParams.length}`)}
+  if(fromDate){dueParams.push(fromDate);dueFilters.push(`d.due_date>=$${dueParams.length}::date`)}
+  if(toDate){dueParams.push(toDate);dueFilters.push(`d.due_date<=$${dueParams.length}::date`)}
+  const dueEntries=(await pool.query(`SELECT d.id,d.student_id,d.due_date AS transaction_date,'due' AS transaction_type,d.amount,d.due_title AS details,NULL AS reference_no,d.entered_by AS created_by,s.registration_no,s.student_name,s.class_name,s.roll_no FROM student_dues d JOIN students s ON s.id=d.student_id WHERE ${dueFilters.join(' AND ')} ORDER BY d.due_date NULLS LAST,d.id`,dueParams)).rows;
   const student=registrationNo?(await pool.query('SELECT id,registration_no,student_name,class_name,roll_no,guardian_mobile,father_mobile,mother_mobile,mobile_number FROM students WHERE registration_no=$1 LIMIT 1',[registrationNo])).rows[0]:null;
-  const summary={deposit:rows.filter(x=>x.transaction_type==='deposit').reduce((n,x)=>n+Number(x.amount||0),0),withdrawal:rows.filter(x=>x.transaction_type==='expense').reduce((n,x)=>n+Number(x.amount||0),0)};
+  const summary={deposit:rows.filter(x=>x.transaction_type==='deposit').reduce((n,x)=>n+Number(x.amount||0),0),withdrawal:rows.filter(x=>x.transaction_type==='expense').reduce((n,x)=>n+Number(x.amount||0),0),due:dueEntries.reduce((n,x)=>n+Number(x.amount||0),0)};
   summary.balance=summary.deposit-summary.withdrawal;summary.advance=Math.max(0,summary.balance);summary.due=Math.max(0,-summary.balance);
   const balances=(await pool.query(`SELECT s.registration_no,s.student_name,s.class_name,COALESCE(SUM(CASE WHEN t.transaction_type='deposit' THEN t.amount WHEN t.transaction_type='expense' THEN -t.amount ELSE 0 END),0) AS balance FROM students s LEFT JOIN student_deposit_transactions t ON t.student_id=s.id WHERE s.is_active=TRUE ${registrationNo?'AND s.registration_no=$1':''} GROUP BY s.id ORDER BY s.class_name,s.student_name`,registrationNo?[registrationNo]:[])).rows.map(x=>({...x,balance:Number(x.balance||0),advance:Math.max(0,Number(x.balance||0)),due:Math.max(0,-Number(x.balance||0))}));
   summary.balance=balances.reduce((total,row)=>total+Number(row.balance||0),0);summary.advance=Math.max(0,summary.balance);summary.due=Math.max(0,-summary.balance);
-  res.json({success:true,registration_no:registrationNo||null,date:fromDate&&toDate&&fromDate===toDate?fromDate:null,from_date:fromDate||null,to_date:toDate||null,student,transactions:rows,balances,summary});
+  res.json({success:true,registration_no:registrationNo||null,date:fromDate&&toDate&&fromDate===toDate?fromDate:null,from_date:fromDate||null,to_date:toDate||null,student,transactions:rows,due_entries:dueEntries,balances,summary});
 }));
 // ========================================
 // ADMIN / SUPER ADMIN:
@@ -2704,6 +2709,19 @@ router.get(
 
     }
 
+    // The overall deposit/expense cards represent the complete transaction
+    // totals. Student due/advance counts above remain based on each student's
+    // current net balance.
+    const transactionTotalsResult = await pool.query(`
+      SELECT
+        COALESCE(SUM(CASE WHEN transaction_type='deposit' THEN amount ELSE 0 END), 0) AS total_deposit,
+        COALESCE(SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END), 0)
+          + COALESCE((SELECT SUM(amount) FROM student_dues WHERE status='due' AND amount>0), 0) AS total_expense
+      FROM student_deposit_transactions
+    `);
+    const overallDeposit = Number(transactionTotalsResult.rows[0]?.total_deposit || 0);
+    const overallExpense = Number(transactionTotalsResult.rows[0]?.total_expense || 0);
+
 
     res.json({
 
@@ -2715,16 +2733,16 @@ router.get(
           students.length,
 
         total_deposit:
-          totalDeposit,
+          overallDeposit,
 
         total_expense:
-          totalDue,
+          overallExpense,
 
         total_positive_balance:
-          totalDeposit,
+          overallDeposit,
 
         total_due:
-          totalDue,
+          overallExpense,
 
         gross_sdf_due:
           grossSdfDue,
@@ -2733,8 +2751,8 @@ router.get(
           grossSdfAdvance,
 
         net_fund_balance:
-          totalDue -
-          totalDeposit,
+          overallDeposit -
+          overallExpense,
 
         positive_students:
           positiveStudents,
