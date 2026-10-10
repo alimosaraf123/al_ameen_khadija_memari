@@ -71,7 +71,7 @@ export default function Guardians(){
    if(!credentials)credentials=await issue(student);
    const groupLink=guardianWhatsAppGroup(student.class_name);
    const groupLine=groupLink?`\nWhatsApp Group: ${groupLink}\n`:'';
-   const message=`As-salamu alaykum, Respected Guardian.\nWelcome to Al-Ameen Mission Academy, Memari.\n\nStudent: ${student.student_name}\nRegistration No: ${student.registration_no}\n\n*Guardian Login ID: ${credentials.login_id}*\n\n*Temporary Password: ${credentials.password}*\n${groupLine}\nPlease change this temporary password after your first login. Do not share your login details with anyone.\n\nThank you,\nAl-Ameen Mission Academy, Memari`;
+   const message=`As-salamu alaykum, Respected Guardian.\nWelcome to Al-Ameen Mission Academy, Memari.\n\nStudent: ${student.student_name}\nRegistration No: ${student.registration_no}\n\n*Guardian Login ID: ${credentials.login_id}*\n\nPlease click the link below to download the app from the WhatsApp group.\n\n*Temporary Password: ${credentials.password}*\n${groupLine}\nPlease change this temporary password after your first login. Do not share your login details with anyone.\n\nThank you,\nAl-Ameen Mission Academy, Memari`;
    const url='https://wa.me/'+phone+'?text='+encodeURIComponent(message);
    if(opened)opened.location.href=url;else await Linking.openURL(url);
   }catch(e:any){opened?.close();notify(e.message)}finally{setBusy(null)}
