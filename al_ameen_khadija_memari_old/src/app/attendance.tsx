@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AcademyHeader from '../components/AcademyHeader';
 import { Select } from '../components/StudentDirectory';
+import DatePickerField from '../components/DatePickerField';
 import { API_BASE, api } from '../lib/api';
 import { getUser } from '../lib/auth';
 
@@ -12,6 +13,12 @@ function localDate() {
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function roomSort(a: any, b: any) {
+  const an = Number(String(a || '').match(/\d+/)?.[0] || 0);
+  const bn = Number(String(b || '').match(/\d+/)?.[0] || 0);
+  return an - bn || String(a || '').localeCompare(String(b || ''));
 }
 
 function StudentPhoto({ student }: { student: any }) {
@@ -41,10 +48,14 @@ export default function Attendance() {
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [canManage, setCanManage] = useState(false);
+  const [assignments, setAssignments] = useState<any[]>([]);
 
-  const loadHistory = async (selectedRoom = roomNumber) => {
+  const loadHistory = async (selectedRoom = roomNumber, selectedDate = date) => {
     try {
-      const query = selectedRoom ? `?room_number=${encodeURIComponent(selectedRoom)}` : '';
+      const params = new URLSearchParams();
+      if (selectedRoom) params.set('room_number', selectedRoom);
+      if (canManage && selectedDate) { params.set('date_from', selectedDate); params.set('date_to', selectedDate); }
+      const query = params.toString() ? `?${params.toString()}` : '';
       const data = await api(`/api/attendance/history${query}`);
       setHistory(data.history || []);
     } catch (error: any) {
@@ -56,7 +67,15 @@ export default function Attendance() {
     try {
       const data = await api('/api/rooms/accessible');
       const roomList = data.rooms || [];
-      setRooms(roomList);
+      let visibleRooms = roomList;
+      try {
+        const assignmentData = await api('/api/rooms/assignments');
+        const activeAssignments = assignmentData.assignments || [];
+        setAssignments(activeAssignments);
+        const assignedNames = new Set(activeAssignments.map((item: any) => String(item.room_name)));
+        visibleRooms = roomList.filter((room: any) => assignedNames.has(String(room.room_name)));
+      } catch { setAssignments([]); }
+      setRooms(visibleRooms);
       if (roomList.length === 1) {
         const onlyRoom = String(roomList[0].room_name);
         setRoomNumber(onlyRoom);
@@ -75,6 +94,8 @@ export default function Attendance() {
     void getUser<any>().then(user => setCanManage(['admin','super_admin'].includes(user?.role)));
   }, []);
 
+  useEffect(() => { if (canManage) void loadHistory('', date); }, [canManage, date]);
+
   const loadAttendance = async (selectedRoom = roomNumber, selectedDate = date) => {
     if (!selectedRoom) {
       Alert.alert('Required', 'Select a room number first.');
@@ -87,7 +108,7 @@ export default function Attendance() {
       setSubmission(data.submission || null);
       setLoaded(true);
       setSearch('');
-      await loadHistory(selectedRoom);
+      await loadHistory(canManage ? '' : selectedRoom, selectedDate);
     } catch (error: any) {
       setLoaded(false);
       Alert.alert('Error', error.message);
@@ -103,6 +124,14 @@ export default function Attendance() {
     setSubmission(null);
     setLoaded(false);
     if (value) void loadAttendance(value, localDate());
+  };
+
+  const changeReportDate = (value: string) => {
+    setDate(value);
+    if (canManage) {
+      void loadHistory('', value);
+      if (roomNumber) void loadAttendance(roomNumber, value);
+    }
   };
 
   const toggle = (studentId: number) => {
@@ -141,7 +170,25 @@ export default function Attendance() {
   };
 
   const editHistory=async(item:any)=>{setRoomNumber(String(item.room_name));setDate(String(item.attendance_date).slice(0,10));setLoading(true);try{const data=await api(`/api/attendance/room/${encodeURIComponent(item.room_name)}?date=${String(item.attendance_date).slice(0,10)}`);setStudents(data.students||[]);setSubmission(data.submission||null);setLoaded(true);setSearch('');}catch(error:any){Alert.alert('Error',error.message);}finally{setLoading(false);}};
-  const deleteHistory=(item:any)=>Alert.alert('Delete attendance','Delete this room attendance permanently?',[{text:'Cancel',style:'cancel'},{text:'Delete',style:'destructive',onPress:async()=>{try{await api(`/api/attendance/submissions/${item.id}`,{method:'DELETE'});if(submission?.id===item.id){setLoaded(false);setStudents([]);setSubmission(null);}await loadHistory(roomNumber);Alert.alert('Deleted','Attendance deleted successfully.');}catch(error:any){Alert.alert('Error',error.message);}}}]);
+  const deleteHistory = async (item: any) => {
+    const remove = async () => {
+      try {
+        await api(`/api/attendance/submissions/${item.id}`, { method: 'DELETE' });
+        if (submission?.id === item.id) { setLoaded(false); setStudents([]); setSubmission(null); }
+        await loadHistory('', date);
+        if (Platform.OS === 'web') window.alert('Attendance deleted successfully.');
+        else Alert.alert('Deleted', 'Attendance deleted successfully.');
+      } catch (error: any) {
+        if (Platform.OS === 'web') window.alert(error.message);
+        else Alert.alert('Error', error.message);
+      }
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm('Delete this room attendance permanently?')) await remove();
+      return;
+    }
+    Alert.alert('Delete attendance', 'Delete this room attendance permanently?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: remove }]);
+  };
   const present = students.filter((student) => student.status === 'present').length;
   const absent = students.length - present;
   const visibleStudents = useMemo(() => {
@@ -150,6 +197,23 @@ export default function Attendance() {
     return students.filter((student) => [student.student_name, student.registration_no, student.class_name]
       .some((field) => String(field || '').toLowerCase().includes(value)));
   }, [students, search]);
+  const sortedHistory = useMemo(() => [...history]
+    .filter(item => !canManage || String(item.attendance_date).slice(0, 10) === date)
+    .sort((a, b) => roomSort(a.room_name, b.room_name)), [history, canManage, date]);
+  const reportRows = useMemo(() => {
+    return sortedHistory.filter(item => !item.pending).sort((a, b) => roomSort(a.room_name, b.room_name));
+  }, [sortedHistory]);
+  const pendingRows = useMemo(() => rooms
+    .filter(room => !sortedHistory.some(item => String(item.room_name) === String(room.room_name)))
+    .map(room => ({
+      room_name: room.room_name,
+      teacher_name: assignments.filter(x => String(x.room_name) === String(room.room_name)).map(x => x.teacher_name).join(', ') || 'Not assigned',
+      pending: true,
+    }))
+    .sort((a, b) => roomSort(a.room_name, b.room_name)), [rooms, assignments, sortedHistory]);
+  const reportPresent = reportRows.reduce((n, item) => n + Number(item.present || 0), 0);
+  const reportAbsent = reportRows.reduce((n, item) => n + Number(item.absent || 0), 0);
+  const reportGpStudents = reportRows.reduce((n, item) => n + Math.max(0, Number(item.total || 0) - Number(item.absent || 0) - Number(item.gate_pass_students || 0)), 0);
 
   return (
     <SafeAreaView style={s.page}>
@@ -171,7 +235,7 @@ export default function Attendance() {
             </View>
             <View style={s.controlField}>
               <Text style={s.label}>Attendance Date</Text>
-              <View style={s.fixedField}><Text style={s.fixedText}>{date.split('-').reverse().join('/')}</Text></View>
+              {canManage ? <DatePickerField label="Report date" value={date} onChange={changeReportDate} /> : <View style={s.fixedField}><Text style={s.fixedText}>{date.split('-').reverse().join('/')}</Text></View>}
             </View>
           </View>
           {loading && <ActivityIndicator color="#1565c0" style={{ marginTop: 12 }} />}
@@ -217,16 +281,22 @@ export default function Attendance() {
           </TouchableOpacity>
         </>}
 
+        {canManage && <>
         <View style={s.historyHeader}>
-          <Text style={s.sectionTitle}>Recent Attendance</Text>
-          <TouchableOpacity onPress={() => loadHistory(roomNumber)}><Text style={s.refresh}>Refresh</Text></TouchableOpacity>
+          <Text style={s.sectionTitle}>{canManage ? `Attendance Report · ${date.split('-').reverse().join('-')}` : 'Recent Attendance'}</Text>
+          <TouchableOpacity onPress={() => loadHistory(canManage ? '' : roomNumber, date)}><Text style={s.refresh}>Refresh</Text></TouchableOpacity>
         </View>
-        {history.length === 0 ? <Text style={s.noHistory}>No submitted attendance found.</Text> : history.map((item) => (
-          <View key={item.id} style={s.historyCard}>
-            <View><Text style={s.historyTitle}>Room {item.room_name} · {String(item.attendance_date).slice(0, 10)}</Text><Text style={s.historyMeta}>{item.last_updated_by_name || item.submitted_by_name || 'User'}</Text></View>
-            <View style={s.historyCounts}><Text style={s.greenText}>{item.present} P</Text><Text style={s.redText}>{item.absent} A</Text><TouchableOpacity onPress={()=>editHistory(item)} style={s.historyButton}><Text style={s.historyButtonText}>{canManage?'View / Edit':'View Absent'}</Text></TouchableOpacity>{canManage&&<TouchableOpacity onPress={()=>deleteHistory(item)} style={s.deleteButton}><Text style={s.deleteButtonText}>Delete</Text></TouchableOpacity>}</View>
-          </View>
-        ))}
+        {reportRows.length === 0 ? <Text style={s.noHistory}>No attendance found for this date.</Text> : <ScrollView horizontal showsHorizontalScrollIndicator><View style={s.reportTable}>
+          <View style={[s.reportRow, s.reportHead]}><Text style={[s.reportCell, s.roomCell]}>Room Number</Text><Text style={[s.reportCell, s.teacherCell]}>Teacher Name</Text><Text style={[s.reportCell, s.countCell]}>Present</Text><Text style={[s.reportCell, s.countCell]}>Absent</Text>{canManage && <Text style={[s.reportCell, s.countCell]}>GP Student</Text>}<Text style={[s.reportCell, s.actionCell]}>View / Edit</Text><Text style={[s.reportCell, s.actionCell]}>Delete</Text></View>
+          {reportRows.map((item:any) => <View key={`${item.room_name}-${item.attendance_date || date}`} style={s.reportRow}>
+            <Text style={[s.reportCell, s.roomCell]}>Room {item.room_name}</Text><Text style={[s.reportCell, s.teacherCell]}>{item.teacher_name || item.last_updated_by_name || item.submitted_by_name || 'Not assigned'}</Text><Text style={[s.reportCell, s.countCell, s.presentText]}>{item.pending ? '-' : item.present}</Text><Text style={[s.reportCell, s.countCell, s.absentText]}>{item.pending ? '-' : item.absent}</Text>{canManage && <Text style={[s.reportCell, s.countCell, s.totalStudentText]}>{item.pending ? '-' : Math.max(0, Number(item.total || 0) - Number(item.absent || 0) - Number(item.gate_pass_students || 0))}</Text>}
+            {item.pending ? <Text style={[s.reportCell, s.actionCell, s.pendingText]}>Pending</Text> : <TouchableOpacity onPress={()=>editHistory(item)} style={[s.reportCell, s.actionCell, s.historyButton]}><Text style={s.historyButtonText}>View / Edit</Text></TouchableOpacity>}
+            {item.pending ? <Text style={[s.reportCell, s.actionCell, s.pendingText]}>Pending</Text> : <TouchableOpacity onPress={()=>deleteHistory(item)} style={[s.reportCell, s.actionCell, s.deleteButton]}><Text style={s.deleteButtonText}>Delete</Text></TouchableOpacity>}
+          </View>)}
+          {canManage && <View style={[s.reportRow, s.reportTotal]}><Text style={[s.reportCell, s.roomCell]}>Total</Text><Text style={[s.reportCell, s.teacherCell]}></Text><Text style={[s.reportCell, s.countCell, s.presentText]}>{reportPresent}</Text><Text style={[s.reportCell, s.countCell, s.absentText]}>{reportAbsent}</Text><Text style={[s.reportCell, s.countCell, s.totalStudentText]}>{reportGpStudents}</Text><Text style={[s.reportCell, s.actionCell]}></Text><Text style={[s.reportCell, s.actionCell]}></Text></View>}
+        </View></ScrollView>}
+        <Text style={s.pendingTitle}>Pending — Attendance Not Submitted</Text>{pendingRows.length ? pendingRows.map(item => <View key={`pending-${item.room_name}`} style={s.pendingRow}><Text style={s.roomCell}>Room {item.room_name}</Text><Text style={s.teacherCell}>{item.teacher_name || 'Not assigned'}</Text><Text style={s.pendingText}>Pending</Text></View>) : <Text style={s.noHistory}>All rooms have submitted attendance.</Text>}
+        </>}
       </ScrollView>
     </SafeAreaView>
   );
@@ -270,6 +340,15 @@ const s = StyleSheet.create({
   sectionTitle: { fontSize: 19, fontWeight: '900', color: '#173a2a' }, refresh: { color: '#1565c0', fontWeight: '800' },
   noHistory: { backgroundColor: '#fff', padding: 18, borderRadius: 10, color: '#697870' },
   historyCard: { backgroundColor: '#fff', borderRadius: 12, padding: 13, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  reportTable: { minWidth: 900, borderWidth: 1, borderColor: '#9fb4c8', backgroundColor: '#fff' },
+  reportRow: { flexDirection: 'row', minHeight: 48, borderBottomWidth: 1, borderBottomColor: '#cbd5df', alignItems: 'stretch' },
+  reportHead: { backgroundColor: '#dbe8f4' },
+  reportTotal: { backgroundColor: '#eef4fa', borderBottomWidth: 0 },
+  reportCell: { paddingHorizontal: 10, paddingVertical: 12, borderRightWidth: 1, borderRightColor: '#cbd5df', justifyContent: 'center' },
+  roomCell: { width: 150, fontWeight: '900' }, teacherCell: { width: 220 }, countCell: { width: 95, textAlign: 'center' }, actionCell: { width: 125, textAlign: 'center' },
+  presentText: { color: '#167844', fontWeight: '900' }, absentText: { color: '#c12c3a', fontWeight: '900' }, totalStudentText: { color: '#174f75', fontWeight: '900' }, pendingText: { color: '#9a6700', fontWeight: '900', padding: 10 },
+  pendingTitle: { fontSize: 17, fontWeight: '900', color: '#8a5a00', marginTop: 18, marginBottom: 8 },
+  pendingRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff8df', borderWidth: 1, borderColor: '#ecd38b', borderRadius: 7, padding: 12, marginBottom: 6, gap: 8 },
   historyTitle: { fontWeight: '800', color: '#233b30' }, historyMeta: { color: '#718078', fontSize: 12, marginTop: 3 },
   historyCounts: { flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }, historyButton:{backgroundColor:'#dcecff',paddingHorizontal:9,paddingVertical:7,borderRadius:7},historyButtonText:{color:'#15538e',fontWeight:'800',fontSize:12},deleteButton:{backgroundColor:'#ffe0e3',paddingHorizontal:9,paddingVertical:7,borderRadius:7},deleteButtonText:{color:'#b32635',fontWeight:'800',fontSize:12}, greenText: { color: '#167844', fontWeight: '900' }, redText: { color: '#c12c3a', fontWeight: '900' },
 });

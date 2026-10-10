@@ -68,13 +68,24 @@ router.get('/history', auth, allow('super_admin','admin','teacher'), asyncHandle
   }
 
   const result = await pool.query(`
-    SELECT sub.id, sub.attendance_date, sub.submitted_at, sub.updated_at,
+    SELECT sub.id, to_char(sub.attendance_date, 'YYYY-MM-DD') AS attendance_date, sub.submitted_at, sub.updated_at,
            r.room_name,
+           COALESCE((SELECT string_agg(t.name, ', ' ORDER BY t.name)
+                     FROM teacher_room_assignments tra
+                     JOIN teachers t ON t.id=tra.teacher_id
+                     WHERE tra.room_id=sub.room_id AND tra.is_active=TRUE), 'Not assigned') AS teacher_name,
            submitted.full_name AS submitted_by_name,
            updated.full_name AS last_updated_by_name,
            COUNT(a.id)::int AS total,
            COUNT(a.id) FILTER (WHERE a.status='present')::int AS present,
-           COUNT(a.id) FILTER (WHERE a.status='absent')::int AS absent
+           COUNT(a.id) FILTER (WHERE a.status='absent')::int AS absent,
+           (
+             SELECT COUNT(DISTINCT gp.student_id)::int
+             FROM student_gate_passes gp
+             JOIN students gps ON gps.id=gp.student_id
+             WHERE gps.room_id=sub.room_id
+               AND gp.status='pending'
+           ) AS gate_pass_students
     FROM attendance_submissions sub
     JOIN rooms r ON r.id=sub.room_id
     LEFT JOIN users submitted ON submitted.id=sub.submitted_by
