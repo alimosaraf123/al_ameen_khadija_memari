@@ -2732,17 +2732,21 @@ router.get(
         total_students:
           students.length,
 
+        // Report cards are student-level aggregates: only the nine
+        // advance students' positive balances and the 118 students' due
+        // amounts are shown here.  The net fund balance below deliberately
+        // keeps the existing transaction-level calculation.
         total_deposit:
-          overallDeposit,
+          totalDeposit,
 
         total_expense:
-          overallExpense,
+          totalDue,
 
         total_positive_balance:
-          overallDeposit,
+          totalDeposit,
 
         total_due:
-          overallExpense,
+          totalDue,
 
         gross_sdf_due:
           grossSdfDue,
