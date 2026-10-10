@@ -1,15 +1,5 @@
 import { Platform } from 'react-native';
-
-let secureStoreModule: Promise<typeof import('expo-secure-store') | null> | null = null;
-async function getSecureStore() {
-  if (!secureStoreModule) secureStoreModule = import('expo-secure-store').catch(() => null);
-  return secureStoreModule;
-}
-const SecureStore = {
-  async setItemAsync(key: string, value: string) { const store = await getSecureStore(); if (store) await store.setItemAsync(key, value); },
-  async getItemAsync(key: string) { const store = await getSecureStore(); return store ? store.getItemAsync(key) : null; },
-  async deleteItemAsync(key: string) { const store = await getSecureStore(); if (store) await store.deleteItemAsync(key); },
-};
+import * as SecureStore from 'expo-secure-store';
 
 const GUARDIAN_LOGIN_ID_KEY =
   'guardian_device_login_id';

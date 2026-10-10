@@ -21,16 +21,7 @@ import {
   router,
 } from 'expo-router';
 
-let localAuthenticationModule: Promise<typeof import('expo-local-authentication') | null> | null = null;
-async function getLocalAuthentication() {
-  if (!localAuthenticationModule) localAuthenticationModule = import('expo-local-authentication').catch(() => null);
-  return localAuthenticationModule;
-}
-const LocalAuthentication = {
-  async hasHardwareAsync() { const module = await getLocalAuthentication(); return module ? module.hasHardwareAsync() : false; },
-  async isEnrolledAsync() { const module = await getLocalAuthentication(); return module ? module.isEnrolledAsync() : false; },
-  async authenticateAsync(options: any) { const module = await getLocalAuthentication(); return module ? module.authenticateAsync(options) : {success: false}; },
-};
+import * as LocalAuthentication from 'expo-local-authentication';
 
 import {
   API_BASE,
