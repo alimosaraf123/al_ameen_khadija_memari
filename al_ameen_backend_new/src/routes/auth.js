@@ -747,13 +747,11 @@ router.post(
       result.rows[0];
 
 
-    if (
-      row.role !== 'guardian'
-    ) {
+    if (!['guardian','admin','teacher'].includes(row.role)) {
       return res.status(403).json({
         success: false,
         message:
-          'Fingerprint login is only for Guardian accounts',
+          'Fingerprint login is not enabled for this account type',
       });
     }
 

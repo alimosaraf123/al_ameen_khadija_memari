@@ -21,8 +21,16 @@ import {
   router,
 } from 'expo-router';
 
-import * as LocalAuthentication
-  from 'expo-local-authentication';
+let localAuthenticationModule: Promise<typeof import('expo-local-authentication') | null> | null = null;
+async function getLocalAuthentication() {
+  if (!localAuthenticationModule) localAuthenticationModule = import('expo-local-authentication').catch(() => null);
+  return localAuthenticationModule;
+}
+const LocalAuthentication = {
+  async hasHardwareAsync() { const module = await getLocalAuthentication(); return module ? module.hasHardwareAsync() : false; },
+  async isEnrolledAsync() { const module = await getLocalAuthentication(); return module ? module.isEnrolledAsync() : false; },
+  async authenticateAsync(options: any) { const module = await getLocalAuthentication(); return module ? module.authenticateAsync(options) : {success: false}; },
+};
 
 import {
   API_BASE,
@@ -40,6 +48,8 @@ import {
   clearGuardianDeviceAccount,
   getGuardianBiometricToken,
   hasGuardianBiometricToken,
+  getBiometricAccount,
+  getRoleBiometricToken,
 } from '../lib/guardianDevice';
 
 import {
@@ -102,6 +112,8 @@ export default function Login() {
     setFingerprintBusy
   ] = useState(false);
 
+  const [fingerprintRole, setFingerprintRole] = useState<string | null>(null);
+
 
   // =====================================
   // CHECK SAVED GUARDIAN
@@ -122,6 +134,11 @@ export default function Login() {
 
           const biometric =
             await hasGuardianBiometricToken();
+
+          const savedBiometricAccount = await getBiometricAccount();
+          const savedRoleToken = savedBiometricAccount?.role
+            ? await getRoleBiometricToken(savedBiometricAccount.role)
+            : null;
 
 
           if (
@@ -149,6 +166,18 @@ export default function Login() {
             setFingerprintAvailable(
               true
             );
+
+            setFingerprintRole('guardian');
+
+          } else if (
+            savedRoleToken &&
+            ['admin','teacher'].includes(String(savedBiometricAccount?.role)) &&
+            Platform.OS !== 'web'
+          ) {
+            setGuardianLoginId(savedBiometricAccount?.loginId || null);
+            setFingerprintRole(String(savedBiometricAccount?.role));
+            setFingerprintAvailable(true);
+            setUsePasswordLogin(false);
 
           }
 
@@ -472,8 +501,9 @@ export default function Login() {
         );
 
 
-        const deviceToken =
-          await getGuardianBiometricToken();
+        const deviceToken = fingerprintRole === 'guardian'
+          ? await getGuardianBiometricToken()
+          : await getRoleBiometricToken(fingerprintRole || '');
 
 
         if (!deviceToken) {
@@ -531,7 +561,7 @@ export default function Login() {
             .authenticateAsync({
 
               promptMessage:
-                'Guardian Login',
+                fingerprintRole === 'teacher' ? 'Teacher Login' : fingerprintRole === 'admin' ? 'Admin Login' : 'Guardian Login',
 
               cancelLabel:
                 'Cancel',
@@ -706,7 +736,7 @@ export default function Login() {
             <Text
               style={styles.quickTitle}
             >
-              Guardian Quick Login
+              {fingerprintRole === 'teacher' ? 'Teacher Quick Login' : fingerprintRole === 'admin' ? 'Admin Quick Login' : 'Guardian Quick Login'}
             </Text>
 
 

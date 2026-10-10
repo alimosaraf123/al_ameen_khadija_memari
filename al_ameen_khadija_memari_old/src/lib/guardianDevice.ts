@@ -1,5 +1,15 @@
 import { Platform } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
+
+let secureStoreModule: Promise<typeof import('expo-secure-store') | null> | null = null;
+async function getSecureStore() {
+  if (!secureStoreModule) secureStoreModule = import('expo-secure-store').catch(() => null);
+  return secureStoreModule;
+}
+const SecureStore = {
+  async setItemAsync(key: string, value: string) { const store = await getSecureStore(); if (store) await store.setItemAsync(key, value); },
+  async getItemAsync(key: string) { const store = await getSecureStore(); return store ? store.getItemAsync(key) : null; },
+  async deleteItemAsync(key: string) { const store = await getSecureStore(); if (store) await store.deleteItemAsync(key); },
+};
 
 const GUARDIAN_LOGIN_ID_KEY =
   'guardian_device_login_id';
@@ -9,6 +19,10 @@ const GUARDIAN_QUICK_LOGIN_KEY =
 
 const GUARDIAN_BIOMETRIC_TOKEN_KEY =
   'guardian_biometric_device_token';
+
+const BIOMETRIC_ACCOUNT_ROLE_KEY = 'biometric_device_account_role';
+const BIOMETRIC_ACCOUNT_LOGIN_KEY = 'biometric_device_account_login';
+const biometricTokenKey = (role: string) => `biometric_device_token_${String(role || '').trim()}`;
 
 
 // ========================================
@@ -167,6 +181,41 @@ export async function clearGuardianBiometricToken() {
   await SecureStore.deleteItemAsync(
     GUARDIAN_BIOMETRIC_TOKEN_KEY
   );
+}
+
+export async function saveRoleBiometricToken(role: string, token: string, loginId?: string) {
+  if (Platform.OS === 'web') return;
+  const cleanRole = String(role || '').trim();
+  const cleanToken = String(token || '').trim();
+  if (!cleanRole || !cleanToken) return;
+  await SecureStore.setItemAsync(biometricTokenKey(cleanRole), cleanToken);
+  await SecureStore.setItemAsync(BIOMETRIC_ACCOUNT_ROLE_KEY, cleanRole);
+  if (loginId) await SecureStore.setItemAsync(BIOMETRIC_ACCOUNT_LOGIN_KEY, String(loginId));
+}
+
+export async function getRoleBiometricToken(role: string) {
+  if (Platform.OS === 'web') return null;
+  const cleanRole = String(role || '').trim();
+  return cleanRole ? SecureStore.getItemAsync(biometricTokenKey(cleanRole)) : null;
+}
+
+export async function getBiometricAccount() {
+  if (Platform.OS === 'web') return null;
+  const role = await SecureStore.getItemAsync(BIOMETRIC_ACCOUNT_ROLE_KEY);
+  const loginId = await SecureStore.getItemAsync(BIOMETRIC_ACCOUNT_LOGIN_KEY);
+  return role && loginId ? { role, loginId } : null;
+}
+
+export async function clearRoleBiometricToken(role: string) {
+  if (Platform.OS === 'web') return;
+  const cleanRole = String(role || '').trim();
+  if (!cleanRole) return;
+  await SecureStore.deleteItemAsync(biometricTokenKey(cleanRole));
+  const account = await getBiometricAccount();
+  if (account?.role === cleanRole) {
+    await SecureStore.deleteItemAsync(BIOMETRIC_ACCOUNT_ROLE_KEY);
+    await SecureStore.deleteItemAsync(BIOMETRIC_ACCOUNT_LOGIN_KEY);
+  }
 }
 
 
