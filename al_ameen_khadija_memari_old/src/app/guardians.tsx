@@ -14,6 +14,7 @@ function confirmAction(title:string,message:string):Promise<boolean> {
 }
 function notify(message:string) {if(Platform.OS==='web')window.alert(message);else Alert.alert('Guardian Login',message);}
 function whatsappNumber(value:any){const digits=String(value||'').replace(/\D/g,'');return digits.length===10?'91'+digits:/^91\d{10}$/.test(digits)?digits:'';}
+const GUARDIAN_WHATSAPP_GROUP='https://chat.whatsapp.com/GNUjwROoO0ULdnmws13S9v';
 export default function Guardians(){
  const [students,setStudents]=useState<any[]>([]),[guardians,setGuardians]=useState<any[]>([]),[search,setSearch]=useState(''),[size,setSize]=useState('25'),[page,setPage]=useState(1),[busy,setBusy]=useState<number|null>(null),[error,setError]=useState(''),[passwords,setPasswords]=useState<Record<string,Credentials>>({});
  const load=useCallback(async()=>{const [s,g,c]=await Promise.all([api('/api/students'),api('/api/guardians'),api('/api/guardians/temporary-passwords')]);setStudents(s.students||[]);setGuardians(g.guardians||[]);setPasswords(Object.fromEntries((c.credentials||[]).map((x:Credentials)=>[x.login_id,x])));},[]);
@@ -54,8 +55,7 @@ export default function Guardians(){
   if(Platform.OS==='web'&&!opened)return notify('Please allow pop-ups and try again.');
   setBusy(student.id);try{
    if(!credentials)credentials=await issue(student);
-   const loginLink=Platform.OS==='web'?window.location.origin+'/':'';
-   const message=`Assalamualaiku, Respected Guardian.\nWelcome to Al-Ameen Mission Academy, Memari.\n\nStudent: ${student.student_name}\nRegistration No: ${student.registration_no}\nGuardian Login ID: ${credentials.login_id}\nTemporary Password: ${credentials.password}\n${loginLink?'Login: '+loginLink+'\n':''}\nPlease change this temporary password after your first login. Do not share your login details with anyone.\n\nThank you,\nAl-Ameen Mission Academy, Memari`;
+   const message=`Assalamualaiku, Respected Guardian.\nWelcome to Al-Ameen Mission Academy, Memari.\n\nStudent: ${student.student_name}\nRegistration No: ${student.registration_no}\nGuardian Login ID: ${credentials.login_id}\nTemporary Password: ${credentials.password}\nWhatsApp Group: ${GUARDIAN_WHATSAPP_GROUP}\n\nPlease change this temporary password after your first login. Do not share your login details with anyone.\n\nThank you,\nAl-Ameen Mission Academy, Memari`;
    const url='https://wa.me/'+phone+'?text='+encodeURIComponent(message);
    if(opened)opened.location.href=url;else await Linking.openURL(url);
   }catch(e:any){opened?.close();notify(e.message)}finally{setBusy(null)}
