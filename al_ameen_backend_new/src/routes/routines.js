@@ -94,6 +94,29 @@ router.get('/manager/backup',auth,allow('super_admin','admin'),asyncHandler(asyn
  res.json({version:1,created_at:new Date().toISOString(),group,routines:q.rows});
 }));
 
+// Restore is intentionally non-destructive: entries that already exist for the
+// same group/date/kind are skipped and are never overwritten.
+router.post('/manager/backup/restore',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ const payload=req.body||{},items=Array.isArray(payload.routines)?payload.routines:[];
+ if(payload.version!==undefined&&Number(payload.version)!==1)return res.status(400).json({success:false,message:'Unsupported routine backup version.'});
+ if(!items.length||items.length>2000)return res.status(400).json({success:false,message:'Backup must contain between 1 and 2000 routines.'});
+ const client=await pool.connect(),added=[];let skipped=0;
+ try{
+  await client.query('BEGIN');
+  for(const item of items){
+   const group=String(item.group_name||''),kind=String(item.routine_kind||'');
+   if(!GROUPS.includes(group)||!['daily','master'].includes(kind)||!validDate(item.routine_date)||!item.grid_data||typeof item.grid_data!=='object')throw new Error('Backup contains an invalid routine entry.');
+   const isMaster=kind==='master'&&item.is_master===true,isPublished=kind==='daily'&&item.is_published===true;
+   const result=await client.query(`INSERT INTO routine_manager_grids(group_name,routine_date,routine_kind,grid_data,is_master,is_published,created_by)
+    VALUES($1,$2,$3,$4::jsonb,$5,$6,$7) ON CONFLICT(group_name,routine_date,routine_kind) DO NOTHING RETURNING id,group_name,routine_date,routine_kind,is_published`,[group,item.routine_date,kind,JSON.stringify(item.grid_data),isMaster,isPublished,req.user.userId]);
+   if(result.rowCount)added.push({...result.rows[0],grid_data:item.grid_data});else skipped++;
+  }
+  await client.query('COMMIT');
+  for(const item of added){if(item.routine_kind==='daily'&&item.is_published)await publishRoutineJpg({group:item.group_name,date:String(item.routine_date).slice(0,10),data:item.grid_data,userId:req.user.userId});}
+  res.json({success:true,added:added.length,skipped,message:`${added.length} routine entr${added.length===1?'y':'ies'} added; ${skipped} existing entr${skipped===1?'y':'ies'} skipped.`});
+ }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+}));
+
 router.get('/manager/history',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
  const r=await pool.query(`SELECT g.id,g.group_name,g.routine_date,g.routine_kind,g.is_master,g.is_published,g.updated_at,
   g.grid_data->>'no_class' no_class,u.full_name updated_by_name FROM routine_manager_grids g
