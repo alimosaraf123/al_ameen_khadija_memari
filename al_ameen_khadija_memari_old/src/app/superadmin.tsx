@@ -124,7 +124,7 @@ export default function Dashboard() {
 
                 style={s.card}
 
-                onPress={() => title==='Students'?setStudentMenu(true):title==='Staff'?setTeacherMenu(true):title==='Hostel'?setHostelMenu(true):title==='Academy'?setAcademyMenu(true):setGenericMenu({title, path})}
+                onPress={() => router.push((title==='Students' ? '/students' : title==='Staff' ? '/teachers' : path) as any)}
 
               >
 
