@@ -104,6 +104,7 @@ export default function Login() {
   ] = useState(false);
 
   const [fingerprintRole, setFingerprintRole] = useState<string | null>(null);
+  const quickLoginLabel = fingerprintRole === 'teacher' ? 'Teacher Quick Login' : fingerprintRole === 'admin' ? 'Admin Quick Login' : 'Guardian Quick Login';
 
 
   // =====================================
@@ -727,7 +728,7 @@ export default function Login() {
             <Text
               style={styles.quickTitle}
             >
-              {fingerprintRole === 'teacher' ? 'Teacher Quick Login' : fingerprintRole === 'admin' ? 'Admin Quick Login' : 'Guardian Quick Login'}
+              {quickLoginLabel}
             </Text>
 
 
@@ -959,7 +960,7 @@ export default function Login() {
                     styles.mpinText
                   }
                 >
-                  Guardian Quick Login
+                {quickLoginLabel}
                 </Text>
 
               </TouchableOpacity>
