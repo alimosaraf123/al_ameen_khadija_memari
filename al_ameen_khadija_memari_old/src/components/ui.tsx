@@ -2,7 +2,17 @@ import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 
 export function Field(props: any) {
-  return <TextInput placeholderTextColor="#888" {...props} value={props.value??''} placeholder={props.placeholder||props.label} style={[styles.input, props.style]} />;
+  const secure = props.secureTextEntry === true;
+  return <TextInput
+    placeholderTextColor="#888"
+    {...props}
+    secureTextEntry={secure}
+    textContentType={secure ? 'password' : props.textContentType}
+    autoComplete={secure ? 'password' : props.autoComplete}
+    value={props.value??''}
+    placeholder={props.placeholder||props.label}
+    style={[styles.input, props.style]}
+  />;
 }
 export function Button({ title, onPress, danger=false }: any) {
   return <TouchableOpacity onPress={onPress} style={[styles.button, danger && styles.danger]}><Text style={styles.buttonText}>{title}</Text></TouchableOpacity>;

@@ -29,6 +29,10 @@ import { Field, Button, Muted } from '../components/ui';
 type TabName = 'home' | 'result' | 'gatepass' | 'visits' | 'details' | 'documents' | 'library' | 'notifications' | 'settings';
 
 const xmlText = (value: any) => String(value ?? '-').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const guardianPopup = (title: string, message: string) => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') window.alert(`${title}\n\n${message}`);
+  else Alert.alert(title, message);
+};
 const resultImageUri = (title: string, headers: string[], rows: string[][]) => {
   const width = Math.max(760, headers.length * 92);
   const rowHeight = 34;
@@ -251,17 +255,17 @@ export default function Guardian() {
 
   const changePassword = async () => {
     if (!currentPassword) {
-      Alert.alert('Required', 'Current Password লিখুন।');
+      guardianPopup('Required', 'Enter the current or temporary password.');
       return;
     }
 
     if (newPassword.length < 6) {
-      Alert.alert('Required', 'New Password কমপক্ষে 6 characters হতে হবে।');
+      guardianPopup('Invalid password', 'New password must be at least 6 characters.');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert('Password mismatch', 'New Password এবং Confirm Password একই নয়।');
+      guardianPopup('Password mismatch', 'New password and re-entered password do not match.');
       return;
     }
 
@@ -277,13 +281,13 @@ export default function Guardian() {
         }),
       });
 
-      Alert.alert('Success', 'Password changed successfully.');
+      guardianPopup('Success', 'Password changed successfully.');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setShowPasswordPanel(false);
     } catch (e: any) {
-      Alert.alert('Error', e.message);
+      guardianPopup('Password change failed', e.message || 'The current or temporary password is incorrect.');
     } finally {
       setChangingPassword(false);
     }
@@ -1114,8 +1118,11 @@ export default function Guardian() {
 
               {showPasswordPanel && (
                 <View style={styles.settingsBox}>
+                  <Text style={styles.fieldLabel}>Enter current / temporary password</Text>
                   <View style={styles.passwordRow}><Field placeholder="Current Password" value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry={!showCurrentPassword} style={styles.passwordField} /><TouchableOpacity onPress={() => setShowCurrentPassword(v => !v)} style={styles.eyeButton}><Text>{showCurrentPassword ? 'Hide' : 'Show'}</Text></TouchableOpacity></View>
+                  <Text style={styles.fieldLabel}>Enter new password</Text>
                   <View style={styles.passwordRow}><Field placeholder="New Password" value={newPassword} onChangeText={setNewPassword} secureTextEntry={!showNewPassword} style={styles.passwordField} /><TouchableOpacity onPress={() => setShowNewPassword(v => !v)} style={styles.eyeButton}><Text>{showNewPassword ? 'Hide' : 'Show'}</Text></TouchableOpacity></View>
+                  <Text style={styles.fieldLabel}>Re-enter new password</Text>
                   <View style={styles.passwordRow}><Field placeholder="Re-enter New Password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry={!showConfirmPassword} style={styles.passwordField} /><TouchableOpacity onPress={() => setShowConfirmPassword(v => !v)} style={styles.eyeButton}><Text>{showConfirmPassword ? 'Hide' : 'Show'}</Text></TouchableOpacity></View>
                   <Button
                     title={changingPassword ? 'Changing...' : 'Save New Password'}
@@ -1134,12 +1141,14 @@ export default function Guardian() {
 
               {showMpinPanel && (
                 <View style={styles.settingsBox}>
+                  <Text style={styles.fieldLabel}>Enter current password</Text>
                   <Field
                     placeholder="Current Password"
                     value={mpinPassword}
                     onChangeText={setMpinPassword}
                     secureTextEntry
                   />
+                  <Text style={styles.fieldLabel}>Enter new 6-digit mPIN</Text>
                   <Field
                     placeholder="6 Digit mPIN"
                     value={mpin}
@@ -1150,6 +1159,7 @@ export default function Guardian() {
                     secureTextEntry
                     maxLength={6}
                   />
+                  <Text style={styles.fieldLabel}>Re-enter 6-digit mPIN</Text>
                   <Field
                     placeholder="Confirm 6 Digit mPIN"
                     value={confirmMpin}
@@ -1226,6 +1236,7 @@ function Tab({
 function Card({ children, tone = 'default', compact = false }: {
   children: React.ReactNode;
   tone?: 'default' | 'notice' | 'fees';
+  compact?: boolean;
 }) {
   return (
     <View style={[styles.card, compact && styles.compactCard, tone === 'notice' && styles.noticeCard, tone === 'fees' && styles.feesCard]}>
@@ -1407,6 +1418,11 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: '#ffffff',
     fontWeight: '900',
+  },
+
+  link: {
+    color: '#1768c5',
+    fontWeight: '800',
   },
 
   logoutTab: {
@@ -1767,6 +1783,13 @@ const styles = StyleSheet.create({
   settingsHelp: {
     color: '#667085',
     marginBottom: 12,
+  },
+  fieldLabel: {
+    color: '#29445f',
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 5,
+    marginTop: 4,
   },
   passwordRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   passwordField: { flex: 1, marginBottom: 0 },

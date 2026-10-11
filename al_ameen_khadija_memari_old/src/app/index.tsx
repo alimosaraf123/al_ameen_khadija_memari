@@ -773,6 +773,7 @@ export default function Login() {
 
             {/* MPIN */}
 
+            <Text style={styles.fieldLabel}>Enter 6-digit mPIN</Text>
             <Field
               value={mpin}
 
@@ -873,21 +874,23 @@ export default function Login() {
 
           <>
 
+            <Text style={styles.fieldLabel}>User ID / Registration No.</Text>
             <Field
               value={userId}
               onChangeText={
                 setUserId
               }
-              placeholder="User ID"
+              placeholder="Enter User ID / Registration No."
               autoCapitalize="none"
             />
 
 
+            <Text style={styles.fieldLabel}>Password / Temporary Password</Text>
             <View style={styles.passwordFieldWrap}>
               <Field
                 value={password}
                 onChangeText={setPassword}
-                placeholder="Password"
+                placeholder="Enter password"
                 secureTextEntry={!showPassword}
                 returnKeyType="done"
                 onSubmitEditing={login}
@@ -1051,6 +1054,13 @@ const styles =
     passwordFieldWrap: {
       position: 'relative',
       marginBottom: 10,
+    },
+    fieldLabel: {
+      color: '#29445f',
+      fontSize: 13,
+      fontWeight: '800',
+      marginBottom: 5,
+      marginTop: 4,
     },
 
     passwordField: {
