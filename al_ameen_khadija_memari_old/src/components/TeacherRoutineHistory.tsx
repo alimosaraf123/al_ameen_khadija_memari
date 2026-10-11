@@ -1,5 +1,6 @@
-import React,{useEffect,useState} from 'react';
-import {ActivityIndicator,Image,Modal,Pressable,ScrollView,StyleSheet,Text,TouchableOpacity,View} from 'react-native';
+import React,{useEffect,useRef,useState} from 'react';
+import {ActivityIndicator,Animated,Image,Modal,Pressable,ScrollView,StyleSheet,Text,TouchableOpacity,View} from 'react-native';
+import {PinchGestureHandler,State} from 'react-native-gesture-handler';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import AcademyHeader from './AcademyHeader';
 import {API_BASE,api} from '../lib/api';
@@ -20,8 +21,13 @@ export function RoutineCard({item}:{item:any}){
  const url=/^https?:/.test(item.file_url)?item.file_url:`${API_BASE}${item.file_url}`;
  const [expanded,setExpanded]=useState(false);
  const [aspectRatio,setAspectRatio]=useState(2);
+ const [zoom,setZoom]=useState(1);
+ const pinchScale=useRef(new Animated.Value(1)).current;
+ const baseZoom=useRef(1);
  useEffect(()=>{Image.getSize(url,(width,height)=>{if(width>0&&height>0)setAspectRatio(width/height);},()=>{});},[url]);
- return <View style={s.routineItem}><Text style={s.routineTitle}>{item.title||'Published Routine'}</Text><Text style={s.routineMeta}>{routineDate(item)}</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Open routine image" onPress={()=>setExpanded(true)}><RoutineImage url={url}/></TouchableOpacity><TouchableOpacity accessibilityRole="button" style={s.openButton} onPress={()=>setExpanded(true)}><Text style={s.routineOpen}>Open JPG</Text></TouchableOpacity><Modal visible={expanded} transparent animationType="fade" onRequestClose={()=>setExpanded(false)}><Pressable style={s.imageBackdrop} onPress={()=>setExpanded(false)}><View style={s.imageModal} onStartShouldSetResponder={()=>true}><View style={s.imageModalHeader}><Text style={s.imageModalTitle}>{item.title||'Published Routine'}</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Close routine image" onPress={()=>setExpanded(false)} style={s.closeButton}><Text style={s.closeText}>X</Text></TouchableOpacity></View><Image source={{uri:url}} resizeMode="contain" style={[s.expandedImage,{aspectRatio}]}/></View></Pressable></Modal></View>;
+ const openPreview=()=>{baseZoom.current=1;setZoom(1);pinchScale.setValue(1);setExpanded(true)};
+ const onPinchStateChange=(event:any)=>{if(event.nativeEvent.oldState===State.ACTIVE){const next=Math.min(4,Math.max(1,baseZoom.current*Number(event.nativeEvent.scale||1)));baseZoom.current=next;setZoom(next);pinchScale.setValue(1)}};
+ return <View style={s.routineItem}><Text style={s.routineTitle}>{item.title||'Published Routine'}</Text><Text style={s.routineMeta}>{routineDate(item)}</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Open routine image" onPress={openPreview}><RoutineImage url={url}/></TouchableOpacity><TouchableOpacity accessibilityRole="button" style={s.openButton} onPress={openPreview}><Text style={s.routineOpen}>Open JPG</Text></TouchableOpacity><Modal visible={expanded} transparent animationType="fade" onRequestClose={()=>setExpanded(false)}><Pressable style={s.imageBackdrop} onPress={()=>setExpanded(false)}><View style={s.imageModal} onStartShouldSetResponder={()=>true}><View style={s.imageModalHeader}><Text style={s.imageModalTitle}>{item.title||'Published Routine'}</Text><Text style={s.zoomHint}>Pinch to zoom · {Math.round(zoom*100)}%</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Close routine image" onPress={()=>setExpanded(false)} style={s.closeButton}><Text style={s.closeText}>X</Text></TouchableOpacity></View><PinchGestureHandler onGestureEvent={Animated.event([{nativeEvent:{scale:pinchScale}}],{useNativeDriver:true})} onHandlerStateChange={onPinchStateChange}><Animated.View style={s.zoomArea}><Animated.Image source={{uri:url}} resizeMode="contain" style={[s.expandedImage,{aspectRatio,transform:[{scale:Animated.multiply(pinchScale,zoom)}]}]}/></Animated.View></PinchGestureHandler></View></Pressable></Modal></View>;
 }
 
 export default function TeacherRoutineHistory(){
@@ -58,7 +64,9 @@ const s=StyleSheet.create({
  imageModal:{width:'96%',height:'92%',maxWidth:1200,backgroundColor:'#fff',borderRadius:12,padding:10},
  imageModalHeader:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:6},
  imageModalTitle:{flex:1,fontSize:17,fontWeight:'900',color:'#173d2b'},
+ zoomHint:{fontSize:11,color:'#607080',marginHorizontal:8},
  closeButton:{backgroundColor:'#b52d3a',borderRadius:7,paddingHorizontal:13,paddingVertical:7},
  closeText:{color:'#fff',fontWeight:'900',fontSize:16},
- expandedImage:{width:'100%',height:'100%',flex:1,backgroundColor:'#f3f4f6',borderRadius:7}
+ zoomArea:{width:'100%',height:'100%',flex:1,overflow:'hidden',backgroundColor:'#f3f4f6',borderRadius:7},
+ expandedImage:{width:'100%',height:'100%',backgroundColor:'#f3f4f6',borderRadius:7}
 });
