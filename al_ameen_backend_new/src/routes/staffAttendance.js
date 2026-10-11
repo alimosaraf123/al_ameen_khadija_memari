@@ -55,6 +55,26 @@ router.get('/monthly', asyncHandler(async(req,res) => {
     GROUP BY t.id,t.staff_id,t.name ORDER BY t.name,t.id`, [month+'-01']);
   res.json({success:true,staff:result.rows});
 }));
+router.get('/summary', asyncHandler(async(req,res) => {
+  if (!validDate(req.query.date)) return res.status(400).json({message:'Enter a valid date (YYYY-MM-DD).'});
+  await schema();
+  const result = await pool.query(`SELECT CASE WHEN LOWER(TRIM(COALESCE(t.profile_details->>'residential_type','')))='guest'
+      AND LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) IN ('teacher','teachers') THEN 'Guest Teacher'
+      ELSE CASE WHEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) IN ('other','others') THEN 'Others'
+        ELSE COALESCE(NULLIF(TRIM(t.profile_details->>'staff_type'),''),'Other') END END AS staff,
+    COUNT(*)::int AS total,
+    COUNT(*) FILTER (WHERE COALESCE(a.status,'Present')='Present')::int AS present,
+    COUNT(*) FILTER (WHERE a.status='Absent')::int AS absent,
+    COUNT(*) FILTER (WHERE a.status='Leave')::int AS leave
+    FROM teachers t LEFT JOIN staff_attendance a ON a.teacher_id=t.id AND a.attendance_date=$1
+    WHERE (LOWER(TRIM(COALESCE(t.profile_details->>'residential_type',''))) <> 'guest'
+      OR LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) IN ('teacher','teachers'))
+      AND LOWER(TRIM(COALESCE(t.profile_details->>'salary',''))) <> 'guest'
+      AND LOWER(TRIM(COALESCE(t.profile_details->>'type_of_staff',''))) <> 'guest'
+      AND LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) <> 'guest'
+    GROUP BY 1 ORDER BY 1`, [req.query.date]);
+  res.json({success:true,summary:result.rows});
+}));
 router.get('/monthly-grid', asyncHandler(async(req,res) => {
   const month = req.query.month;
   if (typeof month !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || !validDate(month+'-01')) return res.status(400).json({message:'Enter a valid month (YYYY-MM).'});

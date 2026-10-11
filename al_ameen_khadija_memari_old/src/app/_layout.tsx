@@ -1,10 +1,9 @@
 import React, {useEffect,useRef,useState} from 'react';
-import {ActivityIndicator,AppState,Platform,View,Text} from 'react-native';
-import {Stack,usePathname} from 'expo-router';
+import {ActivityIndicator,AppState,BackHandler,Platform,View,Text} from 'react-native';
+import {Stack,router,usePathname} from 'expo-router';
 import {api} from '../lib/api';
 import {clearSession,getToken,subscribeSession} from '../lib/auth';
 import {canOpenRoute,PRIVATE_ROUTES} from '../lib/routeAccess';
-import {registerPushNotifications,subscribeToPushNavigation} from '../lib/pushNotifications';
 
 export default function Layout() {
  const [session,setSession]=useState<{checked:boolean;user:any}>({checked:false,user:null});
@@ -45,8 +44,14 @@ export default function Layout() {
  },[pathname]);
  useEffect(()=>{
   if(!session.user)return;
-  void registerPushNotifications().catch(()=>{});
-  return subscribeToPushNavigation();
+  let disposed=false;
+  let unsubscribe=()=>{};
+  void import('../lib/pushNotifications').then(({registerPushNotifications,subscribeToPushNavigation})=>{
+   if(disposed)return;
+   void registerPushNotifications().catch(()=>{});
+   unsubscribe=subscribeToPushNavigation();
+  }).catch(()=>{});
+  return()=>{disposed=true;unsubscribe();};
  },[session.user?.id]);
  useEffect(()=>{
   if(!['super_admin','admin','office'].includes(String(session.user?.role||'')))return;
@@ -60,6 +65,14 @@ export default function Layout() {
   const appState=AppState.addEventListener('change',state=>{if(state==='active')schedule();else clearTimeout(timer)});
   return()=>{clearTimeout(timer);events.forEach(event=>{if(Platform.OS==='web'&&typeof document!=='undefined')document.removeEventListener(event,activity)});appState.remove()};
  },[session.user?.role]);
+ useEffect(()=>{
+  if(Platform.OS==='web')return;
+  const sub=BackHandler.addEventListener('hardwareBackPress',()=>{
+   if(router.canGoBack()){router.back();return true;}
+   return true;
+  });
+  return()=>sub.remove();
+ },[]);
  if(!session.checked)return <View style={{flex:1,alignItems:'center',justifyContent:'center'}}><ActivityIndicator size="large" accessibilityLabel="Checking login"/></View>;
  return <Stack screenOptions={{headerShown:false}}>
   <Stack.Screen name="index"/>

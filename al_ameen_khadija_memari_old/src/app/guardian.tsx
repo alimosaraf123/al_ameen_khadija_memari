@@ -559,6 +559,7 @@ export default function Guardian() {
           <Tab title="Result" active={tab === 'result'} onPress={() => { setTab('result'); setShowMoreMenu(false); }} />
           <Tab title="Library" active={tab === 'library'} onPress={() => { setTab('library'); setShowMoreMenu(false); }} />
           <Tab title="Gate Pass" active={tab === 'gatepass'} onPress={() => { setTab('gatepass'); setShowMoreMenu(false); }} />
+          <Tab title="Documents" active={tab === 'documents'} onPress={() => { setTab('documents'); setShowMoreMenu(false); }} />
           <TouchableOpacity
             style={[styles.tab, showMoreMenu && styles.tabActive]}
             onPress={() => setShowMoreMenu(value => !value)}

@@ -12,7 +12,7 @@ const validDate=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''));
 const xml=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const short=(v,n=24)=>{const s=String(v||'-');return s.length>n?s.slice(0,n-1)+'…':s};
 async function renderRoutineJpg({group,date,data}){
- const academic=group!=='coaching',columns=academic?(data.periods||[]):(data.rooms||[]),rows=academic?(data.classes||[]):(data.times||[]);
+ const academic=group!=='coaching';let columns=academic?(data.periods||[]):(data.rooms||[]);const rows=academic?(data.classes||[]):(data.times||[]);if(!academic){const used=new Set(Object.entries(data.cells||{}).filter(([,cell])=>cell&&cell.teacher_id).map(([key])=>String(key).split('|').slice(1).join('|')));const filtered=columns.filter((room)=>used.has(String(room)));if(filtered.length)columns=filtered;}
  const firstWidth=155,cellWidth=Math.max(150,Math.min(230,Math.floor((1500-firstWidth)/Math.max(columns.length,1)))),rowHeight=88,headerHeight=100,width=firstWidth+cellWidth*Math.max(columns.length,1)+40,height=Math.max(430,190+headerHeight+rowHeight*Math.max(rows.length,1));
  const groupTitle={v_x:'Class V-X',xi_xii:'Class XI-XII',coaching:'Coaching'}[group]||group;
  let body=`<rect width="100%" height="100%" fill="#fff"/><text x="${width/2}" y="45" text-anchor="middle" font-size="29" font-weight="700" fill="#173f77">Al-Ameen Mission Academy Memari</text><text x="${width/2}" y="80" text-anchor="middle" font-size="22" font-weight="700">${xml(groupTitle)} Routine - ${xml(date)}</text>`;
@@ -33,7 +33,14 @@ async function publishRoutineJpg({group,date,data,userId}){
 
 router.get('/',auth,allow('super_admin','admin','teacher'),asyncHandler(async(req,res)=>{
  const teacher=req.user.role==='teacher';
- const r=await pool.query(`SELECT * FROM routines WHERE is_active=TRUE ${teacher?'AND file_url IS NOT NULL':''} ORDER BY published_at DESC`);
+ const r=await pool.query(`SELECT r.* FROM routines r
+  WHERE r.is_active=TRUE ${teacher?'AND r.file_url IS NOT NULL':''}
+  AND EXISTS (
+    SELECT 1 FROM routine_manager_grids g
+    WHERE g.routine_kind='daily' AND g.is_published=TRUE
+      AND g.routine_date=r.routine_date
+      AND r.title=CASE g.group_name WHEN 'v_x' THEN 'Class V-X Routine' WHEN 'xi_xii' THEN 'Class XI-XII Routine' WHEN 'coaching' THEN 'Coaching Routine' ELSE r.title END
+  ) ORDER BY r.published_at DESC`);
  res.json({success:true,routines:r.rows});
 }));
 router.post('/',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
@@ -127,10 +134,49 @@ router.post('/manager',auth,allow('super_admin','admin'),asyncHandler(async(req,
  res.json({success:true,routine:r.rows[0],published_image_url:publishedImageUrl,message:isMaster?'Weekday Master routine saved':'Final routine published as JPG'});
 }));
 
+// Update only the coaching time labels across every saved weekly master.
+// Existing room/teacher assignments are remapped by their time-slot index.
+router.post('/manager/coaching-times',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ const times=Array.isArray(req.body?.times)?req.body.times.map((x)=>String(x||'').trim()).filter(Boolean):[];
+ if(!times.length)return res.status(400).json({success:false,message:'At least one coaching time is required'});
+ const masters=(await pool.query(`SELECT id,grid_data FROM routine_manager_grids WHERE group_name='coaching' AND routine_kind='master'`)).rows;
+ for(const row of masters){
+  const data=row.grid_data||{},oldTimes=Array.isArray(data.times)?data.times.map((x)=>String(x)):[];
+  const cells={};
+  for(const [key,value] of Object.entries(data.cells||{})){
+   const parts=String(key).split('|'),index=oldTimes.indexOf(parts[0]);
+   cells[(index>=0?(times[index]||parts[0]):parts[0])+'|'+parts.slice(1).join('|')]=value;
+  }
+  await pool.query('UPDATE routine_manager_grids SET grid_data=$1::jsonb,updated_at=NOW() WHERE id=$2',[JSON.stringify({...data,times,cells}),row.id]);
+ }
+ res.json({success:true,updated:masters.length,message:`Coaching times updated in ${masters.length} weekly masters`});
+}));
+
+router.post('/manager/academic-periods',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ const group=String(req.body?.group_name||''),periods=Array.isArray(req.body?.periods)?req.body.periods.filter((x)=>Array.isArray(x)&&x.length>=2).map((x)=>[String(x[0]).trim(),String(x[1]).trim()]):[];
+ if(!['v_x','xi_xii'].includes(group)||!periods.length)return res.status(400).json({success:false,message:'Valid academic group and periods are required'});
+ const masters=(await pool.query('SELECT id,grid_data FROM routine_manager_grids WHERE group_name=$1 AND routine_kind=\'master\'',[group])).rows;
+ for(const row of masters){
+  const data=row.grid_data||{},oldPeriods=Array.isArray(data.periods)?data.periods:[],cells={};
+  for(const [key,value] of Object.entries(data.cells||{})){
+   const parts=String(key).split('|'),index=Number(parts[1]);
+   cells[parts[0]+'|'+(Number.isInteger(index)&&periods[index]?index:parts[1])]=value;
+  }
+  await pool.query('UPDATE routine_manager_grids SET grid_data=$1::jsonb,updated_at=NOW() WHERE id=$2',[JSON.stringify({...data,periods,cells}),row.id]);
+ }
+ res.json({success:true,updated:masters.length,message:`Academic periods updated in ${masters.length} weekly masters`});
+}));
+
 router.delete('/manager/:id',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ const existing=await pool.query('SELECT id,group_name,routine_date,routine_kind FROM routine_manager_grids WHERE id=$1',[req.params.id]);
+ if(!existing.rowCount)return res.status(404).json({success:false,message:'Routine not found'});
+ const item=existing.rows[0];
  const r=await pool.query('DELETE FROM routine_manager_grids WHERE id=$1 RETURNING id',[req.params.id]);
- if(!r.rowCount)return res.status(404).json({success:false,message:'Routine not found'});
- res.json({success:true,message:'Routine deleted'});
+ if(item.routine_kind==='daily'){
+  const groupTitle={v_x:'Class V-X',xi_xii:'Class XI-XII',coaching:'Coaching'}[item.group_name]||item.group_name;
+  await pool.query('UPDATE routines SET is_active=FALSE WHERE routine_date=$1 AND title=$2',[item.routine_date,`${groupTitle} Routine`]);
+ }
+ res.json({success:true,message:item.routine_kind==='daily'?'Published routine deleted':'Master routine deleted'});
 }));
 // Upload disks may be empty after deployment. Rebuild only published routine images.
 router.servePublishedImage=asyncHandler(async(req,res,next)=>{

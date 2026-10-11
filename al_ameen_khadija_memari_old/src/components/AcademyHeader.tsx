@@ -26,13 +26,22 @@ const isTeacher = (user: any) =>
 type HeaderProps = {
   extraActions?: React.ReactNode;
   fixed?: boolean;
+  compact?: boolean;
   hideDefaultActions?: boolean;
   profilePhoto?: string;
 };
 
+function HeaderLink({ path, style, onPress, children }: { path: string; style: any; onPress: () => void; children: React.ReactNode }) {
+  if (Platform.OS === 'web') {
+    return <a href={path} onClick={(event) => { event.preventDefault(); onPress(); }} style={{ ...StyleSheet.flatten(style), textDecorationLine: 'none', textDecoration: 'none' } as any}>{children}</a>;
+  }
+  return <TouchableOpacity style={style} onPress={onPress}>{children}</TouchableOpacity>;
+}
+
 export default function AcademyHeader({
   extraActions,
   fixed = false,
+  compact = false,
   hideDefaultActions = false,
   profilePhoto,
 }: HeaderProps = {}) {
@@ -62,13 +71,13 @@ export default function AcademyHeader({
   const showTeacherActions = isTeacher(user);
 
   return (
-    <View style={[styles.header, fixed && styles.fixedHeader]}>
-      <View style={styles.brandRow}>
+    <View style={[styles.header, compact && styles.compactHeader, fixed && styles.fixedHeader]}>
+      <View style={[styles.brandRow, compact && styles.compactBrandRow]}>
         <Image
           source={require('../../assets/images/al-ameen-logo.jpg')}
           resizeMode="contain"
           accessibilityLabel="Al-Ameen Mission Academy Memari logo"
-          style={styles.logo}
+          style={[styles.logo, compact && styles.compactLogo]}
         />
         <Text style={styles.name}>Al-Ameen Mission Academy Memari</Text>
         {headerPhoto ? (
@@ -85,12 +94,12 @@ export default function AcademyHeader({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={styles.actions}
+          style={[styles.actions, compact && styles.compactActions]}
           contentContainerStyle={styles.actionsContent}
         >
-          <TouchableOpacity style={styles.home} onPress={() => router.push(homeFor(user.role) as any)}>
+          <HeaderLink path={homeFor(user.role)} style={styles.home} onPress={() => router.push(homeFor(user.role) as any)}>
             <Text style={styles.actionText}>Home</Text>
-          </TouchableOpacity>
+          </HeaderLink>
 
           {extraActions}
 
@@ -119,9 +128,9 @@ export default function AcademyHeader({
 
           {!hideDefaultActions && !showTeacherActions ? (
             <>
-              <TouchableOpacity style={styles.settings} onPress={() => router.push('/settings')}>
+              <HeaderLink path="/settings" style={styles.settings} onPress={() => router.push('/settings')}>
                 <Text style={styles.actionText}>Settings</Text>
-              </TouchableOpacity>
+              </HeaderLink>
               <TouchableOpacity style={styles.logout} onPress={logout}>
                 <Text style={styles.actionText}>Logout</Text>
               </TouchableOpacity>
@@ -151,6 +160,13 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
+  compactHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 9,
+    gap: 5,
+    marginBottom: 8,
+  },
   fixedHeader: {
     ...Platform.select({
       web: { position: 'fixed' as any, top: 0, left: 0, right: 0, zIndex: 1000 },
@@ -158,10 +174,13 @@ const styles = StyleSheet.create({
     }),
   },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  compactBrandRow: { flex: 1, minWidth: 0 },
   teacherPhoto: { width: 48, height: 48, flexShrink: 0, borderRadius: 24, borderWidth: 2, borderColor: '#17643f', marginLeft: 'auto', marginRight: 20 },
   logo: { width: 58, height: 60 },
+  compactLogo: { width: 42, height: 44 },
   name: { width: 180, flexGrow: 1, flexShrink: 1, minWidth: 0, color: '#166534', fontSize: 19, fontWeight: '800' },
   actions: { width: '100%', minWidth: 0, marginLeft: 0 },
+  compactActions: { width: 'auto', flexGrow: 0, marginLeft: 'auto' },
   actionsContent: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   notice: { backgroundColor: '#783453', paddingHorizontal: 13, paddingVertical: 9, borderRadius: 7 },
   profile: { backgroundColor: '#17643f', paddingHorizontal: 13, paddingVertical: 9, borderRadius: 7 },

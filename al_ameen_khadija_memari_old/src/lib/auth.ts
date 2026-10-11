@@ -1,9 +1,30 @@
 import { Platform } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
 
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'user_data';
 const DEVICE_KEY = 'app_device_id';
+const memoryStore = new Map<string, string>();
+let secureStoreModule: Promise<typeof import('expo-secure-store') | null> | null = null;
+async function getSecureStore() {
+  if (!secureStoreModule) {
+    secureStoreModule = import('expo-secure-store').catch(() => null);
+  }
+  return secureStoreModule;
+}
+async function readNative(key: string) {
+  const store = await getSecureStore();
+  try { return store ? await store.getItemAsync(key) : memoryStore.get(key) || null; } catch { return memoryStore.get(key) || null; }
+}
+async function writeNative(key: string, value: string) {
+  memoryStore.set(key, value);
+  const store = await getSecureStore();
+  try { if (store) await store.setItemAsync(key, value); } catch { /* memory fallback keeps the current session usable */ }
+}
+async function deleteNative(key: string) {
+  memoryStore.delete(key);
+  const store = await getSecureStore();
+  try { if (store) await store.deleteItemAsync(key); } catch { /* ignore unavailable secure storage */ }
+}
 const sessionListeners = new Set<() => Promise<void>>();
 export function subscribeSession(listener: () => Promise<void>) {
   sessionListeners.add(listener);
@@ -18,11 +39,11 @@ export async function refreshSession() {
 
 
 export async function getDeviceId() {
-  let value: string | null = Platform.OS === 'web' ? localStorage.getItem(DEVICE_KEY) : await SecureStore.getItemAsync(DEVICE_KEY);
+  let value: string | null = Platform.OS === 'web' ? localStorage.getItem(DEVICE_KEY) : await readNative(DEVICE_KEY);
   if (!value) {
     value = `device-${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
     if (Platform.OS === 'web') localStorage.setItem(DEVICE_KEY, value);
-    else await SecureStore.setItemAsync(DEVICE_KEY, value);
+    else await writeNative(DEVICE_KEY, value);
   }
   return value;
 }
@@ -37,8 +58,8 @@ export async function saveSession(token: string, user: unknown) {
     return;
   }
 
-  await SecureStore.setItemAsync(TOKEN_KEY, token);
-  await SecureStore.setItemAsync(USER_KEY, userJson);
+  await writeNative(TOKEN_KEY, token);
+  await writeNative(USER_KEY, userJson);
   await notifySessionChanged();
 }
 
@@ -47,7 +68,7 @@ export async function getToken() {
     return localStorage.getItem(TOKEN_KEY);
   }
 
-  return SecureStore.getItemAsync(TOKEN_KEY);
+  return readNative(TOKEN_KEY);
 }
 
 export async function getUser<T = any>(): Promise<T | null> {
@@ -56,7 +77,7 @@ export async function getUser<T = any>(): Promise<T | null> {
   if (Platform.OS === 'web') {
     raw = localStorage.getItem(USER_KEY);
   } else {
-    raw = await SecureStore.getItemAsync(USER_KEY);
+    raw = await readNative(USER_KEY);
   }
 
   if (!raw) return null;
@@ -76,7 +97,7 @@ export async function clearSession() {
     return;
   }
 
-  await SecureStore.deleteItemAsync(TOKEN_KEY);
-  await SecureStore.deleteItemAsync(USER_KEY);
+  await deleteNative(TOKEN_KEY);
+  await deleteNative(USER_KEY);
   await notifySessionChanged();
 }

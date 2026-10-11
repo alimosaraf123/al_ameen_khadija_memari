@@ -151,6 +151,27 @@ router.get('/student-summary', auth, allow('super_admin','admin'), asyncHandler(
   res.json({ success: true, summary: result.rows.map(row => ({ ...row, present: Number(row.total) - Number(row.absent) })) });
 }));
 
+router.get('/staff-summary', auth, allow('super_admin','admin'), asyncHandler(async (req, res) => {
+  const date = String(req.query.date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ message: 'Enter a valid date (YYYY-MM-DD).' });
+  const result = await pool.query(`SELECT CASE WHEN LOWER(TRIM(COALESCE(t.profile_details->>'residential_type','')))='guest'
+      AND LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) IN ('teacher','teachers') THEN 'Guest Teacher'
+      ELSE CASE WHEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) IN ('other','others') THEN 'Others'
+        ELSE COALESCE(NULLIF(TRIM(t.profile_details->>'staff_type'),''),'Other') END END AS staff,
+    COUNT(*)::int AS total,
+    COUNT(*) FILTER (WHERE COALESCE(a.status,'Present')='Present')::int AS present,
+    COUNT(*) FILTER (WHERE a.status='Absent')::int AS absent,
+    COUNT(*) FILTER (WHERE a.status='Leave')::int AS leave
+    FROM teachers t LEFT JOIN staff_attendance a ON a.teacher_id=t.id AND a.attendance_date=$1
+    WHERE (LOWER(TRIM(COALESCE(t.profile_details->>'residential_type',''))) <> 'guest'
+      OR LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) IN ('teacher','teachers'))
+      AND LOWER(TRIM(COALESCE(t.profile_details->>'salary',''))) <> 'guest'
+      AND LOWER(TRIM(COALESCE(t.profile_details->>'type_of_staff',''))) <> 'guest'
+      AND LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) <> 'guest'
+    GROUP BY 1 ORDER BY 1`, [date]);
+  res.json({ success: true, summary: result.rows });
+}));
+
 router.post('/batch', auth, allow('super_admin','admin','teacher'), asyncHandler(async (req, res) => {
   const { room_number: roomNumber, attendance_date: attendanceDate, entries } = req.body || {};
   if (!roomNumber || !isValidDate(attendanceDate) || !Array.isArray(entries)) {

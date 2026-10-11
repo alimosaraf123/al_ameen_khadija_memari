@@ -99,13 +99,13 @@ const configuredApiBase = process.env.EXPO_PUBLIC_API_BASE_URL
 
 const MOBILE_API =
   configuredApiBase ||
-  'http://192.168.0.189:3000';
+  'https://aammeamri.onrender.com';
 
 const WEB_API =
   (typeof window !== 'undefined' &&
   ['localhost', '127.0.0.1'].includes(window.location.hostname)
     ? `${window.location.protocol}//${window.location.hostname}:3000`
-    : configuredApiBase || 'https://al-ameen-khadija-memari.onrender.com');
+    : configuredApiBase || 'https://aammeamri.onrender.com');
 
 export const API_BASE =
   Platform.OS === 'web'

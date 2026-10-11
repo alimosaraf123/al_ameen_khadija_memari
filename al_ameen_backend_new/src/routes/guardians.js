@@ -1438,13 +1438,14 @@ router.get(
               student_id=$1
 
               AND
-              guardian_visible=TRUE
+              (guardian_visible=TRUE OR EXISTS (SELECT 1 FROM student_guardians sg2 JOIN guardian_profiles gp2 ON gp2.id=sg2.guardian_id WHERE sg2.student_id=$1 AND sg2.is_primary=TRUE AND gp2.user_id=$2))
 
             ORDER BY
               uploaded_at DESC
             `,
             [
-              studentId
+              studentId,
+              req.user.userId
             ]
           ),
 
@@ -1641,7 +1642,7 @@ router.get(
             student_id=$2
 
             AND
-            guardian_visible=TRUE
+            (guardian_visible=TRUE OR EXISTS (SELECT 1 FROM student_guardians sg2 JOIN guardian_profiles gp2 ON gp2.id=sg2.guardian_id WHERE sg2.student_id=$2 AND sg2.is_primary=TRUE AND gp2.user_id=$3))
 
           LIMIT 1
           `,
@@ -1651,6 +1652,7 @@ router.get(
               .documentId,
 
             studentId,
+            req.user.userId,
 
           ]
         );
@@ -1741,10 +1743,10 @@ router.get(
             student_id=$2
 
             AND
-            guardian_visible=TRUE
+            (guardian_visible=TRUE OR EXISTS (SELECT 1 FROM student_guardians sg2 JOIN guardian_profiles gp2 ON gp2.id=sg2.guardian_id WHERE sg2.student_id=$2 AND sg2.is_primary=TRUE AND gp2.user_id=$3))
 
             AND
-            guardian_download_allowed=TRUE
+            (guardian_download_allowed=TRUE OR EXISTS (SELECT 1 FROM student_guardians sg2 JOIN guardian_profiles gp2 ON gp2.id=sg2.guardian_id WHERE sg2.student_id=$2 AND sg2.is_primary=TRUE AND gp2.user_id=$3))
 
           LIMIT 1
           `,
@@ -1754,6 +1756,7 @@ router.get(
               .documentId,
 
             studentId,
+            req.user.userId,
 
           ]
         );

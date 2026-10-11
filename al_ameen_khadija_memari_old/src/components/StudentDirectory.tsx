@@ -13,13 +13,14 @@ type Option = { value: string; label: string };
 export function Select({ label, value, options, onChange, searchable=false }: { label: string; value: string; options: Option[]; onChange: (value: string) => void; searchable?: boolean }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [anchor, setAnchor] = useState({ x: 16, y: 60 });
   const visibleOptions = searchable && query ? options.filter(option => option.label.toLowerCase().includes(query.toLowerCase())) : options;
   return <>
-    <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${label}: ${options.find(o => o.value === value)?.label || value}`} onPress={() => { setQuery(''); setOpen(true); }} style={s.select}>
-      <Text style={s.selectText}>{options.find(o => o.value === value)?.label || label}  ▼</Text>
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${label}: ${options.find(o => o.value === value)?.label || value}`} onPress={(event:any) => { const n=event?.nativeEvent||{}, py=Number(n.pageY)||60, px=Number(n.pageX)||16, h=Platform.OS==='web'&&typeof window!=='undefined'?window.innerHeight:800, w=Platform.OS==='web'&&typeof window!=='undefined'?window.innerWidth:1200, panelH=Math.min(460,h*0.75), top=py>h-panelH-20?Math.max(8,py-panelH):py+8; setAnchor({x:Math.max(8,Math.min(px,w-356)),y:top}); setQuery(''); setOpen(true); }} style={s.select}>
+      <Text style={[s.selectText,!value&&s.selectPlaceholder]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{options.find(o => o.value === value)?.label || label}  ▼</Text>
     </TouchableOpacity>
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-      <View style={s.overlay}><Pressable accessibilityRole="button" accessibilityLabel="Close dropdown" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} onPress={() => setOpen(false)} /><View style={s.selectPanel}>
+      <View style={[s.overlay,Platform.OS==='web'&&s.webSelectOverlay]}><Pressable accessibilityRole="button" accessibilityLabel="Close dropdown" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} onPress={() => setOpen(false)} /><View style={[s.selectPanel,Platform.OS==='web'&&{position:'absolute',left:anchor.x,top:anchor.y}] }>
         <Text style={s.panelTitle}>{label}</Text>
         {searchable && <TextInput autoFocus value={query} onChangeText={setQuery} placeholder={label ? `Search ${label}...` : "Type to search..."} style={s.search} />}
         <ScrollView keyboardShouldPersistTaps="handled">{visibleOptions.map(option => <TouchableOpacity key={option.value} accessibilityRole="button" accessibilityState={{ selected: value === option.value }} style={[s.option, value === option.value && s.selected]} onPress={() => { onChange(option.value); setOpen(false); }}>
@@ -334,7 +335,7 @@ function RecordDetails({ record }: { record: any }) {
 const s = StyleSheet.create({
   directory: { backgroundColor: '#fff', padding: 12, borderWidth: 1, borderColor: '#ccd5df', borderRadius: 6 },
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, backgroundColor: '#add8e6', padding: 8, borderRadius: 4 },
-  select: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 4, paddingHorizontal: 12, paddingVertical: 10, minHeight: 42, justifyContent: 'center' },
+  selectPlaceholder: { color: 'rgba(0,0,0,0.5)' }, select: { alignSelf: 'stretch', backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 4, paddingHorizontal: 12, paddingVertical: 10, minHeight: 42, justifyContent: 'center' },
   selectText: { color: '#000000', fontSize: 17, fontFamily: 'Constantia' }, toolbar: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingVertical: 12 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 6 }, search: { borderWidth: 1, borderColor: '#aeb5bd', borderRadius: 3, width: 190, padding: 9, fontSize: 17, color: '#000000', fontFamily: 'Constantia' },
   row: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#c3c7cc', minHeight: 48, alignItems: 'center' }, tableHead: { backgroundColor: '#cfe2ff', minHeight: 38 },
@@ -342,7 +343,7 @@ const s = StyleSheet.create({
   photo: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: '#94a3b8' }, avatar: { backgroundColor: '#e0e7ff', alignItems: 'center', justifyContent: 'center' },
   action: { paddingHorizontal: 7, minHeight: 36, justifyContent: 'center', borderRadius: 4 }, edit: { backgroundColor: '#ffc107' }, view: { backgroundColor: '#22d3ee' }, documents: { backgroundColor: '#0ea5e9', minWidth: 36, alignItems: 'center' }, documentIcon: { color: '#fff', fontSize: 20, fontWeight: '900' }, remove: { backgroundColor: '#e11d48' },
   empty: { padding: 24, textAlign: 'center', color: '#64748b' }, disabled: { opacity: 0.4 }, error: { padding: 16, color: '#b91c1c' },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center', padding: 16 }, selectPanel: { backgroundColor: '#fff', padding: 16, borderRadius: 12, width: '100%', maxWidth: 340, maxHeight: '75%' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center', padding: 16 }, webSelectOverlay: { backgroundColor: 'transparent', alignItems: 'flex-start', justifyContent: 'flex-start', padding: 0 }, selectPanel: { backgroundColor: '#fff', padding: 16, borderRadius: 12, width: '100%', maxWidth: 340, maxHeight: '75%' },
   option: { padding: 14, borderBottomWidth: 1, borderBottomColor: '#edf2f7' }, selected: { backgroundColor: '#dbeafe' }, panelTitle: { fontWeight: '800', fontSize: 17, marginVertical: 12 },
   detailPanel: { backgroundColor: '#fff', borderRadius: 12, width: '100%', maxWidth: 720, maxHeight: '90%', overflow: 'hidden' },
   documentOverlay: { backgroundColor: '#fff', padding: 8 },
