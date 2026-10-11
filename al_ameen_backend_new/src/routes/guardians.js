@@ -1430,6 +1430,7 @@ router.get(
               document_title,
               guardian_visible,
               guardian_download_allowed,
+              EXISTS (SELECT 1 FROM student_guardians sg2 JOIN guardian_profiles gp2 ON gp2.id=sg2.guardian_id WHERE sg2.student_id=$1 AND sg2.is_primary=TRUE AND gp2.user_id=$2) AS is_primary_guardian,
               uploaded_at
 
             FROM student_documents
@@ -1535,13 +1536,14 @@ router.get(
           (document) => ({
 
             ...document,
+            guardian_download_allowed: document.guardian_download_allowed || document.is_primary_guardian,
 
             view_endpoint:
               `/api/guardians/student/${studentId}/document/${document.id}/view`,
 
             download_endpoint:
               document
-                .guardian_download_allowed
+                (document.guardian_download_allowed || document.is_primary_guardian)
 
                 ? `/api/guardians/student/${studentId}/document/${document.id}/download`
 
