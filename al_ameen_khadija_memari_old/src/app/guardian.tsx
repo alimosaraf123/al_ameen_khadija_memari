@@ -29,6 +29,9 @@ import { Field, Button, Muted } from '../components/ui';
 type TabName = 'home' | 'result' | 'gatepass' | 'visits' | 'details' | 'documents' | 'library' | 'notifications' | 'settings';
 
 const xmlText = (value: any) => String(value ?? '-').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const DOCUMENT_ORDER = ['photo','father_photo','mother_photo','visitor1_photo','visitor2_photo','birth_certificate','aadhaar','bank_passbook','ix_registration','mp_admit','mp_marksheet','transfer_certificate','admission_slip','xi_registration','hs_admit_3rd','hs_admit_4th','hs_marksheet','hs_certificate','signature','obc_certificate','ph_certificate','xi_admission_slip','xi_marksheet','other','other_2','other_3'];
+const DOCUMENT_LABELS: Record<string,string> = {photo:'Student Photo',father_photo:'Father Photo',mother_photo:'Mother Photo',visitor1_photo:'Visitor 1 Photo',visitor2_photo:'Visitor 2 Photo',birth_certificate:'Birth Certificate',aadhaar:'Aadhaar Card',bank_passbook:'Bank Book',ix_registration:'MP Registration',mp_admit:'MP Admit',mp_marksheet:'MP Marksheet',transfer_certificate:'T.C.',admission_slip:'Admission Slip',xi_registration:'HS Registration',hs_admit_3rd:'3rd Semester Admit',hs_admit_4th:'4th Semester Admit',hs_marksheet:'HS Result',hs_certificate:'HS Certificate',signature:'Signature',obc_certificate:'OBC Certificate',ph_certificate:'P.H. Certificate',xi_admission_slip:'HS Admission Slip',xi_marksheet:'HS Marksheet',other:'Other Document',other_2:'Other Document 2',other_3:'Other Document 3'};
+const documentLabel = (doc: any) => DOCUMENT_LABELS[String(doc.document_type || '').toLowerCase()] || doc.document_title || doc.document_type || 'Document';
 const guardianPopup = (title: string, message: string) => {
   if (Platform.OS === 'web' && typeof window !== 'undefined') window.alert(`${title}\n\n${message}`);
   else Alert.alert(title, message);
@@ -413,7 +416,14 @@ export default function Guardian() {
 
   const openGuardianDocument = async (doc: any, download = false, print = false) => {
     if (Platform.OS !== 'web') {
-      router.push({ pathname: '/guardian-student', params: { id: String(student.id) } } as any);
+      router.push({
+        pathname: '/guardian-student',
+        params: {
+          id: String(student.id),
+          documentId: String(doc.id),
+          documentAction: download ? 'download' : 'view',
+        },
+      } as any);
       return;
     }
     let opened: any = null;
@@ -510,7 +520,11 @@ export default function Guardian() {
   ].sort((a: any, b: any) => String(b.sortDate).localeCompare(String(a.sortDate))).slice(0, 10);
   const notices = childData?.notices || [];
   const marks = terminalResults.length ? terminalResults : (childData?.marks || []);
-  const documents = childData?.documents || [];
+  const documents = [...(childData?.documents || [])].sort((a: any, b: any) => {
+    const ai = DOCUMENT_ORDER.indexOf(String(a.document_type || '').toLowerCase());
+    const bi = DOCUMENT_ORDER.indexOf(String(b.document_type || '').toLowerCase());
+    return (ai < 0 ? DOCUMENT_ORDER.length : ai) - (bi < 0 ? DOCUMENT_ORDER.length : bi);
+  });
   const gatePasses = childData?.gate_passes || [];
   const photoUrl = getPhotoUrl();
 
@@ -1065,7 +1079,7 @@ export default function Guardian() {
             ) : (
               <View style={styles.documentGrid}>
                 {documents.map((doc: any, index: number) => {
-                  const title = doc.document_title || doc.document_type || 'Document';
+                  const title = documentLabel(doc);
                   const preview = documentPreviews[String(doc.id)] || (/^https?:\/\//i.test(String(doc.file_url || '')) ? String(doc.file_url) : '');
                   return <View key={doc.id || index} style={styles.documentCard}>
                     <Text style={styles.documentCardTitle}>{title.replace(/_/g, ' ')}</Text>

@@ -1428,6 +1428,7 @@ router.get(
               student_id,
               document_type,
               document_title,
+              file_url,
               guardian_visible,
               guardian_download_allowed,
               EXISTS (SELECT 1 FROM student_guardians sg2 JOIN guardian_profiles gp2 ON gp2.id=sg2.guardian_id WHERE sg2.student_id=$1 AND sg2.is_primary=TRUE AND gp2.user_id=$2) AS is_primary_guardian,

@@ -9,6 +9,7 @@ import {
   Modal,
   Image,
   Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
@@ -32,7 +33,9 @@ function extFromTitleOrType(doc: any) {
 }
 
 function guessMime(doc: any) {
-  const name = String(doc?.document_title || '').toLowerCase();
+  const name = String(
+    doc?.document_title || doc?.file_url || ''
+  ).toLowerCase();
 
   if (name.endsWith('.pdf')) return 'application/pdf';
   if (name.endsWith('.png')) return 'image/png';
@@ -46,9 +49,21 @@ function guessMime(doc: any) {
 
   if (
     type.includes('photo') ||
-    type.includes('image')
+    type.includes('image') ||
+    String(doc?.file_url || '').includes('/image/upload/')
   ) {
     return 'image/jpeg';
+  }
+
+  if (
+    String(doc?.file_url || '').includes('/raw/upload/') ||
+    type.includes('certificate') ||
+    type.includes('admit') ||
+    type.includes('registration') ||
+    type.includes('marksheet') ||
+    type.includes('admission')
+  ) {
+    return 'application/pdf';
   }
 
   return 'application/octet-stream';
@@ -65,7 +80,7 @@ async function responseMessage(response: Response) {
 }
 
 export default function Child() {
-  const { id } = useLocalSearchParams();
+  const { id, documentId, documentAction } = useLocalSearchParams();
 
   const [d, setD] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -279,7 +294,9 @@ export default function Child() {
       }
 
       const mime =
-        guessMime(doc);
+        String(result.headers?.['Content-Type'] || result.headers?.['content-type'] || guessMime(doc))
+          .split(';')[0]
+          .trim();
 
       if (mime.startsWith('image/')) {
         setPreviewTitle(
@@ -311,6 +328,8 @@ export default function Child() {
               type: mime,
             }
           );
+      } else {
+        await Linking.openURL(result.uri);
       }
     } catch (e: any) {
       Alert.alert(
@@ -320,6 +339,25 @@ export default function Child() {
       );
     }
   };
+
+  useEffect(() => {
+    if (!documentId || !d?.documents?.length) return;
+
+    const selected = d.documents.find(
+      (doc: any) => String(doc.id) === String(documentId)
+    );
+
+    if (!selected) {
+      Alert.alert('Document unavailable', 'This document could not be found.');
+      return;
+    }
+
+    if (documentAction === 'download') {
+      downloadDocument(selected);
+    } else {
+      openDocument(selected);
+    }
+  }, [d, documentId, documentAction]);
 
   const downloadDocument = async (
     doc: any
