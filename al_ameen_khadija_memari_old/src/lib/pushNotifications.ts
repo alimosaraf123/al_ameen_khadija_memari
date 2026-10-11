@@ -22,8 +22,13 @@ export async function registerPushNotifications() {
 export function subscribeToPushNavigation() {
   const response = Notifications.addNotificationResponseReceivedListener(response => {
     const data = response.notification.request.content.data as any;
-    if (data?.type === 'result') router.push('/guardian?tab=result' as any);
-    else if (data?.type === 'notice') router.push('/guardian?tab=notifications' as any);
+    if (data?.role === 'teacher') {
+      router.push('/notices' as any);
+    } else if (data?.type === 'result') {
+      router.push('/guardian?tab=result' as any);
+    } else if (data?.type === 'notice') {
+      router.push('/guardian?tab=notifications' as any);
+    }
   });
   return () => response.remove();
 }
