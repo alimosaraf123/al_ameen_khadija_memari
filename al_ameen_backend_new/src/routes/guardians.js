@@ -1542,8 +1542,7 @@ router.get(
               `/api/guardians/student/${studentId}/document/${document.id}/view`,
 
             download_endpoint:
-              document
-                (document.guardian_download_allowed || document.is_primary_guardian)
+              (document.guardian_download_allowed || document.is_primary_guardian)
 
                 ? `/api/guardians/student/${studentId}/document/${document.id}/download`
 
