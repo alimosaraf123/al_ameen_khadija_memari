@@ -134,34 +134,6 @@ export default function Login() {
 
 
           if (
-            enabled &&
-            loginId
-          ) {
-
-            setGuardianLoginId(
-              loginId
-            );
-
-            // Show guardian quick login first when this device is already configured.
-            // Password login remains available from the quick-login screen.
-            setUserId(loginId);
-            setUsePasswordLogin(false);
-
-          }
-
-
-          if (
-            biometric &&
-            Platform.OS !== 'web'
-          ) {
-
-            setFingerprintAvailable(
-              true
-            );
-
-            setFingerprintRole('guardian');
-
-          } else if (
             savedRoleToken &&
             ['admin','teacher'].includes(String(savedBiometricAccount?.role)) &&
             Platform.OS !== 'web'
@@ -169,8 +141,19 @@ export default function Login() {
             setGuardianLoginId(savedBiometricAccount?.loginId || null);
             setFingerprintRole(String(savedBiometricAccount?.role));
             setFingerprintAvailable(true);
+            setUserId(savedBiometricAccount?.loginId || '');
             setUsePasswordLogin(false);
-
+          } else if (enabled && loginId) {
+            setGuardianLoginId(loginId);
+            setFingerprintRole('guardian');
+            setUserId(loginId);
+            setUsePasswordLogin(false);
+          } else if (
+            biometric &&
+            Platform.OS !== 'web'
+          ) {
+            setFingerprintAvailable(true);
+            setFingerprintRole('guardian');
           }
 
         } catch (e) {
