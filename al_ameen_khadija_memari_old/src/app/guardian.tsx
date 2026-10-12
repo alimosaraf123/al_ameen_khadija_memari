@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
   Image,
   Linking,
   Modal,
@@ -15,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as FileSystem from 'expo-file-system/legacy';
 
 import { api, API_BASE } from '../lib/api';
 import { clearSession, getToken } from '../lib/auth';
@@ -25,6 +27,7 @@ import {
   getGuardianBiometricToken,
 } from '../lib/guardianDevice';
 import { Field, Button, Muted } from '../components/ui';
+import { PinchGestureHandler, State } from 'react-native-gesture-handler';
 
 type TabName = 'home' | 'result' | 'gatepass' | 'visits' | 'details' | 'documents' | 'library' | 'notifications' | 'settings';
 
@@ -85,7 +88,13 @@ export default function Guardian() {
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricBusy, setBiometricBusy] = useState(false);
   const [documentPreviews, setDocumentPreviews] = useState<Record<string,string>>({});
+  const [selectedDocument, setSelectedDocument] = useState<any>(null);
+  const [selectedDocumentUri, setSelectedDocumentUri] = useState('');
+  const [documentZoom, setDocumentZoom] = useState(1);
+  const documentPinchScale = useRef(new Animated.Value(1)).current;
+  const documentBaseZoom = useRef(1);
   const [visitorEntries, setVisitorEntries] = useState<any[]>([]);
+  const [visitHistory, setVisitHistory] = useState<any[]>([]);
   const [libraryLoans, setLibraryLoans] = useState<any[]>([]);
   useEffect(() => { const timer = setInterval(() => setNoticeBlink(value => !value), 700); return () => clearInterval(timer); }, []);
   useEffect(() => {
@@ -202,11 +211,12 @@ export default function Guardian() {
       // Do not fetch class-wide terminal result payloads into the guardian app.
       setTerminalResults([]);
 
-      const [profileResult, childResult, depositResult, visitorEntriesResult, libraryResult, terminalResult] = await Promise.allSettled([
+      const [profileResult, childResult, depositResult, visitorEntriesResult, visitHistoryResult, libraryResult, terminalResult] = await Promise.allSettled([
         api(`/api/guardians/student/${studentId}/profile`),
         api(`/api/guardians/student/${studentId}`),
         api(`/api/guardians/student/${studentId}/deposit-fund`),
         api(`/api/guardians/student/${studentId}/visitor-entries`),
+        api(`/api/guardians/student/${studentId}/visit-history`),
         api(`/api/guardians/student/${studentId}/library-loans`),
         api('/api/terminal-exams/published'),
       ]);
@@ -215,10 +225,11 @@ export default function Guardian() {
       setChildData(childResult.status === 'fulfilled' ? childResult.value : null);
       setDepositData(depositResult.status === 'fulfilled' ? depositResult.value : null);
       setVisitorEntries(visitorEntriesResult.status === 'fulfilled' ? (visitorEntriesResult.value.entries || []) : []);
+      setVisitHistory(visitHistoryResult.status === 'fulfilled' ? (visitHistoryResult.value.visits || []) : []);
       setLibraryLoans(libraryResult.status === 'fulfilled' ? (libraryResult.value.loans || []) : []);
       setPublishedTerminalResults(terminalResult.status === 'fulfilled' ? (terminalResult.value.exams || []) : []);
 
-      const failed = [profileResult, childResult, depositResult, visitorEntriesResult, libraryResult, terminalResult].find(
+      const failed = [profileResult, childResult, depositResult, visitorEntriesResult, visitHistoryResult, libraryResult, terminalResult].find(
         (result) => result.status === 'rejected'
       );
       if (failed?.status === 'rejected') {
@@ -416,14 +427,29 @@ export default function Guardian() {
 
   const openGuardianDocument = async (doc: any, download = false, print = false) => {
     if (Platform.OS !== 'web') {
-      router.push({
-        pathname: '/guardian-student',
-        params: {
-          id: String(student.id),
-          documentId: String(doc.id),
-          documentAction: download ? 'download' : 'view',
-        },
-      } as any);
+      if (download) {
+        return Alert.alert('Download', 'Download is available from the web panel.');
+      }
+      try {
+        let uri = documentPreviews[String(doc.id)] || '';
+        if (!uri) {
+          const token = await getToken();
+          const endpoint = doc.view_endpoint;
+          if (!endpoint) throw new Error('Document preview is unavailable.');
+          const target = `${(FileSystem as any).cacheDirectory || ''}guardian-${doc.id}-${Date.now()}`;
+          const result = await FileSystem.downloadAsync(API_BASE + endpoint, target, { headers: { Authorization: 'Bearer ' + token } });
+          if (result.status < 200 || result.status >= 300) throw new Error('Document could not be opened.');
+          uri = result.uri;
+          setDocumentPreviews(current => ({ ...current, [String(doc.id)]: uri }));
+        }
+        setSelectedDocument(doc);
+        setSelectedDocumentUri(uri);
+        documentBaseZoom.current = 1;
+        setDocumentZoom(1);
+        documentPinchScale.setValue(1);
+      } catch (error: any) {
+        Alert.alert('Document', error.message || 'Document could not be opened.');
+      }
       return;
     }
     let opened: any = null;
@@ -525,7 +551,8 @@ export default function Guardian() {
     const bi = DOCUMENT_ORDER.indexOf(String(b.document_type || '').toLowerCase());
     return (ai < 0 ? DOCUMENT_ORDER.length : ai) - (bi < 0 ? DOCUMENT_ORDER.length : bi);
   });
-  const gatePasses = childData?.gate_passes || [];
+  const gatePasses = (childData?.gate_passes || []).filter((pass: any) => String(pass.status || '').toLowerCase() !== 'cancelled');
+  const activeVisitNotices = notices.filter((notice: any) => String(notice.notice_type || '').toLowerCase() === 'visit' && !/cancelled|canceled/i.test(String(notice.notice_text || notice.message || '')));
   const photoUrl = getPhotoUrl();
 
 
@@ -573,7 +600,6 @@ export default function Guardian() {
           <Tab title="Result" active={tab === 'result'} onPress={() => { setTab('result'); setShowMoreMenu(false); }} />
           <Tab title="Library" active={tab === 'library'} onPress={() => { setTab('library'); setShowMoreMenu(false); }} />
           <Tab title="Gate Pass" active={tab === 'gatepass'} onPress={() => { setTab('gatepass'); setShowMoreMenu(false); }} />
-          <Tab title="Documents" active={tab === 'documents'} onPress={() => { setTab('documents'); setShowMoreMenu(false); }} />
           <TouchableOpacity
             style={[styles.tab, showMoreMenu && styles.tabActive]}
             onPress={() => setShowMoreMenu(value => !value)}
@@ -917,20 +943,34 @@ export default function Guardian() {
         {tab === 'gatepass' && (
           <>
             <Text style={styles.heading}>Gate Pass Records</Text>
-            {gatePasses.length===0?<Card><Muted>No Gate Pass record found.</Muted></Card>:gatePasses.map((pass:any)=><Card key={pass.id} tone="notice"><View style={styles.gateHeader}><Text style={styles.noticeTitle}>{pass.token_no}</Text><Text style={[styles.gateStatus,pass.status==='returned'&&styles.gateReturned,pass.status==='cancelled'&&styles.gateCancelled]}>{pass.status==='draft'?'Ready to Print':pass.status==='pending'?'Outside / Return Pending':pass.status==='returned'?'Returned':'Cancelled'}</Text></View><Text style={styles.noticeText}>Reason: {pass.reason}</Text><Text style={styles.noticeText}>Departure: {pass.departure_text||String(pass.departure_at||'').slice(0,16).replace('T',' ')}</Text><Text style={styles.noticeText}>Expected Return: {pass.return_text||String(pass.expected_return_at||'').slice(0,16).replace('T',' ')||'-'}</Text>{pass.returned_at&&<Text style={styles.dateText}>Returned: {String(pass.returned_at).slice(0,16).replace('T',' ')}</Text>}</Card>)}
+            {gatePasses.length===0?<Card><Muted>No Gate Pass record found.</Muted></Card>:gatePasses.map((pass:any)=><Card key={pass.id} tone="notice"><View style={styles.gateHeader}><Text style={styles.noticeTitle}>{pass.token_no}</Text><Text style={[styles.gateStatus,pass.status==='returned'&&styles.gateReturned,pass.status==='cancelled'&&styles.gateCancelled]}>{pass.status==='draft'?'Ready to Print':pass.status==='pending'?'Outside / Return Pending':pass.status==='returned'?'Returned':'Cancelled'}</Text></View><Text style={styles.noticeText}>Reason: {pass.reason}</Text><Text style={styles.noticeText}>Gate pass printed: {pass.printed_text||'Not printed yet'}</Text><Text style={styles.noticeText}>Departure Date: {pass.departure_text||String(pass.departure_at||'').slice(0,16).replace('T',' ')}</Text><Text style={styles.noticeText}>Return Date: {pass.return_text||String(pass.expected_return_at||'').slice(0,16).replace('T',' ')||'-'}</Text><Text style={styles.noticeText}>Actual return: {pass.returned_text||'Not returned yet'}</Text><Text style={styles.dateText}>{pass.return_delay_note}{pass.return_delay_days>0?` (${pass.return_delay_days} day${pass.return_delay_days===1?'':'s'} late)`:''}</Text></Card>)}
           </>
         )}
 
         {tab === 'visits' && (
           <>
             <Text style={styles.heading}>Visiting Day Permission</Text>
-            {(notices.filter((n: any) => String(n.notice_type || '').toLowerCase() === 'visit').length === 0) ? (
+            {activeVisitNotices.length === 0 ? (
               <Card tone="notice"><Muted>No visiting day permission notification.</Muted></Card>
-            ) : notices.filter((n: any) => String(n.notice_type || '').toLowerCase() === 'visit').map((notice: any, index: number) => (
+            ) : activeVisitNotices.map((notice: any, index: number) => (
               <Card key={notice.id || index} tone="notice">
                 <Text style={styles.noticeTitle}>{notice.title || 'Visit Permission Approved'}</Text>
                 <Text style={styles.noticeText}>{notice.notice_text || notice.message || ''}</Text>
                 <Text style={styles.dateText}>{String(notice.published_at || notice.created_at || '').slice(0, 16).replace('T', ' ')}</Text>
+              </Card>
+            ))}
+            <Text style={styles.heading}>Permission History</Text>
+            {visitHistory.length === 0 ? (
+              <Card><Muted>No visit permission history found.</Muted></Card>
+            ) : visitHistory.map((visit: any) => (
+              <Card key={`visit-history-${visit.id}`}>
+                <View style={styles.gateHeader}><Text style={styles.noticeTitle}>{visit.visitor_name} ({visit.visitor_relation})</Text><Text style={styles.gateStatus}>{visit.status === 'completed' ? 'Completed' : 'Approved'}</Text></View>
+                <Text style={styles.noticeText}>Permission: {visit.visit_text}</Text>
+                <Text style={styles.noticeText}>Duration: {visit.duration_minutes} minutes</Text>
+                {visit.purpose && <Text style={styles.noticeText}>Purpose: {visit.purpose}</Text>}
+                <Text style={styles.noticeText}>Actual entry: {visit.entered_text || 'Not recorded'}</Text>
+                <Text style={styles.noticeText}>Entry type: {visit.entry_mode === 'with_permission' ? 'With Permission' : 'Without Permission'}</Text>
+                {visit.completed_text && <Text style={styles.dateText}>Completed: {visit.completed_text}</Text>}
               </Card>
             ))}
             <Text style={styles.heading}>Visitor Entry Records</Text>
@@ -1089,6 +1129,7 @@ export default function Guardian() {
                       <TouchableOpacity style={styles.documentPrintButton} onPress={() => openGuardianDocument(doc, false, true)}><Text style={styles.documentActionText}>Print</Text></TouchableOpacity>
                       {doc.guardian_download_allowed && <TouchableOpacity style={styles.documentDownloadButton} onPress={() => openGuardianDocument(doc, true)}><Text style={styles.documentActionText}>Download</Text></TouchableOpacity>}
                     </View>
+
                   </View>;
                 })}
               </View>
@@ -1097,6 +1138,18 @@ export default function Guardian() {
 
           </>
         )}
+
+        <Modal visible={!!selectedDocument} transparent animationType="fade" onRequestClose={() => setSelectedDocument(null)}>
+          <Pressable style={styles.documentViewerOverlay} onPress={() => setSelectedDocument(null)}>
+            <Pressable style={styles.documentViewerCard} onPress={() => {}}>
+              <View style={styles.documentViewerHeader}>
+                <Text style={styles.documentViewerTitle}>{selectedDocument ? documentLabel(selectedDocument) : 'Document'}</Text>
+                <TouchableOpacity onPress={() => setSelectedDocument(null)}><Text style={styles.documentViewerClose}>×</Text></TouchableOpacity>
+              </View>
+              {selectedDocumentUri ? <PinchGestureHandler onGestureEvent={Animated.event([{ nativeEvent: { scale: documentPinchScale } }], { useNativeDriver: true })} onHandlerStateChange={(event: any) => { if (event.nativeEvent.oldState === State.ACTIVE) { const next = Math.min(4, Math.max(1, documentBaseZoom.current * Number(event.nativeEvent.scale || 1))); documentBaseZoom.current = next; setDocumentZoom(next); documentPinchScale.setValue(1); } }}><Animated.View style={styles.documentZoomArea}><Animated.Image source={{ uri: selectedDocumentUri }} style={[styles.documentViewerImage, { transform: [{ scale: Animated.multiply(documentPinchScale, documentZoom) }] }]} resizeMode="contain" /></Animated.View></PinchGestureHandler> : <Muted>Loading document...</Muted>}
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         {/* LIBRARY */}
         {tab === 'library' && (
@@ -1814,5 +1867,12 @@ const styles = StyleSheet.create({
   gateHeader:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',gap:10},gateStatus:{backgroundColor:'#fff0b8',color:'#7c5200',fontWeight:'800',fontSize:11,paddingHorizontal:9,paddingVertical:5,borderRadius:12},gateReturned:{backgroundColor:'#dcfce7',color:'#166534'},gateCancelled:{backgroundColor:'#fee2e2',color:'#991b1b'},
     noticeCard: { backgroundColor: '#fffbeb', borderColor: '#fde68a', borderLeftWidth: 4, borderLeftColor: '#f59e0b' },
   feesCard: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
+  documentViewerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.82)', justifyContent: 'center', alignItems: 'center', padding: 12 },
+  documentViewerCard: { width: '100%', height: '88%', backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden' },
+  documentViewerHeader: { minHeight: 54, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#dbe2ea' },
+  documentViewerTitle: { flex: 1, fontSize: 17, fontWeight: '800', color: '#173b67' },
+  documentViewerClose: { fontSize: 32, lineHeight: 34, color: '#173b67', paddingHorizontal: 6 },
+  documentViewerImage: { flex: 1, width: '100%', backgroundColor: '#f4f6f8' },
+  documentZoomArea: { flex: 1, width: '100%', overflow: 'hidden', backgroundColor: '#f4f6f8' },
 });
 

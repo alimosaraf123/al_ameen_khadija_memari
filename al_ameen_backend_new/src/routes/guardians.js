@@ -1241,6 +1241,27 @@ router.get('/student/:studentId/visitor-entries', auth, allow('guardian'), async
   res.json({ success: true, entries: result.rows });
 }));
 
+router.get('/student/:studentId/visit-history', auth, allow('guardian'), asyncHandler(async (req, res) => {
+  const studentId = req.params.studentId;
+  if (!(await guardianOwnsStudent(req.user.userId, studentId))) {
+    return res.status(403).json({ success: false, message: 'Not allowed' });
+  }
+  const result = await pool.query(`
+    SELECT v.id,v.token_no,v.visitor_name,v.visitor_relation,v.visit_at,v.duration_minutes,v.purpose,
+           v.status,v.completed_at,v.cancelled_at,v.created_at,
+           to_char(v.visit_at,'DD-MM-YYYY HH24:MI') visit_text,
+           to_char(v.completed_at,'DD-MM-YYYY HH24:MI') completed_text,
+           e.entered_at,e.entry_mode,e.is_active,e.remarks,
+           to_char(e.entered_at,'DD-MM-YYYY HH24:MI') entered_text
+    FROM student_visits v
+    LEFT JOIN gate_guardian_visit_entries e ON e.permission_id=v.id
+    WHERE v.student_id=$1 AND v.status <> 'cancelled'
+    ORDER BY v.visit_at DESC
+    LIMIT 100
+  `, [studentId]);
+  res.json({ success: true, visits: result.rows });
+}));
+
 // Guardian sees only the selected child's published weekly-test marks.
 router.get(
   '/student/:studentId/weekly-tests',
@@ -1487,9 +1508,21 @@ router.get(
             `
             SELECT gp.id,gp.token_no,gp.reason,gp.status,gp.departure_at,gp.expected_return_at,gp.returned_at,gp.printed_at,gp.created_at,
                    to_char(gp.departure_at,'DD-MM-YYYY HH24:MI') AS departure_text,
-                   to_char(gp.expected_return_at,'DD-MM-YYYY HH24:MI') AS return_text
+                   to_char(gp.expected_return_at,'DD-MM-YYYY HH24:MI') AS return_text,
+                   to_char(gp.printed_at,'DD-MM-YYYY HH24:MI') AS printed_text,
+                   to_char(gp.returned_at,'DD-MM-YYYY HH24:MI') AS returned_text,
+                   CASE WHEN gp.expected_return_at IS NULL THEN NULL
+                        WHEN gp.returned_at IS NOT NULL THEN GREATEST(gp.returned_at::date-gp.expected_return_at::date,0)
+                        WHEN gp.status='pending' THEN GREATEST(CURRENT_DATE-gp.expected_return_at::date,0)
+                        ELSE 0 END AS return_delay_days,
+                   CASE WHEN gp.expected_return_at IS NULL THEN 'No return date'
+                        WHEN gp.returned_at IS NOT NULL AND gp.returned_at::date>gp.expected_return_at::date THEN 'Returned late'
+                        WHEN gp.returned_at IS NOT NULL THEN 'Returned on time'
+                        WHEN gp.status='pending' AND CURRENT_DATE>gp.expected_return_at::date THEN 'Not returned - overdue'
+                        WHEN gp.status='pending' THEN 'Return date not reached'
+                        ELSE 'Not yet printed' END AS return_delay_note
             FROM student_gate_passes gp
-            WHERE gp.student_id=$1
+            WHERE gp.student_id=$1 AND gp.status <> 'cancelled'
             ORDER BY gp.created_at DESC
             LIMIT 100
             `,
@@ -1501,7 +1534,14 @@ router.get(
             `
             SELECT DISTINCT n.* FROM notices n
             JOIN notice_targets nt ON nt.notice_id=n.id
-            WHERE n.is_active=TRUE AND n.notice_type <> 'routine' AND (
+            LEFT JOIN student_gate_passes gp_notice
+              ON gp_notice.token_no = substring(n.notice_text from 'Gate pass ([^ ]+)')
+            LEFT JOIN student_visits visit_notice
+              ON visit_notice.token_no = substring(n.notice_text from 'Visit ([^:]+):')
+            WHERE n.is_active=TRUE AND n.notice_type <> 'routine'
+              AND (n.notice_type <> 'gate_pass' OR gp_notice.status IS NULL OR gp_notice.status <> 'cancelled')
+              AND (n.notice_type <> 'visit' OR visit_notice.status IS NULL OR visit_notice.status <> 'cancelled')
+              AND (
               nt.target_type='all'
               OR (nt.target_type='role' AND nt.target_value='guardian')
               OR (nt.target_type='class' AND LOWER(TRIM(nt.target_value))=LOWER(TRIM((SELECT class_name FROM students WHERE id=$1))))
