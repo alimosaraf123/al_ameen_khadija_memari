@@ -162,6 +162,7 @@ const styles = StyleSheet.create({
   },
   compactHeader: {
     flexDirection: 'row',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     padding: 9,
     gap: 5,

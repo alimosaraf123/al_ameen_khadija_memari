@@ -95,7 +95,7 @@ export default function Rooms() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={{flexDirection:'row',gap:8,padding:15}}><TouchableOpacity onPress={()=>router.back()} style={styles.navButton}><Text>Back</Text></TouchableOpacity><TouchableOpacity onPress={()=>router.push('/superadmin')} style={styles.navButton}><Text>Home</Text></TouchableOpacity></View>
+      <View style={{flexDirection:'row',gap:8,padding:15}}><TouchableOpacity onPress={()=>router.canGoBack()?router.back():router.replace('/superadmin')} style={styles.navButton}><Text>Back</Text></TouchableOpacity><TouchableOpacity onPress={()=>router.push('/superadmin')} style={styles.navButton}><Text>Home</Text></TouchableOpacity></View>
       <ScrollView contentContainerStyle={styles.content}>
         <PageNavigation />
 
@@ -237,3 +237,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+

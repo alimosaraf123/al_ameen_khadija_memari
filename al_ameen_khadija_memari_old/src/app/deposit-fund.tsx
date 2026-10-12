@@ -6,6 +6,7 @@ import React, {
 
 import {
   Alert,
+  Image,
   Linking,
   Platform,
   ScrollView,
@@ -19,9 +20,7 @@ import {
   SafeAreaView,
 } from 'react-native-safe-area-context';
 
-import {
-  api,
-} from '../lib/api';
+import {api, API_BASE} from '../lib/api';
 import {getUser} from '../lib/auth';
 import {router} from 'expo-router';
 import {useLocalSearchParams} from 'expo-router';
@@ -49,6 +48,7 @@ type Student = {
   father_mobile?: string;
   mother_mobile?: string;
   mobile_number?: string;
+  photo_url?: string;
 };
 
 
@@ -59,6 +59,8 @@ export default function DepositFund() {
 
   const [search, setSearch] =
     useState('');
+  const [showStudentPicker, setShowStudentPicker] = useState(false);
+  const [highlightedStudentIndex, setHighlightedStudentIndex] = useState(0);
 
   const [
     selectedStudent,
@@ -225,7 +227,7 @@ export default function DepositFund() {
 
 
       if (!q) {
-        return [];
+        return showStudentPicker ? students.slice(0, 50) : [];
       }
 
 
@@ -260,7 +262,23 @@ export default function DepositFund() {
     }, [
       search,
       students,
+      showStudentPicker,
     ]);
+
+  const moveStudentWithKey = (event: any) => {
+    const key = event?.key || event?.nativeEvent?.key;
+    if (!filteredStudents.length) return;
+    if (key === 'ArrowDown') {
+      event.preventDefault?.();
+      setHighlightedStudentIndex(index => Math.min(index + 1, filteredStudents.length - 1));
+    } else if (key === 'ArrowUp') {
+      event.preventDefault?.();
+      setHighlightedStudentIndex(index => Math.max(index - 1, 0));
+    } else if (key === 'Enter') {
+      event.preventDefault?.();
+      void selectStudent(filteredStudents[highlightedStudentIndex] || filteredStudents[0]);
+    }
+  };
 
 
   // =====================================
@@ -522,9 +540,7 @@ export default function DepositFund() {
         keyboardShouldPersistTaps="handled"
 
       >
-
-        <AcademyHeader />
-        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/superadmin')} style={styles.backButton}><Text style={styles.backText}>← Back</Text></TouchableOpacity>
+        <AcademyHeader extraActions={<TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/superadmin')} style={styles.headerBack}><Text style={styles.headerBackText}>Back</Text></TouchableOpacity>} />
 
         <H1>
           Student Deposit Fund
@@ -543,18 +559,13 @@ export default function DepositFund() {
             <Text style={styles.tabText}>Due Reminder</Text>
           </TouchableOpacity>
         </View>
-        <View style={styles.sdfSummary}>
-          {selectedStudent && fundData ? (
-            <View style={styles.sdfSummaryCard}>
-              <Text style={styles.sdfLabel}>SDF Balance (Selected Student)</Text>
-              <Text style={selectedNetBalance >= 0 ? styles.sdfAdvance : styles.sdfDue}>{selectedNetBalance < 0 ? '-' : '+'}{'\u20B9'}{Math.abs(selectedNetBalance).toFixed(2)}</Text>
-            </View>
-          ) : (
-            <View style={styles.sdfSummaryCard}>
-              <Text style={styles.sdfLabel}>SDF Balance (All Students)</Text>
-              <Text style={aggregateSdfBalance < 0 ? styles.sdfDue : styles.sdfAdvance}>{aggregateSdfBalance < 0 ? '-' : '+'}{'\u20B9'}{Math.abs(aggregateSdfBalance).toFixed(2)}</Text>
-            </View>
-          )}
+        <View style={styles.studentSearchRow}>
+          <View style={styles.studentSearchInput}>
+            <Field placeholder="Registration No / Student Name" value={search} onChangeText={(value: string) => { setSearch(value); setHighlightedStudentIndex(0); }} onKeyDown={moveStudentWithKey} onKeyPress={moveStudentWithKey} onSubmitEditing={() => { if (filteredStudents[highlightedStudentIndex]) void selectStudent(filteredStudents[highlightedStudentIndex]); }} returnKeyType="search" />
+          </View>
+          <TouchableOpacity style={styles.changeStudentTop} onPress={() => { if (filteredStudents[0]) void selectStudent(filteredStudents[0]); else setShowStudentPicker(true); }}>
+            <Text style={styles.changeStudentTopText}>{selectedStudent ? 'Change Student' : 'Select Student'}</Text>
+          </TouchableOpacity>
         </View>
 
         {activeTab === 'statement' && (
@@ -609,11 +620,6 @@ export default function DepositFund() {
 
         {activeTab === 'transactions' && (
           <>
-        <Text
-          style={styles.help}
-        >
-          Search for a student by registration number or student name.
-        </Text>
 
 
 
@@ -622,37 +628,18 @@ export default function DepositFund() {
             STUDENT SEARCH
         ================================= */}
 
-        {!selectedStudent && (
+        {(!selectedStudent || search.trim()) && (
 
           <>
 
-            <Field
-
-              placeholder="Registration No / Student Name"
-
-              value={search}
-
-              onChangeText={
-                setSearch
-              }
-              onSubmitEditing={() => {
-                if (filteredStudents[0]) selectStudent(filteredStudents[0]);
-              }}
-              returnKeyType="search"
-
-            />
-
-
             {filteredStudents.map(
-              (student) => (
+              (student, index) => (
 
                 <TouchableOpacity
 
                   key={student.id}
 
-                  style={
-                    styles.studentCard
-                  }
+                  style={[styles.studentCard, index === highlightedStudentIndex && styles.highlightedStudentCard]}
 
                   onPress={() =>
                     selectStudent(
@@ -757,92 +744,15 @@ export default function DepositFund() {
                   returnKeyType="done"
                   style={styles.bookNoInput}
                 />
-                <TouchableOpacity style={styles.bookNoSave} onPress={() => bookNoEditing ? saveSdfBookNo() : setBookNoEditing(true)}>
-                  <Text style={styles.bookNoSaveText}>{bookNoEditing ? 'Save Book No.' : 'Edit Book No.'}</Text>
-                </TouchableOpacity>
               </View>
-
-
-              <Text
-                style={
-                  styles.studentMeta
-                }
-              >
-                Registration No:{' '}
-                {
-                  selectedStudent
-                    .registration_no ||
-                  '-'
-                }
-              </Text>
-
-
-              <Text
-                style={
-                  styles.studentMeta
-                }
-              >
-                Class:{' '}
-                {
-                  selectedStudent
-                    .class_name ||
-                  '-'
-                }
-                {'   '}
-                Roll:{' '}
-                {
-                  selectedStudent
-                    .roll_no ||
-                  '-'
-                }
-              </Text>
-
-
-              <TouchableOpacity
-
-                style={
-                  styles.changeStudent
-                }
-
-                onPress={() => {
-
-                  setSelectedStudent(
-                    null
-                  );
-
-                  setFundData(
-                    null
-                  );
-
-                  setSearch('');
-
-                }}
-
-              >
-
-                <Text
-                  style={
-                    styles.changeStudentText
-                  }
-                >
-                  Change Student
-                </Text>
-
-              </TouchableOpacity>
-              </View>
-            </Card>
-
-
-            {/* ===============================
-                FUND SUMMARY
-            =============================== */}
-
-            <Text
-              style={styles.heading}
-            >
-              Fund Summary
-            </Text>
+              <Text style={styles.studentMeta}>Registration No: {selectedStudent.registration_no || '-'}</Text>
+              <Text style={styles.studentMeta}>Class: {selectedStudent.class_name || '-'}   Roll: {selectedStudent.roll_no || '-'}</Text>
+  
 <View style={styles.netBalanceBox}>
+
+  {(fundData?.student?.photo_url || selectedStudent?.photo_url) ? (
+    <Image source={{uri: /^http/.test(String(fundData?.student?.photo_url || selectedStudent?.photo_url)) ? String(fundData?.student?.photo_url || selectedStudent?.photo_url) : API_BASE + String(fundData?.student?.photo_url || selectedStudent?.photo_url)}} style={styles.balanceStudentPhoto} />
+  ) : null}
 
   <Text style={styles.netBalanceLabel}>
     Current Fund Balance
@@ -883,29 +793,29 @@ export default function DepositFund() {
 
   </Text>
 
-  <Text style={styles.netBalanceStatus}>
+      <Text style={styles.netBalanceStatus} numberOfLines={1}>
 
     {Number(
       fundData?.summary?.net_balance || 0
     ) > 0
-      ? 'The student has a fund balance.'
+      ? 'Fund balance'
       : Number(
           fundData?.summary?.net_balance || 0
         ) < 0
-      ? 'The student has a fund shortfall / due.'
+      ? 'Fund shortfall / due'
       : 'Fund Balance Zero'}
 
   </Text>
 
   {Number(fundData?.summary?.net_balance || 0) < 0 && (
     <TouchableOpacity style={styles.whatsappButton} onPress={sendDueReminder}>
-      <Text style={styles.whatsappText}>Send Due Reminder on WhatsApp</Text>
+      <Text style={styles.whatsappText}>WhatsApp</Text>
     </TouchableOpacity>
   )}
 
 </View>
-
-
+              </View>
+            </Card>
 
 
             {/* ===============================
@@ -913,7 +823,7 @@ export default function DepositFund() {
             =============================== */}
 
             <Text
-              style={styles.heading}
+              style={styles.transactionHeading}
             >
               Add Transaction
             </Text>
@@ -1146,21 +1056,35 @@ export default function DepositFund() {
 const styles =
   StyleSheet.create({
 netBalanceBox: {
-  backgroundColor: '#fff',
-  borderRadius: 14,
-  padding: 18,
-  marginBottom: 12,
+  position: 'absolute',
+  right: 320,
+  top: 4,
+  width: 190,
+  backgroundColor: '#f8fafc',
+  borderRadius: 9,
+  padding: 8,
   alignItems: 'center',
+},
+
+balanceStudentPhoto: {
+  position: 'absolute',
+  left: -500,
+  top: -20,
+  width: 100,
+  height: 100,
+  borderRadius: 10,
+  resizeMode: 'cover',
 },
 
 netBalanceLabel: {
   color: '#667085',
   fontWeight: '700',
-  marginBottom: 7,
+  marginBottom: 3,
+  fontSize: 12,
 },
 
 netBalanceValue: {
-  fontSize: 30,
+  fontSize: 22,
   fontWeight: '900',
 },
 
@@ -1177,29 +1101,46 @@ zeroBalance: {
 },
 
 netBalanceStatus: {
-  marginTop: 6,
+  marginTop: 3,
+  fontSize: 12,
   color: '#667085',
   textAlign: 'center',
 },
 
 whatsappButton: {
-  marginTop: 12,
-  backgroundColor: '#128c4a',
-  paddingHorizontal: 14,
-  paddingVertical: 11,
+  position: 'absolute',
+  left: 200,
+  top: 0,
+  width: 72,
+  minHeight: 64,
+  backgroundColor: '#25D366',
+  paddingHorizontal: 6,
+  paddingVertical: 7,
   borderRadius: 8,
   alignItems: 'center',
+  justifyContent: 'center',
 },
 
 whatsappText: {
   color: '#fff',
   fontWeight: '800',
+  fontSize: 11,
+  textAlign: 'center',
 },
     page: {
       flex: 1,
       backgroundColor:
         '#f3f6f9',
     },
+
+  headerBack: {
+    marginLeft: 'auto',
+      backgroundColor: '#e5eef8',
+      paddingHorizontal: 13,
+      paddingVertical: 9,
+      borderRadius: 7,
+    },
+    headerBackText: { color: '#1764a5', fontWeight: '800' },
 
     backButton: {
       alignSelf: 'flex-start',
@@ -1393,6 +1334,13 @@ whatsappText: {
     tabActive: { backgroundColor: '#1768c5' },
     tabText: { color: '#173d6b', fontWeight: '800' },
 
+    transactionHeading: {
+      fontSize: 19,
+      fontWeight: '800',
+      marginTop: 0,
+      marginBottom: 6,
+    },
+
     heading: {
       fontSize: 19,
       fontWeight: '800',
@@ -1409,6 +1357,11 @@ whatsappText: {
       borderColor: '#d7dde2',
     },
 
+    highlightedStudentCard: {
+      borderColor: '#1768c5',
+      backgroundColor: '#eaf3ff',
+    },
+
     studentName: {
       fontSize: 18,
       fontWeight: '800',
@@ -1418,7 +1371,8 @@ whatsappText: {
       position: 'relative',
       paddingTop: 2,
       paddingRight: 180,
-      minHeight: 112,
+      minHeight: 72,
+      paddingBottom: 2,
     },
 
     savedBookNo: {
@@ -1460,6 +1414,11 @@ whatsappText: {
       color: '#667085',
       marginTop: 5,
     },
+
+    studentSearchRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 8, maxWidth: 900 },
+    studentSearchInput: { width: 680 },
+    changeStudentTop: { backgroundColor: '#1768c5', paddingHorizontal: 14, paddingVertical: 11, borderRadius: 7, marginBottom: 8 },
+    changeStudentTopText: { color: '#fff', fontWeight: '800' },
 
     changeStudent: {
       marginTop: 14,

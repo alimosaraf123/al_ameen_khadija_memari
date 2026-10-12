@@ -1,0 +1,461 @@
+
+> al_ameen_khadija_memari@1.0.0 web
+> expo start --web --port 8082
+
+Starting project at D:\memari_soft\al_ameen_khadija_memari_old
+Using src/app as the root directory for Expo Router.
+Starting Metro Bundler
+
+Waiting on http://localhost:8082
+
+Logs for your project will appear below.
+| (node:3872) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:3872) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:3872) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:3872) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:3872) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:3872) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+λ Bundled 16691ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1640 modules)
+λ Bundled 10349ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1 module)
+Web Bundled 18819ms node_modules\expo-router\entry.js (1493 modules)
+Web Bundled 10837ms node_modules\expo-router\entry.js (1 module)
+λ Bundled 54ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1 module)
+Web Bundled 340ms node_modules\expo-router\entry.js (1 module)
+Web Bundled 8572ms node_modules\expo-router\entry.js (1492 modules)
+Web  INFO  %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+Web  LOG  Running application "main" with appParams:
+ {"hydrate": undefined, "rootTag": "#root"} 
+Development-level warnings: ON.
+Performance optimizations: OFF.
+Web Bundled 585ms src\lib\pushNotifications.ts (862 modules)
+Web  WARN  [expo-notifications] Listening to push token changes is not yet fully supported on web. Adding a listener will have no effect.
+λ Bundled 1851ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1 module)
+Web Bundled 2574ms node_modules\expo-router\entry.js (1 module)
+Web Bundled 236ms node_modules\expo-router\entry.js (1 module)
+Web  INFO  %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+Web  LOG  Running application "main" with appParams:
+ {"hydrate": undefined, "rootTag": "#root"} 
+Development-level warnings: ON.
+Performance optimizations: OFF.
+Web Bundled 47ms src\lib\pushNotifications.ts (1 module)
+Web  WARN  [expo-notifications] Listening to push token changes is not yet fully supported on web. Adding a listener will have no effect.
+Web Bundled 135ms node_modules\expo-router\entry.js (1 module)
+λ Bundled 198ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1 module)
+Web Bundled 50ms node_modules\expo-router\entry.js (1 module)
+Web  INFO  %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+Web  LOG  Running application "main" with appParams:
+ {"hydrate": undefined, "rootTag": "#root"} 
+Development-level warnings: ON.
+Performance optimizations: OFF.
+Web Bundled 32ms src\lib\pushNotifications.ts (1 module)
+Web  WARN  [expo-notifications] Listening to push token changes is not yet fully supported on web. Adding a listener will have no effect.
+λ Bundled 44ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1 module)
+Web Bundled 367ms node_modules\expo-router\entry.js (1 module)
+Web Bundled 72ms node_modules\expo-router\entry.js (1 module)
+Web  INFO  %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+Web  LOG  Running application "main" with appParams:
+ {"hydrate": undefined, "rootTag": "#root"} 
+Development-level warnings: ON.
+Performance optimizations: OFF.
+Web Bundled 308ms src\lib\pushNotifications.ts (1 module)
+Web  WARN  [expo-notifications] Listening to push token changes is not yet fully supported on web. Adding a listener will have no effect.
+λ Bundled 2499ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1 module)
+Web Bundled 3440ms node_modules\expo-router\entry.js (1 module)
+Web Bundled 95ms node_modules\expo-router\entry.js (1 module)
+Web  INFO  %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+Web  LOG  Running application "main" with appParams:
+ {"hydrate": undefined, "rootTag": "#root"} 
+Development-level warnings: ON.
+Performance optimizations: OFF.
+Web Bundled 37ms src\lib\pushNotifications.ts (1 module)
+Web  WARN  [expo-notifications] Listening to push token changes is not yet fully supported on web. Adding a listener will have no effect.
+ ERROR  SyntaxError: D:\memari_soft\al_ameen_khadija_memari_old\src\app\deposit-fund.tsx: Expected corresponding JSX closing tag for <View>. (797:12)
+
+  795 | </View>
+  796 |               </View>
+> 797 |             </Card>
+      |             ^
+  798 |
+  799 |
+  800 |             {/* ===============================
+    at constructor (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:369:19)
+    at TypeScriptParserMixin.raise (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:6622:19)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4745:16)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4716:32)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4716:32)
+    at TypeScriptParserMixin.jsxParseElement (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4767:17)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4777:19)
+    at TypeScriptParserMixin.parseExprSubscripts (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11107:23)
+    at TypeScriptParserMixin.parseUpdate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11092:21)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11072:23)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9860:18)
+    at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10925:61)
+    at TypeScriptParserMixin.parseExprOps (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10930:23)
+    at TypeScriptParserMixin.parseMaybeConditional (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10907:23)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10857:21)
+    at D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9798:39
+    at TypeScriptParserMixin.tryParse (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:6930:20)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9798:18)
+    at D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10826:39
+    at TypeScriptParserMixin.allowInAnd (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:12460:12)
+    at TypeScriptParserMixin.parseMaybeAssignAllowIn (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10826:17)
+    at TypeScriptParserMixin.parseMaybeAssignAllowInOrVoidPattern (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:12527:17)
+    at TypeScriptParserMixin.parseParenAndDistinguishExpression (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11706:28)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11362:23)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4782:20)
+    at TypeScriptParserMixin.parseExprSubscripts (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11107:23)
+    at TypeScriptParserMixin.parseUpdate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11092:21)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11072:23)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9860:18)
+    at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10925:61)
+    at TypeScriptParserMixin.parseExprOpBaseRightExpr (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11012:34)
+    at TypeScriptParserMixin.parseExprOpRightExpr (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11007:21)
+    at TypeScriptParserMixin.parseExprOp (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10973:27)
+    at TypeScriptParserMixin.parseExprOp (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9329:18)
+    at TypeScriptParserMixin.parseExprOps (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10934:17)
+    at TypeScriptParserMixin.parseMaybeConditional (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10907:23)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10857:21)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9809:20)
+    at TypeScriptParserMixin.parseExpressionBase (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10810:23)
+    at D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10806:39
+    at TypeScriptParserMixin.allowInAnd (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:12460:12)
+    at TypeScriptParserMixin.parseExpression (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10806:17)
+    at TypeScriptParserMixin.jsxParseExpressionContainer (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4650:31)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4729:36)
+    at TypeScriptParserMixin.jsxParseElement (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4767:17)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4777:19)
+    at TypeScriptParserMixin.parseExprSubscripts (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11107:23)
+    at TypeScriptParserMixin.parseUpdate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11092:21)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11072:23)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9860:18)
+Web  ERROR  [TransformError: SyntaxError: D:\memari_soft\al_ameen_khadija_memari_old\src\app\deposit-fund.tsx: Expected corresponding JSX closing tag for <View>. (797:12)
+
+  795 | </View>
+  796 |               </View>
+> 797 |             </Card>
+      |             ^
+  798 |
+  799 |
+  800 |             {/* ===============================]
+ ERROR  SyntaxError: D:\memari_soft\al_ameen_khadija_memari_old\src\app\deposit-fund.tsx: Expected corresponding JSX closing tag for <View>. (797:12)
+
+  795 | </View>
+  796 |               </View>
+> 797 |             </Card>
+      |             ^
+  798 |
+  799 |
+  800 |             {/* ===============================
+    at constructor (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:369:19)
+    at TypeScriptParserMixin.raise (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:6622:19)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4745:16)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4716:32)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4716:32)
+    at TypeScriptParserMixin.jsxParseElement (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4767:17)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4777:19)
+    at TypeScriptParserMixin.parseExprSubscripts (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11107:23)
+    at TypeScriptParserMixin.parseUpdate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11092:21)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11072:23)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9860:18)
+    at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10925:61)
+    at TypeScriptParserMixin.parseExprOps (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10930:23)
+    at TypeScriptParserMixin.parseMaybeConditional (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10907:23)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10857:21)
+    at D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9798:39
+    at TypeScriptParserMixin.tryParse (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:6930:20)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9798:18)
+    at D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10826:39
+    at TypeScriptParserMixin.allowInAnd (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:12460:12)
+    at TypeScriptParserMixin.parseMaybeAssignAllowIn (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10826:17)
+    at TypeScriptParserMixin.parseMaybeAssignAllowInOrVoidPattern (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:12527:17)
+    at TypeScriptParserMixin.parseParenAndDistinguishExpression (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11706:28)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11362:23)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4782:20)
+    at TypeScriptParserMixin.parseExprSubscripts (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11107:23)
+    at TypeScriptParserMixin.parseUpdate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11092:21)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11072:23)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9860:18)
+    at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10925:61)
+    at TypeScriptParserMixin.parseExprOpBaseRightExpr (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11012:34)
+    at TypeScriptParserMixin.parseExprOpRightExpr (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11007:21)
+    at TypeScriptParserMixin.parseExprOp (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10973:27)
+    at TypeScriptParserMixin.parseExprOp (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9329:18)
+    at TypeScriptParserMixin.parseExprOps (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10934:17)
+    at TypeScriptParserMixin.parseMaybeConditional (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10907:23)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10857:21)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9809:20)
+    at TypeScriptParserMixin.parseExpressionBase (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10810:23)
+    at D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10806:39
+    at TypeScriptParserMixin.allowInAnd (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:12460:12)
+    at TypeScriptParserMixin.parseExpression (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10806:17)
+    at TypeScriptParserMixin.jsxParseExpressionContainer (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4650:31)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4729:36)
+    at TypeScriptParserMixin.jsxParseElement (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4767:17)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4777:19)
+    at TypeScriptParserMixin.parseExprSubscripts (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11107:23)
+    at TypeScriptParserMixin.parseUpdate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11092:21)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11072:23)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9860:18)
+Web  ERROR  [TransformError: SyntaxError: D:\memari_soft\al_ameen_khadija_memari_old\src\app\deposit-fund.tsx: Expected corresponding JSX closing tag for <View>. (797:12)
+
+  795 | </View>
+  796 |               </View>
+> 797 |             </Card>
+      |             ^
+  798 |
+  799 |
+  800 |             {/* ===============================]
+ ERROR  SyntaxError: D:\memari_soft\al_ameen_khadija_memari_old\src\app\deposit-fund.tsx: Expected corresponding JSX closing tag for <View>. (797:12)
+
+  795 | </View>
+  796 |               </View>
+> 797 |             </Card>
+      |             ^
+  798 |
+  799 |
+  800 |             {/* ===============================
+    at constructor (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:369:19)
+    at TypeScriptParserMixin.raise (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:6622:19)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4745:16)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4716:32)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4716:32)
+    at TypeScriptParserMixin.jsxParseElement (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4767:17)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4777:19)
+    at TypeScriptParserMixin.parseExprSubscripts (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11107:23)
+    at TypeScriptParserMixin.parseUpdate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11092:21)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11072:23)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9860:18)
+    at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10925:61)
+    at TypeScriptParserMixin.parseExprOps (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10930:23)
+    at TypeScriptParserMixin.parseMaybeConditional (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10907:23)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10857:21)
+    at D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9798:39
+    at TypeScriptParserMixin.tryParse (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:6930:20)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9798:18)
+    at D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10826:39
+    at TypeScriptParserMixin.allowInAnd (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:12460:12)
+    at TypeScriptParserMixin.parseMaybeAssignAllowIn (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10826:17)
+    at TypeScriptParserMixin.parseMaybeAssignAllowInOrVoidPattern (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:12527:17)
+    at TypeScriptParserMixin.parseParenAndDistinguishExpression (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11706:28)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11362:23)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4782:20)
+    at TypeScriptParserMixin.parseExprSubscripts (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11107:23)
+    at TypeScriptParserMixin.parseUpdate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11092:21)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11072:23)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9860:18)
+    at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10925:61)
+    at TypeScriptParserMixin.parseExprOpBaseRightExpr (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11012:34)
+    at TypeScriptParserMixin.parseExprOpRightExpr (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11007:21)
+    at TypeScriptParserMixin.parseExprOp (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10973:27)
+    at TypeScriptParserMixin.parseExprOp (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9329:18)
+    at TypeScriptParserMixin.parseExprOps (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10934:17)
+    at TypeScriptParserMixin.parseMaybeConditional (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10907:23)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10857:21)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9809:20)
+    at TypeScriptParserMixin.parseExpressionBase (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10810:23)
+    at D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10806:39
+    at TypeScriptParserMixin.allowInAnd (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:12460:12)
+    at TypeScriptParserMixin.parseExpression (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10806:17)
+    at TypeScriptParserMixin.jsxParseExpressionContainer (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4650:31)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4729:36)
+    at TypeScriptParserMixin.jsxParseElement (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4767:17)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4777:19)
+    at TypeScriptParserMixin.parseExprSubscripts (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11107:23)
+    at TypeScriptParserMixin.parseUpdate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11092:21)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11072:23)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9860:18)
+Web  ERROR  [TransformError: SyntaxError: D:\memari_soft\al_ameen_khadija_memari_old\src\app\deposit-fund.tsx: Expected corresponding JSX closing tag for <View>. (797:12)
+
+  795 | </View>
+  796 |               </View>
+> 797 |             </Card>
+      |             ^
+  798 |
+  799 |
+  800 |             {/* ===============================]
+ ERROR  SyntaxError: D:\memari_soft\al_ameen_khadija_memari_old\src\app\deposit-fund.tsx: Expected corresponding JSX closing tag for <View>. (797:12)
+
+  795 | </View>
+  796 |               </View>
+> 797 |             </Card>
+      |             ^
+  798 |
+  799 |
+  800 |             {/* ===============================
+    at constructor (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:369:19)
+    at TypeScriptParserMixin.raise (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:6622:19)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4745:16)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4716:32)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4716:32)
+    at TypeScriptParserMixin.jsxParseElement (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4767:17)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4777:19)
+    at TypeScriptParserMixin.parseExprSubscripts (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11107:23)
+    at TypeScriptParserMixin.parseUpdate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11092:21)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11072:23)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9860:18)
+    at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10925:61)
+    at TypeScriptParserMixin.parseExprOps (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10930:23)
+    at TypeScriptParserMixin.parseMaybeConditional (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10907:23)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10857:21)
+    at D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9798:39
+    at TypeScriptParserMixin.tryParse (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:6930:20)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9798:18)
+    at D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10826:39
+    at TypeScriptParserMixin.allowInAnd (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:12460:12)
+    at TypeScriptParserMixin.parseMaybeAssignAllowIn (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10826:17)
+    at TypeScriptParserMixin.parseMaybeAssignAllowInOrVoidPattern (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:12527:17)
+    at TypeScriptParserMixin.parseParenAndDistinguishExpression (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11706:28)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11362:23)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4782:20)
+    at TypeScriptParserMixin.parseExprSubscripts (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11107:23)
+    at TypeScriptParserMixin.parseUpdate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11092:21)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11072:23)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9860:18)
+    at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10925:61)
+    at TypeScriptParserMixin.parseExprOpBaseRightExpr (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11012:34)
+    at TypeScriptParserMixin.parseExprOpRightExpr (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11007:21)
+    at TypeScriptParserMixin.parseExprOp (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10973:27)
+    at TypeScriptParserMixin.parseExprOp (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9329:18)
+    at TypeScriptParserMixin.parseExprOps (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10934:17)
+    at TypeScriptParserMixin.parseMaybeConditional (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10907:23)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10857:21)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9809:20)
+    at TypeScriptParserMixin.parseExpressionBase (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10810:23)
+    at D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10806:39
+    at TypeScriptParserMixin.allowInAnd (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:12460:12)
+    at TypeScriptParserMixin.parseExpression (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10806:17)
+    at TypeScriptParserMixin.jsxParseExpressionContainer (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4650:31)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4729:36)
+    at TypeScriptParserMixin.jsxParseElement (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4767:17)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4777:19)
+    at TypeScriptParserMixin.parseExprSubscripts (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11107:23)
+    at TypeScriptParserMixin.parseUpdate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11092:21)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11072:23)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9860:18)
+Web  ERROR  [TransformError: SyntaxError: D:\memari_soft\al_ameen_khadija_memari_old\src\app\deposit-fund.tsx: Expected corresponding JSX closing tag for <View>. (797:12)
+
+  795 | </View>
+  796 |               </View>
+> 797 |             </Card>
+      |             ^
+  798 |
+  799 |
+  800 |             {/* ===============================]
+ ERROR  SyntaxError: D:\memari_soft\al_ameen_khadija_memari_old\src\app\deposit-fund.tsx: Expected corresponding JSX closing tag for <View>. (797:12)
+
+  795 | </View>
+  796 |               </View>
+> 797 |             </Card>
+      |             ^
+  798 |
+  799 |
+  800 |             {/* ===============================
+    at constructor (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:369:19)
+    at TypeScriptParserMixin.raise (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:6622:19)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4745:16)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4716:32)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4716:32)
+    at TypeScriptParserMixin.jsxParseElement (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4767:17)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4777:19)
+    at TypeScriptParserMixin.parseExprSubscripts (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11107:23)
+    at TypeScriptParserMixin.parseUpdate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11092:21)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11072:23)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9860:18)
+    at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10925:61)
+    at TypeScriptParserMixin.parseExprOps (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10930:23)
+    at TypeScriptParserMixin.parseMaybeConditional (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10907:23)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10857:21)
+    at D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9798:39
+    at TypeScriptParserMixin.tryParse (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:6930:20)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9798:18)
+    at D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10826:39
+    at TypeScriptParserMixin.allowInAnd (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:12460:12)
+    at TypeScriptParserMixin.parseMaybeAssignAllowIn (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10826:17)
+    at TypeScriptParserMixin.parseMaybeAssignAllowInOrVoidPattern (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:12527:17)
+    at TypeScriptParserMixin.parseParenAndDistinguishExpression (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11706:28)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11362:23)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4782:20)
+    at TypeScriptParserMixin.parseExprSubscripts (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11107:23)
+    at TypeScriptParserMixin.parseUpdate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11092:21)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11072:23)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9860:18)
+    at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10925:61)
+    at TypeScriptParserMixin.parseExprOpBaseRightExpr (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11012:34)
+    at TypeScriptParserMixin.parseExprOpRightExpr (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11007:21)
+    at TypeScriptParserMixin.parseExprOp (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10973:27)
+    at TypeScriptParserMixin.parseExprOp (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9329:18)
+    at TypeScriptParserMixin.parseExprOps (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10934:17)
+    at TypeScriptParserMixin.parseMaybeConditional (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10907:23)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10857:21)
+    at TypeScriptParserMixin.parseMaybeAssign (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9809:20)
+    at TypeScriptParserMixin.parseExpressionBase (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10810:23)
+    at D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10806:39
+    at TypeScriptParserMixin.allowInAnd (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:12460:12)
+    at TypeScriptParserMixin.parseExpression (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:10806:17)
+    at TypeScriptParserMixin.jsxParseExpressionContainer (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4650:31)
+    at TypeScriptParserMixin.jsxParseElementAt (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4729:36)
+    at TypeScriptParserMixin.jsxParseElement (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4767:17)
+    at TypeScriptParserMixin.parseExprAtom (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:4777:19)
+    at TypeScriptParserMixin.parseExprSubscripts (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11107:23)
+    at TypeScriptParserMixin.parseUpdate (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11092:21)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:11072:23)
+    at TypeScriptParserMixin.parseMaybeUnary (D:\memari_soft\al_ameen_khadija_memari_old\node_modules\@babel\parser\lib\index.js:9860:18)
+Web  ERROR  [TransformError: SyntaxError: D:\memari_soft\al_ameen_khadija_memari_old\src\app\deposit-fund.tsx: Expected corresponding JSX closing tag for <View>. (797:12)
+
+  795 | </View>
+  796 |               </View>
+> 797 |             </Card>
+      |             ^
+  798 |
+  799 |
+  800 |             {/* ===============================]
+λ Bundled 309ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1 module)
+Web Bundled 1274ms node_modules\expo-router\entry.js (1 module)
+Web Bundled 115ms node_modules\expo-router\entry.js (1 module)
+Web  INFO  %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+Web  LOG  Running application "main" with appParams:
+ {"hydrate": undefined, "rootTag": "#root"} 
+Development-level warnings: ON.
+Performance optimizations: OFF.
+Web Bundled 34ms src\lib\pushNotifications.ts (1 module)
+Web  WARN  [expo-notifications] Listening to push token changes is not yet fully supported on web. Adding a listener will have no effect.
+Web  WARN  Image: style.resizeMode is deprecated. Please use props.resizeMode.
+λ Bundled 241ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1 module)
+Web Bundled 1025ms node_modules\expo-router\entry.js (1 module)
+Web Bundled 126ms node_modules\expo-router\entry.js (1 module)
+Web  INFO  %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+Web  LOG  Running application "main" with appParams:
+ {"hydrate": undefined, "rootTag": "#root"} 
+Development-level warnings: ON.
+Performance optimizations: OFF.
+Web Bundled 43ms src\lib\pushNotifications.ts (1 module)
+Web  WARN  [expo-notifications] Listening to push token changes is not yet fully supported on web. Adding a listener will have no effect.
+Web  WARN  Image: style.resizeMode is deprecated. Please use props.resizeMode.
+λ Bundled 54ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1 module)
+Web Bundled 374ms node_modules\expo-router\entry.js (1 module)
+Web Bundled 92ms node_modules\expo-router\entry.js (1 module)
+Web  INFO  %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+Web  LOG  Running application "main" with appParams:
+ {"hydrate": undefined, "rootTag": "#root"} 
+Development-level warnings: ON.
+Performance optimizations: OFF.
+Web Bundled 37ms src\lib\pushNotifications.ts (1 module)
+Web  WARN  [expo-notifications] Listening to push token changes is not yet fully supported on web. Adding a listener will have no effect.
+Web  WARN  Image: style.resizeMode is deprecated. Please use props.resizeMode.
+λ Bundled 216ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1 module)
+Web Bundled 932ms node_modules\expo-router\entry.js (1 module)
+Web Bundled 112ms node_modules\expo-router\entry.js (1 module)
+Web  INFO  %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+Web  LOG  Running application "main" with appParams:
+ {"hydrate": undefined, "rootTag": "#root"} 
+Development-level warnings: ON.
+Performance optimizations: OFF.
+Web Bundled 49ms src\lib\pushNotifications.ts (1 module)
+Web  WARN  [expo-notifications] Listening to push token changes is not yet fully supported on web. Adding a listener will have no effect.
+Web  WARN  Image: style.resizeMode is deprecated. Please use props.resizeMode.

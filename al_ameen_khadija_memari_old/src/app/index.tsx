@@ -228,8 +228,17 @@ export default function Login() {
           );
 
 
-        const data =
-          await response.json();
+        const responseText = await response.text();
+        let data: any = {};
+        if (responseText.trim()) {
+          try {
+            data = JSON.parse(responseText);
+          } catch {
+            throw new Error(`Login server returned invalid data (${response.status})`);
+          }
+        } else if (!response.ok) {
+          throw new Error(`Login server unavailable (${response.status})`);
+        }
 
 
         if (

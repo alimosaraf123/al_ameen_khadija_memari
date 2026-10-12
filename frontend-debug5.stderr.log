@@ -1,0 +1,4 @@
+[debugger-shell stderr] [92072:1012/120040.133:ERROR:electron\shell\common\node_bindings.cc:482] Most NODE_OPTIONs are not supported in packaged apps. See documentation for more details.
+
+[debugger-shell stderr] [92072:1012/120358.036:ERROR:gpu\ipc\client\command_buffer_proxy_impl.cc:327] GPU state invalid after WaitForGetOffsetInRange.
+

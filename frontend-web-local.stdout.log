@@ -1,0 +1,13 @@
+Starting project at D:\memari_soft\al_ameen_khadija_memari_old
+Using src/app as the root directory for Expo Router.
+Starting Metro Bundler
+
+Waiting on http://localhost:8082
+
+Logs for your project will appear below.
+| (node:102240) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+λ Bundled 7833ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1641 modules)
+Web Bundled 9323ms node_modules\expo-router\entry.js (1493 modules)
+λ Bundled 45ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1 module)
+Web Bundled 410ms node_modules\expo-router\entry.js (1 module)

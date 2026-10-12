@@ -75,6 +75,13 @@ export default function Dashboard() {
   const loadCounter=async()=>{try{const d=await api('/api/notices/admin-counter');setUnread(d.unread||0);}catch{}};
   useEffect(()=>{void getUser<any>().then(u=>{if(u)setDashboardName(String(u.full_name||u.name||u.login_id||'').trim())});void api('/api/me').then(d=>{setRestricted(!!d.restricted);setPermissions(d.permissions||[]);setUserRole(d.user?.role||'');setDashboardName(String(d.user?.full_name||d.user?.name||d.user?.login_id||'').trim())}).catch(()=>{});void loadCounter();const timer=setInterval(loadCounter,30000);return()=>clearInterval(timer);},[]);
   const openNotifications=async()=>{try{await api('/api/notices/read-all',{method:'POST'});setUnread(0);}finally{router.push('/notices');}};
+  const openMenu=(title:string,path:string)=>{
+    if(title==='Staff'){setTeacherMenu(true);return;}
+    if(title==='Students'){setStudentMenu(true);return;}
+    if(title==='Hostel'){setHostelMenu(true);return;}
+    if(title==='Academy'){setAcademyMenu(true);return;}
+    router.push(path as any);
+  };
 
   const logout =
     async () => {
@@ -120,11 +127,11 @@ export default function Dashboard() {
 
                 key={title}
 
-                path={title==='Students' ? '/students' : title==='Staff' ? '/teachers' : path}
+                path={title==='Students' || title==='Staff' || title==='Hostel' || title==='Academy' ? '#' : path}
 
                 style={s.card}
 
-                onPress={() => router.push((title==='Students' ? '/students' : title==='Staff' ? '/teachers' : path) as any)}
+                onPress={() => openMenu(title,path)}
 
               >
 

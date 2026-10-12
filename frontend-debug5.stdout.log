@@ -1,0 +1,36 @@
+Starting project at D:\memari_soft\al_ameen_khadija_memari_old
+Using src/app as the root directory for Expo Router.
+Starting Metro Bundler
+
+Waiting on http://localhost:8081
+
+Logs for your project will appear below.
+| (node:89420) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:89420) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:89420) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:89420) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:89420) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:89420) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+Android Bundled 38191ms node_modules\expo-router\entry.js (1961 modules)
+Android Bundled 855ms node_modules\expo-secure-store\build\SecureStore.js (642 modules)
+Android Bundled 7544ms src\lib\pushNotifications.ts (1394 modules)
+ WARN  Response.blob() is using React Native's Blob, which copies the response into the native blob store and reads it back through base64 encoding. This may be slow for large responses. Add the `expo-blob` package to your app to avoid the performance overhead.
+ INFO  Launching DevTools...
+[debugger-shell stdout] 
+
+λ Bundled 87193ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1638 modules)
+Web Bundled 89632ms node_modules\expo-router\entry.js (1493 modules)
+Web Bundled 72097ms node_modules\expo-router\entry.js (1493 modules)
+Web  INFO  %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+Web  LOG  Running application "main" with appParams:
+ {"hydrate": undefined, "rootTag": "#root"} 
+Development-level warnings: ON.
+Performance optimizations: OFF.
+Android Bundled 4043ms node_modules\expo-router\entry.js (1 module)
+Android Bundled 254ms node_modules\expo-secure-store\build\SecureStore.js (1 module)
