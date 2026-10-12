@@ -437,7 +437,9 @@ export default function Guardian() {
           const token = await getToken();
           const endpoint = doc.view_endpoint;
           if (!endpoint) throw new Error('Document preview is unavailable.');
-          const target = `${(FileSystem as any).cacheDirectory || ''}guardian-${doc.id}-${Date.now()}`;
+          const titleName = String(doc.document_title || doc.document_type || 'document').replace(/[^a-z0-9._-]+/gi, '_');
+          const extension = /\.[a-z0-9]{2,5}$/i.test(titleName) ? '' : (String(doc.mime_type || '').includes('pdf') ? '.pdf' : '.jpg');
+          const target = `${(FileSystem as any).cacheDirectory || ''}guardian-${doc.id}-${Date.now()}-${titleName}${extension}`;
           const result = await FileSystem.downloadAsync(API_BASE + endpoint, target, { headers: { Authorization: 'Bearer ' + token } });
           if (result.status < 200 || result.status >= 300) throw new Error('Document could not be opened.');
           uri = result.uri;
@@ -825,12 +827,14 @@ export default function Guardian() {
                   <Text style={styles.noticeText}>{notice.notice_text || notice.message || notice.content || notice.description}</Text>
                 )}
                 {!!notice.attachment_url && (
-                  <Image
-                    source={{ uri: /^https?:\/\//i.test(String(notice.attachment_url)) ? String(notice.attachment_url) : API_BASE + String(notice.attachment_url) }}
-                    style={styles.noticeAttachment}
-                    resizeMode="contain"
-                    accessibilityLabel="Notice attachment"
-                  />
+                  <TouchableOpacity onPress={() => { const uri = /^https?:\/\//i.test(String(notice.attachment_url)) ? String(notice.attachment_url) : API_BASE + String(notice.attachment_url); setSelectedDocument({ document_title: notice.title || 'Notice attachment' }); setSelectedDocumentUri(uri); documentBaseZoom.current = 1; setDocumentZoom(1); documentPinchScale.setValue(1); }} activeOpacity={0.85}>
+                    <Image
+                      source={{ uri: /^https?:\/\//i.test(String(notice.attachment_url)) ? String(notice.attachment_url) : API_BASE + String(notice.attachment_url) }}
+                      style={styles.noticeAttachment}
+                      resizeMode="contain"
+                      accessibilityLabel="Notice attachment"
+                    />
+                  </TouchableOpacity>
                 )}
                 {notice.notice_type !== 'gate_pass' && !!(notice.published_at || notice.created_at) && (
                   <Text style={styles.dateText}>{String(notice.published_at || notice.created_at).slice(0, 10)}</Text>
