@@ -1449,8 +1449,8 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
 
-  moreModalBackdrop: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.35)', justifyContent: 'center', alignItems: 'center', padding: 22 },
-  moreModal: { width: '100%', maxWidth: 420, backgroundColor: '#ffffff', borderRadius: 16, padding: 14, elevation: 8 },
+  moreModalBackdrop: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.35)', justifyContent: 'center', alignItems: 'flex-start', paddingHorizontal: 12 },
+  moreModal: { width: '86%', maxWidth: 360, alignSelf: 'flex-start', backgroundColor: '#ffffff', borderRadius: 16, padding: 14, elevation: 8 },
   moreModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   moreModalTitle: { color: '#1f2f5c', fontSize: 18, fontWeight: '900' },
   moreModalClose: { color: '#b42318', fontSize: 16, fontWeight: '900', padding: 6 },
