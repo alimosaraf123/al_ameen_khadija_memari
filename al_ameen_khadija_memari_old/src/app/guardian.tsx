@@ -943,7 +943,7 @@ export default function Guardian() {
         {tab === 'gatepass' && (
           <>
             <Text style={styles.heading}>Gate Pass Records</Text>
-            {gatePasses.length===0?<Card><Muted>No Gate Pass record found.</Muted></Card>:gatePasses.map((pass:any)=><Card key={pass.id} tone="notice"><View style={styles.gateHeader}><Text style={styles.noticeTitle}>{pass.token_no}</Text><Text style={[styles.gateStatus,pass.status==='returned'&&styles.gateReturned,pass.status==='cancelled'&&styles.gateCancelled]}>{pass.status==='draft'?'Ready to Print':pass.status==='pending'?'Outside / Return Pending':pass.status==='returned'?'Returned':'Cancelled'}</Text></View><Text style={styles.noticeText}>Reason: {pass.reason}</Text><Text style={styles.noticeText}>Departure Date: {pass.departure_text||String(pass.departure_at||'').slice(0,16).replace('T',' ')}</Text><Text style={styles.noticeText}>Return Date: {pass.return_text||String(pass.expected_return_at||'').slice(0,16).replace('T',' ')||'-'}</Text><Text style={styles.noticeText}>Actual return: {pass.returned_text||'Not returned yet'}</Text><Text style={styles.dateText}>{pass.return_delay_note}{pass.return_delay_days>0?` (${pass.return_delay_days} day${pass.return_delay_days===1?'':'s'} late)`:''}</Text></Card>)}
+            {gatePasses.length===0?<Card><Muted>No Gate Pass record found.</Muted></Card>:gatePasses.map((pass:any)=><Card key={pass.id} tone="notice"><View style={styles.gateHeader}><Text style={styles.noticeTitle}>{pass.token_no}</Text><Text style={[styles.gateStatus,pass.status==='returned'&&styles.gateReturned,pass.status==='cancelled'&&styles.gateCancelled]}>{pass.status==='draft'?'Ready to Print':pass.status==='pending'?'Outside / Return Pending':pass.status==='returned'?'Returned':'Cancelled'}</Text></View><Text style={styles.noticeText}>Reason: {pass.reason}</Text><Text style={styles.noticeText}>Printed on: {pass.printed_text||'Not printed yet'}</Text><Text style={styles.noticeText}>Departure Date: {pass.departure_text||String(pass.departure_at||'').slice(0,16).replace('T',' ')}</Text><Text style={styles.noticeText}>Return Date: {pass.return_text||String(pass.expected_return_at||'').slice(0,16).replace('T',' ')||'-'}</Text><Text style={styles.noticeText}>Actual return: {pass.returned_text||'Not returned yet'}</Text><Text style={styles.dateText}>{pass.return_delay_note}{pass.return_delay_days>0?` (${pass.return_delay_days} day${pass.return_delay_days===1?'':'s'} late)`:''}</Text></Card>)}
           </>
         )}
 
@@ -965,12 +965,12 @@ export default function Guardian() {
             ) : visitHistory.map((visit: any) => (
               <Card key={`visit-history-${visit.id}`}>
                 <View style={styles.gateHeader}><Text style={styles.noticeTitle}>{visit.visitor_name} ({visit.visitor_relation})</Text><Text style={styles.gateStatus}>{visit.status === 'completed' ? 'Completed' : 'Approved'}</Text></View>
-                <Text style={styles.noticeText}>Permission: {visit.visit_text}</Text>
-                <Text style={styles.noticeText}>Duration: {visit.duration_minutes} minutes</Text>
+                <Text style={styles.noticeText}>Permission date/time: {visit.visit_text}</Text>
+                <Text style={styles.noticeText}>Approved duration: {visit.duration_minutes} minutes</Text>
                 {visit.purpose && <Text style={styles.noticeText}>Purpose: {visit.purpose}</Text>}
                 <Text style={styles.noticeText}>Actual entry: {visit.entered_text || 'Not recorded'}</Text>
-                <Text style={styles.noticeText}>Entry type: {visit.entry_mode === 'with_permission' ? 'With Permission' : 'Without Permission'}</Text>
-                {visit.completed_text && <Text style={styles.dateText}>Completed: {visit.completed_text}</Text>}
+                <Text style={styles.noticeText}>Entry type: {visit.entry_mode ? (visit.entry_mode === 'with_permission' ? 'With Permission' : 'Without Permission') : 'Not entered yet'}</Text>
+                <Text style={styles.noticeText}>Visit completed: {visit.completed_text ? `Yes (${visit.completed_text})` : 'No'}</Text>
               </Card>
             ))}
             <Text style={styles.heading}>Visitor Entry Records</Text>
