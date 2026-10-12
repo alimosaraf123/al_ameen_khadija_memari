@@ -17,6 +17,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as WebBrowser from 'expo-web-browser';
+import * as Sharing from 'expo-sharing';
 
 import { api, API_BASE } from '../lib/api';
 import { clearSession, getToken } from '../lib/auth';
@@ -142,7 +144,8 @@ export default function Guardian() {
       if (!result?.payment_path) {
         throw new Error('Fee payment link could not be created.');
       }
-      await Linking.openURL(API_BASE + result.payment_path);
+      if (Platform.OS === 'web') await Linking.openURL(API_BASE + result.payment_path);
+      else await WebBrowser.openBrowserAsync(API_BASE + result.payment_path);
     } catch (e: any) {
       Alert.alert('Fee Payment', e.message || 'Unable to open the fee payment page.');
     }
@@ -158,7 +161,8 @@ export default function Guardian() {
       if (!result?.receipt_path) {
         throw new Error('Fee receipt link could not be created.');
       }
-      await Linking.openURL(API_BASE + result.receipt_path);
+      if (Platform.OS === 'web') await Linking.openURL(API_BASE + result.receipt_path);
+      else await WebBrowser.openBrowserAsync(API_BASE + result.receipt_path);
     } catch (e: any) {
       Alert.alert('Fee Receipt', e.message || 'Unable to open the fee receipt page.');
     }
@@ -427,9 +431,6 @@ export default function Guardian() {
 
   const openGuardianDocument = async (doc: any, download = false, print = false) => {
     if (Platform.OS !== 'web') {
-      if (download) {
-        return Alert.alert('Download', 'Download is available from the web panel.');
-      }
       try {
         let uri = documentPreviews[String(doc.id)] || '';
         if (!uri) {
@@ -440,7 +441,22 @@ export default function Guardian() {
           const result = await FileSystem.downloadAsync(API_BASE + endpoint, target, { headers: { Authorization: 'Bearer ' + token } });
           if (result.status < 200 || result.status >= 300) throw new Error('Document could not be opened.');
           uri = result.uri;
+          if (download) {
+            const canShare = await Sharing.isAvailableAsync();
+            if (!canShare) throw new Error('This device cannot save or share downloaded documents.');
+            await Sharing.shareAsync(uri, {
+              dialogTitle: 'Save or share document',
+              mimeType: doc.mime_type || 'application/octet-stream',
+              UTI: doc.mime_type || 'public.data',
+            });
+            return;
+          }
           setDocumentPreviews(current => ({ ...current, [String(doc.id)]: uri }));
+        } else if (download) {
+          const canShare = await Sharing.isAvailableAsync();
+          if (!canShare) throw new Error('This device cannot save or share downloaded documents.');
+          await Sharing.shareAsync(uri, { dialogTitle: 'Save or share document', mimeType: doc.mime_type || 'application/octet-stream', UTI: doc.mime_type || 'public.data' });
+          return;
         }
         setSelectedDocument(doc);
         setSelectedDocumentUri(uri);
@@ -808,7 +824,15 @@ export default function Guardian() {
                 {!!(notice.notice_text || notice.message || notice.content || notice.description) && (
                   <Text style={styles.noticeText}>{notice.notice_text || notice.message || notice.content || notice.description}</Text>
                 )}
-                {!!(notice.published_at || notice.created_at) && (
+                {!!notice.attachment_url && (
+                  <Image
+                    source={{ uri: /^https?:\/\//i.test(String(notice.attachment_url)) ? String(notice.attachment_url) : API_BASE + String(notice.attachment_url) }}
+                    style={styles.noticeAttachment}
+                    resizeMode="contain"
+                    accessibilityLabel="Notice attachment"
+                  />
+                )}
+                {notice.notice_type !== 'gate_pass' && !!(notice.published_at || notice.created_at) && (
                   <Text style={styles.dateText}>{String(notice.published_at || notice.created_at).slice(0, 10)}</Text>
                 )}
               </Card>
@@ -965,17 +989,17 @@ export default function Guardian() {
             <Text style={styles.heading}>Permission History</Text>
             {visitHistory.length === 0 ? (
               <Card><Muted>No visit permission history found.</Muted></Card>
-            ) : visitHistory.map((visit: any) => (
-              <Card key={`visit-history-${visit.id}`}>
-                <View style={styles.gateHeader}><Text style={styles.noticeTitle}>{visit.visitor_name} ({visit.visitor_relation})</Text><Text style={styles.gateStatus}>{visit.status === 'completed' ? 'Completed' : 'Approved'}</Text></View>
-                <Text style={styles.noticeText}>Permission date/time: {visit.visit_text}</Text>
-                <Text style={styles.noticeText}>Approved duration: {visit.duration_minutes} minutes</Text>
-                {visit.purpose && <Text style={styles.noticeText}>Purpose: {visit.purpose}</Text>}
-                <Text style={styles.noticeText}>Actual entry: {visit.entered_text || 'Not recorded'}</Text>
-                <Text style={styles.noticeText}>Entry type: {visit.entry_mode ? (visit.entry_mode === 'with_permission' ? 'With Permission' : 'Without Permission') : 'Not entered yet'}</Text>
-                <Text style={styles.noticeText}>Visit completed: {visit.completed_text ? `Yes (${visit.completed_text})` : 'No'}</Text>
-              </Card>
-            ))}
+            ) : <ScrollView horizontal showsHorizontalScrollIndicator persistentScrollbar><View style={styles.visitHistoryTable}>
+              <View style={[styles.visitHistoryRow, styles.visitHistoryHeader]}>{['Visitor','Status','Permission date/time','Duration','Entry','Completed'].map(label => <Text key={label} style={styles.visitHistoryCell}>{label}</Text>)}</View>
+              {visitHistory.map((visit: any, index: number) => <View key={`visit-history-${visit.id}`} style={[styles.visitHistoryRow,index%2===1&&styles.visitHistoryAltRow]}>
+                <Text style={[styles.visitHistoryCell,styles.visitHistoryStrong]}>{visit.visitor_name} ({visit.visitor_relation})</Text>
+                <Text style={styles.visitHistoryCell}>{visit.status === 'completed' ? 'Completed' : 'Approved'}</Text>
+                <Text style={styles.visitHistoryCell}>{visit.visit_text || '-'}</Text>
+                <Text style={styles.visitHistoryCell}>{visit.duration_minutes} minutes</Text>
+                <Text style={styles.visitHistoryCell}>{visit.entered_text || 'Not recorded'}{visit.entry_mode ? ` - ${visit.entry_mode === 'with_permission' ? 'With Permission' : 'Without Permission'}` : ''}</Text>
+                <Text style={styles.visitHistoryCell}>{visit.completed_text || 'Not completed'}</Text>
+              </View>)}
+            </View></ScrollView>}
             <Text style={styles.heading}>Visitor Entry Records</Text>
             {visitorEntries.length === 0 ? (
               <Card><Muted>No visitor entry recorded.</Muted></Card>
@@ -1578,6 +1602,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  visitHistoryTable:{minWidth:900,borderWidth:1,borderColor:'#cbd5e1',borderRadius:10,overflow:'hidden',backgroundColor:'#fff'},visitHistoryRow:{flexDirection:'row',borderBottomWidth:1,borderBottomColor:'#dbe3ec',minHeight:58},visitHistoryHeader:{backgroundColor:'#e7eef7'},visitHistoryAltRow:{backgroundColor:'#f8fafc'},visitHistoryCell:{width:155,padding:12,color:'#334155',fontSize:12},visitHistoryStrong:{fontWeight:'900',color:'#173b67'},
+  noticeAttachment: { width: '100%', height: 260, marginTop: 10, backgroundColor: '#f8fafc', borderRadius: 8 },
   noticeText: {
     marginTop: 6,
     color: '#475467',

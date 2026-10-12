@@ -99,13 +99,15 @@ const configuredApiBase = process.env.EXPO_PUBLIC_API_BASE_URL
 
 const MOBILE_API =
   configuredApiBase ||
-  'https://aammeamri.onrender.com';
+  'https://alameenk.onrender.com';
 
 const WEB_API =
-  (typeof window !== 'undefined' &&
+  (Platform.OS === 'web' &&
+  typeof window !== 'undefined' &&
+  window.location?.hostname &&
   ['localhost', '127.0.0.1'].includes(window.location.hostname)
     ? `${window.location.protocol}//${window.location.hostname}:3000`
-    : configuredApiBase || 'https://aammeamri.onrender.com');
+    : configuredApiBase || 'https://alameenk.onrender.com');
 
 export const API_BASE =
   Platform.OS === 'web'
