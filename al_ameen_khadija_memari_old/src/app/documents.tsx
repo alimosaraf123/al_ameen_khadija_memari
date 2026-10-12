@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Animated,
   ScrollView,
   Text,
   View,
@@ -9,6 +10,7 @@ import {
   Modal,
   Image,
 } from 'react-native';
+import { PinchGestureHandler, State } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system/legacy';
 import { File as ExpoFile } from 'expo-file-system';
@@ -269,6 +271,9 @@ export default function Documents() {
   const [previewTitle, setPreviewTitle] = useState('');
   const [previewObjectUrl, setPreviewObjectUrl] =
     useState<string | null>(null);
+  const [previewZoom, setPreviewZoom] = useState(1);
+  const previewPinchScale = React.useRef(new Animated.Value(1)).current;
+  const previewBaseZoom = React.useRef(1);
 
   const closePreview = () => {
     if (
@@ -281,6 +286,9 @@ export default function Documents() {
 
     setPreviewObjectUrl(null);
     setPreviewUri(null);
+    previewBaseZoom.current = 1;
+    setPreviewZoom(1);
+    previewPinchScale.setValue(1);
   };
 
   const loadStudents = async () => {
@@ -1374,11 +1382,28 @@ export default function Documents() {
           </View>
 
           {previewUri && (
-            <Image
-              source={{ uri: previewUri }}
-              style={styles.previewImage}
-              resizeMode="contain"
-            />
+            <PinchGestureHandler
+              onGestureEvent={Animated.event(
+                [{ nativeEvent: { scale: previewPinchScale } }],
+                { useNativeDriver: true }
+              )}
+              onHandlerStateChange={(event: any) => {
+                if (event.nativeEvent.oldState === State.ACTIVE) {
+                  const next = Math.min(4, Math.max(1, previewBaseZoom.current * Number(event.nativeEvent.scale || 1)));
+                  previewBaseZoom.current = next;
+                  setPreviewZoom(next);
+                  previewPinchScale.setValue(1);
+                }
+              }}
+            >
+              <Animated.View style={styles.previewZoomArea}>
+                <Animated.Image
+                  source={{ uri: previewUri }}
+                  style={[styles.previewImage, { transform: [{ scale: Animated.multiply(previewPinchScale, previewZoom) }] }]}
+                  resizeMode="contain"
+                />
+              </Animated.View>
+            </PinchGestureHandler>
           )}
         </SafeAreaView>
       </Modal>
@@ -1737,6 +1762,13 @@ const styles = StyleSheet.create({
   previewCloseText: {
     color: '#fff',
     fontWeight: '800',
+  },
+
+  previewZoomArea: {
+    flex: 1,
+    width: '100%',
+    overflow: 'hidden',
+    backgroundColor: '#000',
   },
 
   previewImage: {

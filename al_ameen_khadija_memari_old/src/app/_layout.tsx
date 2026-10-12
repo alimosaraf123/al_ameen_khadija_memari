@@ -4,6 +4,7 @@ import {Stack,router,usePathname} from 'expo-router';
 import {api} from '../lib/api';
 import {clearSession,getToken,subscribeSession} from '../lib/auth';
 import {canOpenRoute,PRIVATE_ROUTES} from '../lib/routeAccess';
+import {GestureHandlerRootView} from 'react-native-gesture-handler';
 
 export default function Layout() {
  const [session,setSession]=useState<{checked:boolean;user:any}>({checked:false,user:null});
@@ -28,7 +29,11 @@ export default function Layout() {
    const current=++request.current;
    let user=null;
    try {
-    if(await getToken()) {
+    const token = await Promise.race([
+      getToken(),
+      new Promise<string | null>(resolve=>setTimeout(()=>resolve(null),2000)),
+    ]);
+    if(token) {
      const data=await Promise.race([
       api('/api/me'),
       new Promise<never>((_,reject)=>setTimeout(()=>reject(new Error('Session check timed out')),6000)),
@@ -74,10 +79,10 @@ export default function Layout() {
   return()=>sub.remove();
  },[]);
  if(!session.checked)return <View style={{flex:1,alignItems:'center',justifyContent:'center'}}><ActivityIndicator size="large" accessibilityLabel="Checking login"/></View>;
- return <Stack screenOptions={{headerShown:false}}>
+ return <GestureHandlerRootView style={{flex:1}}><Stack screenOptions={{headerShown:false}}>
   <Stack.Screen name="index"/>
   {PRIVATE_ROUTES.map(name=><Stack.Protected key={name} guard={canOpenRoute(name,session.user)}><Stack.Screen name={name}/></Stack.Protected>)}
- </Stack>;
+ </Stack></GestureHandlerRootView>;
 }
 
 export function ErrorBoundary({error}: {error: Error}) {
