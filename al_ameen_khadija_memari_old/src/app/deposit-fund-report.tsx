@@ -619,6 +619,9 @@ Thank you.`;
 
   const summary =
     data?.summary || {};
+  const reportDeposit = Number(summary.total_deposit || 0);
+  const reportDue = Number(summary.total_due ?? summary.total_expense ?? 0);
+  const reportNet = reportDeposit - reportDue;
 
 
   return (
@@ -723,8 +726,7 @@ Thank you.`;
             label="Total Deposit"
             value={
               `₹${Number(
-                summary.total_deposit ||
-                0
+                reportDeposit
               ).toFixed(2)}`
             }
           />
@@ -733,8 +735,7 @@ Thank you.`;
             label="Total Due (Combined)"
             value={
               `₹${Number(
-                summary.total_expense ||
-                0
+                reportDue
               ).toFixed(2)}`
             }
           />
@@ -759,8 +760,7 @@ Thank you.`;
               styles.netValue,
 
               Number(
-                summary.net_fund_balance ||
-                0
+                reportNet
               ) >= 0
 
                 ? styles.positive
@@ -770,13 +770,11 @@ Thank you.`;
           >
 
             {Number(
-              summary.net_fund_balance ||
-              0
+              reportNet
             ) > 0
               ? '+ '
               : Number(
-                  summary.net_fund_balance ||
-                  0
+                  reportNet
                 ) < 0
               ? '- '
               : ''}
@@ -784,8 +782,7 @@ Thank you.`;
             ₹
             {Math.abs(
               Number(
-                summary.net_fund_balance ||
-                0
+                reportNet
               )
             ).toFixed(2)}
 

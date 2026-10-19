@@ -524,6 +524,8 @@ export default function DepositFund() {
 
 
   const statementTotals = getStatementTotals();
+  const combinedDue = (statement?.balances || []).reduce((sum:any, row:any) => sum + Math.max(0, -Number(row.balance || 0)), 0);
+  const combinedDeposit = (statement?.balances || []).reduce((sum:any, row:any) => sum + Math.max(0, Number(row.balance || 0)), 0);
 
   return (
 
@@ -576,18 +578,18 @@ export default function DepositFund() {
           <Button title="View Statement" onPress={searchStatement} />
           {statement && <>
             <View style={styles.statementSummaryBox}>
-              <View style={styles.statementSummaryItem}><Text style={styles.statementSummaryLabel}>Total Deposit</Text><Text style={styles.statementDepositValue}>{'\u20B9'}{Number(statement.summary?.deposit || 0).toFixed(2)}</Text></View>
-              <View style={styles.statementSummaryItem}><Text style={styles.statementSummaryLabel}>Total Due (Combined)</Text><Text style={styles.statementWithdrawalValue}>{'\u20B9'}{statementTotals.withdrawal.toFixed(2)}</Text></View>
+              <View style={styles.statementSummaryItem}><Text style={styles.statementSummaryLabel}>Total Deposit</Text><Text style={styles.statementDepositValue}>{'\u20B9'}{combinedDeposit.toFixed(2)}</Text></View>
+              <View style={styles.statementSummaryItem}><Text style={styles.statementSummaryLabel}>Total Due (Combined)</Text><Text style={styles.statementWithdrawalValue}>{'\u20B9'}{combinedDue.toFixed(2)}</Text></View><View style={styles.statementSummaryItem}><Text style={styles.statementSummaryLabel}>Total Transactions</Text><Text style={styles.statementDepositValue}>{'\u20B9'}{(combinedDeposit+combinedDue).toFixed(2)}</Text></View>
               <View style={styles.statementBalanceBox}>
-                <Text style={statementTotals.balance >= 0 ? styles.statementAdvanceLabel : styles.statementDueLabel}>
-                  {statementTotals.balance >= 0 ? 'SDF Advance' : 'SDF Due'}
+                <Text style={combinedDeposit - combinedDue >= 0 ? styles.statementAdvanceLabel : styles.statementDueLabel}>
+                  {combinedDeposit - combinedDue >= 0 ? 'SDF Advance' : 'SDF Due'}
                 </Text>
-                <Text style={statementTotals.balance >= 0 ? styles.statementAdvanceValue : styles.statementDueValue}>
-                  {statementTotals.balance < 0 ? '-' : '+'}{'\u20B9'}{Math.abs(statementTotals.balance).toFixed(2)}
+                <Text style={combinedDeposit - combinedDue >= 0 ? styles.statementAdvanceValue : styles.statementDueValue}>
+                  {combinedDeposit - combinedDue < 0 ? '-' : '+'}{'\u20B9'}{Math.abs(combinedDeposit - combinedDue).toFixed(2)}
                 </Text>
               </View>
             </View>
-            <Text style={styles.statementHistoryTitle}>Transaction History</Text>
+            {Platform.OS==='web'&&<ScrollView horizontal style={{marginTop:12}}><View style={{minWidth:1015,borderWidth:1,borderColor:'#b8c9db'}}><View style={{flexDirection:'row',backgroundColor:'#d8f2fa'}}>{['#','T. ID','Date','Reg.','Class','Name','Particulars','Withdrawal','Deposit','Balance','Remarks','Exe. By'].map((h,i)=><Text key={h} style={[styles.statementTableHead,{width:[35,60,90,65,55,130,150,85,85,85,90,60][i]}]}>{h}</Text>)}</View>{getStatementRows().map((item:any,i:number)=><View key={String(item.id)+'-'+i} style={{flexDirection:'row',backgroundColor:i%2?'#f5f5f5':'#fff'}}><Text style={[styles.statementTableCell,{width:35}]}>{i+1}</Text><Text style={[styles.statementTableCell,{width:60}]}>{item.id||'-'}</Text><Text style={[styles.statementTableCell,{width:90}]}>{String(item.transaction_date||'').slice(0,10)}</Text><Text style={[styles.statementTableCell,{width:65}]}>{item.registration_no||'-'}</Text><Text style={[styles.statementTableCell,{width:55}]}>{item.class_name||'-'}</Text><Text style={[styles.statementTableCell,{width:130}]}>{item.student_name||'-'}</Text><Text style={[styles.statementTableCell,{width:150}]}>{item.statementType==='Due'?(item.due_title||item.details||'Due'):(item.details|| (item.transaction_type==='deposit'?'Cash/Deposited By Self':'Cash/Withdrawal By Self'))}</Text><Text style={[styles.statementTableCell,{width:85}]}>{item.withdrawal?Number(item.withdrawal).toFixed(2):'-'}</Text><Text style={[styles.statementTableCell,{width:85}]}>{item.deposit?Number(item.deposit).toFixed(2):'-'}</Text><Text style={[styles.statementTableCell,{width:85}]}>{item.running_balance===''?'':Number(item.running_balance||0).toFixed(2)}</Text><Text style={[styles.statementTableCell,{width:90}]}>{item.remarks||'-'}</Text><Text style={[styles.statementTableCell,{width:60}]}>{item.created_by||'-'}</Text></View>)}</View></ScrollView>}<Text style={styles.statementHistoryTitle}>Transaction History</Text>
             {(statement.transactions || []).map((item:any) => <View key={item.id} style={styles.statementTransaction}>
               <View style={styles.transactionTop}><Text style={styles.transactionType}>ID: {item.id}</Text><Text style={item.transaction_type === 'deposit' ? styles.depositAmount : styles.expenseAmount}>{item.transaction_type === 'deposit' ? '+' : '-'} {'\u20B9'}{Number(item.amount || 0).toFixed(2)}</Text></View>
               <Text style={styles.transactionDetails}>{String(item.transaction_date || '').slice(0, 10)} · Reg. {item.registration_no || '-'} · {item.details || '-'}</Text>
@@ -606,10 +608,10 @@ export default function DepositFund() {
             {(() => { const totals = statementTotals; return <View style={styles.statementTotalsRow}>
               <Text style={styles.statementTotalsLabel}>Total</Text>
               <Text style={styles.statementTotalsValue}>Deposit: {'\u20B9'}{totals.deposit.toFixed(2)}</Text>
-              <Text style={styles.statementTotalsValue}>Due (Combined): {'\u20B9'}{totals.withdrawal.toFixed(2)}</Text>
+              <Text style={styles.statementTotalsValue}>Due (Combined): {'\u20B9'}{totals.withdrawal.toFixed(2)}</Text><Text style={styles.statementTotalsValue}>Total Transactions: {'\u20B9'}{(totals.deposit+totals.withdrawal).toFixed(2)}</Text>
               <Text style={[styles.statementTotalsValue, totals.balance < 0 ? styles.statementDueValue : styles.statementAdvanceValue]}>Balance: {totals.balance < 0 ? '-' : '+'}{'\u20B9'}{Math.abs(totals.balance).toFixed(2)}</Text>
             </View>; })()}
-            <Text style={styles.dashboardText}>Present Balance: {statementTotals.balance > 0 ? '+' : statementTotals.balance < 0 ? '-' : ''}{'\u20B9'}{Math.abs(statementTotals.balance).toFixed(2)}</Text>
+            <Text style={styles.dashboardText}>Present Balance: {statementTotals.balance > 0 ? '+' : statementTotals.balance < 0 ? '-' : ''}{'\u20B9'}{Math.abs(combinedDeposit - combinedDue).toFixed(2)}</Text>
             {(statement.balances || []).filter((row:any) => Number(row.balance || 0) !== 0).map((row:any) => <TouchableOpacity key={row.registration_no} accessibilityRole="button" onPress={() => { void openStatementStudent(row); }} style={styles.statementRow}><Text style={styles.statementName}>{row.student_name} · Reg. {row.registration_no}</Text><Text>Balance: {Number(row.balance || 0) > 0 ? '+' : '-'}₹{Math.abs(Number(row.balance || 0)).toFixed(2)}</Text><Text style={styles.statementLink}>Open student account</Text></TouchableOpacity>)}
             <Button title="Download Excel" onPress={downloadStatementExcel} />
             <Button title="Print Statement" onPress={printStatement} />
@@ -1222,7 +1224,7 @@ whatsappText: {
       marginTop: 3,
     },
 
-    statementHistoryTitle: {
+    statementTableHead:{padding:5,borderRightWidth:1,borderBottomWidth:1,borderColor:'#9fb4ca',fontWeight:'900',color:'#173f68'},statementTableCell:{padding:5,borderRightWidth:1,borderBottomWidth:1,borderColor:'#d5dee8',fontSize:12},statementHistoryTitle: {
       fontSize: 17,
       fontWeight: '900',
       marginTop: 12,
@@ -1301,7 +1303,7 @@ whatsappText: {
     },
 
     statementAdvanceLabel: {
-      color: '#1565c0',
+      color: '#087f23',
       fontWeight: '900',
     },
 
@@ -1311,7 +1313,7 @@ whatsappText: {
     },
 
     statementAdvanceValue: {
-      color: '#1565c0',
+      color: '#087f23',
       fontWeight: '900',
       fontSize: 22,
       marginTop: 3,
@@ -1376,7 +1378,7 @@ whatsappText: {
     },
 
     savedBookNo: {
-      color: '#1565c0',
+      color: '#087f23',
       fontWeight: '900',
     },
 
@@ -1430,7 +1432,7 @@ whatsappText: {
 
     changeStudentText: {
       textAlign: 'center',
-      color: '#1565c0',
+      color: '#087f23',
       fontWeight: '700',
     },
 
@@ -1482,7 +1484,7 @@ whatsappText: {
 
     typeText: {
       textAlign: 'center',
-      color: '#1565c0',
+      color: '#087f23',
       fontWeight: '800',
     },
 
