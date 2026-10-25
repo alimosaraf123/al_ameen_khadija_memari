@@ -488,7 +488,7 @@ router.post(
       result.rows[0];
 
     if (
-      !['guardian','teacher','gateman','office','library'].includes(user.role)
+      !['super_admin','guardian','teacher','gateman','office','library'].includes(user.role)
     ) {
       return res.status(403).json({
         success: false,

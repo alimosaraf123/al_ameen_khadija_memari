@@ -50,6 +50,7 @@ import {
 
 
 const panelForRole=(role:string)=>role==='guardian'?'/guardian':role==='teacher'?'/teacher':role==='gateman'?'/gateman':role==='office'?'/office':role==='library'?'/library':'/';
+const offlineMessage=(e:any)=>{const m=String(e?.message||'');return /network|fetch failed|unknownhost|unable to resolve host|internet|timeout|aborted/i.test(m)?'Please connect internet and try again.':(m||'Unable to login');};
 
 export default function Login() {
 
@@ -89,7 +90,7 @@ export default function Login() {
   const [
     usePasswordLogin,
     setUsePasswordLogin
-  ] = useState(true);
+  ] = useState(Platform.OS === 'web');
 
 
   // FINGERPRINT
@@ -127,6 +128,13 @@ export default function Login() {
           const biometric =
             await hasGuardianBiometricToken();
 
+          // Keep the login action visible on native devices when the phone
+          // supports enrolled biometrics. The saved device token is checked
+          // again when the user presses the button.
+          const nativeBiometricReady = Platform.OS !== 'web'
+            && await LocalAuthentication.hasHardwareAsync()
+            && await LocalAuthentication.isEnrolledAsync();
+
           const savedBiometricAccount = await getBiometricAccount();
           const savedRoleToken = savedBiometricAccount?.role
             ? await getRoleBiometricToken(savedBiometricAccount.role)
@@ -149,7 +157,7 @@ export default function Login() {
             setUserId(loginId);
             setUsePasswordLogin(false);
           } else if (
-            biometric &&
+            (biometric || nativeBiometricReady) &&
             Platform.OS !== 'web'
           ) {
             setFingerprintAvailable(true);
@@ -261,6 +269,9 @@ export default function Login() {
         );
 
         if (data.user.password_change_required) { router.replace('/settings'); return; }
+        const savedLoginId = data.user.login_id || userId.trim();
+        await saveGuardianDeviceAccount(savedLoginId);
+        setGuardianLoginId(savedLoginId);
 
 
         if (['gateman','office','library'].includes(data.user.role)) {
@@ -330,9 +341,7 @@ export default function Login() {
 
       } catch (e: any) {
 
-        const message =
-          e.message ||
-          'Unable to login';
+        const message = offlineMessage(e);
 
         setLoginError(message);
 
@@ -439,6 +448,9 @@ export default function Login() {
         );
 
         if (data.user.password_change_required) { router.replace('/settings'); return; }
+        const savedLoginId = data.user.login_id || userId.trim();
+        await saveGuardianDeviceAccount(savedLoginId);
+        setGuardianLoginId(savedLoginId);
 
 
         setMpin('');
@@ -451,8 +463,7 @@ export default function Login() {
 
         Alert.alert(
           'mPIN Login Failed',
-          e.message ||
-          'Unable to login'
+          offlineMessage(e)
         );
 
 
@@ -610,6 +621,9 @@ export default function Login() {
         );
 
         if (data.user.password_change_required) { router.replace('/settings'); return; }
+        const savedLoginId = data.user.login_id || userId.trim();
+        await saveGuardianDeviceAccount(savedLoginId);
+        setGuardianLoginId(savedLoginId);
 
 
         router.replace(panelForRole(data.user.role) as any);
@@ -619,8 +633,7 @@ export default function Login() {
 
         Alert.alert(
           'Fingerprint Login Failed',
-          e.message ||
-          'Unable to login'
+          offlineMessage(e)
         );
 
 
@@ -714,7 +727,7 @@ export default function Login() {
 
 
         {!usePasswordLogin &&
-         (guardianLoginId || fingerprintAvailable) ? (
+         (Platform.OS !== 'web' || guardianLoginId || fingerprintAvailable) ? (
 
           <>
 
@@ -734,8 +747,7 @@ export default function Login() {
 
             {/* FINGERPRINT */}
 
-            {fingerprintAvailable &&
-             Platform.OS !== 'web' && (
+            {(fingerprintAvailable || Platform.OS !== 'web') && (
 
               <>
 

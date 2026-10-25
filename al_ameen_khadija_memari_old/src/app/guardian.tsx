@@ -29,7 +29,7 @@ import {
   getGuardianBiometricToken,
 } from '../lib/guardianDevice';
 import { Field, Button, Muted } from '../components/ui';
-import { PinchGestureHandler, State } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, PinchGestureHandler, State } from 'react-native-gesture-handler';
 
 type TabName = 'home' | 'result' | 'gatepass' | 'visits' | 'details' | 'documents' | 'library' | 'notifications' | 'settings';
 
@@ -38,7 +38,9 @@ const DOCUMENT_ORDER = ['photo','father_photo','mother_photo','visitor1_photo','
 const DOCUMENT_LABELS: Record<string,string> = {photo:'Student Photo',father_photo:'Father Photo',mother_photo:'Mother Photo',visitor1_photo:'Visitor 1 Photo',visitor2_photo:'Visitor 2 Photo',birth_certificate:'Birth Certificate',aadhaar:'Aadhaar Card',bank_passbook:'Bank Book',ix_registration:'MP Registration',mp_admit:'MP Admit',mp_marksheet:'MP Marksheet',transfer_certificate:'T.C.',admission_slip:'Admission Slip',xi_registration:'HS Registration',hs_admit_3rd:'3rd Semester Admit',hs_admit_4th:'4th Semester Admit',hs_marksheet:'HS Result',hs_certificate:'HS Certificate',signature:'Signature',obc_certificate:'OBC Certificate',ph_certificate:'P.H. Certificate',xi_admission_slip:'HS Admission Slip',xi_marksheet:'HS Marksheet',other:'Other Document',other_2:'Other Document 2',other_3:'Other Document 3'};
 const documentLabel = (doc: any) => DOCUMENT_LABELS[String(doc.document_type || '').toLowerCase()] || doc.document_title || doc.document_type || 'Document';
 const guardianPopup = (title: string, message: string) => {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') window.alert(`${title}\n\n${message}`);
+  if (Platform.OS === 'web' && typeof window !== 'undefined') window.alert(`${title}
+
+${message}`);
   else Alert.alert(title, message);
 };
 const resultImageUri = (title: string, headers: string[], rows: string[][]) => {
@@ -123,6 +125,9 @@ export default function Guardian() {
     const loadPreviews = async () => {
       const docs = childData?.documents || [];
       if (!docs.length) { setDocumentPreviews({}); return; }
+      // Native Image cannot display browser blob URLs. Native previews are
+      // downloaded on demand by openGuardianDocument instead.
+      if (Platform.OS !== 'web') { setDocumentPreviews({}); return; }
       const token = await getToken();
       const entries = await Promise.all(docs.map(async (doc: any) => {
         if (!doc.view_endpoint) return [String(doc.id), ''] as const;
@@ -313,17 +318,17 @@ export default function Guardian() {
 
   const saveMpin = async () => {
     if (!mpinPassword) {
-      Alert.alert('Required', 'Current Password লিখুন।');
+      guardianPopup('Required', 'Current Password লিখুন।');
       return;
     }
 
     if (!/^\d{6}$/.test(mpin)) {
-      Alert.alert('Invalid mPIN', 'mPIN ঠিক 6 সংখ্যার হতে হবে।');
+      guardianPopup('Invalid mPIN', 'mPIN ঠিক 6 সংখ্যার হতে হবে।');
       return;
     }
 
     if (mpin !== confirmMpin) {
-      Alert.alert('mPIN mismatch', 'mPIN এবং Confirm mPIN একই নয়।');
+      guardianPopup('mPIN mismatch', 'mPIN এবং Confirm mPIN একই নয়।');
       return;
     }
 
@@ -338,13 +343,13 @@ export default function Guardian() {
         }),
       });
 
-      Alert.alert('Success', 'mPIN saved successfully.');
+      guardianPopup('Success', 'mPIN saved successfully.');
       setMpinPassword('');
       setMpin('');
       setConfirmMpin('');
       setShowMpinPanel(false);
     } catch (e: any) {
-      Alert.alert('Error', e.message);
+      guardianPopup('Error', e.message);
     } finally {
       setSavingMpin(false);
     }
@@ -433,6 +438,9 @@ export default function Guardian() {
     if (Platform.OS !== 'web') {
       try {
         let uri = documentPreviews[String(doc.id)] || '';
+        // Always fetch a fresh, authenticated file for downloads. A preview
+        // URI may be a browser blob URL and cannot be shared by Android.
+        if (download) uri = '';
         if (!uri) {
           const token = await getToken();
           const endpoint = doc.view_endpoint;
@@ -444,6 +452,27 @@ export default function Guardian() {
           if (result.status < 200 || result.status >= 300) throw new Error('Document could not be opened.');
           uri = result.uri;
           if (download) {
+            const saf = (FileSystem as any).StorageAccessFramework;
+            if (saf?.requestDirectoryPermissionsAsync) {
+              const picked = await saf.requestDirectoryPermissionsAsync();
+              if (picked.granted) {
+                const name = `${titleName}${extension}`;
+                const target = await saf.createFileAsync(picked.directoryUri, name, doc.mime_type || 'application/octet-stream');
+                const base64 = await FileSystem.readAsStringAsync(uri, { encoding: (FileSystem as any).EncodingType?.Base64 || 'base64' });
+                await FileSystem.writeAsStringAsync(target, base64, { encoding: (FileSystem as any).EncodingType?.Base64 || 'base64' });
+                Alert.alert('Download complete', 'File saved to the selected mobile folder.');
+                return;
+              }
+            }
+            if (String(doc.mime_type || '').startsWith('image/')) {
+              const MediaLibrary = require('expo-media-library');
+              const permission = await MediaLibrary.requestPermissionsAsync();
+              if (permission.granted) {
+                await MediaLibrary.saveToLibraryAsync(uri);
+                Alert.alert('Download complete', 'Document saved to the phone gallery.');
+                return;
+              }
+            }
             const canShare = await Sharing.isAvailableAsync();
             if (!canShare) throw new Error('This device cannot save or share downloaded documents.');
             await Sharing.shareAsync(uri, {
@@ -1171,6 +1200,7 @@ export default function Guardian() {
         )}
 
         <Modal visible={!!selectedDocument} transparent animationType="fade" onRequestClose={() => setSelectedDocument(null)}>
+          <GestureHandlerRootView style={{ flex: 1 }}>
           <Pressable style={styles.documentViewerOverlay} onPress={() => setSelectedDocument(null)}>
             <Pressable style={styles.documentViewerCard} onPress={() => {}}>
               <View style={styles.documentViewerHeader}>
@@ -1180,6 +1210,7 @@ export default function Guardian() {
               {selectedDocumentUri ? <PinchGestureHandler onGestureEvent={Animated.event([{ nativeEvent: { scale: documentPinchScale } }], { useNativeDriver: true })} onHandlerStateChange={(event: any) => { if (event.nativeEvent.oldState === State.ACTIVE) { const next = Math.min(4, Math.max(1, documentBaseZoom.current * Number(event.nativeEvent.scale || 1))); documentBaseZoom.current = next; setDocumentZoom(next); documentPinchScale.setValue(1); } }}><Animated.View style={styles.documentZoomArea}><Animated.Image source={{ uri: selectedDocumentUri }} style={[styles.documentViewerImage, { transform: [{ scale: Animated.multiply(documentPinchScale, documentZoom) }] }]} resizeMode="contain" /></Animated.View></PinchGestureHandler> : <Muted>Loading document...</Muted>}
             </Pressable>
           </Pressable>
+          </GestureHandlerRootView>
         </Modal>
 
         {/* LIBRARY */}
@@ -1913,4 +1944,9 @@ const styles = StyleSheet.create({
   documentViewerImage: { flex: 1, width: '100%', backgroundColor: '#f4f6f8' },
   documentZoomArea: { flex: 1, width: '100%', overflow: 'hidden', backgroundColor: '#f4f6f8' },
 });
+
+
+
+
+
 

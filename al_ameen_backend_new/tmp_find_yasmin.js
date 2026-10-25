@@ -1,0 +1,1 @@
+require('dotenv').config();const p=require('./src/db');(async()=>{console.log((await p.query("SELECT registration_no,student_name,class_name,is_active FROM students WHERE lower(student_name) LIKE '%yasmin%' OR registration_no LIKE '%73554%'")).rows);await p.end()})()

@@ -1,0 +1,1 @@
+require('dotenv').config();const p=require('./src/db');(async()=>{console.log((await p.query("SELECT pid,wait_event_type,wait_event,state,query FROM pg_stat_activity WHERE datname=current_database() AND state<>'idle'")).rows);await p.end()})()

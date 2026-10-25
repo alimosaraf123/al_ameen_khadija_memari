@@ -1,0 +1,109 @@
+
+> al_ameen_khadija_memari@1.0.0 web
+> expo start --web
+
+Starting project at D:\memari_soft\al_ameen_khadija_memari_old
+Using src/app as the root directory for Expo Router.
+Starting Metro Bundler
+
+Waiting on http://localhost:8081
+
+An update for expo is available: 57.0.27 → ~57.0.28
+4 other packages may need updating. Run npx expo install --check for details.
+Logs for your project will appear below.
+| (node:25628) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:25628) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:25628) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:25628) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:25628) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:25628) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+λ Bundled 19154ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1655 modules)
+
+Metro error: Class extends value undefined is not a constructor or null
+
+  TypeError: Class extends value undefined is not a constructor or null
+    at D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:188667:52
+    at loadModuleImplementation (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:263:7)
+    at guardedLoadModule (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:169:14)
+    at metroRequire (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:89:75)
+    at D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:184936:27
+    at loadModuleImplementation (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:263:7)
+    at guardedLoadModule (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:162:23)
+    at metroRequire (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:89:75)
+    at Object.get [as ./guardian.tsx] (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:97425:16)
+    at metroContext (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:97604:15)
+Web Bundled 20048ms node_modules\expo-router\entry.js (1511 modules)
+λ Bundled 2108ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1 module)
+
+Metro error: Class extends value undefined is not a constructor or null
+
+  TypeError: Class extends value undefined is not a constructor or null
+    at D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:188667:52
+    at loadModuleImplementation (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:263:7)
+    at guardedLoadModule (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:169:14)
+    at metroRequire (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:89:75)
+    at D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:184936:27
+    at loadModuleImplementation (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:263:7)
+    at guardedLoadModule (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:162:23)
+    at metroRequire (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:89:75)
+    at Object.get [as ./guardian.tsx] (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:97425:16)
+    at metroContext (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:97604:15)
+Web Bundled 2775ms node_modules\expo-router\entry.js (1 module)
+Web Bundled 511ms .expo\static-tmp\_error.js (63 modules)
+λ Bundled 105ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1 module)
+
+Metro error: Class extends value undefined is not a constructor or null
+
+  TypeError: Class extends value undefined is not a constructor or null
+    at D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:188667:52
+    at loadModuleImplementation (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:263:7)
+    at guardedLoadModule (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:169:14)
+    at metroRequire (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:89:75)
+    at D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:184936:27
+    at loadModuleImplementation (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:263:7)
+    at guardedLoadModule (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:162:23)
+    at metroRequire (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:89:75)
+    at Object.get [as ./guardian.tsx] (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:97425:16)
+    at metroContext (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:97604:15)
+Web Bundled 672ms node_modules\expo-router\entry.js (1 module)
+Web Bundled 21ms .expo\static-tmp\_error.js (1 module)
+λ Bundled 66ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1 module)
+
+Metro error: Class extends value undefined is not a constructor or null
+
+  TypeError: Class extends value undefined is not a constructor or null
+    at D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:188667:52
+    at loadModuleImplementation (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:263:7)
+    at guardedLoadModule (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:169:14)
+    at metroRequire (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:89:75)
+    at D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:184936:27
+    at loadModuleImplementation (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:263:7)
+    at guardedLoadModule (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:162:23)
+    at metroRequire (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:89:75)
+    at Object.get [as ./guardian.tsx] (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:97425:16)
+    at metroContext (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:97604:15)
+Web Bundled 345ms node_modules\expo-router\entry.js (1 module)
+Web Bundled 14ms .expo\static-tmp\_error.js (1 module)
+λ Bundled 52ms node_modules\expo\node_modules\@expo\cli\node_modules\@expo\router-server\node\render.js (1 module)
+
+Metro error: Class extends value undefined is not a constructor or null
+
+  TypeError: Class extends value undefined is not a constructor or null
+    at D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:188667:52
+    at loadModuleImplementation (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:263:7)
+    at guardedLoadModule (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:169:14)
+    at metroRequire (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:89:75)
+    at D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:184936:27
+    at loadModuleImplementation (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:263:7)
+    at guardedLoadModule (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:162:23)
+    at metroRequire (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:89:75)
+    at Object.get [as ./guardian.tsx] (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:97425:16)
+    at metroContext (D:/memari_soft/al_ameen_khadija_memari_old/node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js.bundle?platform=web&dev=true&hot=false&transform.engine=hermes&transform.routerRoot=src%2Fapp&resolver.environment=node&transform.environment=node&unstable_transformProfile=hermes-stable:97604:15)
+Web Bundled 356ms node_modules\expo-router\entry.js (1 module)
+Web Bundled 11ms .expo\static-tmp\_error.js (1 module)
