@@ -16,7 +16,8 @@ app.use(cors({
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
     try {
-      if (new URL(origin).hostname.endsWith('.onrender.com')) return callback(null, true);
+      const u = new URL(origin);
+      if (u.hostname.endsWith('.onrender.com') || u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname.startsWith('192.168.') || u.hostname.startsWith('10.')) return callback(null, true);
     } catch {}
     return callback(new Error('Origin not allowed'));
   }
