@@ -519,6 +519,18 @@ export default function Library() {
       setBookMessage('Find student and select a book.');
       return;
     }
+
+    // Open print window synchronously on click so browser popup blocker does not block it:
+    let printWin: Window | null = null;
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        printWin = window.open('', '_blank', 'width=620,height=460,scrollbars=no');
+        if (printWin) {
+          printWin.document.write('<!DOCTYPE html><html><head><title>Loading Receipt...</title></head><body style="font-family:Arial;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><p style="color:#64748b;font-weight:bold;">Preparing print slip...</p></body></html>');
+        }
+      } catch {}
+    }
+
     issueLock.current = true;
     setBookMessage('Issuing book...');
     try {
@@ -547,7 +559,20 @@ export default function Library() {
         issuedByName: res?.issued_by_name || '',
       };
       setReceiptModal(receiptData);
-      openReceiptPrintWindow(receiptData, API_BASE);
+
+      if (printWin && !printWin.closed) {
+        printWin.document.open();
+        printWin.document.write(buildReceiptHtml(receiptData, API_BASE));
+        printWin.document.close();
+        printWin.focus();
+        setTimeout(() => {
+          try {
+            printWin?.print();
+          } catch {}
+        }, 400);
+      } else {
+        openReceiptPrintWindow(receiptData, API_BASE);
+      }
 
       setBookId('');
       setBookSearch('');
@@ -558,6 +583,9 @@ export default function Library() {
       await student();
       await loadStatus();
     } catch (e: any) {
+      if (printWin && !printWin.closed) {
+        printWin.close();
+      }
       setBookMessage(e.message);
     } finally {
       issueLock.current = false;
