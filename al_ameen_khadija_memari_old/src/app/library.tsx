@@ -19,6 +19,7 @@ import AcademyHeader from '../components/AcademyHeader';
 import DatePickerField from '../components/DatePickerField';
 import { Select } from '../components/StudentDirectory';
 import { api, API_BASE } from '../lib/api';
+import { getUser } from '../lib/auth';
 import {
   IssueReceiptData,
   openReceiptPrintWindow,
@@ -30,7 +31,7 @@ type Mode = 'menu' | 'catalogue' | 'issue' | 'status';
 
 const due = () => {
   const d = new Date();
-  d.setDate(d.getDate() + 14);
+  d.setDate(d.getDate() + 7);
   return d.toISOString().slice(0, 10);
 };
 
@@ -46,6 +47,38 @@ const dateOnly = (v: any) => {
   }
   const d = new Date(v);
   return isNaN(d.getTime()) ? str : d.toLocaleDateString('en-IN');
+};
+
+const formatCleanDueDate = (v: any, issuedAt?: any) => {
+  if (!v) return '-';
+  const str = String(v).trim();
+  let day = '', month = '', year = '';
+  const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    year = isoMatch[1];
+    const monthNum = parseInt(isoMatch[2], 10);
+    day = isoMatch[3];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    month = months[monthNum - 1] || isoMatch[2];
+  } else {
+    const d = new Date(v);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+    return str;
+  }
+
+  const cleanDate = `${day} ${month} ${year}`;
+  let cleanTime = '';
+  const timeSource = issuedAt || (str.includes('T') && !str.endsWith('00:00:00.000Z') && !str.endsWith('18:30:00.000Z') ? v : null);
+  if (timeSource) {
+    const t = new Date(timeSource);
+    if (!isNaN(t.getTime())) {
+      cleanTime = t.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+    }
+  }
+
+  return cleanTime ? `${cleanDate}, ${cleanTime}` : cleanDate;
 };
 
 const CATALOGUE_COLUMNS = [
@@ -198,6 +231,44 @@ export default function Library() {
   const [status, setStatus] = useState('issued');
   const [statusQ, setStatusQ] = useState('');
   const [records, setRecords] = useState<any[]>([]);
+
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  useEffect(() => {
+    void getUser().then(u => setCurrentUser(u));
+  }, []);
+  const isAdmin = ['super_admin', 'admin'].includes(currentUser?.role || '');
+
+  const deleteLoanRecord = (loanId: number) => {
+    if (!isAdmin) return;
+    const executeDelete = async () => {
+      try {
+        await api('/api/service-panels/library/loans/' + loanId, {
+          method: 'DELETE',
+        });
+        await loadStatus();
+        await loadBooks();
+        if (data) await student();
+        Alert.alert('Library', 'Loan history record deleted successfully.');
+      } catch (e: any) {
+        Alert.alert('Error', e.message);
+      }
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm('Are you sure you want to delete this book issue/submit history record? This will permanently remove the record.')) {
+        void executeDelete();
+      }
+    } else {
+      Alert.alert(
+        'Delete Record',
+        'Are you sure you want to delete this book issue/submit history record? This will permanently remove the record.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: () => void executeDelete() },
+        ]
+      );
+    }
+  };
 
   const loadBooks = async (nextFilter = catalogFilter, nextClass = classFilter) => {
     try {
@@ -1104,7 +1175,7 @@ export default function Library() {
                           {x.accession_no} · {x.title}
                         </Text>
                         <Text>
-                          Issued: {dateTime(x.issued_at)} · Due: {dateOnly(x.due_date)} ·{' '}
+                          Issued: {dateTime(x.issued_at)} · Due: {formatCleanDueDate(x.due_date, x.issued_at)} ·{' '}
                           {x.returned_at ? 'Returned: ' + dateTime(x.returned_at) : 'Outstanding'}
                         </Text>
                       </View>
@@ -1118,6 +1189,15 @@ export default function Library() {
                         {!x.returned_at && (
                           <TouchableOpacity style={s.returned} onPress={() => returned(x.id)}>
                             <Text style={s.white}>Return</Text>
+                          </TouchableOpacity>
+                        )}
+                        {isAdmin && (
+                          <TouchableOpacity
+                            style={s.deleteBtn}
+                            onPress={() => deleteLoanRecord(x.id)}
+                            accessibilityRole="button"
+                          >
+                            <Text style={s.white}>Delete</Text>
                           </TouchableOpacity>
                         )}
                       </View>
@@ -1141,8 +1221,11 @@ export default function Library() {
                   void loadStatus(v);
                 }}
                 options={[
-                  { value: 'issued', label: 'Issued' },
-                  { value: 'available', label: 'Not Issued / Available' },
+                  { value: 'issued', label: 'Currently Issued (ইস্যু করা বইগুলি)' },
+                  { value: 'never_issued', label: 'Never Issued (কোনোদিন ইস্যু না হওয়া বই)' },
+                  { value: 'returned', label: 'Returned History (ফেরত দেওয়া হিস্ট্রি)' },
+                  { value: 'all_loans', label: 'All Issue History (সমস্ত হিস্ট্রি)' },
+                  { value: 'available', label: 'Available in Stock (মজুত বই)' },
                 ]}
               />
               <Field
@@ -1157,8 +1240,9 @@ export default function Library() {
             <StatusTable
               status={status}
               records={records}
-              onReturn={returned}
               onPrintReceipt={printReceiptFromStatus}
+              isAdmin={isAdmin}
+              onDeleteLoan={deleteLoanRecord}
             />
           </View>
         )}
@@ -1350,7 +1434,7 @@ const CatalogueTable = ({
   </TableScrollWrapper>
 );
 
-const StatusTable = ({ status, records, onReturn, onPrintReceipt }: any) => {
+const StatusTable = ({ status, records, onPrintReceipt, isAdmin, onDeleteLoan }: any) => {
   const [sortCol, setSortCol] = useState<string>('id');
   const [sortAsc, setSortAsc] = useState<boolean>(true);
 
@@ -1382,21 +1466,67 @@ const StatusTable = ({ status, records, onReturn, onPrintReceipt }: any) => {
     ['registration_no', 'Reg. No'],
     ['class_name', 'Class'],
     ['issued_at', 'Issue Date & Time'],
-    ['due_date', 'Due Date'],
+    ['due_date', 'Due Date & Time'],
     ['title', 'Book Name'],
     ['author', 'Author'],
     ['action', 'Action'],
   ];
 
+  const returnedHeaders: [string, string][] = [
+    ['accession_no', 'Book ID'],
+    ['student_name', 'Student Name'],
+    ['registration_no', 'Reg. No'],
+    ['class_name', 'Class'],
+    ['issued_at', 'Issue Date & Time'],
+    ['returned_at', 'Return Date & Time'],
+    ['title', 'Book Name'],
+    ['author', 'Author'],
+    ['action', 'Action'],
+  ];
+
+  const allLoansHeaders: [string, string][] = [
+    ['accession_no', 'Book ID'],
+    ['student_name', 'Student Name'],
+    ['registration_no', 'Reg. No'],
+    ['class_name', 'Class'],
+    ['issued_at', 'Issue Date & Time'],
+    ['due_date', 'Due / Return Date'],
+    ['status_note', 'Status'],
+    ['title', 'Book Name'],
+    ['action', 'Action'],
+  ];
+
+  const neverIssuedHeaders: [string, string][] = [
+    ['accession_no', 'Book ID / Barcode'],
+    ['book_number', 'Book No'],
+    ['title', 'Book Name'],
+    ['author', 'Author'],
+    ['book_class', 'Class'],
+    ['rack_no', 'Rack No'],
+    ['total_copies', 'Total Copies'],
+    ['status_note', 'Status'],
+  ];
+
   const availableHeaders: [string, string][] = [
     ['accession_no', 'Book ID'],
+    ['book_number', 'Book No'],
     ['title', 'Book Name'],
     ['author', 'Author'],
     ['available_count', 'Available'],
     ['total_copies', 'Total Copies'],
+    ['total_times_issued', 'Times Issued'],
   ];
 
-  const headers = status === 'issued' ? issuedHeaders : availableHeaders;
+  const headers =
+    status === 'issued'
+      ? issuedHeaders
+      : status === 'returned'
+      ? returnedHeaders
+      : status === 'all_loans'
+      ? allLoansHeaders
+      : status === 'never_issued'
+      ? neverIssuedHeaders
+      : availableHeaders;
 
   return (
     <TableScrollWrapper nativeID="statusTableScroll" style={s.tableScrollFrame}>
@@ -1436,14 +1566,14 @@ const StatusTable = ({ status, records, onReturn, onPrintReceipt }: any) => {
               key={status + '-' + String(x.loan_id || x.id || x.accession_no || 'record') + '-' + i}
               style={[s.tr, i % 2 === 1 ? s.trAlt : null]}
             >
-              {status === 'issued' ? (
+              {status === 'issued' && (
                 <>
                   <Text style={s.cell}>{x.accession_no}</Text>
                   <Text style={s.cell}>{x.student_name}</Text>
                   <Text style={s.cell}>{x.registration_no}</Text>
                   <Text style={s.cell}>{x.class_name || '-'}</Text>
                   <Text style={s.cell}>{dateTime(x.issued_at)}</Text>
-                  <Text style={s.cell}>{x.due_date}</Text>
+                  <Text style={s.cell}>{formatCleanDueDate(x.due_date, x.issued_at)}</Text>
                   <Text style={s.cell}>{x.title}</Text>
                   <Text style={s.cell}>{x.author || '-'}</Text>
                   <View style={[s.cell, { width: 170, flexDirection: 'row', gap: 6, alignItems: 'center' }]}>
@@ -1453,18 +1583,109 @@ const StatusTable = ({ status, records, onReturn, onPrintReceipt }: any) => {
                     >
                       <Text style={s.white}>Receipt</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={s.returned} onPress={() => onReturn(x.loan_id)}>
-                      <Text style={s.white}>Return</Text>
-                    </TouchableOpacity>
+                    {isAdmin && (
+                      <TouchableOpacity
+                        style={s.deleteBtn}
+                        onPress={() => onDeleteLoan?.(x.loan_id)}
+                        accessibilityRole="button"
+                      >
+                        <Text style={s.white}>Delete</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </>
-              ) : (
+              )}
+
+              {status === 'returned' && (
                 <>
                   <Text style={s.cell}>{x.accession_no}</Text>
+                  <Text style={s.cell}>{x.student_name}</Text>
+                  <Text style={s.cell}>{x.registration_no}</Text>
+                  <Text style={s.cell}>{x.class_name || '-'}</Text>
+                  <Text style={s.cell}>{dateTime(x.issued_at)}</Text>
+                  <Text style={s.cell}>{dateTime(x.returned_at)}</Text>
+                  <Text style={s.cell}>{x.title}</Text>
+                  <Text style={s.cell}>{x.author || '-'}</Text>
+                  <View style={[s.cell, { width: 170, flexDirection: 'row', gap: 6, alignItems: 'center' }]}>
+                    <TouchableOpacity
+                      style={s.receiptBtn}
+                      onPress={() => onPrintReceipt?.(x)}
+                    >
+                      <Text style={s.white}>Receipt</Text>
+                    </TouchableOpacity>
+                    {isAdmin && (
+                      <TouchableOpacity
+                        style={s.deleteBtn}
+                        onPress={() => onDeleteLoan?.(x.loan_id)}
+                        accessibilityRole="button"
+                      >
+                        <Text style={s.white}>Delete</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </>
+              )}
+
+              {status === 'all_loans' && (
+                <>
+                  <Text style={s.cell}>{x.accession_no}</Text>
+                  <Text style={s.cell}>{x.student_name}</Text>
+                  <Text style={s.cell}>{x.registration_no}</Text>
+                  <Text style={s.cell}>{x.class_name || '-'}</Text>
+                  <Text style={s.cell}>{dateTime(x.issued_at)}</Text>
+                  <Text style={s.cell}>
+                    {x.returned_at ? dateTime(x.returned_at) : formatCleanDueDate(x.due_date, x.issued_at)}
+                  </Text>
+                  <Text style={[s.cell, { fontWeight: '700', color: x.returned_at ? '#166534' : '#b91c1c' }]}>
+                    {x.returned_at ? 'Returned' : 'Issued'}
+                  </Text>
+                  <Text style={s.cell}>{x.title}</Text>
+                  <View style={[s.cell, { width: 170, flexDirection: 'row', gap: 6, alignItems: 'center' }]}>
+                    <TouchableOpacity
+                      style={s.receiptBtn}
+                      onPress={() => onPrintReceipt?.(x)}
+                    >
+                      <Text style={s.white}>Receipt</Text>
+                    </TouchableOpacity>
+                    {isAdmin && (
+                      <TouchableOpacity
+                        style={s.deleteBtn}
+                        onPress={() => onDeleteLoan?.(x.loan_id)}
+                        accessibilityRole="button"
+                      >
+                        <Text style={s.white}>Delete</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </>
+              )}
+
+              {status === 'never_issued' && (
+                <>
+                  <Text style={s.cell}>{x.accession_no}</Text>
+                  <Text style={s.cell}>{x.book_number || '-'}</Text>
+                  <Text style={s.cell}>{x.title}</Text>
+                  <Text style={s.cell}>{x.author || '-'}</Text>
+                  <Text style={s.cell}>{x.book_class || '-'}</Text>
+                  <Text style={s.cell}>{x.rack_no || '-'}</Text>
+                  <Text style={s.cell}>{x.total_copies}</Text>
+                  <View style={[s.cell, { justifyContent: 'center' }]}>
+                    <View style={s.neverIssuedBadge}>
+                      <Text style={s.neverIssuedText}>Never Issued</Text>
+                    </View>
+                  </View>
+                </>
+              )}
+
+              {status === 'available' && (
+                <>
+                  <Text style={s.cell}>{x.accession_no}</Text>
+                  <Text style={s.cell}>{x.book_number || '-'}</Text>
                   <Text style={s.cell}>{x.title}</Text>
                   <Text style={s.cell}>{x.author || '-'}</Text>
                   <Text style={s.cell}>{x.available_count}</Text>
                   <Text style={s.cell}>{x.total_copies}</Text>
+                  <Text style={s.cell}>{x.total_times_issued ?? 0}</Text>
                 </>
               )}
             </View>
@@ -1773,6 +1994,21 @@ const s = StyleSheet.create({
   photo: { width: 55, height: 65, borderRadius: 5 },
   returned: { backgroundColor: '#198754', padding: 9, borderRadius: 6 },
   receiptBtn: { backgroundColor: '#0284c7', padding: 9, borderRadius: 6 },
+  deleteBtn: { backgroundColor: '#dc2626', padding: 9, borderRadius: 6 },
+  neverIssuedBadge: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#fde68a',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  neverIssuedText: {
+    color: '#92400e',
+    fontWeight: '800',
+    fontSize: 12,
+  },
   table: { minWidth: 1250 },
   tableScrollFrame: {
     maxHeight: 580,

@@ -55,7 +55,80 @@ router.get('/dining',auth,allow('office','super_admin','admin'),asyncHandler(asy
 router.get('/dining/transactions',auth,allow('office','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const q=await pool.query(`SELECT t.*,s.item_name,s.unit,u.full_name entered_by_name FROM dining_stock_transactions t JOIN dining_stock s ON s.id=t.stock_id LEFT JOIN users u ON u.id=t.entered_by ORDER BY t.created_at DESC,t.id DESC LIMIT 500`);res.json({success:true,transactions:q.rows})}));
 router.post('/dining/items',auth,allow('office','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const b=req.body||{};if(!b.item_name||!b.unit)return res.status(400).json({success:false,message:'Item and unit are required'});const q=await pool.query(`INSERT INTO dining_stock(item_name,unit,current_quantity,reorder_level) VALUES($1,$2,$3,$4) RETURNING *`,[b.item_name,b.unit,Number(b.current_quantity)||0,Number(b.reorder_level)||0]);res.status(201).json({success:true,item:q.rows[0]})}));
 router.post('/dining/transaction',auth,allow('office','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const b=req.body||{},qty=Number(b.quantity);if(!b.stock_id||!['in','out'].includes(b.transaction_type)||!(qty>0))return res.status(400).json({success:false,message:'Stock item, type and positive quantity are required'});const c=await pool.connect();try{await c.query('BEGIN');const st=(await c.query('SELECT * FROM dining_stock WHERE id=$1 FOR UPDATE',[b.stock_id])).rows[0];if(!st)throw new Error('Stock item not found');const transactionDate=b.transaction_date||null;const duplicate=await c.query(`SELECT id FROM dining_stock_transactions WHERE stock_id=$1 AND transaction_type=$2 AND transaction_date=COALESCE($3::date,CURRENT_DATE) LIMIT 1`,[st.id,b.transaction_type,transactionDate]);if(duplicate.rowCount)throw new Error(st.item_name+' already has a Stock '+(b.transaction_type==='in'?'In':'Out')+' entry for this date');const next=Number(st.current_quantity)+(b.transaction_type==='in'?qty:-qty);if(next<0)throw new Error('Quantity Out cannot exceed available balance of '+Number(st.current_quantity)+' '+st.unit);await c.query('UPDATE dining_stock SET current_quantity=$1,updated_at=NOW() WHERE id=$2',[next,st.id]);await c.query(`INSERT INTO dining_stock_transactions(stock_id,transaction_type,quantity,note,entered_by,transaction_date,invoice_no,supplier_name,rate,opening_quantity,closing_quantity) VALUES($1,$2,$3,$4,$5,COALESCE($6::date,CURRENT_DATE),$7,$8,$9,$10,$11)`,[st.id,b.transaction_type,qty,b.note||null,req.user.userId,b.transaction_date||null,b.invoice_no||null,b.supplier_name||null,b.rate===''||b.rate==null?null:Number(b.rate),Number(st.current_quantity),next]);await c.query('COMMIT');res.json({success:true,current_quantity:next})}catch(e){await c.query('ROLLBACK');res.status(409).json({success:false,message:e.message})}finally{c.release()}}));
-router.get('/library/status',auth,allow('library','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const status=String(req.query.status||'issued'),search='%'+String(req.query.q||'').trim()+'%';if(status==='issued'){const q=await pool.query(`SELECT l.id loan_id,l.issued_at,l.due_date,b.id book_id,b.accession_no,b.title,b.author,s.id student_id,s.registration_no,s.student_name,s.class_name FROM library_loans l JOIN library_books b ON b.id=l.book_id JOIN students s ON s.id=l.student_id WHERE l.returned_at IS NULL AND ($1='%%' OR b.title ILIKE $1 OR b.accession_no ILIKE $1 OR s.student_name ILIKE $1 OR s.registration_no ILIKE $1) ORDER BY l.issued_at DESC`,[search]);return res.json({success:true,status,records:q.rows})}const q=await pool.query(`SELECT b.*,GREATEST(b.available_copies,0)::int available_count FROM library_books b WHERE b.is_active=TRUE AND b.available_copies>0 AND ($1='%%' OR b.title ILIKE $1 OR b.accession_no ILIKE $1 OR COALESCE(b.author,'') ILIKE $1) ORDER BY b.title,b.accession_no`,[search]);res.json({success:true,status:'available',records:q.rows})}));router.get('/library/books',auth,allow('library','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const q=await pool.query(`SELECT b.*,(SELECT COUNT(*) FROM library_loans l WHERE l.book_id=b.id AND l.returned_at IS NULL) issued_count FROM library_books b WHERE b.is_active=TRUE AND ($1='' OR b.title ILIKE $2 OR b.accession_no ILIKE $2) AND ($3='' OR b.category=$3) AND ($4='' OR b.book_class=$4) ORDER BY b.title`,[String(req.query.q||''),'%'+String(req.query.q||'')+'%',String(req.query.category||''),String(req.query.book_class||'')]);res.json({success:true,books:q.rows})}));
+router.get('/library/status',auth,allow('library','super_admin','admin'),asyncHandler(async(req,res)=>{
+  await schemaReady;
+  const status=String(req.query.status||'issued'),search='%'+String(req.query.q||'').trim()+'%';
+  if(status==='never_issued'){
+    const q=await pool.query(`
+      SELECT b.id book_id, b.accession_no, b.book_number, b.title, b.author,
+             b.book_class, b.category, b.rack_no, b.total_copies,
+             GREATEST(b.available_copies,0)::int available_count,
+             0::int total_times_issued,
+             'Never Issued' status_note
+      FROM library_books b
+      WHERE b.is_active=TRUE
+        AND NOT EXISTS(SELECT 1 FROM library_loans l WHERE l.book_id=b.id)
+        AND ($1='%%' OR b.title ILIKE $1 OR b.accession_no ILIKE $1 OR COALESCE(b.book_number,'') ILIKE $1 OR COALESCE(b.author,'') ILIKE $1)
+      ORDER BY b.title, b.accession_no
+    `,[search]);
+    return res.json({success:true,status,records:q.rows});
+  }
+  if(status==='returned'){
+    const q=await pool.query(`
+      SELECT l.id loan_id, l.issued_at, l.due_date, l.returned_at,
+             b.id book_id, b.accession_no, b.book_number, b.title, b.author,
+             s.id student_id, s.registration_no, s.student_name, s.class_name,
+             'Returned' status_note
+      FROM library_loans l
+      JOIN library_books b ON b.id=l.book_id
+      JOIN students s ON s.id=l.student_id
+      WHERE l.returned_at IS NOT NULL
+        AND ($1='%%' OR b.title ILIKE $1 OR b.accession_no ILIKE $1 OR COALESCE(b.book_number,'') ILIKE $1 OR s.student_name ILIKE $1 OR s.registration_no ILIKE $1)
+      ORDER BY l.returned_at DESC
+    `,[search]);
+    return res.json({success:true,status,records:q.rows});
+  }
+  if(status==='all_loans'){
+    const q=await pool.query(`
+      SELECT l.id loan_id, l.issued_at, l.due_date, l.returned_at,
+             b.id book_id, b.accession_no, b.book_number, b.title, b.author,
+             s.id student_id, s.registration_no, s.student_name, s.class_name,
+             CASE WHEN l.returned_at IS NULL THEN 'Issued' ELSE 'Returned' END status_note
+      FROM library_loans l
+      JOIN library_books b ON b.id=l.book_id
+      JOIN students s ON s.id=l.student_id
+      WHERE ($1='%%' OR b.title ILIKE $1 OR b.accession_no ILIKE $1 OR COALESCE(b.book_number,'') ILIKE $1 OR s.student_name ILIKE $1 OR s.registration_no ILIKE $1)
+      ORDER BY l.issued_at DESC
+    `,[search]);
+    return res.json({success:true,status,records:q.rows});
+  }
+  if(status==='issued'){
+    const q=await pool.query(`
+      SELECT l.id loan_id, l.issued_at, l.due_date, l.returned_at,
+             b.id book_id, b.accession_no, b.book_number, b.title, b.author,
+             s.id student_id, s.registration_no, s.student_name, s.class_name,
+             'Issued' status_note
+      FROM library_loans l
+      JOIN library_books b ON b.id=l.book_id
+      JOIN students s ON s.id=l.student_id
+      WHERE l.returned_at IS NULL
+        AND ($1='%%' OR b.title ILIKE $1 OR b.accession_no ILIKE $1 OR COALESCE(b.book_number,'') ILIKE $1 OR s.student_name ILIKE $1 OR s.registration_no ILIKE $1)
+      ORDER BY l.issued_at DESC
+    `,[search]);
+    return res.json({success:true,status,records:q.rows});
+  }
+  const q=await pool.query(`
+    SELECT b.*,GREATEST(b.available_copies,0)::int available_count,
+           (SELECT COUNT(*)::int FROM library_loans l WHERE l.book_id=b.id) total_times_issued,
+           'Available' status_note
+    FROM library_books b
+    WHERE b.is_active=TRUE AND b.available_copies>0
+      AND ($1='%%' OR b.title ILIKE $1 OR b.accession_no ILIKE $1 OR COALESCE(b.author,'') ILIKE $1)
+    ORDER BY b.title,b.accession_no
+  `,[search]);
+  res.json({success:true,status:'available',records:q.rows});
+}));
+router.get('/library/books',auth,allow('library','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const q=await pool.query(`SELECT b.*,(SELECT COUNT(*) FROM library_loans l WHERE l.book_id=b.id AND l.returned_at IS NULL) issued_count FROM library_books b WHERE b.is_active=TRUE AND ($1='' OR b.title ILIKE $2 OR b.accession_no ILIKE $2) AND ($3='' OR b.category=$3) AND ($4='' OR b.book_class=$4) ORDER BY b.title`,[String(req.query.q||''),'%'+String(req.query.q||'')+'%',String(req.query.category||''),String(req.query.book_class||'')]);res.json({success:true,books:q.rows})}));
 router.post('/library/books',auth,allow('library','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const b=req.body||{},copies=Math.max(1,Number(b.total_copies)||1);if(!b.accession_no||!b.title)return res.status(400).json({success:false,message:'Accession number and title are required'});const q=await pool.query(`INSERT INTO library_books(accession_no,title,author,total_copies,available_copies,book_class,part,category,publisher,publish_year,price,purchase_date,rack_no,book_number) VALUES($1,$2,$3,$4,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,[b.accession_no,b.title,b.author||null,copies,b.book_class||null,b.part||null,b.category||null,b.publisher||null,b.publish_year?Number(b.publish_year):null,b.price?Number(b.price):null,b.purchase_date||null,b.rack_no||null,b.book_number||null]);res.status(201).json({success:true,book:q.rows[0]})}));
 router.patch('/library/books/:id',auth,allow('library','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const b=req.body||{},copies=Math.max(1,Number(b.total_copies)||1),current=(await pool.query('SELECT * FROM library_books WHERE id=$1 AND is_active=TRUE',[req.params.id])).rows[0];if(!current)return res.status(404).json({success:false,message:'Book not found'});const issued=Number(current.total_copies)-Number(current.available_copies);if(copies<issued)return res.status(409).json({success:false,message:`Total copies cannot be less than ${issued} currently issued copies`});const q=await pool.query(`UPDATE library_books SET accession_no=$1,title=$2,author=$3,total_copies=$4,available_copies=$4-$5,book_class=$6,part=$7,category=$8,publisher=$9,publish_year=$10,price=$11,purchase_date=$12,rack_no=$13,book_number=$14,updated_at=NOW() WHERE id=$15 RETURNING *`,[b.accession_no,b.title,b.author||null,copies,issued,b.book_class||null,b.part||null,b.category||null,b.publisher||null,b.publish_year?Number(b.publish_year):null,b.price?Number(b.price):null,b.purchase_date||null,b.rack_no||null,b.book_number||null,req.params.id]);res.json({success:true,book:q.rows[0]})}));
 router.patch('/library/books/:id/archive',auth,allow('library','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;if((await pool.query('SELECT 1 FROM library_loans WHERE book_id=$1 AND returned_at IS NULL',[req.params.id])).rowCount)return res.status(409).json({success:false,message:'Return all issued copies before archiving this book'});const q=await pool.query('UPDATE library_books SET is_active=FALSE,updated_at=NOW() WHERE id=$1 AND is_active=TRUE RETURNING id',[req.params.id]);if(!q.rowCount)return res.status(404).json({success:false,message:'Active book not found'});res.json({success:true})}));router.get('/library/book/:barcode',auth,allow('library','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const code=String(req.params.barcode||'').trim();const book=(await pool.query(`SELECT b.*,(SELECT COUNT(*) FROM library_loans l WHERE l.book_id=b.id AND l.returned_at IS NULL) issued_count FROM library_books b WHERE b.is_active=TRUE AND (lower(b.accession_no)=lower($1) OR lower(COALESCE(b.book_number,''))=lower($1)) LIMIT 1`,[code])).rows[0];if(!book)return res.status(404).json({success:false,message:'Book Number / Barcode not found'});if(Number(book.available_copies)<1)return res.status(409).json({success:false,message:'This book already issued.',book});res.json({success:true,book})}));router.get('/library/students/search/:query',auth,allow('library','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const q=String(req.params.query||'').trim();const rows=(await pool.query('SELECT id,registration_no,student_name,class_name,photo_url FROM students WHERE is_active=TRUE AND (registration_no=$1 OR student_name ILIKE $2) ORDER BY student_name,registration_no LIMIT 50',[q,'%'+q+'%'])).rows;res.json({success:true,students:rows})}));router.get('/library/return-book/:barcode',auth,allow('library','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const q=await pool.query(`SELECT l.*,s.id AS student_id,s.registration_no,s.student_name,s.class_name,s.photo_url,b.accession_no,b.title,b.author FROM library_loans l JOIN students s ON s.id=l.student_id JOIN library_books b ON b.id=l.book_id WHERE l.returned_at IS NULL AND (lower(b.accession_no)=lower($1) OR lower(COALESCE(b.book_number,''))=lower($1)) LIMIT 1`,[String(req.params.barcode||'').trim()]);const x=q.rows[0];if(!x)return res.status(404).json({success:false,message:'Issued book not found'});res.json({success:true,student:{id:x.student_id,registration_no:x.registration_no,student_name:x.student_name,class_name:x.class_name,photo_url:x.photo_url},loans:[x]})}));router.get('/library/student/:registration',auth,allow('library','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const st=(await pool.query('SELECT id,registration_no,student_name,class_name,photo_url FROM students WHERE registration_no=$1 AND is_active=TRUE',[req.params.registration])).rows[0];if(!st)return res.status(404).json({success:false,message:'Active student not found'});const loans=(await pool.query(`SELECT l.*,b.accession_no,b.title,b.author,b.rack_no,b.book_number,u.full_name issued_by_name FROM library_loans l JOIN library_books b ON b.id=l.book_id LEFT JOIN users u ON u.id=l.issued_by WHERE l.student_id=$1 ORDER BY l.returned_at NULLS FIRST,l.issued_at DESC`,[st.id])).rows;res.json({success:true,student:st,loans})}));
@@ -80,4 +153,29 @@ res.status(201).json({
   book
 })}catch(e){await c.query('ROLLBACK');res.status(409).json({success:false,message:e.message})}finally{c.release()}}));
 router.patch('/library/loans/:id/return',auth,allow('library','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const c=await pool.connect();try{await c.query('BEGIN');const loan=(await c.query('UPDATE library_loans SET returned_at=NOW(),returned_by=$1 WHERE id=$2 AND returned_at IS NULL RETURNING *',[req.user.userId,req.params.id])).rows[0];if(!loan)throw new Error('Active loan not found');await c.query('UPDATE library_books SET available_copies=available_copies+1 WHERE id=$1',[loan.book_id]);await c.query('COMMIT');res.json({success:true})}catch(e){await c.query('ROLLBACK');res.status(409).json({success:false,message:e.message})}finally{c.release()}}));
+router.delete('/library/loans/:id',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+  await schemaReady;
+  const loanId=req.params.id;
+  const c=await pool.connect();
+  try{
+    await c.query('BEGIN');
+    const loan=(await c.query('SELECT * FROM library_loans WHERE id=$1 FOR UPDATE',[loanId])).rows[0];
+    if(!loan){
+      await c.query('ROLLBACK');
+      return res.status(404).json({success:false,message:'Loan record not found'});
+    }
+    if(!loan.returned_at){
+      await c.query('UPDATE library_books SET available_copies=LEAST(total_copies,available_copies+1) WHERE id=$1',[loan.book_id]);
+    }
+    await c.query('DELETE FROM library_loans WHERE id=$1',[loanId]);
+    await c.query('COMMIT');
+    res.json({success:true,message:'Loan history record deleted successfully'});
+  }catch(e){
+    await c.query('ROLLBACK');
+    res.status(500).json({success:false,message:e.message});
+  }finally{
+    c.release();
+  }
+}));
 module.exports=router;
+
