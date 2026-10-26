@@ -26,6 +26,14 @@ export const getApiBase = () => {
 
 export const API_BASE = getApiBase();
 
+export const imageUrl = (url?: string | null) => {
+  if (!url) return '';
+  if (/^https?:/.test(url)) return url;
+  const base = Platform.OS === 'web' ? getApiBase() : API_BASE;
+  const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+  return `${base}${cleanUrl}`;
+};
+
 export async function api(
   path: string,
   options: RequestInit = {}

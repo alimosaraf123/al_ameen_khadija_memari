@@ -29,7 +29,6 @@ import {
   getGuardianBiometricToken,
 } from '../lib/guardianDevice';
 import { Field, Button, Muted } from '../components/ui';
-import { GestureHandlerRootView, PinchGestureHandler, State } from 'react-native-gesture-handler';
 
 type TabName = 'home' | 'result' | 'gatepass' | 'visits' | 'details' | 'documents' | 'library' | 'notifications' | 'settings';
 
