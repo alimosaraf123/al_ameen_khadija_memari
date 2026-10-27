@@ -351,11 +351,33 @@ export function buildReceiptHtml(data: IssueReceiptData, apiBase: string = ''): 
       </div>
     </div>
   </div>
+  <script>
+    function notifyAndClose() {
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({ type: 'LIBRARY_RECEIPT_PRINTED' }, '*');
+        }
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'LIBRARY_RECEIPT_PRINTED' }, '*');
+        }
+      } catch (e) {}
+      setTimeout(function() {
+        try {
+          window.close();
+        } catch (e) {}
+      }, 300);
+    }
+    window.addEventListener('afterprint', notifyAndClose);
+  </script>
 </body>
 </html>`;
 }
 
-export function openReceiptPrintWindow(data: IssueReceiptData, apiBase: string = '') {
+export function openReceiptPrintWindow(
+  data: IssueReceiptData,
+  apiBase: string = '',
+  onPrinted?: () => void
+) {
   if (Platform.OS !== 'web' || typeof window === 'undefined') {
     return false;
   }
@@ -367,14 +389,36 @@ export function openReceiptPrintWindow(data: IssueReceiptData, apiBase: string =
     w.document.write(html);
     w.document.close();
     w.focus();
+
+    let handled = false;
+    const handleClose = () => {
+      if (handled) return;
+      handled = true;
+      try {
+        onPrinted?.();
+      } catch {}
+      setTimeout(() => {
+        try {
+          if (!w.closed) w.close();
+        } catch {}
+      }, 300);
+    };
+
+    try {
+      w.addEventListener('afterprint', handleClose);
+      (w as any).onafterprint = handleClose;
+    } catch {}
+
     setTimeout(() => {
       try {
+        w.focus();
         w.print();
       } catch (err) {
         console.warn('Receipt auto-print error:', err);
       }
-    }, 400);
+    }, 450);
     return true;
   }
   return false;
 }
+

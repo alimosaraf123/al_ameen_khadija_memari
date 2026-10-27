@@ -236,6 +236,17 @@ export default function Library() {
   useEffect(() => {
     void getUser().then(u => setCurrentUser(u));
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const handleMsg = (e: MessageEvent) => {
+      if (e.data?.type === 'LIBRARY_RECEIPT_PRINTED') {
+        setReceiptModal(null);
+      }
+    };
+    window.addEventListener('message', handleMsg);
+    return () => window.removeEventListener('message', handleMsg);
+  }, []);
   const isAdmin = ['super_admin', 'admin'].includes(currentUser?.role || '');
 
   const deleteLoanRecord = (loanId: number) => {
@@ -503,6 +514,13 @@ export default function Library() {
           <div class="barcode-box">${svgHtml || `<h3>${value}</h3>`}</div>
           <div class="meta">Book No: ${String(x.book_number || '-')} | Class: ${String(x.book_class || '-')} | Rack: ${String(x.rack_no || '-')}</div>
           <button onclick="window.print()">Print Barcode</button>
+          <script>
+            window.addEventListener('afterprint', function() {
+              setTimeout(function() {
+                try { window.close(); } catch(e) {}
+              }, 300);
+            });
+          </script>
         </body></html>`
       );
       w.document.close();
@@ -562,8 +580,7 @@ export default function Library() {
       rackNo: loan?.rack_no || '',
       issuedByName: loan?.issued_by_name || '',
     };
-    setReceiptModal(receiptData);
-    openReceiptPrintWindow(receiptData, API_BASE);
+    openReceiptPrintWindow(receiptData, API_BASE, () => setReceiptModal(null));
   };
 
   const printReceiptFromStatus = (record: any) => {
@@ -579,8 +596,7 @@ export default function Library() {
       rackNo: record?.rack_no || '',
       issuedByName: record?.issued_by_name || '',
     };
-    setReceiptModal(receiptData);
-    openReceiptPrintWindow(receiptData, API_BASE);
+    openReceiptPrintWindow(receiptData, API_BASE, () => setReceiptModal(null));
   };
 
   const issue = async (overrideId?: string) => {
@@ -629,20 +645,38 @@ export default function Library() {
         rackNo: bookObj?.rack_no || '',
         issuedByName: res?.issued_by_name || '',
       };
-      setReceiptModal(receiptData);
-
       if (printWin && !printWin.closed) {
         printWin.document.open();
         printWin.document.write(buildReceiptHtml(receiptData, API_BASE));
         printWin.document.close();
         printWin.focus();
+
+        let handled = false;
+        const handleClose = () => {
+          if (handled) return;
+          handled = true;
+          setReceiptModal(null);
+          setTimeout(() => {
+            try {
+              if (!printWin?.closed) printWin?.close();
+            } catch {}
+          }, 300);
+        };
+
+        try {
+          printWin.addEventListener('afterprint', handleClose);
+          (printWin as any).onafterprint = handleClose;
+        } catch {}
+
         setTimeout(() => {
           try {
+            printWin?.focus();
             printWin?.print();
           } catch {}
-        }, 400);
+        }, 450);
       } else {
-        openReceiptPrintWindow(receiptData, API_BASE);
+        setReceiptModal(receiptData);
+        openReceiptPrintWindow(receiptData, API_BASE, () => setReceiptModal(null));
       }
 
       setBookId('');
@@ -1295,7 +1329,7 @@ export default function Library() {
                   <TouchableOpacity
                     style={[s.primary, { backgroundColor: '#198754' }]}
                     onPress={() => {
-                      openReceiptPrintWindow(receiptModal, API_BASE);
+                      openReceiptPrintWindow(receiptModal, API_BASE, () => setReceiptModal(null));
                     }}
                   >
                     <Text style={s.white}>Print Receipt</Text>
