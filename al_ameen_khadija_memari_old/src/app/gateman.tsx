@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Image,
@@ -148,6 +148,7 @@ export default function Gateman() {
           body: JSON.stringify({ permission_id: id, person_count: personCount }),
         });
       }
+      setToday((prev) => prev.filter((p) => !(p.permission_type === type && Number(p.permission_id) === Number(id))));
       const msg = `Entry recorded successfully (${personCount} ${personCount > 1 ? 'persons' : 'person'}) in system & Admin Panel.`;
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.alert(msg);
@@ -210,6 +211,7 @@ export default function Gateman() {
           person_count: personCount,
         }),
       });
+      setToday((prev) => prev.filter((p) => Number(p.student_id) !== Number(data.student.id)));
       const msg = `${name} (${source}) entry saved (${personCount} ${personCount > 1 ? 'persons' : 'person'})! Total student visits: ${result.total}`;
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.alert(msg);
@@ -243,6 +245,7 @@ export default function Gateman() {
           visitor_source: source,
         }),
       });
+      setToday((prev) => prev.filter((p) => Number(p.student_id) !== Number(data?.student?.id)));
       const msg = result.message || `${name} (${source}) exit recorded successfully!`;
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.alert(msg);
@@ -274,6 +277,7 @@ export default function Gateman() {
         method: 'POST',
         body: JSON.stringify({ entry_id: v.id }),
       });
+      setToday((prev) => prev.filter((p) => Number(p.student_id) !== Number(v.student_id)));
       const msg = result.message || `${v.visitor_name} exit recorded successfully!`;
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.alert(msg);
@@ -385,6 +389,20 @@ export default function Gateman() {
 
   const insideVisitors = todayVisitors.filter((x: any) => x.status === 'inside');
   const displayedVisitors = visitorTab === 'inside' ? insideVisitors : todayVisitors;
+
+  // "Today's Approved Students" notification/list:
+  // ONLY show students awaiting entry!
+  // If active (entered/inside campus) or returned (exited), they must disappear from this notification/list.
+  const pendingToday = useMemo(() => {
+    return today.filter((x: any) => {
+      if (x.entered) return false;
+      const hasVisitorRecordToday = todayVisitors.some(
+        (v: any) => Number(v.student_id) === Number(x.student_id)
+      );
+      if (hasVisitorRecordToday) return false;
+      return true;
+    });
+  }, [today, todayVisitors]);
 
   return (
     <SafeAreaView style={s.page}>
@@ -528,15 +546,15 @@ export default function Gateman() {
 
         <View style={s.todayCard}>
           <View style={s.todayTitle}>
-            <Text style={s.heading}>Today's Approved Students ({today.length})</Text>
+            <Text style={s.heading}>Today's Approved Students ({pendingToday.length})</Text>
             <TouchableOpacity onPress={loadToday} style={s.refresh}>
               <Text style={s.bold}>Refresh</Text>
             </TouchableOpacity>
           </View>
-          {!today.length && (
-            <Text style={s.none}>No visiting or gate pass permission today.</Text>
+          {!pendingToday.length && (
+            <Text style={s.none}>No pending visiting or gate pass permission today.</Text>
           )}
-          {today.map((x) => (
+          {pendingToday.map((x) => (
             <TouchableOpacity
               key={x.permission_type + '-' + x.permission_id}
               onPress={() => {
