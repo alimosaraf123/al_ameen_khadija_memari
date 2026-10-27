@@ -358,6 +358,9 @@ router.get(
         (v) => v.visitor_number === 2
       ) || null;
 
+    const docsResult = await pool.query("SELECT DISTINCT ON (document_type) document_type, file_url FROM student_documents WHERE student_id=$1 AND document_type IN('father_photo','mother_photo','visitor1_photo','visitor2_photo') ORDER BY document_type, uploaded_at DESC", [req.params.id]);
+    const photos = Object.fromEntries(docsResult.rows.map(x => [x.document_type, x.file_url]));
+
     res.json({
       success: true,
 
@@ -368,6 +371,7 @@ router.get(
 
         visitor1,
         visitor2,
+        photos,
       },
     });
   })

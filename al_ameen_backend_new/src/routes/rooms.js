@@ -121,8 +121,111 @@ router.delete('/assignments/:id', auth, allow('super_admin','admin'), asyncHandl
 }));
 
 router.get('/', auth, asyncHandler(async (req, res) => {
-  const r = await pool.query('SELECT * FROM rooms ORDER BY room_name');
+  const r = await pool.query(`
+    SELECT r.*, COUNT(s.id)::int AS student_count
+    FROM rooms r
+    LEFT JOIN students s ON s.room_id = r.id AND s.is_active = TRUE
+    GROUP BY r.id
+    ORDER BY r.room_name
+  `);
   res.json({ success: true, rooms: r.rows });
+}));
+
+router.get('/students', auth, allow('super_admin','admin','office'), asyncHandler(async (req, res) => {
+  const { class_name, room_id, q } = req.query;
+  const conditions = ['s.is_active = TRUE'];
+  const values = [];
+
+  if (class_name && class_name !== 'all') {
+    values.push(class_name);
+    conditions.push(`s.class_name = $${values.length}`);
+  }
+
+  if (room_id) {
+    if (room_id === 'unassigned') {
+      conditions.push('s.room_id IS NULL');
+    } else if (room_id !== 'all') {
+      values.push(Number(room_id));
+      conditions.push(`s.room_id = $${values.length}`);
+    }
+  }
+
+  if (q) {
+    values.push(`%${String(q).trim()}%`);
+    conditions.push(`(s.student_name ILIKE $${values.length} OR s.registration_no ILIKE $${values.length} OR CAST(s.roll_no AS TEXT) ILIKE $${values.length})`);
+  }
+
+  const query = `
+    SELECT s.id, s.registration_no, s.student_name, s.class_name, s.roll_no, s.gender, s.student_type,
+           s.room_id, r.room_name
+    FROM students s
+    LEFT JOIN rooms r ON r.id = s.room_id
+    WHERE ${conditions.join(' AND ')}
+    ORDER BY s.class_name, s.roll_no, s.student_name
+  `;
+
+  const result = await pool.query(query, values);
+  res.json({ success: true, students: result.rows });
+}));
+
+router.post('/update-student-room', auth, allow('super_admin','admin','office'), asyncHandler(async (req, res) => {
+  const studentId = Number(req.body?.student_id);
+  const roomId = req.body?.room_id ? Number(req.body.room_id) : null;
+
+  if (!studentId) {
+    return res.status(400).json({ success: false, message: 'Student ID is required' });
+  }
+
+  if (roomId) {
+    const roomCheck = await pool.query('SELECT id, room_name FROM rooms WHERE id = $1', [roomId]);
+    if (!roomCheck.rowCount) {
+      return res.status(400).json({ success: false, message: 'Selected room not found' });
+    }
+  }
+
+  const result = await pool.query(`
+    UPDATE students
+    SET room_id = $1, updated_at = NOW()
+    WHERE id = $2 AND is_active = TRUE
+    RETURNING id, registration_no, student_name, class_name, roll_no, room_id
+  `, [roomId, studentId]);
+
+  if (!result.rowCount) {
+    return res.status(404).json({ success: false, message: 'Active student not found' });
+  }
+
+  res.json({ success: true, student: result.rows[0], message: 'Room updated successfully' });
+}));
+
+router.post('/bulk-update-student-rooms', auth, allow('super_admin','admin','office'), asyncHandler(async (req, res) => {
+  const studentIds = Array.isArray(req.body?.student_ids) ? req.body.student_ids.map(Number).filter(Boolean) : [];
+  const roomId = req.body?.room_id ? Number(req.body.room_id) : null;
+
+  if (!studentIds.length) {
+    return res.status(400).json({ success: false, message: 'At least one student must be selected' });
+  }
+
+  let roomName = 'Unassigned';
+  if (roomId) {
+    const roomCheck = await pool.query('SELECT id, room_name FROM rooms WHERE id = $1', [roomId]);
+    if (!roomCheck.rowCount) {
+      return res.status(400).json({ success: false, message: 'Selected room not found' });
+    }
+    roomName = roomCheck.rows[0].room_name;
+  }
+
+  const result = await pool.query(`
+    UPDATE students
+    SET room_id = $1, updated_at = NOW()
+    WHERE id = ANY($2::bigint[]) AND is_active = TRUE
+    RETURNING id
+  `, [roomId, studentIds]);
+
+  res.json({
+    success: true,
+    updated_count: result.rowCount,
+    message: `${result.rowCount} student(s) successfully assigned to Room ${roomName}`,
+  });
 }));
 
 router.post('/', auth, allow('super_admin','admin'), asyncHandler(async (req, res) => {

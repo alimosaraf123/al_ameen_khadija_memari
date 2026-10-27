@@ -313,9 +313,40 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
     </Modal>
     <Modal visible={detailOpen} transparent animationType="fade" onRequestClose={() => setDetailOpen(false)}><View style={s.overlay}><View style={s.detailPanel}>
       <View style={s.modalHeader}><Text style={s.modalTitle}>Student Details</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Close student details" onPress={() => setDetailOpen(false)}><Text style={s.close}>-</Text></TouchableOpacity></View>
-      <ScrollView contentContainerStyle={{ padding: 18 }}>{detailLoading ? <ActivityIndicator /> : detailError ? <Text style={s.error}>{detailError}</Text> : detail && <><Photo student={detail} /><Text style={s.panelTitle}>{detail.student_name}</Text><RecordDetails record={detail} /></>}</ScrollView>
+      <ScrollView contentContainerStyle={{ padding: 18 }}>{detailLoading ? <ActivityIndicator /> : detailError ? <Text style={s.error}>{detailError}</Text> : detail && <><FamilyPhotos student={detail} /><Text style={s.panelTitle}>{detail.student_name}</Text><RecordDetails record={detail} /></>}</ScrollView>
     </View></View></Modal>
   </View>;
+}
+
+function FamilyPhotos({ student }: { student: any }) {
+  const getUrl = (path?: string) => {
+    if (!path) return '';
+    return /^https?:/.test(path) ? path : (API_BASE + (path.startsWith('/') ? '' : '/') + path);
+  };
+  const cards = [
+    { label: 'Student', name: student.student_name, url: getUrl(student.photo_url) },
+    { label: 'Father', name: student.father_name, url: getUrl(student.photos?.father_photo) },
+    { label: 'Mother', name: student.mother_name, url: getUrl(student.photos?.mother_photo) },
+    { label: (student.visitor1?.relation && String(student.visitor1.relation).trim()) ? String(student.visitor1.relation).trim() : 'Visitor 1', name: student.visitor1?.visitor_name || (student.photos?.visitor1_photo ? '-' : ''), url: getUrl(student.photos?.visitor1_photo) },
+    { label: (student.visitor2?.relation && String(student.visitor2.relation).trim()) ? String(student.visitor2.relation).trim() : 'Visitor 2', name: student.visitor2?.visitor_name || (student.photos?.visitor2_photo ? '-' : ''), url: getUrl(student.photos?.visitor2_photo) },
+  ];
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+      {cards.map((c, i) => (
+        <View key={i} style={{ width: 110, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, padding: 8, alignItems: 'center', backgroundColor: '#f8fafc' }}>
+          {c.url ? (
+            <Image source={{ uri: c.url }} style={{ width: 80, height: 90, borderRadius: 6, resizeMode: 'cover' }} />
+          ) : (
+            <View style={{ width: 80, height: 90, borderRadius: 6, backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ color: '#94a3b8', fontSize: 11 }}>No Photo</Text>
+            </View>
+          )}
+          <Text style={{ fontWeight: '800', fontSize: 12, marginTop: 6, color: '#1e293b' }}>{c.label}</Text>
+          <Text numberOfLines={2} style={{ fontSize: 11, color: '#475569', textAlign: 'center', marginTop: 2 }}>{c.name || '-'}</Text>
+        </View>
+      ))}
+    </View>
+  );
 }
 
 function Photo({ student, large = false }: { student: any; large?: boolean }) {

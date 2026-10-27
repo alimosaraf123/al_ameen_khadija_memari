@@ -14,8 +14,14 @@ import {
 import { api, imageUrl, API_BASE } from '../lib/api';
 import AcademyHeader from '../components/AcademyHeader';
 import CardQrScanner from '../components/CardQrScanner';
+import { Select } from '../components/StudentDirectory';
 import { checkVisitingSchedule } from '../lib/visitingSchedule';
 import { confirmAction } from '../lib/confirm';
+
+const PERSON_OPTIONS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((n) => ({
+  value: n,
+  label: n,
+}));
 
 const safeImageUrl = (url?: string | null) => {
   if (!url) return '';
@@ -36,6 +42,8 @@ export default function Gateman() {
   const [today, setToday] = useState<any[]>([]);
   const [todayVisitors, setTodayVisitors] = useState<any[]>([]);
   const [visitorTab, setVisitorTab] = useState<'inside' | 'all'>('inside');
+  const [sourcePersons, setSourcePersons] = useState<Record<string, string>>({});
+  const [visitPersons, setVisitPersons] = useState<Record<number, string>>({});
   const inputRef = useRef<any>(null);
 
   const cleanBarcode = (val: string) => {
@@ -125,7 +133,7 @@ export default function Gateman() {
 
   const search = async () => fetchRegistration(reg);
 
-  const enter = async (type: string, id: number) => {
+  const enter = async (type: string, id: number, personCount: number = 1) => {
     try {
       await api('/api/service-panels/gate-entry', {
         method: 'POST',
@@ -134,10 +142,10 @@ export default function Gateman() {
       if (type === 'visit') {
         await api('/api/service-panels/gate-visitor-entry', {
           method: 'POST',
-          body: JSON.stringify({ permission_id: id }),
+          body: JSON.stringify({ permission_id: id, person_count: personCount }),
         });
       }
-      const msg = 'Entry recorded successfully in system & Admin Panel.';
+      const msg = `Entry recorded successfully (${personCount} ${personCount > 1 ? 'persons' : 'person'}) in system & Admin Panel.`;
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.alert(msg);
       } else {
@@ -155,7 +163,7 @@ export default function Gateman() {
     }
   };
 
-  const recordMeeting = async (source: string, name: string) => {
+  const recordMeeting = async (source: string, name: string, personCount: number = 1) => {
     if (!data?.student?.id || !name) return;
 
     // Check visiting schedule for student
@@ -163,7 +171,12 @@ export default function Gateman() {
       ? checkVisitingSchedule(new Date(), data.student.class_name)
       : null;
 
-    if (sched && !sched.allowed) {
+    const hasPermission = Boolean(
+      (data?.visits && data.visits.length > 0) ||
+      (data?.gate_passes && data.gate_passes.length > 0)
+    );
+
+    if (sched && !sched.allowed && !hasPermission) {
       const confirmPrompt =
         `আজ ক্লাস ${data.student.class_name}-এর নির্ধারিত ভিজিটিং দিন নয়!\n\n` +
         `• নির্ধারিত দিন: ${sched.scheduledText}\n` +
@@ -181,16 +194,20 @@ export default function Gateman() {
     const todayCount = meetingToday(source);
     if (todayCount > 0 && typeof window !== 'undefined') {
       const ok = window.confirm(
-        `${name} (${source}) has already entered today (${todayCount} time). Record another entry?`
+        `${name} (${source}) has already entered today (${todayCount} time). Record another entry with ${personCount} persons?`
       );
       if (!ok) return;
     }
     try {
       const result = await api('/api/service-panels/guardian-entry', {
         method: 'POST',
-        body: JSON.stringify({ student_id: data.student.id, visitor_source: source }),
+        body: JSON.stringify({
+          student_id: data.student.id,
+          visitor_source: source,
+          person_count: personCount,
+        }),
       });
-      const msg = `${name} (${source}) without permission entry saved! Total student visits: ${result.total}`;
+      const msg = `${name} (${source}) entry saved (${personCount} ${personCount > 1 ? 'persons' : 'person'})! Total student visits: ${result.total}`;
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.alert(msg);
       } else {
@@ -299,6 +316,7 @@ export default function Gateman() {
     const todayCount = meetingToday(source);
     const insideInfo = source ? meetingInside(source) : null;
     const isInside = !!insideInfo;
+    const displayName = (name && name.trim() && name !== '-') ? name.trim() : (source ? title : '');
 
     return (
       <View style={[s.photoCard, isInside && s.photoCardInside]}>
@@ -309,9 +327,11 @@ export default function Gateman() {
             <Text>No Photo</Text>
           </View>
         )}
-        <Text style={s.bold}>{title}</Text>
-        <Text style={{ textAlign: 'center', marginTop: 2 }}>{name || '-'}</Text>
-        {source && name && (
+        <Text style={[s.bold, { marginTop: 4, textAlign: 'center' }]} numberOfLines={1}>{title}</Text>
+        <Text style={{ textAlign: 'center', marginTop: 2, fontSize: 13, color: '#334155', fontWeight: '500', minHeight: 18 }} numberOfLines={1}>
+          {name || '-'}
+        </Text>
+        {source && (
           <>
             <Text style={s.visitCount}>Total visits: {count}</Text>
             {isInside ? (
@@ -326,20 +346,33 @@ export default function Gateman() {
                 </View>
                 <TouchableOpacity
                   style={s.exitButton}
-                  onPress={() => recordExit(source, name, insideInfo?.entryId)}
+                  onPress={() => recordExit(source, displayName, insideInfo?.entryId)}
                 >
                   <Text style={s.white}>Exit (ফিরে গেছেন)</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity
-                style={[s.entryButton, todayCount > 0 && s.entryRepeatButton]}
-                onPress={() => recordMeeting(source, name)}
-              >
-                <Text style={s.white}>
-                  {todayCount > 0 ? `Entered (${todayCount}) + Entry` : 'Entry'}
-                </Text>
-              </TouchableOpacity>
+              <View style={{ width: '100%', alignItems: 'center', marginTop: 5, gap: 5 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginVertical: 2 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#475569' }}>Persons:</Text>
+                  <View style={{ width: 62 }}>
+                    <Select
+                      label="1"
+                      value={sourcePersons[source] || '1'}
+                      onChange={(v) => setSourcePersons((prev) => ({ ...prev, [source]: v }))}
+                      options={PERSON_OPTIONS}
+                    />
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={[s.entryButton, todayCount > 0 && s.entryRepeatButton]}
+                  onPress={() => recordMeeting(source, displayName, Number(sourcePersons[source] || '1'))}
+                >
+                  <Text style={s.white}>
+                    {todayCount > 0 ? `Entered (${todayCount}) + Entry` : 'Entry'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             )}
           </>
         )}
@@ -418,9 +451,12 @@ export default function Gateman() {
                       void fetchRegistration(v.registration_no);
                     }}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       <Text style={s.bold}>
                         {v.visitor_name} ({v.visitor_relation})
+                      </Text>
+                      <Text style={{ backgroundColor: '#e0f2fe', color: '#0369a1', fontSize: 11, fontWeight: '800', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                        👥 {v.person_count || 1} {Number(v.person_count) > 1 ? 'persons' : 'person'}
                       </Text>
                       <Text style={isInside ? s.insideBadgeSmall : s.exitedBadgeSmall}>
                         {isInside ? '🟢 Inside' : '✓ Exited'}
@@ -455,7 +491,7 @@ export default function Gateman() {
 
         <View style={s.todayCard}>
           <View style={s.todayTitle}>
-            <Text style={s.heading}>Today\'s Approved Students ({today.length})</Text>
+            <Text style={s.heading}>Today's Approved Students ({today.length})</Text>
             <TouchableOpacity onPress={loadToday} style={s.refresh}>
               <Text style={s.bold}>Refresh</Text>
             </TouchableOpacity>
@@ -498,7 +534,7 @@ export default function Gateman() {
                 </Text>
                 <Text>
                   Class {x.class_name || '-'} - Room {x.room_name || '-'} -{' '}
-                  {x.permission_type === 'visit' ? 'Visit' : 'Gate Pass'}
+                  {x.permission_type === 'visit' ? `Visit (👥 ${x.person_count || 1})` : 'Gate Pass'}
                 </Text>
                 <Text>
                   {x.permission_type === 'visit'
@@ -532,10 +568,20 @@ export default function Gateman() {
         {data && (
           <>
             {(() => {
+              const hasPermission = Boolean(
+                (data.visits && data.visits.length > 0) ||
+                (data.gate_passes && data.gate_passes.length > 0)
+              );
               const scheduleCheck = data.student?.class_name
                 ? checkVisitingSchedule(new Date(), data.student.class_name)
                 : null;
               if (!scheduleCheck) return null;
+
+              // Don't show unscheduled visiting day warning if student already has approved visit permission or gate pass
+              if (!scheduleCheck.allowed && hasPermission) {
+                return null;
+              }
+
               return (
                 <View
                   style={[
@@ -591,36 +637,75 @@ export default function Gateman() {
               );
             })()}
 
-            <View style={s.student}>
-              <Photo
-                title="Student"
-                url={data.student.photo_url}
-                name={data.student.student_name}
-              />
-              <Photo
-                title="Father"
-                source="father"
-                url={data.photos.father_photo}
-                name={data.student.father_name}
-              />
-              <Photo
-                title="Mother"
-                source="mother"
-                url={data.photos.mother_photo}
-                name={data.student.mother_name}
-              />
-              {data.visitors.map((v: any) => (
-                <Photo
-                  key={v.visitor_number}
-                  source={'visitor' + v.visitor_number}
-                  title={'Visitor ' + v.visitor_number}
-                  url={data.photos['visitor' + v.visitor_number + '_photo']}
-                  name={v.visitor_name}
-                />
-              ))}
-            </View>
+            {(() => {
+              const formatTitle = (rel?: string | null, fallback?: string) => {
+                const r = (rel && String(rel).trim()) ? String(rel).trim() : '';
+                if (!r) return fallback || '';
+                return r
+                  .split(' ')
+                  .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+                  .join(' ');
+              };
 
-            <Text style={s.heading}>Today\'s Visiting Permissions</Text>
+              const v1 = (data.visitors || []).find((v: any) => Number(v.visitor_number) === 1);
+              const v2 = (data.visitors || []).find((v: any) => Number(v.visitor_number) === 2);
+              const extraVisitors = (data.visitors || []).filter((v: any) => Number(v.visitor_number) > 2);
+
+              const v1Title = formatTitle(v1?.relation, 'Visitor 1');
+              const v1Name = (v1?.visitor_name && String(v1.visitor_name).trim()) ? String(v1.visitor_name).trim() : '-';
+
+              const v2Title = formatTitle(v2?.relation, 'Visitor 2');
+              const v2Name = (v2?.visitor_name && String(v2.visitor_name).trim()) ? String(v2.visitor_name).trim() : '-';
+
+              return (
+                <View style={s.student}>
+                  <Photo
+                    title="Student"
+                    url={data.student.photo_url}
+                    name={data.student.student_name}
+                  />
+                  <Photo
+                    title="Father"
+                    source="father"
+                    url={data.photos?.father_photo}
+                    name={data.student.father_name}
+                  />
+                  <Photo
+                    title="Mother"
+                    source="mother"
+                    url={data.photos?.mother_photo}
+                    name={data.student.mother_name}
+                  />
+                  <Photo
+                    title={v1Title}
+                    source="visitor1"
+                    url={data.photos?.visitor1_photo}
+                    name={v1Name}
+                  />
+                  <Photo
+                    title={v2Title}
+                    source="visitor2"
+                    url={data.photos?.visitor2_photo}
+                    name={v2Name}
+                  />
+                  {extraVisitors.map((v: any) => {
+                    const extraTitle = formatTitle(v.relation, 'Visitor ' + v.visitor_number);
+                    const extraName = (v.visitor_name && String(v.visitor_name).trim()) ? String(v.visitor_name).trim() : '-';
+                    return (
+                      <Photo
+                        key={v.visitor_number}
+                        source={'visitor' + v.visitor_number}
+                        title={extraTitle}
+                        url={data.photos?.['visitor' + v.visitor_number + '_photo']}
+                        name={extraName}
+                      />
+                    );
+                  })}
+                </View>
+              );
+            })()}
+
+            <Text style={s.heading}>Today's Visiting Permissions</Text>
             {!data.visits.length && (
               <Text style={s.none}>No visiting permission today.</Text>
             )}
@@ -634,10 +719,23 @@ export default function Gateman() {
                     {new Date(x.visit_at).toLocaleString()} - {x.duration_minutes} minutes
                   </Text>
                 </View>
+                {!x.entered && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginRight: 8 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155' }}>Persons:</Text>
+                    <View style={{ width: 62 }}>
+                      <Select
+                        label="1"
+                        value={visitPersons[x.id] || String(x.person_count || '1')}
+                        onChange={(v) => setVisitPersons((prev) => ({ ...prev, [x.id]: v }))}
+                        options={PERSON_OPTIONS}
+                      />
+                    </View>
+                  </View>
+                )}
                 <TouchableOpacity
                   disabled={!!x.entered}
                   style={[s.allow, x.entered && s.entryDisabled]}
-                  onPress={() => enter('visit', x.id)}
+                  onPress={() => enter('visit', x.id, Number(visitPersons[x.id] || x.person_count || '1'))}
                 >
                   <Text style={s.white}>
                     {x.entered ? 'Entered Today' : 'Allow Entry'}
@@ -646,7 +744,7 @@ export default function Gateman() {
               </View>
             ))}
 
-            <Text style={s.heading}>Today\'s Gate Passes</Text>
+            <Text style={s.heading}>Today's Gate Passes</Text>
             {!data.gate_passes.length && (
               <Text style={s.none}>No gate pass today.</Text>
             )}
@@ -681,9 +779,14 @@ export default function Gateman() {
               return (
                 <View key={'m-' + m.id} style={[s.permission, isInside && s.insideRow]}>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.bold}>
-                      {m.visitor_name} ({m.visitor_relation}) - <Text style={{ textTransform: 'capitalize' }}>{m.visitor_source}</Text>
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={s.bold}>
+                        {m.visitor_name} ({m.visitor_relation}) - <Text style={{ textTransform: 'capitalize' }}>{m.visitor_source}</Text>
+                      </Text>
+                      <Text style={{ backgroundColor: '#f1f5f9', color: '#475569', fontSize: 11, fontWeight: '800', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                        👥 {m.person_count || 1}
+                      </Text>
+                    </View>
                     <Text style={s.historyTime}>
                       Entry: {new Date(m.entered_at).toLocaleString()}
                       {m.exited_at ? ` · Exit: ${new Date(m.exited_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
