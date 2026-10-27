@@ -1,0 +1,59 @@
+[
+  {
+    "reg": 70085,
+    "name": "Jarin Asma",
+    "marks": {
+      "Beng": { "written": 47.5, "mcq": 7.5, "oral": 9.0 },
+      "Eng-I": { "written": 44.0, "mcq": 7.5, "oral": 6.0 },
+      "Eng-II": { "written": 48.0, "mcq": 7.75, "oral": 6.0 },
+      "P.Sc": { "written": 34.0, "mcq": 7.75, "oral": 6.0 },
+      "L.Sc": { "written": 55.0, "mcq": 3.5, "oral": 8.0 },
+      "Math": { "written": 36.5, "mcq": 4.0, "oral": 8.0 },
+      "Hist": { "written": 57.5, "mcq": 10.0, "oral": 10.0 },
+      "Geo": { "written": 59.0, "mcq": 7.2, "oral": 10.0 }
+    }
+  },
+  {
+    "reg": 73172,
+    "name": "Sk Farhana Parvin",
+    "marks": {
+      "Beng": { "written": 58.5, "mcq": 9.0, "oral": 10.0 },
+      "Eng-I": { "written": 60.0, "mcq": 8.75, "oral": 9.0 },
+      "Eng-II": { "written": 54.0, "mcq": 7.0, "oral": 9.0 },
+      "P.Sc": { "written": 39.5, "mcq": 6.0, "oral": 7.5 },
+      "L.Sc": { "written": 66.5, "mcq": 3.5, "oral": 9.0 },
+      "Math": { "written": 57.5, "mcq": 7.0, "oral": 9.0 },
+      "Hist": { "written": 72.0, "mcq": 8.0, "oral": 6.0 },
+      "Geo": { "written": 61.0, "mcq": 5.75, "oral": 9.0 }
+    }
+  },
+  {
+    "reg": 74162,
+    "sheet_reg": 74253,
+    "name": "Nusrat Mustafi",
+    "marks": {
+      "Beng": { "written": 27.0, "mcq": 5.0, "oral": 7.0 },
+      "Eng-I": { "written": 10.0, "mcq": 1.25, "oral": 6.0 },
+      "Eng-II": { "written": 15.0, "mcq": 3.75, "oral": 7.0 },
+      "P.Sc": { "written": 25.0, "mcq": 1.5, "oral": 5.0 },
+      "L.Sc": { "written": 10.0, "mcq": 3.5, "oral": 6.0 },
+      "Math": { "written": 8.0, "mcq": 0.0, "oral": 5.5 },
+      "Hist": { "written": 15.0, "mcq": 2.5, "oral": 6.0 },
+      "Geo": { "written": 19.0, "mcq": 0.25, "oral": 5.0 }
+    }
+  },
+  {
+    "reg": 75572,
+    "name": "Tanisha Mallick",
+    "marks": {
+      "Beng": { "written": 50.0, "mcq": 9.0, "oral": 9.0 },
+      "Eng-I": { "written": 61.0, "mcq": 6.75, "oral": 9.0 },
+      "Eng-II": { "written": 50.5, "mcq": 8.75, "oral": 8.0 },
+      "P.Sc": { "written": 37.0, "mcq": 5.25, "oral": 7.0 },
+      "L.Sc": { "written": 52.0, "mcq": 4.75, "oral": 7.5 },
+      "Math": { "written": 65.0, "mcq": 6.5, "oral": 9.0 },
+      "Hist": { "written": 59.0, "mcq": 6.25, "oral": 9.0 },
+      "Geo": { "written": 52.0, "mcq": 4.25, "oral": 8.0 }
+    }
+  }
+]

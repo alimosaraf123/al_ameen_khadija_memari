@@ -1,0 +1,132 @@
+[
+  {
+    "reg": 62910,
+    "name": "Hafiza Khatun",
+    "marks": {
+      "Beng": { "written": 55.0, "mcq": 6.25, "oral": 9.0 },
+      "Eng-I": { "written": 56.5, "mcq": 7.5, "oral": 7.0 },
+      "Eng-II": { "written": 22.5, "mcq": 10.0, "oral": 7.0 },
+      "Sci": { "written": 52.5, "mcq": 3.75, "oral": 8.5 },
+      "Math": { "written": 36.0, "mcq": 3.75, "oral": 9.0 },
+      "Hist": { "written": 62.5, "mcq": 6.25, "oral": 10.0 },
+      "Geo": { "written": 66.5, "mcq": 6.25, "oral": 7.0 }
+    }
+  },
+  {
+    "reg": 67000,
+    "name": "Jannat Afrin",
+    "marks": {
+      "Beng": { "written": 44.0, "mcq": 6.25, "oral": 7.0 },
+      "Eng-I": { "written": 50.0, "mcq": 3.75, "oral": 8.0 },
+      "Eng-II": { "written": 24.5, "mcq": 8.75, "oral": 9.0 },
+      "Sci": { "written": null, "mcq": null, "oral": 7.5 },
+      "Math": { "written": 32.0, "mcq": 0.0, "oral": 9.0 },
+      "Hist": { "written": 35.0, "mcq": 6.25, "oral": 7.0 },
+      "Geo": { "written": 44.5, "mcq": 6.25, "oral": 5.0 }
+    }
+  },
+  {
+    "reg": 67001,
+    "name": "Nusrat Afrin",
+    "marks": {
+      "Beng": { "written": 42.5, "mcq": 8.75, "oral": 6.0 },
+      "Eng-I": { "written": 40.5, "mcq": 2.5, "oral": 6.0 },
+      "Eng-II": { "written": 19.0, "mcq": 10.0, "oral": 7.0 },
+      "Sci": { "written": 26.5, "mcq": 3.75, "oral": 8.0 },
+      "Math": { "written": 21.0, "mcq": 0.0, "oral": 8.0 },
+      "Hist": { "written": 34.0, "mcq": 5.0, "oral": 6.0 },
+      "Geo": { "written": 37.5, "mcq": 1.25, "oral": 6.0 }
+    }
+  },
+  {
+    "reg": 67316,
+    "name": "Atika Paresha",
+    "marks": {
+      "Beng": { "written": 63.0, "mcq": 6.25, "oral": 9.0 },
+      "Eng-I": { "written": 66.0, "mcq": 7.5, "oral": 9.5 },
+      "Eng-II": { "written": 49.0, "mcq": 10.0, "oral": 10.0 },
+      "Sci": { "written": 60.0, "mcq": 6.25, "oral": 9.0 },
+      "Math": { "written": 67.0, "mcq": 5.0, "oral": 9.0 },
+      "Hist": { "written": 67.5, "mcq": 8.75, "oral": 10.0 },
+      "Geo": { "written": 62.5, "mcq": 8.75, "oral": 8.0 }
+    }
+  },
+  {
+    "reg": 68202,
+    "name": "Naureen Mallick",
+    "marks": {
+      "Beng": { "written": 55.5, "mcq": 7.5, "oral": 8.0 },
+      "Eng-I": { "written": 53.5, "mcq": 6.25, "oral": 9.0 },
+      "Eng-II": { "written": 21.5, "mcq": 10.0, "oral": 8.0 },
+      "Sci": { "written": 50.0, "mcq": 3.75, "oral": 9.0 },
+      "Math": { "written": 54.0, "mcq": 1.25, "oral": 10.0 },
+      "Hist": { "written": 64.0, "mcq": 10.0, "oral": 9.5 },
+      "Geo": { "written": 60.0, "mcq": 6.25, "oral": 9.0 }
+    }
+  },
+  {
+    "reg": 68557,
+    "name": "Afsana Khatun",
+    "marks": {
+      "Beng": { "written": 38.5, "mcq": 7.5, "oral": 8.0 },
+      "Eng-I": { "written": 37.5, "mcq": 7.5, "oral": 8.0 },
+      "Eng-II": { "written": 24.0, "mcq": 8.75, "oral": 10.0 },
+      "Sci": { "written": 32.5, "mcq": 5.25, "oral": 9.0 },
+      "Math": { "written": 35.0, "mcq": 1.25, "oral": 10.0 },
+      "Hist": { "written": 23.0, "mcq": 3.75, "oral": 8.0 },
+      "Geo": { "written": 34.0, "mcq": 2.5, "oral": 6.0 }
+    }
+  },
+  {
+    "reg": 75374,
+    "name": "Subnur Khatun",
+    "marks": {
+      "Beng": { "written": 41.5, "mcq": 6.25, "oral": 7.0 },
+      "Eng-I": { "written": 30.0, "mcq": 5.0, "oral": 6.0 },
+      "Eng-II": { "written": 16.0, "mcq": 8.75, "oral": 4.0 },
+      "Sci": { "written": 28.0, "mcq": 6.25, "oral": 9.0 },
+      "Math": { "written": 21.0, "mcq": 0.0, "oral": 7.0 },
+      "Hist": { "written": 27.0, "mcq": 6.25, "oral": 7.0 },
+      "Geo": { "written": 53.0, "mcq": 6.25, "oral": 5.0 }
+    }
+  },
+  {
+    "reg": 75558,
+    "name": "Tajnur Mondal",
+    "marks": {
+      "Beng": { "written": 33.0, "mcq": 5.0, "oral": 6.0 },
+      "Eng-I": { "written": 30.0, "mcq": 7.5, "oral": 7.0 },
+      "Eng-II": { "written": 17.0, "mcq": 8.75, "oral": 4.0 },
+      "Sci": { "written": 22.5, "mcq": 2.75, "oral": 5.5 },
+      "Math": { "written": 19.0, "mcq": 1.25, "oral": 8.0 },
+      "Hist": { "written": 11.5, "mcq": 3.75, "oral": 6.0 },
+      "Geo": { "written": 29.5, "mcq": 1.25, "oral": 6.0 }
+    }
+  },
+  {
+    "reg": 75583,
+    "name": "Sk Nusrat",
+    "marks": {
+      "Beng": { "written": 37.5, "mcq": 5.0, "oral": 6.0 },
+      "Eng-I": { "written": 43.5, "mcq": 7.5, "oral": 8.0 },
+      "Eng-II": { "written": 20.5, "mcq": 8.75, "oral": 4.0 },
+      "Sci": { "written": 29.0, "mcq": 4.0, "oral": 6.5 },
+      "Math": { "written": 27.0, "mcq": 1.25, "oral": 6.0 },
+      "Hist": { "written": 31.0, "mcq": 2.5, "oral": 6.5 },
+      "Geo": { "written": 34.5, "mcq": 2.5, "oral": 6.0 }
+    }
+  },
+  {
+    "reg": 75889,
+    "name": "Afsana Parvin",
+    "marks": {
+      "Beng": { "written": 61.0, "mcq": 6.25, "oral": 9.0 },
+      "Eng-I": { "written": 59.0, "mcq": 8.75, "oral": 8.0 },
+      "Eng-II": { "written": 24.5, "mcq": 10.0, "oral": 9.0 },
+      "Sci": { "written": 56.0, "mcq": 7.5, "oral": 9.5 },
+      "Math": { "written": 47.0, "mcq": 2.5, "oral": 9.0 },
+      "Hist": { "written": 68.5, "mcq": 10.0, "oral": 10.0 },
+      "Geo": { "written": 56.0, "mcq": 6.25, "oral": 7.0 }
+    }
+  }
+]

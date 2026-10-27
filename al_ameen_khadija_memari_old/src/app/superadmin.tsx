@@ -171,7 +171,7 @@ export default function Dashboard() {
       <Modal visible={teacherMenu} transparent animationType="fade" onRequestClose={()=>setTeacherMenu(false)}>
         <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={()=>setTeacherMenu(false)} accessibilityRole="button" accessibilityLabel="Close teachers menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Staff</Text><TouchableOpacity onPress={()=>setTeacherMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
           <View style={s.modalGrid}>
-            {[["Add Staff","/teachers?mode=add"],["View Staff","/teachers?mode=view"],["I-Card & Form","/teachers?mode=icard"],["Staff Attendance","/teacher-attendance"],["Staff Summary","/staff-summary"]].map(([label,path])=><AdminLink path={path} key={label} style={s.modalItem} onPress={()=>{setTeacherMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></AdminLink>)}
+            {[["Add Staff","/teachers?mode=add"],["View Staff","/teachers?mode=view"],["I-Card & Form","/teachers?mode=icard"],["Staff Attendance","/teacher-attendance"],["Staff Summary","/staff-summary"],["Gateman & Service Staff","/service-staff"]].map(([label,path])=><AdminLink path={path} key={label} style={s.modalItem} onPress={()=>{setTeacherMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></AdminLink>)}
           </View>
         </View></View>
       </Modal>

@@ -1,0 +1,128 @@
+[
+  {
+    "reg": 54162,
+    "name": "Alisha Khatun",
+    "marks": {
+      "Beng": { "written": 64.0, "mcq": 8.0, "oral": 10.0 },
+      "Eng-I": { "written": 61.5, "mcq": 7.75, "oral": 7.0 },
+      "Eng-II": { "written": 57.5, "mcq": 6.25, "oral": 9.0 },
+      "P.Sc": { "written": 50.0, "mcq": 5.25, "oral": 8.5 },
+      "L.Sc": { "written": 65.5, "mcq": 5.0, "oral": 10.0 },
+      "Math": { "written": 39.0, "mcq": 3.75, "oral": 8.0 },
+      "Hist": { "written": 71.5, "mcq": 10.0, "oral": 10.0 },
+      "Geo": { "written": 64.5, "mcq": 6.5, "oral": 7.0 }
+    }
+  },
+  {
+    "reg": 60543,
+    "name": "jesmina khatun",
+    "marks": {
+      "Beng": { "written": 62.5, "mcq": 9.0, "oral": 9.0 },
+      "Eng-I": { "written": 54.0, "mcq": 5.0, "oral": 9.0 },
+      "Eng-II": { "written": 57.0, "mcq": 6.5, "oral": 9.0 },
+      "P.Sc": { "written": 47.5, "mcq": 6.25, "oral": 8.0 },
+      "L.Sc": { "written": 55.5, "mcq": 6.25, "oral": 8.5 },
+      "Math": { "written": 52.0, "mcq": 4.25, "oral": 8.5 },
+      "Hist": { "written": 64.0, "mcq": 6.25, "oral": 9.0 },
+      "Geo": { "written": 59.0, "mcq": 6.25, "oral": 7.0 }
+    }
+  },
+  {
+    "reg": 68003,
+    "name": "Saina Mondal",
+    "marks": {
+      "Beng": { "written": 56.5, "mcq": 9.0, "oral": 8.0 },
+      "Eng-I": { "written": 46.0, "mcq": 7.5, "oral": 7.0 },
+      "Eng-II": { "written": 53.5, "mcq": 8.75, "oral": 8.0 },
+      "P.Sc": { "written": 33.0, "mcq": 2.5, "oral": 6.0 },
+      "L.Sc": { "written": 52.5, "mcq": 5.0, "oral": 8.0 },
+      "Math": { "written": 50.0, "mcq": 2.5, "oral": 6.5 },
+      "Hist": { "written": 64.5, "mcq": 8.75, "oral": 9.0 },
+      "Geo": { "written": 56.5, "mcq": 5.0, "oral": 9.0 }
+    }
+  },
+  {
+    "reg": 72763,
+    "name": "Renufa Hossain",
+    "marks": {
+      "Beng": { "written": 59.0, "mcq": 8.0, "oral": 8.0 },
+      "Eng-I": { "written": 47.5, "mcq": 8.75, "oral": 8.0 },
+      "Eng-II": { "written": 48.0, "mcq": 5.25, "oral": 8.0 },
+      "P.Sc": { "written": 48.5, "mcq": 5.5, "oral": 6.5 },
+      "L.Sc": { "written": 69.5, "mcq": 5.0, "oral": 9.5 },
+      "Math": { "written": 60.0, "mcq": 3.0, "oral": 8.0 },
+      "Hist": { "written": 67.5, "mcq": 6.25, "oral": 9.0 },
+      "Geo": { "written": 54.0, "mcq": 5.5, "oral": 7.0 }
+    }
+  },
+  {
+    "reg": 73185,
+    "name": "Anisha Mondal",
+    "marks": {
+      "Beng": { "written": 55.5, "mcq": 9.0, "oral": 7.0 },
+      "Eng-I": { "written": 47.5, "mcq": 7.75, "oral": 7.0 },
+      "Eng-II": { "written": 44.0, "mcq": 6.5, "oral": 8.0 },
+      "P.Sc": { "written": 45.5, "mcq": 3.75, "oral": 8.0 },
+      "L.Sc": { "written": 60.5, "mcq": 6.25, "oral": 7.0 },
+      "Math": { "written": 43.5, "mcq": 0.25, "oral": 9.0 },
+      "Hist": { "written": 68.5, "mcq": 6.25, "oral": 9.0 },
+      "Geo": { "written": 51.0, "mcq": 5.0, "oral": 5.0 }
+    }
+  },
+  {
+    "reg": 73287,
+    "name": "Nourin Mondal",
+    "marks": {
+      "Beng": { "written": 63.5, "mcq": 10.0, "oral": 10.0 },
+      "Eng-I": { "written": 65.0, "mcq": 7.5, "oral": 9.0 },
+      "Eng-II": { "written": 68.5, "mcq": 8.75, "oral": 10.0 },
+      "P.Sc": { "written": 57.0, "mcq": 5.75, "oral": 8.0 },
+      "L.Sc": { "written": 75.5, "mcq": 7.75, "oral": 9.0 },
+      "Math": { "written": 52.0, "mcq": 3.5, "oral": 9.0 },
+      "Hist": { "written": 69.5, "mcq": 10.0, "oral": 10.0 },
+      "Geo": { "written": 66.5, "mcq": 6.75, "oral": 10.0 }
+    }
+  },
+  {
+    "reg": 74875,
+    "name": "Afrin Sultana",
+    "marks": {
+      "Beng": { "written": 43.0, "mcq": 6.0, "oral": 8.0 },
+      "Eng-I": { "written": 31.0, "mcq": 2.75, "oral": 7.0 },
+      "Eng-II": { "written": 47.0, "mcq": 2.75, "oral": 9.0 },
+      "P.Sc": { "written": 24.5, "mcq": 1.75, "oral": 6.5 },
+      "L.Sc": { "written": 41.5, "mcq": 6.0, "oral": 8.0 },
+      "Math": { "written": 20.0, "mcq": 1.75, "oral": 7.0 },
+      "Hist": { "written": 57.5, "mcq": 7.5, "oral": 8.0 },
+      "Geo": { "written": 36.0, "mcq": 2.5, "oral": 5.0 }
+    }
+  },
+  {
+    "reg": 75438,
+    "name": "Rebeka Afrose",
+    "marks": {
+      "Beng": { "written": 44.0, "mcq": 6.0, "oral": 9.0 },
+      "Eng-I": { "written": 44.5, "mcq": 2.25, "oral": 7.0 },
+      "Eng-II": { "written": 56.5, "mcq": 7.5, "oral": 8.0 },
+      "P.Sc": { "written": 7.5, "mcq": -0.75, "oral": 6.5 },
+      "L.Sc": { "written": 46.0, "mcq": 7.5, "oral": 8.0 },
+      "Math": { "written": 18.0, "mcq": 0.25, "oral": 6.5 },
+      "Hist": { "written": 45.0, "mcq": 4.0, "oral": 8.0 },
+      "Geo": { "written": 38.5, "mcq": 3.75, "oral": 5.0 }
+    }
+  },
+  {
+    "reg": 75554,
+    "name": "Maha Muda Mondal",
+    "marks": {
+      "Beng": { "written": 55.5, "mcq": 6.0, "oral": 9.0 },
+      "Eng-I": { "written": 54.0, "mcq": 5.25, "oral": 9.0 },
+      "Eng-II": { "written": 66.5, "mcq": 9.0, "oral": 10.0 },
+      "P.Sc": { "written": 47.5, "mcq": 2.25, "oral": 9.5 },
+      "L.Sc": { "written": 62.0, "mcq": 7.5, "oral": 7.0 },
+      "Math": { "written": 44.5, "mcq": 1.0, "oral": 6.5 },
+      "Hist": { "written": 68.5, "mcq": 7.75, "oral": 10.0 },
+      "Geo": { "written": 54.5, "mcq": 1.5, "oral": 7.0 }
+    }
+  }
+]

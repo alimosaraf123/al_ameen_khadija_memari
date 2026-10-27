@@ -1,0 +1,57 @@
+[
+  {
+    "reg": 75276,
+    "name": "Rohini Khatun",
+    "marks": {
+      "Beng": { "written": 52.5, "mcq": 7.5, "oral": 8.0 },
+      "Eng-I": { "written": 45.0, "mcq": 8.75, "oral": 7.0 },
+      "Eng-II": { "written": 66.0, "mcq": 8.0, "oral": 8.0 },
+      "Sci": { "written": 45.5, "mcq": 2.5, "oral": 7.0 },
+      "Math": { "written": 58.0, "mcq": 5.0, "oral": 7.5 }
+    }
+  },
+  {
+    "reg": 75566,
+    "name": "Ayesha Siddiqua",
+    "marks": {
+      "Beng": { "written": 49.5, "mcq": 6.25, "oral": 8.0 },
+      "Eng-I": { "written": 45.5, "mcq": 10.0, "oral": 7.0 },
+      "Eng-II": { "written": 46.0, "mcq": 8.0, "oral": 2.0 },
+      "Sci": { "written": 46.5, "mcq": 3.75, "oral": 7.5 },
+      "Math": { "written": 63.5, "mcq": 7.5, "oral": 7.5 }
+    }
+  },
+  {
+    "reg": 75569,
+    "name": "Farhana Khatun",
+    "marks": {
+      "Beng": { "written": 39.5, "mcq": 7.5, "oral": 9.0 },
+      "Eng-I": { "written": 58.5, "mcq": 10.0, "oral": 8.0 },
+      "Eng-II": { "written": 68.0, "mcq": 8.0, "oral": 10.0 },
+      "Sci": { "written": 59.0, "mcq": 6.25, "oral": 8.5 },
+      "Math": { "written": 60.5, "mcq": 7.5, "oral": 9.0 }
+    }
+  },
+  {
+    "reg": 75655,
+    "name": "Sadika Yeasmin",
+    "marks": {
+      "Beng": { "written": null, "mcq": null, "oral": null },
+      "Eng-I": { "written": 25.0, "mcq": 10.0, "oral": null },
+      "Eng-II": { "written": null, "mcq": null, "oral": null },
+      "Sci": { "written": null, "mcq": null, "oral": null },
+      "Math": { "written": null, "mcq": null, "oral": null }
+    }
+  },
+  {
+    "reg": 75748,
+    "name": "Nassirin Mallick",
+    "marks": {
+      "Beng": { "written": 33.0, "mcq": 5.0, "oral": 7.0 },
+      "Eng-I": { "written": 33.0, "mcq": 8.75, "oral": 6.0 },
+      "Eng-II": { "written": 59.5, "mcq": 8.0, "oral": 8.0 },
+      "Sci": { "written": 38.0, "mcq": 2.5, "oral": 5.5 },
+      "Math": { "written": 30.0, "mcq": 0.5, "oral": 7.5 }
+    }
+  }
+]

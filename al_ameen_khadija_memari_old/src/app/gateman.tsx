@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { api, imageUrl, API_BASE } from '../lib/api';
+import { getUser } from '../lib/auth';
 import AcademyHeader from '../components/AcademyHeader';
 import CardQrScanner from '../components/CardQrScanner';
 import { Select } from '../components/StudentDirectory';
@@ -36,6 +37,7 @@ const safeImageUrl = (url?: string | null) => {
 };
 
 export default function Gateman() {
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [reg, setReg] = useState('');
   const [data, setData] = useState<any>(null);
   const [busy, setBusy] = useState(false);
@@ -65,6 +67,7 @@ export default function Gateman() {
   };
 
   useEffect(() => {
+    void getUser<any>().then(setCurrentUser);
     void loadToday();
   }, []);
 
@@ -387,6 +390,39 @@ export default function Gateman() {
     <SafeAreaView style={s.page}>
       <ScrollView contentContainerStyle={s.body}>
         <AcademyHeader />
+
+        {/* ON DUTY GATEMAN BANNER */}
+        <View style={{
+          backgroundColor: '#0f3a61',
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          borderRadius: 10,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 10,
+          borderWidth: 1,
+          borderColor: '#1d4e7d',
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={{ fontSize: 26 }}>👮</Text>
+            <View>
+              <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>
+                On Duty: {currentUser?.full_name || currentUser?.name || currentUser?.login_id || 'Gateman'}
+              </Text>
+              <Text style={{ color: '#93c5fd', fontSize: 12, marginTop: 2 }}>
+                Login ID: <Text style={{ fontWeight: '800', color: '#fff' }}>{currentUser?.login_id || '—'}</Text> · All entry/exit operations are recorded under your ID
+              </Text>
+            </View>
+          </View>
+          <View style={{ backgroundColor: 'rgba(255,255,255,0.18)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 }}>
+            <Text style={{ color: '#e0f2fe', fontSize: 11, fontWeight: '700' }}>
+              4 Active Gateman Logins Available
+            </Text>
+          </View>
+        </View>
+
         <CardQrScanner onRegistration={fetchRegistration} />
 
         {/* CURRENTLY INSIDE VISITORS & GUARDIANS */}
@@ -467,7 +503,8 @@ export default function Gateman() {
                     </Text>
                     <Text style={{ color: '#64748b', fontSize: 11, marginTop: 2 }}>
                       Entered: {new Date(v.entered_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      {v.exited_at ? ` · Exited: ${new Date(v.exited_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ` · ${v.duration_minutes || 0}m inside`}
+                      {(v.entered_by_name || v.entered_by_login) ? ` (By: ${v.entered_by_name || v.entered_by_login})` : ''}
+                      {v.exited_at ? ` · Exited: ${new Date(v.exited_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${(v.exited_by_name || v.exited_by_login) ? ` (By: ${v.exited_by_name || v.exited_by_login})` : ''}` : ` · ${v.duration_minutes || 0}m inside`}
                     </Text>
                   </TouchableOpacity>
 
@@ -789,7 +826,8 @@ export default function Gateman() {
                     </View>
                     <Text style={s.historyTime}>
                       Entry: {new Date(m.entered_at).toLocaleString()}
-                      {m.exited_at ? ` · Exit: ${new Date(m.exited_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                      {(m.entered_by_name || m.entered_by_login) ? ` (By: ${m.entered_by_name || m.entered_by_login})` : ''}
+                      {m.exited_at ? ` · Exit: ${new Date(m.exited_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${(m.exited_by_name || m.exited_by_login) ? ` (By: ${m.exited_by_name || m.exited_by_login})` : ''}` : ''}
                     </Text>
                   </View>
                   {isInside ? (
