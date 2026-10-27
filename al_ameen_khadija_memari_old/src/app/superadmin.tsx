@@ -105,15 +105,17 @@ export default function Dashboard() {
         }
       >
 
-        <AcademyHeader />
+        <AcademyHeader compact />
 
-
-        <Text
-          style={s.sub}
-        >
-          {restricted ? (dashboardName ? dashboardName+' Dashboard' : 'Dashboard') : 'Super Admin Dashboard'}
-        </Text>
-        <TouchableOpacity onPress={openNotifications} style={s.notification}><Text style={s.notificationText}>🔔 Admin Notifications</Text>{unread>0&&<View style={s.badge}><Text style={s.badgeText}>{unread>99?'99+':unread}</Text></View>}</TouchableOpacity>
+        <View style={s.topBar}>
+          <Text style={s.sub}>
+            {restricted ? (dashboardName ? dashboardName+' Dashboard' : 'Dashboard') : 'Super Admin Dashboard'}
+          </Text>
+          <TouchableOpacity onPress={openNotifications} style={s.notification}>
+            <Text style={s.notificationText}>🔔 Admin Notifications</Text>
+            {unread>0&&<View style={s.badge}><Text style={s.badgeText}>{unread>99?'99+':unread}</Text></View>}
+          </TouchableOpacity>
+        </View>
 
 
         <View
@@ -217,20 +219,31 @@ const s =
     },
 
     content: {
-      padding: 16,
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 24,
+    },
+
+    topBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      flexWrap: 'wrap',
+      gap: 10,
+      marginTop: 2,
+      marginBottom: 10,
     },
 
     title: {
-      fontSize: 26,
+      fontSize: 22,
       fontWeight: '800',
       textAlign: 'center',
     },
 
     sub: {
-      fontSize: 17,
-      textAlign: 'center',
-      color: '#667085',
-      marginBottom: 20,
+      fontSize: 18,
+      fontWeight: '800',
+      color: '#0f3a61',
     },
 
     grid: {
@@ -243,11 +256,11 @@ const s =
     card: {
       width: '48%',
       backgroundColor: '#fff',
-      minHeight: 78,
-      paddingVertical: 18,
+      minHeight: 68,
+      paddingVertical: 14,
       paddingHorizontal: 8,
-      borderRadius: 14,
-      marginBottom: 12,
+      borderRadius: 12,
+      marginBottom: 10,
       alignItems: 'center',
       justifyContent: 'center',
       elevation: 2,
@@ -256,13 +269,22 @@ const s =
     cardText: {
       width: '100%',
       textAlign: 'center',
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: '700',
       color: '#124a94',
     },
 
-    notification: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', backgroundColor: '#e8f1fb', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 9, marginBottom: 16 },
-    notificationText: { color: '#124a94', fontWeight: '800' },
+    notification: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#e8f1fb',
+      paddingVertical: 7,
+      paddingHorizontal: 13,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: '#cbdcf0',
+    },
+    notificationText: { color: '#124a94', fontWeight: '800', fontSize: 13 },
     modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,.65)', justifyContent: 'center', alignItems: 'center', padding: 20 },
     teacherModal: { width: '100%', maxWidth: 830, backgroundColor: '#fff', borderRadius: 18, overflow: 'hidden' },
     modalHeader: { backgroundColor: '#11101d', padding: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

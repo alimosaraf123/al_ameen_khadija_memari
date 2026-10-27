@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
@@ -10,19 +10,82 @@ import { STUDENT_CLASSES, isVisibleStudentClass } from '../lib/studentClasses';
 import { filterStudents, studentSession, normalizeStudentClass } from '../lib/studentDirectory';
 
 type Option = { value: string; label: string };
-export function Select({ label, value, options, onChange, searchable=false }: { label: string; value: string; options: Option[]; onChange: (value: string) => void; searchable?: boolean }) {
+export function Select({ label, value, options, onChange, searchable=false, style }: { label: string; value: string; options: Option[]; onChange: (value: string) => void; searchable?: boolean; style?: any }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [anchor, setAnchor] = useState({ x: 16, y: 60 });
+  const [anchor, setAnchor] = useState({ x: 16, y: 60, width: 280, maxHeight: 380 });
+  const buttonRef = useRef<any>(null);
   const visibleOptions = searchable && query ? options.filter(option => option.label.toLowerCase().includes(query.toLowerCase())) : options;
+
+  const handleOpen = (event: any) => {
+    const w = Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerWidth : 1200;
+    const h = Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerHeight : 800;
+
+    const calculate = (bx: number, by: number, bw: number, bh: number) => {
+      const dropdownW = Math.min(340, Math.max(220, Math.min(Math.max(bw, 220), w - 16)));
+      let left = bx;
+      if (left + dropdownW > w - 12) {
+        left = Math.max(8, w - dropdownW - 12);
+      }
+      if (left < 8) left = 8;
+
+      const estimatedH = Math.min(380, (searchable ? 100 : 54) + Math.max(visibleOptions.length, 1) * 46);
+      const spaceBelow = h - (by + bh) - 12;
+      const spaceAbove = by - 12;
+
+      let top: number;
+      let maxHeight: number;
+
+      if (spaceBelow >= Math.min(estimatedH, 160) || spaceBelow >= spaceAbove) {
+        top = by + bh + 4;
+        maxHeight = Math.max(120, Math.min(380, spaceBelow - 8));
+      } else {
+        const actualH = Math.min(estimatedH, Math.max(120, spaceAbove - 8));
+        top = Math.max(8, by - actualH - 4);
+        maxHeight = Math.max(120, spaceAbove - 8);
+      }
+
+      setAnchor({ x: Math.round(left), y: Math.round(top), width: dropdownW, maxHeight: Math.round(maxHeight) });
+      setQuery('');
+      setOpen(true);
+    };
+
+    if (Platform.OS === 'web') {
+      const el = (buttonRef.current as any) || (event?.currentTarget as any);
+      if (el && typeof el.getBoundingClientRect === 'function') {
+        const rect = el.getBoundingClientRect();
+        calculate(rect.left, rect.top, rect.width, rect.height);
+        return;
+      }
+    }
+
+    if (buttonRef.current?.measureInWindow) {
+      buttonRef.current.measureInWindow((x: number, y: number, width: number, height: number) => {
+        calculate(x || 16, y || 60, width || 220, height || 40);
+      });
+      return;
+    }
+
+    const n = event?.nativeEvent || {};
+    const cy = Number(n.clientY ?? n.pageY) || 60;
+    const cx = Number(n.clientX ?? n.pageX) || 16;
+    calculate(cx, cy, 220, 40);
+  };
+
   return <>
-    <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${label}: ${options.find(o => o.value === value)?.label || value}`} onPress={(event:any) => { const n=event?.nativeEvent||{}, py=Number(n.pageY)||60, px=Number(n.pageX)||16, h=Platform.OS==='web'&&typeof window!=='undefined'?window.innerHeight:800, w=Platform.OS==='web'&&typeof window!=='undefined'?window.innerWidth:1200, panelH=Math.min(460,h*0.75), top=py>h-panelH-20?Math.max(8,py-panelH):py+8; setAnchor({x:Math.max(8,Math.min(px,w-356)),y:top}); setQuery(''); setOpen(true); }} style={s.select}>
+    <TouchableOpacity
+      ref={buttonRef}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${options.find(o => o.value === value)?.label || value}`}
+      onPress={handleOpen}
+      style={[s.select, style]}
+    >
       <Text style={[s.selectText,!value&&s.selectPlaceholder]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{options.find(o => o.value === value)?.label || label}  ▼</Text>
     </TouchableOpacity>
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-      <View style={[s.overlay,Platform.OS==='web'&&s.webSelectOverlay]}><Pressable accessibilityRole="button" accessibilityLabel="Close dropdown" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} onPress={() => setOpen(false)} /><View style={[s.selectPanel,Platform.OS==='web'&&{position:'absolute',left:anchor.x,top:anchor.y,width:Math.min(340,Math.max(220,(typeof window!=='undefined'?window.innerWidth:360)-16))}] }>
+      <View style={[s.overlay,Platform.OS==='web'&&s.webSelectOverlay]}><Pressable accessibilityRole="button" accessibilityLabel="Close dropdown" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} onPress={() => setOpen(false)} /><View style={[s.selectPanel,Platform.OS==='web'&&{position:'absolute',left:anchor.x,top:anchor.y,width:anchor.width,maxHeight:anchor.maxHeight,borderWidth:1,borderColor:'#cbd5e1'}] }>
         <Text style={s.panelTitle}>{label}</Text>
-        {searchable && <TextInput autoFocus value={query} onChangeText={setQuery} placeholder={label ? `Search ${label}...` : "Type to search..."} style={s.search} />}
+        {searchable && <TextInput autoFocus value={query} onChangeText={setQuery} placeholder={label ? `Search ${label}...` : "Type to search..."} style={[s.search, { width: '100%', marginBottom: 8 }]} />}
         <ScrollView keyboardShouldPersistTaps="handled">{visibleOptions.map(option => <TouchableOpacity key={option.value} accessibilityRole="button" accessibilityState={{ selected: value === option.value }} style={[s.option, value === option.value && s.selected]} onPress={() => { onChange(option.value); setOpen(false); }}>
           <Text>{option.label}{value === option.value ? '  Selected' : ''}</Text>
         </TouchableOpacity>)}</ScrollView>
