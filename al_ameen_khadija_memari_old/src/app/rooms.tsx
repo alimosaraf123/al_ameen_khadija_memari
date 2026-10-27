@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import AcademyHeader from '../components/AcademyHeader';
 import { Select } from '../components/StudentDirectory';
 import { api } from '../lib/api';
 
@@ -343,9 +342,9 @@ export default function Rooms() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
+      {/* Ultra Compact Top Header Bar */}
+      <View style={styles.compactHeader}>
+        <View style={styles.headerLeft}>
           <TouchableOpacity
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/superadmin'))}
             style={styles.navButton}
@@ -355,167 +354,155 @@ export default function Rooms() {
           <TouchableOpacity onPress={() => router.push('/superadmin')} style={styles.navButton}>
             <Text style={styles.navButtonText}>🏠 SuperAdmin</Text>
           </TouchableOpacity>
+          <Text style={styles.headerTitle}>Hostel - Rooms & Student Allocation</Text>
         </View>
-        <AcademyHeader />
-        <Text style={styles.pageTitle}>Hostel - Rooms & Student Allocation</Text>
-        <Text style={styles.pageSubtitle}>
-          ছাত্রছাত্রীদের হোস্টেল রুম পরিবর্তন ও বণ্টন ব্যবস্থা (সহজ ও দ্রুত রুম চেঞ্জ)
-        </Text>
+
+        <View style={styles.headerTabs}>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'students' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('students')}
+          >
+            <Text style={[styles.tabButtonText, activeTab === 'students' && styles.tabButtonTextActive]}>
+              👥 Student Allocation ({students.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'rooms' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('rooms')}
+          >
+            <Text style={[styles.tabButtonText, activeTab === 'rooms' && styles.tabButtonTextActive]}>
+              🏢 Manage Rooms ({rooms.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Main Tab Switcher */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'students' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('students')}
-        >
-          <Text style={[styles.tabButtonText, activeTab === 'students' && styles.tabButtonTextActive]}>
-            👥 Student Room Allocation ({students.length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'rooms' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('rooms')}
-        >
-          <Text style={[styles.tabButtonText, activeTab === 'rooms' && styles.tabButtonTextActive]}>
-            🏢 Manage Rooms ({rooms.length})
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {/* Frozen Filter Toolbar for Students Tab */}
+      {activeTab === 'students' && (
+        <View style={styles.frozenFilterWrapper}>
+          <View style={styles.compactFilterCard}>
+            <View style={{ width: 140 }}>
+              <Select
+                label="All Classes"
+                value={selectedClass}
+                onChange={setSelectedClass}
+                options={CLASS_OPTIONS}
+              />
+            </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* TAB 1: STUDENT ROOM ALLOCATION */}
-        {activeTab === 'students' && (
-          <View>
-            {/* Filter Toolbar */}
-            <View style={styles.filterCard}>
-              <Text style={styles.filterCardTitle}>🔍 Filter & Search Students</Text>
+            <View style={{ width: 185 }}>
+              <Select
+                label="All Rooms"
+                value={selectedRoomFilter}
+                onChange={setSelectedRoomFilter}
+                options={roomFilterOptions}
+                searchable={true}
+              />
+            </View>
 
-              <View style={styles.filterRow}>
-                <View style={styles.filterItem}>
-                  <Text style={styles.filterLabel}>Class (ক্লাস):</Text>
+            <View style={{ flex: 1, minWidth: 160 }}>
+              <TextInput
+                style={styles.compactSearchInput}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search name, reg. no, or roll..."
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+
+            <View style={styles.compactStatsGroup}>
+              <Text style={styles.compactStatsText}>
+                <Text style={{ fontWeight: '800', color: '#0284c7' }}>{filteredStudents.length}</Text> / {students.length}
+              </Text>
+              {Boolean(selectedClass !== 'all' || selectedRoomFilter !== 'all' || searchQuery.trim().length > 0) ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedClass('all');
+                    setSelectedRoomFilter('all');
+                    setSearchQuery('');
+                  }}
+                  style={styles.compactResetBtn}
+                  accessibilityLabel="Reset filters"
+                >
+                  <Text style={styles.compactResetText}>✕ Reset</Text>
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity
+                onPress={() => {
+                  void loadStudents();
+                  void loadRooms();
+                }}
+                style={styles.compactRefreshBtn}
+                accessibilityLabel="Refresh list"
+              >
+                <Text style={styles.compactRefreshText}>🔄</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* BULK ACTION BAR (FROZEN) */}
+          <View style={[styles.bulkBar, selectedIds.length > 0 && styles.bulkBarActive]}>
+            <View style={styles.bulkLeft}>
+              <TouchableOpacity onPress={toggleSelectAllPaginated} style={styles.checkboxRow}>
+                <Text style={styles.checkboxIcon}>{isAllPaginatedSelected ? '☑️' : '⬜'}</Text>
+                <Text style={styles.bulkSelectText}>
+                  {isAllPaginatedSelected ? 'Deselect Page' : 'Select Page'}
+                </Text>
+              </TouchableOpacity>
+
+              {filteredStudents.length > paginatedStudents.length && (
+                <TouchableOpacity onPress={selectAllFiltered} style={styles.selectAllBtn}>
+                  <Text style={styles.selectAllBtnText}>
+                    {selectedIds.length === filteredStudents.length
+                      ? 'Deselect All'
+                      : `Select All (${filteredStudents.length})`}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              <Text style={styles.selectedCountBadge}>
+                ✓ Selected: <Text style={{ fontWeight: '900' }}>{selectedIds.length}</Text>
+              </Text>
+            </View>
+
+            {selectedIds.length > 0 && (
+              <View style={styles.bulkRight}>
+                <View style={{ minWidth: 220 }}>
                   <Select
-                    label="All Classes"
-                    value={selectedClass}
-                    onChange={setSelectedClass}
-                    options={CLASS_OPTIONS}
-                  />
-                </View>
-
-                <View style={styles.filterItem}>
-                  <Text style={styles.filterLabel}>Current Room (বর্তমান রুম):</Text>
-                  <Select
-                    label="All Rooms"
-                    value={selectedRoomFilter}
-                    onChange={setSelectedRoomFilter}
-                    options={roomFilterOptions}
+                    label="Select Target Room"
+                    value={bulkTargetRoom}
+                    onChange={setBulkTargetRoom}
+                    options={targetRoomOptions}
                     searchable={true}
                   />
                 </View>
 
-                <View style={[styles.filterItem, { minWidth: 200, flex: 1.5 }]}>
-                  <Text style={styles.filterLabel}>Search Name / Reg. / Roll:</Text>
-                  <TextInput
-                    style={styles.searchInput}
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    placeholder="Search by name, reg. no, or roll..."
-                    placeholderTextColor="#94a3b8"
-                  />
-                </View>
-              </View>
-
-              <View style={styles.statsRow}>
-                <Text style={styles.statsText}>
-                  Showing <Text style={{ fontWeight: '800' }}>{filteredStudents.length}</Text> of {students.length} students
-                  {selectedRoomFilter !== 'all' && (
-                    <Text style={{ color: '#0369a1' }}>
-                      {' '}· Filter: {roomFilterOptions.find((o) => o.value === selectedRoomFilter)?.label || selectedRoomFilter}
-                    </Text>
-                  )}
-                </Text>
-                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                  {(selectedClass !== 'all' || selectedRoomFilter !== 'all' || searchQuery) && (
-                    <TouchableOpacity
-                      onPress={() => {
-                        setSelectedClass('all');
-                        setSelectedRoomFilter('all');
-                        setSearchQuery('');
-                      }}
-                      style={styles.clearFilterBtn}
-                    >
-                      <Text style={styles.clearFilterText}>✕ Reset Filters</Text>
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity
-                    onPress={() => {
-                      void loadStudents();
-                      void loadRooms();
-                    }}
-                    style={styles.refreshBtn}
-                  >
-                    <Text style={styles.refreshBtnText}>🔄 Refresh</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-
-            {/* BULK ACTION BAR */}
-            <View style={[styles.bulkBar, selectedIds.length > 0 && styles.bulkBarActive]}>
-              <View style={styles.bulkLeft}>
-                <TouchableOpacity onPress={toggleSelectAllPaginated} style={styles.checkboxRow}>
-                  <Text style={styles.checkboxIcon}>{isAllPaginatedSelected ? '☑️' : '⬜'}</Text>
-                  <Text style={styles.bulkSelectText}>
-                    {isAllPaginatedSelected ? 'Deselect Page' : 'Select This Page'}
+                <TouchableOpacity
+                  style={[styles.bulkMoveButton, (!bulkTargetRoom || bulkMoving) && styles.btnDisabled]}
+                  onPress={executeBulkMove}
+                  disabled={!bulkTargetRoom || bulkMoving}
+                >
+                  <Text style={styles.bulkMoveButtonText}>
+                    {bulkMoving ? 'Moving...' : `🚀 Move (${selectedIds.length}) to Target Room`}
                   </Text>
                 </TouchableOpacity>
 
-                {filteredStudents.length > paginatedStudents.length && (
-                  <TouchableOpacity onPress={selectAllFiltered} style={styles.selectAllBtn}>
-                    <Text style={styles.selectAllBtnText}>
-                      {selectedIds.length === filteredStudents.length
-                        ? 'Deselect All'
-                        : `Select All Filtered (${filteredStudents.length})`}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-
-                <Text style={styles.selectedCountBadge}>
-                  ✓ Selected: <Text style={{ fontWeight: '900' }}>{selectedIds.length}</Text>
-                </Text>
+                <TouchableOpacity
+                  style={styles.bulkCancelButton}
+                  onPress={() => setSelectedIds([])}
+                >
+                  <Text style={styles.bulkCancelText}>Clear</Text>
+                </TouchableOpacity>
               </View>
+            )}
+          </View>
+        </View>
+      )}
 
-              {selectedIds.length > 0 && (
-                <View style={styles.bulkRight}>
-                  <View style={{ minWidth: 220 }}>
-                    <Select
-                      label="Select Target Room"
-                      value={bulkTargetRoom}
-                      onChange={setBulkTargetRoom}
-                      options={targetRoomOptions}
-                      searchable={true}
-                    />
-                  </View>
-
-                  <TouchableOpacity
-                    style={[styles.bulkMoveButton, (!bulkTargetRoom || bulkMoving) && styles.btnDisabled]}
-                    onPress={executeBulkMove}
-                    disabled={!bulkTargetRoom || bulkMoving}
-                  >
-                    <Text style={styles.bulkMoveButtonText}>
-                      {bulkMoving ? 'Moving...' : `🚀 Move (${selectedIds.length}) to Target Room`}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.bulkCancelButton}
-                    onPress={() => setSelectedIds([])}
-                  >
-                    <Text style={styles.bulkCancelText}>Clear</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+        {/* TAB 1: STUDENT ROOM ALLOCATION */}
+        {activeTab === 'students' && (
+          <View>
 
             {/* Students List */}
             {loadingStudents ? (
@@ -553,16 +540,16 @@ export default function Rooms() {
                       {/* Info */}
                       <View style={styles.studentInfo}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <Text style={styles.studentIndex}>#{startIndex + idx + 1}</Text>
+                          <Text style={styles.studentIndex}>{startIndex + idx + 1}</Text>
                           <Text style={styles.studentName}>{s.student_name}</Text>
                           <View style={styles.badgeClass}>
                             <Text style={styles.badgeClassText}>Class {s.class_name || '-'}</Text>
                           </View>
-                          {s.roll_no && (
+                          {Boolean(s.roll_no) ? (
                             <View style={styles.badgeRoll}>
                               <Text style={styles.badgeRollText}>Roll: {s.roll_no}</Text>
                             </View>
-                          )}
+                          ) : null}
                         </View>
                         <Text style={styles.studentMeta}>
                           Reg. No: <Text style={styles.metaHighlight}>{s.registration_no || '-'}</Text>
@@ -828,144 +815,138 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f1f5f9',
   },
-  header: {
+  compactHeader: {
     backgroundColor: '#ffffff',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
-  },
-  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  headerTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0f172a',
+    marginLeft: 4,
+  },
+  headerTabs: {
+    flexDirection: 'row',
+    gap: 6,
   },
   navButton: {
     backgroundColor: '#f1f5f9',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#cbd5e1',
   },
   navButtonText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#334155',
   },
-  pageTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#0f172a',
-    marginTop: 6,
-  },
-  pageSubtitle: {
-    fontSize: 13,
-    color: '#64748b',
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    gap: 10,
-  },
   tabButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
-  },
-  tabButtonActive: {
-    borderBottomColor: '#0284c7',
-  },
-  tabButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#64748b',
-  },
-  tabButtonTextActive: {
-    color: '#0284c7',
-    fontWeight: '900',
-  },
-  content: {
-    padding: 16,
-    maxWidth: 1200,
-    width: '100%',
-    alignSelf: 'center',
-    gap: 14,
-  },
-  filterCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    gap: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  filterCardTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#1e293b',
-  },
-  filterRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    alignItems: 'flex-end',
-  },
-  filterItem: {
-    flex: 1,
-    minWidth: 160,
-  },
-  filterLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
-    marginBottom: 4,
-  },
-  searchInput: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#cbd5e1',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 14,
-    color: '#0f172a',
   },
-  statsRow: {
+  tabButtonActive: {
+    backgroundColor: '#0284c7',
+    borderColor: '#0284c7',
+  },
+  tabButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  tabButtonTextActive: {
+    color: '#ffffff',
+    fontWeight: '800',
+  },
+  frozenFilterWrapper: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 8,
+    paddingTop: 6,
+    paddingBottom: 4,
+    maxWidth: 1200,
+    width: '100%',
+    alignSelf: 'center',
+    gap: 6,
+    zIndex: 10,
+  },
+  content: {
+    paddingHorizontal: 8,
+    paddingTop: 4,
+    paddingBottom: 24,
+    maxWidth: 1200,
+    width: '100%',
+    alignSelf: 'center',
+    gap: 8,
+  },
+  compactFilterCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
     flexWrap: 'wrap',
     gap: 8,
   },
-  statsText: {
+  compactSearchInput: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 13,
+    color: '#0f172a',
+  },
+  compactStatsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  compactStatsText: {
     fontSize: 13,
     color: '#475569',
   },
-  clearFilterBtn: {
-    paddingHorizontal: 10,
+  compactResetBtn: {
+    paddingHorizontal: 8,
     paddingVertical: 5,
-    borderRadius: 6,
+    borderRadius: 5,
     backgroundColor: '#fee2e2',
   },
-  clearFilterText: {
-    fontSize: 12,
+  compactResetText: {
+    fontSize: 11,
     fontWeight: '700',
     color: '#b91c1c',
+  },
+  compactRefreshBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 5,
+    backgroundColor: '#e0f2fe',
+  },
+  compactRefreshText: {
+    fontSize: 13,
   },
   refreshBtn: {
     paddingHorizontal: 10,
@@ -980,15 +961,16 @@ const styles = StyleSheet.create({
   },
   bulkBar: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 8,
   },
   bulkBarActive: {
     backgroundColor: '#f0f9ff',
