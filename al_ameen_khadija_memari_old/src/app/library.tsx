@@ -907,7 +907,7 @@ export default function Library() {
                 {accession.trim().length > 0 && (
                   <View style={s.barcodePreviewBox}>
                     <Text style={s.barcodePreviewHeading}>
-                      Barcode Preview (Code 128 - react-native-barcode-creator)
+                      Barcode Preview (Code 128)
                     </Text>
                     <BarcodeDisplay
                       value={accession.trim()}

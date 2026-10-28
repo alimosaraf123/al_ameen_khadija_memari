@@ -6,6 +6,7 @@ installed-check.apk
 *.bundle
 *.mp4
 *.log
+*.png
 extracted_assets/
 tmp/
 tmpframes/

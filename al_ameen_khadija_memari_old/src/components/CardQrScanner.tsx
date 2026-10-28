@@ -49,19 +49,27 @@ function registrationFromQr(raw: string) {
 
 export default function CardQrScanner({
   onRegistration,
+  value,
+  busy = false,
 }: {
   onRegistration: (registration: string) => void | Promise<void>;
+  value?: string;
+  busy?: boolean;
 }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [liveOpen, setLiveOpen] = useState(false);
   const [locked, setLocked] = useState(false);
   const [facing, setFacing] = useState<'back' | 'front'>('back');
   const [statusMsg, setStatusMsg] = useState<string>('');
-  const [scanningPhoto, setScanningPhoto] = useState(false);
-  const [quickReg, setQuickReg] = useState('');
+  const [quickReg, setQuickReg] = useState(value || '');
   const [showHttpNotice, setShowHttpNotice] = useState(false);
 
-  const fileInputRef = useRef<any>(null);
+  useEffect(() => {
+    if (value !== undefined) {
+      setQuickReg(value);
+    }
+  }, [value]);
+
   const videoRef = useRef<any>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const scanIntervalRef = useRef<any>(null);
@@ -242,81 +250,6 @@ export default function CardQrScanner({
     await onRegistration(reg);
   };
 
-  // Option 2: Photo Capture / File Barcode Detector (Works on all mobile browsers over HTTP without restriction)
-  const triggerPhotoCapture = () => {
-    if (isWeb && fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
-  const handleFileChange = async (e: any) => {
-    const file = e.target?.files?.[0];
-    if (!file) return;
-
-    setStatusMsg('⏳ কার্ডের ছবি থেকে বারকোড স্ক্যান করা হচ্ছে...');
-    setScanningPhoto(true);
-
-    try {
-      let BarcodeDetectorClass = (globalThis as any).BarcodeDetector;
-      if (!BarcodeDetectorClass) {
-        const mod = await import('barcode-detector/pure');
-        if (mod.setZXingModuleOverrides) {
-          mod.setZXingModuleOverrides({
-            locateFile: (f: string) => `/${f}`,
-          });
-        }
-        BarcodeDetectorClass = mod.BarcodeDetector;
-      }
-
-      const detector = new BarcodeDetectorClass({
-        formats: ['code_128', 'code_39', 'qr_code', 'ean_13', 'upc_a', 'ean_8'],
-      });
-
-      const img = new Image();
-      const objectUrl = URL.createObjectURL(file);
-      img.src = objectUrl;
-
-      img.onload = async () => {
-        try {
-          const results = await detector.detect(img);
-          URL.revokeObjectURL(objectUrl);
-
-          if (!results || results.length === 0) {
-            setScanningPhoto(false);
-            setStatusMsg('⚠️ ছবিতে কোনো স্পষ্ট Barcode বা QR code পাওয়া যায়নি। দয়া করে কার্ডটি সোজাসুজি ধরে আলোতে স্পষ্ট ছবি তুলুন।');
-            return;
-          }
-
-          const rawValue = results[0]?.rawValue || '';
-          const reg = registrationFromQr(rawValue);
-
-          if (!reg) {
-            setScanningPhoto(false);
-            setStatusMsg(`⚠️ বারকোড পড়া গেছে (${rawValue}) কিন্তু এতে স্টুডেন্ট রেজিস্ট্রেশন নম্বর মেলেনি।`);
-            return;
-          }
-
-          setScanningPhoto(false);
-          setStatusMsg(`✅ সফলভাবে স্ক্যান হয়েছে: Reg. ${reg}`);
-          await onRegistration(reg);
-        } catch (scanErr: any) {
-          setScanningPhoto(false);
-          setStatusMsg(`⚠️ স্ক্যান এরর: ${scanErr.message || 'Failed to detect barcode'}`);
-        }
-      };
-
-      img.onerror = () => {
-        setScanningPhoto(false);
-        setStatusMsg('⚠️ ছবিটি লোড করা যায়নি।');
-      };
-    } catch (err: any) {
-      setScanningPhoto(false);
-      setStatusMsg(`⚠️ বারকোড রিডার লোড করা যায়নি: ${err.message}`);
-    }
-
-    if (e.target) e.target.value = '';
-  };
-
   const handleQuickSubmit = async () => {
     const val = quickReg.trim();
     if (!val) return showAlert('Required', 'Please enter a registration number.');
@@ -325,27 +258,9 @@ export default function CardQrScanner({
 
   return (
     <View style={s.card}>
-      <Text style={s.cardTitle}>🔍 Student ID Card Scanner / Lookup</Text>
-      <Text style={s.cardSubtitle}>
-        নিচের যেকোনো একটি সহজ উপায়ে স্টুডেন্ট কার্ড স্ক্যান বা সার্চ করুন:
-      </Text>
-
       {/* ACTION BUTTONS ROW */}
       <View style={s.buttonRow}>
-        {/* BUTTON 1: PHOTO CAPTURE (WORKS EVERYWHERE INCLUDING MOBILE HTTP) */}
-        {isWeb && (
-          <TouchableOpacity
-            style={s.photoBtn}
-            onPress={triggerPhotoCapture}
-            disabled={scanningPhoto}
-          >
-            <Text style={s.white}>
-              {scanningPhoto ? '⏳ স্ক্যান হচ্ছে...' : '📸 কার্ডের ছবি তুলে স্ক্যান করুন'}
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        {/* BUTTON 2: LIVE VIDEO CAMERA */}
+        {/* BUTTON: LIVE VIDEO CAMERA */}
         <TouchableOpacity
           onPress={liveOpen ? closeLive : startLive}
           style={[s.liveBtn, liveOpen && s.liveBtnClose]}
@@ -362,18 +277,6 @@ export default function CardQrScanner({
         )}
       </View>
 
-      {/* HIDDEN HTML FILE INPUT FOR INSTANT MOBILE CAMERA CAPTURE */}
-      {isWeb && (
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          style={{ display: 'none' }}
-          onChange={handleFileChange}
-        />
-      )}
-
       {/* HTTP SECURITY NOTICE BANNER (WHEN ON MOBILE OVER HTTP LAN IP) */}
       {showHttpNotice && (
         <View style={s.noticeBox}>
@@ -386,18 +289,7 @@ export default function CardQrScanner({
           <Text style={s.noticeText}>
             গুগল ক্রোম ও মোবাইল ব্রাউজারে সাধারণ <Text style={{ fontWeight: '700' }}>http://</Text> আইপি সংযোগে সরাসরি লাইভ ভিডিও ক্যামেরা বন্ধ থাকে।
           </Text>
-          <View style={s.noticeActionBox}>
-            <Text style={s.noticeActionTitle}>👉 সহজ সমাধান (যেকোনো ফোনেই সাথে সাথে কাজ করে):</Text>
-            <TouchableOpacity
-              style={s.noticeBtn}
-              onPress={() => {
-                setShowHttpNotice(false);
-                triggerPhotoCapture();
-              }}
-            >
-              <Text style={s.noticeBtnText}>📸 এখনই ফোনের ক্যামেরা দিয়ে ছবি তুলে স্ক্যান করুন</Text>
-            </TouchableOpacity>
-          </View>
+
           <View style={[s.noticeActionBox, { marginTop: 6, backgroundColor: '#f1f5f9' }]}>
             <Text style={[s.noticeActionTitle, { color: '#475569' }]}>
               💡 আপনি যদি মোবাইলেও বেগুনি লাইভ ভিডিও স্ট্রিম চালাতে চান:
@@ -543,8 +435,8 @@ export default function CardQrScanner({
           autoCapitalize="none"
           autoCorrect={false}
         />
-        <TouchableOpacity style={s.quickBtn} onPress={handleQuickSubmit}>
-          <Text style={s.white}>Search / Check</Text>
+        <TouchableOpacity style={s.quickBtn} onPress={handleQuickSubmit} disabled={busy}>
+          <Text style={s.white}>{busy ? 'Checking...' : 'Search / Check'}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -560,27 +452,11 @@ const s = StyleSheet.create({
     padding: 14,
     gap: 10,
   },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0f3a61',
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: -4,
-  },
   buttonRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
     alignItems: 'center',
-  },
-  photoBtn: {
-    backgroundColor: '#0284c7',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 7,
   },
   liveBtn: {
     backgroundColor: '#7c3aed',

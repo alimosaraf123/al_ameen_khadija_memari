@@ -28,7 +28,7 @@ import { api } from '../lib/api';
 
 
 const menuPermission:Record<string,string>={
- '/students':'students','/teachers':'teachers','/hostel-menu':'rooms','/academy-menu':'marks','/service-staff':'service_staff','/office':'office_panel','/library':'library_panel','/dining-stock':'dining_stock','/guardians':'guardians','/rooms':'rooms','/room-assignments':'room_assignments','/attendance':'attendance','/behavior':'behavior','/asset-register':'asset_register','/gate-pass':'gate_passes','/visits':'visits','/student-lifecycle':'student_lifecycle','/illness':'illness','/marks':'marks','/terminal-exams':'terminal_exams','/class-results':'published_results','/problems':'problems','/routines':'routines','/notices':'notices','/deposit-fund':'deposit_fund','/audit-log':'audit_log'
+ '/students':'students','/teachers':'teachers','/hostel-menu':'rooms','/academy-menu':'marks','/service-staff':'service_staff','/office':'office_panel','/library':'library_panel','/dining-stock':'dining_stock','/guardians':'guardians','/rooms':'rooms','/room-assignments':'room_assignments','/attendance':'attendance','/daily-attendance':'attendance','/behavior':'behavior','/asset-register':'asset_register','/gate-pass':'gate_passes','/visits':'visits','/student-lifecycle':'student_lifecycle','/illness':'illness','/marks':'marks','/terminal-exams':'terminal_exams','/class-results':'published_results','/problems':'problems','/routines':'routines','/notices':'notices','/deposit-fund':'deposit_fund','/audit-log':'audit_log'
 };
 
 const menus: any[] = [
@@ -111,10 +111,15 @@ export default function Dashboard() {
           <Text style={s.sub}>
             {restricted ? (dashboardName ? dashboardName+' Dashboard' : 'Dashboard') : 'Super Admin Dashboard'}
           </Text>
-          <TouchableOpacity onPress={openNotifications} style={s.notification}>
-            <Text style={s.notificationText}>🔔 Admin Notifications</Text>
-            {unread>0&&<View style={s.badge}><Text style={s.badgeText}>{unread>99?'99+':unread}</Text></View>}
-          </TouchableOpacity>
+          <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
+            <TouchableOpacity onPress={()=>router.push('/daily-attendance' as any)} style={{flexDirection:'row',alignItems:'center',backgroundColor:'#ecfdf5',borderWidth:1,borderColor:'#a7f3d0',borderRadius:20,paddingVertical:7,paddingHorizontal:13,gap:6}}>
+              <Text style={{fontSize:13,fontWeight:'800',color:'#047857'}}>📋 Daily Attendance</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={openNotifications} style={s.notification}>
+              <Text style={s.notificationText}>🔔 Admin Notifications</Text>
+              {unread>0&&<View style={s.badge}><Text style={s.badgeText}>{unread>99?'99+':unread}</Text></View>}
+            </TouchableOpacity>
+          </View>
         </View>
 
 
@@ -180,7 +185,7 @@ export default function Dashboard() {
 
       <Modal visible={studentMenu} transparent animationType="fade" onRequestClose={()=>setStudentMenu(false)}>
         <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={()=>setStudentMenu(false)} accessibilityRole="button" accessibilityLabel="Close students menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Students</Text><TouchableOpacity onPress={()=>setStudentMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
-          <View style={s.modalGrid}>{[["Student Details","/students"]].map(([label,path])=><AdminLink path={path} key={label} style={s.modalItem} onPress={()=>{setStudentMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></AdminLink>)}</View>
+          <View style={s.modalGrid}>{[["Student Details","/students"],["Daily Student Attendance","/daily-attendance"],["Student Summary","/student-summary"]].map(([label,path])=><AdminLink path={path} key={label} style={s.modalItem} onPress={()=>{setStudentMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></AdminLink>)}</View>
         </View></View>
       </Modal>
 
@@ -192,7 +197,7 @@ export default function Dashboard() {
 
       <Modal visible={hostelMenu} transparent animationType="fade" onRequestClose={()=>setHostelMenu(false)}>
         <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={()=>setHostelMenu(false)} accessibilityRole="button" accessibilityLabel="Close hostel menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Hostel</Text><TouchableOpacity onPress={()=>setHostelMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
-          <View style={s.modalGrid}>{[["Rooms","/rooms"],["Teacher Room Assignment","/room-assignments"],["Evening Room Attendance","/attendance"],["Student Behaviour","/behavior"],["Student Illness","/illness"],["Room Problem","/problems"],["Stock","/dining-stock"]].map(([label,path])=><AdminLink path={path} key={label} style={s.modalItem} onPress={()=>{setHostelMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></AdminLink>)}</View>
+          <View style={s.modalGrid}>{[["Rooms","/rooms"],["Teacher Room Assignment","/room-assignments"],["Daily Student Attendance","/daily-attendance"],["Evening Room Attendance","/attendance"],["Student Behaviour","/behavior"],["Student Illness","/illness"],["Room Problem","/problems"],["Stock","/dining-stock"]].map(([label,path])=><AdminLink path={path} key={label} style={s.modalItem} onPress={()=>{setHostelMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></AdminLink>)}</View>
         </View></View>
       </Modal>
 

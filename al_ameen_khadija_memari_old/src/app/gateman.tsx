@@ -26,7 +26,7 @@ import { Select } from '../components/StudentDirectory';
 import { checkVisitingSchedule } from '../lib/visitingSchedule';
 import { confirmAction } from '../lib/confirm';
 
-const DEFAULT_GATEMAN_PHOTO_URL = 'https://res.cloudinary.com/dftzjdhb/image/upload/v1793159487/staff/aparna_mondal.jpg';
+const DEFAULT_GATEMAN_PHOTO_URL = 'https://ui-avatars.com/api/?name=Gate+Man&background=0D8ABC&color=fff&size=200';
 
 const PERSON_OPTIONS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((n) => ({
   value: n,
@@ -61,7 +61,6 @@ export default function Gateman() {
   const [sourcePersons, setSourcePersons] = useState<Record<string, string>>({});
   const [visitPersons, setVisitPersons] = useState<Record<number, string>>({});
   const [fingerprintEnabled, setFingerprintEnabled] = useState(false);
-  const inputRef = useRef<any>(null);
 
   
   const [isOnDuty, setIsOnDuty] = useState(false);
@@ -296,7 +295,8 @@ export default function Gateman() {
       } else {
         Alert.alert('Entry', msg);
       }
-      await search();
+      setData(null);
+      setReg('');
       await loadToday();
     } catch (e: any) {
       const err = e.message || 'Error recording permission entry';
@@ -337,8 +337,9 @@ export default function Gateman() {
     }
 
     const todayCount = meetingToday(source);
-    if (todayCount > 0 && typeof window !== 'undefined') {
-      const ok = window.confirm(
+    if (todayCount > 0) {
+      const ok = await confirmAction(
+        'Already Entered Today',
         `${name} (${source}) has already entered today (${todayCount} time). Record another entry with ${personCount} persons?`
       );
       if (!ok) return;
@@ -359,7 +360,8 @@ export default function Gateman() {
       } else {
         Alert.alert('Entry Recorded', msg);
       }
-      await search();
+      setData(null);
+      setReg('');
       await loadToday();
     } catch (e: any) {
       const err = e.message || 'Error recording entry';
@@ -373,10 +375,11 @@ export default function Gateman() {
 
   const recordExit = async (source: string, name: string, entryId?: number) => {
     if (!data?.student?.id || !name) return;
-    if (typeof window !== 'undefined') {
-      const ok = window.confirm(`Confirm exit for ${name} (${source})? Departure time will be recorded.`);
-      if (!ok) return;
-    }
+    const ok = await confirmAction(
+      'Confirm Exit',
+      `Confirm exit for ${name} (${source})? Departure time will be recorded.`
+    );
+    if (!ok) return;
     try {
       const result = await api('/api/service-panels/guardian-exit', {
         method: 'POST',
@@ -393,7 +396,8 @@ export default function Gateman() {
       } else {
         Alert.alert('Exit Recorded', msg);
       }
-      await search();
+      setData(null);
+      setReg('');
       await loadToday();
     } catch (e: any) {
       const err = e.message || 'Error recording exit';
@@ -407,12 +411,11 @@ export default function Gateman() {
 
   const recordDirectExit = async (v: any) => {
     if (!v?.id) return;
-    if (typeof window !== 'undefined') {
-      const ok = window.confirm(
-        `Confirm return / exit for ${v.visitor_name} (${v.visitor_relation || 'Visitor'})? Departure time will be recorded.`
-      );
-      if (!ok) return;
-    }
+    const ok = await confirmAction(
+      'Confirm Return / Exit',
+      `Confirm return / exit for ${v.visitor_name} (${v.visitor_relation || 'Visitor'})? Departure time will be recorded.`
+    );
+    if (!ok) return;
     try {
       const result = await api('/api/service-panels/guardian-exit', {
         method: 'POST',
@@ -425,9 +428,8 @@ export default function Gateman() {
       } else {
         Alert.alert('Exit Recorded', msg);
       }
-      if (data?.student?.registration_no) {
-        await search();
-      }
+      setData(null);
+      setReg('');
       await loadToday();
     } catch (e: any) {
       const err = e.message || 'Error recording exit';
@@ -548,7 +550,10 @@ export default function Gateman() {
   return (
     <SafeAreaView style={s.page}>
       <ScrollView contentContainerStyle={s.body}>
-        <AcademyHeader />
+        <AcademyHeader
+          profilePhoto={gatemanPhotoUri}
+          onPhotoPress={() => setShowGreetingModal(true)}
+        />
 
         {/* LOGIN WELCOME GREETING MODAL */}
         <Modal
@@ -635,127 +640,63 @@ export default function Gateman() {
           </View>
         </Modal>
 
-        {/* ON DUTY GATEMAN WELCOME & STATUS BANNER */}
-        <View style={s.dutyBannerCard}>
-          <View style={s.dutyBannerMainRow}>
-            {/* Gateman Photo Avatar */}
-            <TouchableOpacity
-              style={s.dutyAvatarWrapper}
-              onPress={() => setShowGreetingModal(true)}
-              activeOpacity={0.8}
-            >
-              <Image
-                source={{ uri: gatemanPhotoUri || DEFAULT_GATEMAN_PHOTO_URL }}
-                style={s.dutyAvatarImage}
-                resizeMode="cover"
-              />
-              <View style={s.dutyAvatarOnlineDot} />
-            </TouchableOpacity>
 
-            {/* Name & Duty Greeting Info */}
-            <View style={{ flex: 1, minWidth: 200 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <Text style={s.dutyGreetingSalutation}>
-                  {timeGreeting.icon} {timeGreeting.bengali},
-                </Text>
-                <View style={s.dutyActiveChip}>
-                  <Text style={s.dutyActiveChipText}>🟢 অন-ডিউটি (On Duty)</Text>
-                </View>
-              </View>
-              <Text style={s.dutyGatemanName} numberOfLines={1}>
-                {gatemanName}
-              </Text>
-              <Text style={s.dutySubDetails}>
-                Gate Security · Login: <Text style={{ color: '#fff', fontWeight: '800' }}>{gatemanLoginId}</Text> · Staff ID: 786786
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <CardQrScanner onRegistration={fetchRegistration} />
+        <CardQrScanner onRegistration={fetchRegistration} value={reg} busy={busy} />
 
         {/* CURRENTLY INSIDE VISITORS & GUARDIANS */}
         <View style={s.visitorsCard}>
-          <View style={s.todayTitle}>
-            <View>
-              <Text style={s.heading}>
-                👥 Currently Inside Campus ({insideVisitors.length})
-              </Text>
-              <Text style={s.subText}>
-                Visitors who entered today and have not yet returned.
-              </Text>
-            </View>
-            <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-              <TouchableOpacity
-                onPress={() => setVisitorTab('inside')}
-                style={[s.tabButton, visitorTab === 'inside' && s.tabButtonActive]}
-              >
-                <Text style={visitorTab === 'inside' ? s.white : s.tabButtonText}>
-                  Inside ({insideVisitors.length})
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setVisitorTab('all')}
-                style={[s.tabButton, visitorTab === 'all' && s.tabButtonActive]}
-              >
-                <Text style={visitorTab === 'all' ? s.white : s.tabButtonText}>
-                  All Today ({todayVisitors.length})
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={loadToday} style={s.refresh}>
-                <Text style={s.bold}>Refresh</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={[s.todayTitle, displayedVisitors.length === 0 && { marginBottom: 0 }]}>
+            <Text style={s.heading}>
+              👥 Currently Inside Campus ({insideVisitors.length})
+            </Text>
+            <TouchableOpacity onPress={loadToday} style={s.refresh}>
+              <Text style={s.bold}>Refresh</Text>
+            </TouchableOpacity>
           </View>
 
-          {displayedVisitors.length === 0 ? (
-            <Text style={s.none}>
-              {visitorTab === 'inside'
-                ? 'No visitors currently inside campus.'
-                : 'No visitor entries recorded today.'}
-            </Text>
-          ) : (
-            displayedVisitors.map((v: any) => {
+          {displayedVisitors.map((v: any) => {
               const isInside = v.status === 'inside';
               return (
                 <View
                   key={'v-entry-' + v.id}
                   style={[s.visitorRow, isInside && s.visitorRowInside]}
                 >
-                  {v.photo_url ? (
-                    <Image source={{ uri: safeImageUrl(v.photo_url) }} style={s.todayPhoto} />
-                  ) : (
-                    <View style={[s.todayPhoto, s.empty]}>
-                      <Text style={{ fontSize: 10 }}>No Photo</Text>
-                    </View>
-                  )}
-                  <TouchableOpacity
-                    style={{ flex: 1 }}
-                    onPress={() => {
-                      setReg(v.registration_no);
-                      void fetchRegistration(v.registration_no);
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <Text style={s.bold}>
-                        {v.visitor_name} ({v.visitor_relation})
+                  <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start', width: '100%' }}>
+                    {v.photo_url ? (
+                      <Image source={{ uri: safeImageUrl(v.photo_url) }} style={s.todayPhoto} />
+                    ) : (
+                      <View style={[s.todayPhoto, s.empty]}>
+                        <Text style={{ fontSize: 10, textAlign: 'center' }}>No Photo</Text>
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      style={{ flex: 1, minWidth: 0 }}
+                      onPress={() => {
+                        setReg(v.registration_no);
+                        void fetchRegistration(v.registration_no);
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <Text style={s.bold}>
+                          {v.visitor_name} ({v.visitor_relation})
+                        </Text>
+                        <Text style={{ backgroundColor: '#e0f2fe', color: '#0369a1', fontSize: 11, fontWeight: '800', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                          👥 {v.person_count || 1} {Number(v.person_count) > 1 ? 'persons' : 'person'}
+                        </Text>
+                        <Text style={isInside ? s.insideBadgeSmall : s.exitedBadgeSmall}>
+                          {isInside ? '🟢 Inside' : '✓ Exited'}
+                        </Text>
+                      </View>
+                      <Text style={{ color: '#254d75', fontSize: 13, fontWeight: '700', marginTop: 2 }}>
+                        Student: {v.student_name} (Reg. {v.registration_no}) · Class {v.class_name || '-'}
                       </Text>
-                      <Text style={{ backgroundColor: '#e0f2fe', color: '#0369a1', fontSize: 11, fontWeight: '800', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
-                        👥 {v.person_count || 1} {Number(v.person_count) > 1 ? 'persons' : 'person'}
+                      <Text style={{ color: '#64748b', fontSize: 11, marginTop: 2 }}>
+                        Entered: {new Date(v.entered_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {(v.entered_by_name || v.entered_by_login) ? ` (By: ${v.entered_by_name || v.entered_by_login})` : ''}
+                        {v.exited_at ? ` · Exited: ${new Date(v.exited_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${(v.exited_by_name || v.exited_by_login) ? ` (By: ${v.exited_by_name || v.exited_by_login})` : ''}` : ` · ${v.duration_minutes || 0}m inside`}
                       </Text>
-                      <Text style={isInside ? s.insideBadgeSmall : s.exitedBadgeSmall}>
-                        {isInside ? '🟢 Inside' : '✓ Exited'}
-                      </Text>
-                    </View>
-                    <Text style={{ color: '#254d75', fontSize: 13, fontWeight: '700', marginTop: 2 }}>
-                      Student: {v.student_name} (Reg. {v.registration_no}) · Class {v.class_name || '-'}
-                    </Text>
-                    <Text style={{ color: '#64748b', fontSize: 11, marginTop: 2 }}>
-                      Entered: {new Date(v.entered_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      {(v.entered_by_name || v.entered_by_login) ? ` (By: ${v.entered_by_name || v.entered_by_login})` : ''}
-                      {v.exited_at ? ` · Exited: ${new Date(v.exited_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${(v.exited_by_name || v.exited_by_login) ? ` (By: ${v.exited_by_name || v.exited_by_login})` : ''}` : ` · ${v.duration_minutes || 0}m inside`}
-                    </Text>
-                  </TouchableOpacity>
+                    </TouchableOpacity>
+                  </View>
 
                   {isInside ? (
                     <TouchableOpacity
@@ -771,88 +712,101 @@ export default function Gateman() {
                   )}
                 </View>
               );
-            })
-          )}
+            })}
         </View>
 
-        <View style={s.todayCard}>
-          <View style={s.todayTitle}>
-            <Text style={s.heading}>Today's Approved Students ({pendingToday.length})</Text>
-            <TouchableOpacity onPress={loadToday} style={s.refresh}>
-              <Text style={s.bold}>Refresh</Text>
-            </TouchableOpacity>
-          </View>
-          {!pendingToday.length && (
-            <Text style={s.none}>No pending visiting or gate pass permission today.</Text>
-          )}
-          {pendingToday.map((x) => (
-            <TouchableOpacity
-              key={x.permission_type + '-' + x.permission_id}
-              onPress={() => {
-                setReg(x.registration_no);
-                void (async () => {
-                  setBusy(true);
-                  try {
-                    setData(
-                      await api(
-                        '/api/service-panels/gate-check/' + encodeURIComponent(x.registration_no)
-                      )
-                    );
-                  } catch (e: any) {
-                    Alert.alert('Gate Check', e.message);
-                  } finally {
-                    setBusy(false);
-                  }
-                })();
-              }}
-              style={[s.todayRow, x.entered && s.entered]}
-            >
-              {x.photo_url ? (
-                <Image source={{ uri: safeImageUrl(x.photo_url) }} style={s.todayPhoto} />
-              ) : (
-                <View style={[s.todayPhoto, s.empty]}>
-                  <Text>No Photo</Text>
+        {pendingToday.length > 0 && (
+          <View style={s.todayCard}>
+            <View style={s.todayTitle}>
+              <Text style={s.heading}>Today's Approved Students ({pendingToday.length})</Text>
+              <TouchableOpacity onPress={loadToday} style={s.refresh}>
+                <Text style={s.bold}>Refresh</Text>
+              </TouchableOpacity>
+            </View>
+            {pendingToday.map((x) => (
+              <TouchableOpacity
+                key={x.permission_type + '-' + x.permission_id}
+                onPress={() => {
+                  setReg(x.registration_no);
+                  void (async () => {
+                    setBusy(true);
+                    try {
+                      setData(
+                        await api(
+                          '/api/service-panels/gate-check/' + encodeURIComponent(x.registration_no)
+                        )
+                      );
+                    } catch (e: any) {
+                      Alert.alert('Gate Check', e.message);
+                    } finally {
+                      setBusy(false);
+                    }
+                  })();
+                }}
+                style={[s.todayRow, x.entered && s.entered]}
+              >
+                {x.photo_url ? (
+                  <Image source={{ uri: safeImageUrl(x.photo_url) }} style={s.todayPhoto} />
+                ) : (
+                  <View style={[s.todayPhoto, s.empty]}>
+                    <Text>No Photo</Text>
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={s.bold}>
+                    {x.student_name} (Reg: {x.registration_no})
+                  </Text>
+                  <Text>Class {x.class_name || '-'}</Text>
+                  <Text style={{ color: '#555', fontSize: 12 }}>
+                    {x.permission_type === 'visit'
+                      ? `Visitor: ${x.visitor_name || '-'} (${x.visitor_relation || '-'})`
+                      : `Reason: ${x.reason || 'Gate Pass'}`}
+                  </Text>
                 </View>
-              )}
-              <View style={{ flex: 1 }}>
-                <Text style={s.bold}>
-                  {x.student_name} - {x.registration_no}
-                </Text>
-                <Text>
-                  Class {x.class_name || '-'} - Room {x.room_name || '-'} -{' '}
-                  {x.permission_type === 'visit' ? `Visit (👥 ${x.person_count || 1})` : 'Gate Pass'}
-                </Text>
-                <Text>
-                  {x.permission_type === 'visit'
-                    ? (x.detail_name || '-') + ' (' + (x.detail_relation || '-') + ')'
-                    : x.reason || '-'}
-                </Text>
-              </View>
-              <Text style={[s.status, x.entered && s.statusEntered]}>
-                {x.entered ? 'Entered' : 'View'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+                <View>
+                  <Text style={[s.status, x.entered && s.statusEntered]}>
+                    {x.entered ? 'Entered' : x.permission_type === 'visit' ? 'Visiting' : 'Gate Pass'}
+                  </Text>
+                  {!x.entered && (
+                    <TouchableOpacity
+                      onPress={() => enter(x.permission_type, x.permission_id)}
+                      style={[s.allow, { marginTop: 4 }]}
+                    >
+                      <Text style={s.white}>Mark Entry</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
-        <View style={s.search}>
-          <TextInput
-            ref={inputRef}
-            value={reg}
-            onChangeText={setReg}
-            onSubmitEditing={search}
-            placeholder="Student Registration / Barcode Scan"
-            style={s.input}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <TouchableOpacity onPress={search} style={s.primary}>
-            <Text style={s.white}>{busy ? 'Checking...' : 'Check'}</Text>
-          </TouchableOpacity>
-        </View>
 
         {data && (
           <>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 2 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setData(null);
+                  setReg('');
+                }}
+                style={{
+                  backgroundColor: '#fee2e2',
+                  borderWidth: 1,
+                  borderColor: '#fca5a5',
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 6,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <Text style={{ color: '#b91c1c', fontWeight: '800', fontSize: 12.5 }}>
+                  ✕ Close Details (বন্ধ করুন)
+                </Text>
+              </TouchableOpacity>
+            </View>
             {(() => {
               const hasPermission = Boolean(
                 (data.visits && data.visits.length > 0) ||
@@ -991,11 +945,10 @@ export default function Gateman() {
               );
             })()}
 
-            <Text style={s.heading}>Today's Visiting Permissions</Text>
-            {!data.visits.length && (
-              <Text style={s.none}>No visiting permission today.</Text>
-            )}
-            {data.visits.map((x: any) => (
+            <Text style={s.heading}>
+              Today's Visiting Permissions ({data.visits?.length || 0})
+            </Text>
+            {data.visits?.map((x: any) => (
               <View key={'v' + x.id} style={s.permission}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.bold}>
@@ -1030,11 +983,10 @@ export default function Gateman() {
               </View>
             ))}
 
-            <Text style={s.heading}>Today's Gate Passes</Text>
-            {!data.gate_passes.length && (
-              <Text style={s.none}>No gate pass today.</Text>
-            )}
-            {data.gate_passes.map((x: any) => (
+            <Text style={s.heading}>
+              Today's Gate Passes ({data.gate_passes?.length || 0})
+            </Text>
+            {data.gate_passes?.map((x: any) => (
               <View key={'g' + x.id} style={s.permission}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.bold}>
@@ -1054,46 +1006,42 @@ export default function Gateman() {
               </View>
             ))}
 
-            <Text style={s.heading}>
-              Student's Visitor Entries ({data.meeting_history?.length || 0})
-            </Text>
-            {(!data.meeting_history || !data.meeting_history.length) && (
-              <Text style={s.none}>No visitor entries recorded yet for this student.</Text>
-            )}
-            {(data.meeting_history || []).slice(0, 10).map((m: any) => {
-              const isInside = !m.exited_at && new Date(m.entered_at).toDateString() === new Date().toDateString();
-              return (
-                <View key={'m-' + m.id} style={[s.permission, isInside && s.insideRow]}>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={s.bold}>
-                        {m.visitor_name} ({m.visitor_relation}) - <Text style={{ textTransform: 'capitalize' }}>{m.visitor_source}</Text>
-                      </Text>
-                      <Text style={{ backgroundColor: '#f1f5f9', color: '#475569', fontSize: 11, fontWeight: '800', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                        👥 {m.person_count || 1}
-                      </Text>
-                    </View>
-                    <Text style={s.historyTime}>
-                      Entry: {new Date(m.entered_at).toLocaleString()}
-                      {(m.entered_by_name || m.entered_by_login) ? ` (By: ${m.entered_by_name || m.entered_by_login})` : ''}
-                      {m.exited_at ? ` · Exit: ${new Date(m.exited_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${(m.exited_by_name || m.exited_by_login) ? ` (By: ${m.exited_by_name || m.exited_by_login})` : ''}` : ''}
-                    </Text>
-                  </View>
-                  {isInside ? (
-                    <TouchableOpacity
-                      style={s.exitSmallButton}
-                      onPress={() => recordExit(m.visitor_source, m.visitor_name, m.id)}
-                    >
-                      <Text style={s.white}>Exit (ফিরে গেছেন)</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <Text style={m.exited_at ? s.exitedBadge : s.pastBadge}>
-                      {m.exited_at ? 'Exited (ফিরে গেছেন)' : 'Past Entry'}
-                    </Text>
-                  )}
-                </View>
+            {(() => {
+              const activeInsideEntries = (data.meeting_history || []).filter(
+                (m: any) => !m.exited_at && new Date(m.entered_at).toDateString() === new Date().toDateString()
               );
-            })}
+              return (
+                <>
+                  <Text style={s.heading}>
+                    Student's Visitor Entries ({activeInsideEntries.length})
+                  </Text>
+                  {activeInsideEntries.map((m: any) => (
+                    <View key={'m-' + m.id} style={[s.permission, s.insideRow]}>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={s.bold}>
+                            {m.visitor_name} ({m.visitor_relation}) - <Text style={{ textTransform: 'capitalize' }}>{m.visitor_source}</Text>
+                          </Text>
+                          <Text style={{ backgroundColor: '#f1f5f9', color: '#475569', fontSize: 11, fontWeight: '800', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                            👥 {m.person_count || 1}
+                          </Text>
+                        </View>
+                        <Text style={s.historyTime}>
+                          Entry: {new Date(m.entered_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {(m.entered_by_name || m.entered_by_login) ? ` (By: ${m.entered_by_name || m.entered_by_login})` : ''}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={s.exitSmallButton}
+                        onPress={() => recordExit(m.visitor_source, m.visitor_name, m.id)}
+                      >
+                        <Text style={s.white}>Exit (ফিরে গেছেন)</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </>
+              );
+            })()}
           </>
         )}
       </ScrollView>
@@ -1346,14 +1294,12 @@ const s = StyleSheet.create({
     fontSize: 12,
   },
   visitorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 9,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#d6e0e9',
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: '#fff',
+    gap: 8,
   },
   visitorRowInside: {
     backgroundColor: '#f0fdf4',
@@ -1380,9 +1326,13 @@ const s = StyleSheet.create({
   },
   exitButtonDirect: {
     backgroundColor: '#dc2626',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+    marginTop: 6,
   },
   scheduleBanner: {
     padding: 14,

@@ -351,7 +351,7 @@ export default function ServiceStaff() {
                   <TouchableOpacity
                     style={s.avatarContainer}
                     onPress={() => pickAndUploadPhoto(x.id)}
-                    title="Click to add or change photo"
+                    accessibilityLabel="Click to add or change photo"
                   >
                     {hasPhoto ? (
                       <Image

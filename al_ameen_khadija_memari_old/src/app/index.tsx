@@ -162,7 +162,7 @@ export default function Login() {
             setUserId(savedBiometricAccount?.loginId || '');
             setUsePasswordLogin(false);
           } else if (isGatemanTarget && Platform.OS !== 'web') {
-            const gId = savedBiometricAccount?.loginId || loginId || 'gateman01';
+            const gId = savedBiometricAccount?.loginId || loginId || '';
             setGuardianLoginId(gId);
             setFingerprintRole('gateman');
             setFingerprintAvailable(true);
@@ -173,13 +173,8 @@ export default function Login() {
             setFingerprintRole(loginId.toLowerCase().startsWith('gateman') ? 'gateman' : 'guardian');
             setUserId(loginId);
             setUsePasswordLogin(false);
-          } else if (
-            (biometric || nativeBiometricReady) &&
-            Platform.OS !== 'web'
-          ) {
-            setFingerprintAvailable(true);
-            setFingerprintRole('guardian');
-            setUsePasswordLogin(false);
+          } else {
+            setUsePasswordLogin(true);
           }
 
         } catch (e) {
@@ -206,10 +201,14 @@ export default function Login() {
       !usePasswordLogin &&
       Platform.OS !== 'web'
     ) {
-      const timer = setTimeout(() => {
-        void loginWithFingerprint();
-      }, 500);
-      return () => clearTimeout(timer);
+      void getRoleBiometricToken('gateman').then((token) => {
+        if (token) {
+          const timer = setTimeout(() => {
+            void loginWithFingerprint();
+          }, 500);
+          return () => clearTimeout(timer);
+        }
+      });
     }
   }, [fingerprintRole, fingerprintAvailable, usePasswordLogin]);
 
@@ -417,19 +416,11 @@ export default function Login() {
   const loginWithMpin =
     async () => {
 
-      if (!guardianLoginId) {
-
-        Alert.alert(
-          'Guardian Account',
-          'Guardian account is not saved on this device.'
-        );
-
-        setUsePasswordLogin(
-          true
-        );
-
+      const activeLoginId = guardianLoginId || userId || (Platform.OS !== 'web' ? 'gateman01' : '');
+      if (!activeLoginId) {
+        Alert.alert('Account Required', 'Please select or enter your User ID.');
+        setUsePasswordLogin(true);
         return;
-
       }
 
 
@@ -467,7 +458,7 @@ export default function Login() {
               body:
                 JSON.stringify({
                   login_id:
-                    guardianLoginId,
+                    activeLoginId,
 
                   mpin,
                 }),
@@ -502,6 +493,23 @@ export default function Login() {
         await saveGuardianDeviceAccount(savedLoginId);
         setGuardianLoginId(savedLoginId);
 
+        if (data.user.role === 'gateman' && Platform.OS !== 'web') {
+          try {
+            const hasHw = await LocalAuthentication.hasHardwareAsync();
+            const isEn = await LocalAuthentication.isEnrolledAsync();
+            if (hasHw && isEn) {
+              const bioReg = await api('/api/biometric/register', {
+                method: 'POST',
+                body: JSON.stringify({ device_name: `Gateman Device (${savedLoginId})` })
+              });
+              if (bioReg?.device_token) {
+                await saveRoleBiometricToken('gateman', bioReg.device_token, savedLoginId);
+              }
+            }
+          } catch (bioErr) {
+            console.log('Gateman auto biometric setup via mpin:', bioErr);
+          }
+        }
 
         setMpin('');
 
@@ -556,13 +564,9 @@ export default function Login() {
 
           if (fingerprintRole === 'gateman') {
             Alert.alert(
-              'Fingerprint Setup Required',
-              'Please login with Password once to enable and link your fingerprint on this device.',
-              [
-                { text: 'Login with Password', onPress: () => setUsePasswordLogin(true) }
-              ]
+              'Fingerprint Setup',
+              'Please login once with your 6-digit mPIN (Default: 123456) or Password to link fingerprint on this phone.'
             );
-            setUsePasswordLogin(true);
             return;
           }
 
@@ -804,9 +808,17 @@ export default function Login() {
               style={styles.quickHelp}
             >
               {fingerprintRole === 'gateman'
-                ? 'Scan your fingerprint to open the Gateman Scanner.'
+                ? 'Log in with Fingerprint or 6-digit mPIN.'
                 : 'Log in with mPIN or Fingerprint.'}
             </Text>
+
+            {fingerprintRole === 'gateman' && Boolean(guardianLoginId || userId) && (
+              <View style={{ backgroundColor: '#e0f2fe', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, marginBottom: 14, alignSelf: 'center', borderWidth: 1, borderColor: '#bae6fd' }}>
+                <Text style={{ color: '#0369a1', fontSize: 13, fontWeight: '800' }}>
+                  👮 Logged in: {guardianLoginId || userId}
+                </Text>
+              </View>
+            )}
 
 
             {/* FINGERPRINT */}
@@ -830,23 +842,14 @@ export default function Login() {
                 />
 
 
-                {fingerprintRole !== 'gateman' && (
-                  <Text
-                    style={styles.orText}
-                  >
-                    OR
-                  </Text>
-                )}
+                <Text style={styles.orText}>OR</Text>
 
               </>
 
             )}
 
 
-            {/* MPIN (Guardian only) */}
-
-            {fingerprintRole !== 'gateman' && (
-              <>
+            {/* MPIN */}
                 <Text style={styles.fieldLabel}>Enter 6-digit mPIN</Text>
                 <Field
                   value={mpin}
@@ -889,8 +892,6 @@ export default function Login() {
                   }
 
                 />
-              </>
-            )}
 
 
             <TouchableOpacity
@@ -939,7 +940,7 @@ export default function Login() {
                   styles.forgetText
                 }
               >
-                Forget Guardian from this device
+                {fingerprintRole === 'gateman' ? 'Switch Gateman Account / Forget from this device' : 'Forget Guardian from this device'}
               </Text>
 
             </TouchableOpacity>
@@ -950,6 +951,7 @@ export default function Login() {
 
           <>
 
+            
             <Text style={styles.fieldLabel}>User ID / Registration No.</Text>
             <Field
               value={userId}
@@ -1076,6 +1078,34 @@ const styles =
       elevation: 5,
     },
 
+    gatemanPickerRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 14,
+      gap: 6,
+    },
+    gatemanPickerBtn: {
+      flex: 1,
+      paddingVertical: 10,
+      paddingHorizontal: 4,
+      borderRadius: 10,
+      backgroundColor: '#f0f4f8',
+      borderWidth: 1.5,
+      borderColor: '#d0d7de',
+      alignItems: 'center',
+    },
+    gatemanPickerBtnActive: {
+      backgroundColor: '#005f73',
+      borderColor: '#005f73',
+    },
+    gatemanPickerText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: '#475467',
+    },
+    gatemanPickerTextActive: {
+      color: '#ffffff',
+    },
     loginLogo: {
       width: 64,
       height: 64,
