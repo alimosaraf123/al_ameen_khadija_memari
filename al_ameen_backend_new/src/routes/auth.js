@@ -68,15 +68,19 @@ router.post(
     const result = await pool.query(
       `
       SELECT
-        id,
-        login_id,
-        password_hash,
-        full_name,
-        role,
-        is_active,
-        password_change_required
-      FROM users
-      WHERE login_id=$1 OR id IN (SELECT user_id FROM teachers WHERE staff_id=$1)
+        u.id,
+        u.login_id,
+        u.password_hash,
+        COALESCE(sp.name, tp.name, gp.guardian_name, u.full_name) AS full_name,
+        u.role,
+        u.is_active,
+        u.password_change_required,
+        COALESCE(u.photo_url, sp.photo_url, tp.photo_url, gp.photo_url) AS photo_url
+      FROM users u
+      LEFT JOIN service_staff_profiles sp ON sp.user_id = u.id
+      LEFT JOIN teachers tp ON tp.user_id = u.id
+      LEFT JOIN guardian_profiles gp ON gp.user_id = u.id
+      WHERE u.login_id=$1 OR u.id IN (SELECT user_id FROM teachers WHERE staff_id=$1)
       LIMIT 1
       `,
       [String(login_id).trim()]
@@ -120,6 +124,7 @@ router.post(
         login_id: user.login_id,
         full_name: user.full_name,
         role: user.role,
+        photo_url: user.photo_url || null,
         password_change_required: !!user.password_change_required,
       },
     });
@@ -140,14 +145,18 @@ router.get(
     const result = await pool.query(
       `
       SELECT
-        id,
-        login_id,
-        full_name,
-        role,
-        is_active,
-        password_change_required
-      FROM users
-      WHERE id=$1
+        u.id,
+        u.login_id,
+        COALESCE(sp.name, tp.name, gp.guardian_name, u.full_name) AS full_name,
+        u.role,
+        u.is_active,
+        u.password_change_required,
+        COALESCE(u.photo_url, sp.photo_url, tp.photo_url, gp.photo_url) AS photo_url
+      FROM users u
+      LEFT JOIN service_staff_profiles sp ON sp.user_id = u.id
+      LEFT JOIN teachers tp ON tp.user_id = u.id
+      LEFT JOIN guardian_profiles gp ON gp.user_id = u.id
+      WHERE u.id=$1
       `,
       [req.user.userId]
     );
@@ -697,35 +706,22 @@ router.post(
       await pool.query(
         `
         SELECT
-
-          gdt.id
-            AS token_id,
-
+          gdt.id AS token_id,
           gdt.user_id,
-
-          gdt.is_active
-            AS token_active,
-
+          gdt.is_active AS token_active,
           gdt.expires_at,
-
           u.login_id,
-
-          u.full_name,
-
+          COALESCE(sp.name, tp.name, gp.guardian_name, u.full_name) AS full_name,
           u.role,
-
-          u.is_active
-            AS user_active
-
+          u.is_active AS user_active,
+          COALESCE(u.photo_url, sp.photo_url, tp.photo_url, gp.photo_url) AS photo_url
         FROM guardian_device_tokens gdt
-
-        JOIN users u
-          ON u.id =
-             gdt.user_id
-
+        JOIN users u ON u.id = gdt.user_id
+        LEFT JOIN service_staff_profiles sp ON sp.user_id = u.id
+        LEFT JOIN teachers tp ON tp.user_id = u.id
+        LEFT JOIN guardian_profiles gp ON gp.user_id = u.id
         WHERE
           gdt.token_hash=$1
-
         LIMIT 1
         `,
         [
@@ -747,7 +743,7 @@ router.post(
       result.rows[0];
 
 
-    if (!['guardian','admin','teacher'].includes(row.role)) {
+    if (!['guardian','admin','teacher','gateman','super_admin','office','library'].includes(row.role)) {
       return res.status(403).json({
         success: false,
         message:
@@ -818,6 +814,9 @@ router.post(
 
         role:
           row.role,
+
+        photo_url:
+          row.photo_url || null,
       },
     });
 

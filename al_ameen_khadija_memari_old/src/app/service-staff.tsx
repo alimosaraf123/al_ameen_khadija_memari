@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -13,8 +14,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import * as DocumentPicker from 'expo-document-picker';
 import AcademyHeader from '../components/AcademyHeader';
-import { api } from '../lib/api';
+import { api, API_BASE } from '../lib/api';
+import { getToken } from '../lib/auth';
 import { Select } from '../components/StudentDirectory';
 
 const ROLE_OPTIONS = [
@@ -45,7 +48,9 @@ export default function ServiceStaff() {
   const [editPassword, setEditPassword] = useState('');
   const [editConfirmPassword, setEditConfirmPassword] = useState('');
   const [editIsActive, setEditIsActive] = useState(true);
+  const [editPhotoUrl, setEditPhotoUrl] = useState<string | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const load = async () => {
     try {
@@ -104,6 +109,81 @@ export default function ServiceStaff() {
     setEditIsActive(!!item.is_active);
     setEditPassword('');
     setEditConfirmPassword('');
+    setEditPhotoUrl(item.photo_url || null);
+  };
+
+  const pickAndUploadPhoto = async (targetStaffId?: number) => {
+    const targetId = targetStaffId || editItem?.id;
+    if (!targetId) return;
+
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({
+        type: ['image/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (picked.canceled || !picked.assets?.[0]) return;
+
+      const asset = picked.assets[0];
+      setUploadingPhoto(true);
+
+      const token = await getToken();
+      const fd = new FormData();
+
+      if (Platform.OS === 'web' && (asset as any).file) {
+        fd.append('photo', (asset as any).file);
+      } else {
+        fd.append('photo', {
+          uri: asset.uri,
+          name: asset.name || 'photo.jpg',
+          type: asset.mimeType || 'image/jpeg',
+        } as any);
+      }
+
+      const res = await fetch(`${API_BASE}/api/service-panels/staff/${targetId}/photo`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Photo upload failed');
+      }
+
+      setEditPhotoUrl(data.photo_url);
+      if (editItem && editItem.id === targetId) {
+        setEditItem((prev: any) => ({ ...prev, photo_url: data.photo_url }));
+      }
+      await load();
+      Alert.alert('Success', 'Staff photo uploaded successfully!');
+    } catch (e: any) {
+      Alert.alert('Upload Failed', e.message || 'Could not upload photo.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const removePhoto = async (targetStaffId?: number) => {
+    const targetId = targetStaffId || editItem?.id;
+    if (!targetId) return;
+
+    try {
+      setUploadingPhoto(true);
+      await api(`/api/service-panels/staff/${targetId}/photo`, {
+        method: 'DELETE',
+      });
+      setEditPhotoUrl(null);
+      if (editItem && editItem.id === targetId) {
+        setEditItem((prev: any) => ({ ...prev, photo_url: null }));
+      }
+      await load();
+      Alert.alert('Removed', 'Staff photo removed successfully.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Could not remove photo.');
+    } finally {
+      setUploadingPhoto(false);
+    }
   };
 
   const saveEdit = async () => {
@@ -159,43 +239,34 @@ export default function ServiceStaff() {
         method: 'PATCH',
         body: JSON.stringify({ password: temporaryPassword, confirm_password: temporaryPassword }),
       });
-      if (typeof window !== 'undefined') {
-        window.alert(`User ID: ${x.login_id}\nNew temporary password: ${temporaryPassword}`);
-      } else {
-        Alert.alert('Password Reset', `User ID: ${x.login_id}\nNew temporary password: ${temporaryPassword}`);
-      }
+      await load();
+      Alert.alert('Temporary Password Created', `Login ID: ${x.login_id}\nTemporary Password: ${temporaryPassword}`);
     } catch (e: any) {
-      Alert.alert('Staff', e.message);
+      Alert.alert('Reset Failed', e.message);
     }
   };
 
-  const filteredList = list.filter((item) => {
+  const filteredList = list.filter((x) => {
     if (roleFilter === 'all') return true;
-    const itemRole = String(item.staff_role || item.role || '').toLowerCase();
-    return itemRole === roleFilter;
+    return (x.staff_role || x.role) === roleFilter;
   });
 
-  const gatemanCount = list.filter(
-    (x) => String(x.staff_role || x.role || '').toLowerCase() === 'gateman'
-  ).length;
+  const gatemanCount = list.filter((x) => (x.staff_role || x.role) === 'gateman').length;
 
   return (
     <SafeAreaView style={s.page}>
       <ScrollView contentContainerStyle={s.body}>
         <AcademyHeader />
 
-        {/* TOP BAR */}
+        {/* HEADER */}
         <View style={s.top}>
-          <TouchableOpacity
-            style={s.light}
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/superadmin'))}
-          >
-            <Text style={s.bold}>‹ Back</Text>
+          <TouchableOpacity style={s.light} onPress={() => router.push('/superadmin' as any)}>
+            <Text style={s.bold}>← Super Admin</Text>
           </TouchableOpacity>
           <View>
-            <Text style={s.title}>Gateman / Office / Library Accounts</Text>
+            <Text style={s.title}>Service Staff Management</Text>
             <Text style={{ color: '#64748b', fontSize: 13, marginTop: 2 }}>
-              Manage logins, reset passwords, change names, and activate/deactivate accounts.
+              Add, manage photos, passwords, and access for Gateman, Office, and Library staff.
             </Text>
           </View>
         </View>
@@ -273,11 +344,34 @@ export default function ServiceStaff() {
           ) : (
             filteredList.map((x) => {
               const isGateman = String(x.staff_role || x.role).toLowerCase() === 'gateman';
+              const hasPhoto = !!x.photo_url;
               return (
                 <View key={x.id} style={[s.row, !x.is_active && s.inactiveRow]}>
-                  <View style={{ flex: 1, minWidth: 260 }}>
+                  {/* AVATAR / PHOTO */}
+                  <TouchableOpacity
+                    style={s.avatarContainer}
+                    onPress={() => pickAndUploadPhoto(x.id)}
+                    title="Click to add or change photo"
+                  >
+                    {hasPhoto ? (
+                      <Image
+                        source={{ uri: x.photo_url }}
+                        style={s.avatarImage}
+                      />
+                    ) : (
+                      <View style={[s.avatarCircle, isGateman && s.avatarCircleGate]}>
+                        <Text style={{ fontSize: 22 }}>
+                          {isGateman ? '👮' : x.role === 'library' ? '📚' : '🏢'}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={s.cameraBadge}>
+                      <Text style={{ fontSize: 9 }}>📷</Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  <View style={{ flex: 1, minWidth: 240 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <Text style={{ fontSize: 18 }}>{isGateman ? '👮' : x.role === 'library' ? '📚' : '🏢'}</Text>
                       <Text style={s.bold}>{x.name || 'Unnamed'}</Text>
                       <View style={[s.roleBadge, isGateman && s.roleBadgeGate]}>
                         <Text style={[s.roleBadgeText, isGateman && s.roleBadgeTextGate]}>
@@ -305,6 +399,16 @@ export default function ServiceStaff() {
 
                   {/* ACTION BUTTONS */}
                   <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <TouchableOpacity
+                      style={s.photoBtn}
+                      onPress={() => pickAndUploadPhoto(x.id)}
+                      disabled={uploadingPhoto}
+                    >
+                      <Text style={s.photoBtnText}>
+                        {uploadingPhoto ? '⏳ Uploading...' : hasPhoto ? '📷 Change Photo' : '📷 Add Photo'}
+                      </Text>
+                    </TouchableOpacity>
+
                     <TouchableOpacity style={s.editBtn} onPress={() => openEdit(x)}>
                       <Text style={s.white}>✏️ Edit Details / Password</Text>
                     </TouchableOpacity>
@@ -345,7 +449,45 @@ export default function ServiceStaff() {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ gap: 12, paddingVertical: 10 }}>
+              <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ gap: 12, paddingVertical: 10 }}>
+                {/* PHOTO UPLOAD & PREVIEW SECTION */}
+                <View style={s.modalPhotoCard}>
+                  <Text style={s.inputLabel}>Staff Profile Photo</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                    {editPhotoUrl ? (
+                      <Image source={{ uri: editPhotoUrl }} style={s.modalPhotoPreview} />
+                    ) : (
+                      <View style={[s.modalPhotoPlaceholder, editItem?.staff_role === 'gateman' && { backgroundColor: '#fef3c7' }]}>
+                        <Text style={{ fontSize: 36 }}>
+                          {editItem?.staff_role === 'gateman' ? '👮' : '👤'}
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={{ gap: 6, flex: 1 }}>
+                      <TouchableOpacity
+                        style={s.modalUploadBtn}
+                        onPress={() => pickAndUploadPhoto(editItem?.id)}
+                        disabled={uploadingPhoto}
+                      >
+                        <Text style={s.modalUploadBtnText}>
+                          {uploadingPhoto ? '⏳ Uploading...' : editPhotoUrl ? '📷 Change Photo' : '📷 Upload Photo'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      {editPhotoUrl && (
+                        <TouchableOpacity
+                          style={s.modalRemoveBtn}
+                          onPress={() => removePhoto(editItem?.id)}
+                          disabled={uploadingPhoto}
+                        >
+                          <Text style={s.modalRemoveBtnText}>🗑️ Remove Photo</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                </View>
+
                 <View>
                   <Text style={s.inputLabel}>Staff Full Name</Text>
                   <TextInput
@@ -448,52 +590,85 @@ const s = StyleSheet.create({
   top: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   title: { fontSize: 22, fontWeight: '900', color: '#0f3a61' },
   light: { backgroundColor: '#e2ecf8', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8 },
-  bold: { fontWeight: '800', color: '#1e3a5f' },
-  card: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#cbd8e4',
-    gap: 10,
-  },
-  cardHeading: { fontSize: 16, fontWeight: '800', color: '#1e3a5f' },
-  createGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' },
-  input: {
-    minWidth: 160,
-    flex: 1,
-    height: 42,
-    borderWidth: 1,
-    borderColor: '#bbc7d2',
-    borderRadius: 7,
-    paddingHorizontal: 10,
-    backgroundColor: '#fff',
-  },
-  primary: { backgroundColor: '#1769aa', paddingHorizontal: 18, paddingVertical: 11, borderRadius: 7 },
-  white: { color: '#fff', fontWeight: '800', fontSize: 13 },
-  row: {
-    backgroundColor: '#fff',
-    padding: 14,
-    borderRadius: 9,
-    borderWidth: 1,
-    borderColor: '#cbd8e4',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  inactiveRow: { opacity: 0.6, backgroundColor: '#f8fafc' },
+  bold: { fontWeight: '700', color: '#0f3a61' },
   filterRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   filterTab: {
+    backgroundColor: '#fff',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#e2ecf8',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
   },
-  filterTabActive: { backgroundColor: '#0f3a61' },
-  filterTabText: { fontWeight: '700', color: '#1e3a5f', fontSize: 13 },
+  filterTabActive: { backgroundColor: '#0284c7', borderColor: '#0284c7' },
+  filterTabText: { fontSize: 13, fontWeight: '700', color: '#475569' },
   filterTabTextActive: { color: '#fff' },
+  card: { backgroundColor: '#fff', borderRadius: 10, padding: 16, gap: 12 },
+  cardHeading: { fontSize: 16, fontWeight: '800', color: '#1e3a5f' },
+  createGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
+  input: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    minWidth: 130,
+    flex: 1,
+  },
+  primary: { backgroundColor: '#0284c7', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 6 },
+  white: { color: '#fff', fontWeight: '700', fontSize: 12 },
+  row: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    flexWrap: 'wrap',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  inactiveRow: { opacity: 0.6, backgroundColor: '#f8fafc' },
+  avatarContainer: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#e2e8f0',
+    borderWidth: 2,
+    borderColor: '#0284c7',
+  },
+  avatarCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#e0f2fe',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  avatarCircleGate: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b',
+  },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
   roleBadge: {
     backgroundColor: '#e2e8f0',
     paddingHorizontal: 7,
@@ -507,6 +682,13 @@ const s = StyleSheet.create({
   statusActive: { backgroundColor: '#dcfce7' },
   statusInactive: { backgroundColor: '#fee2e2' },
   statusBadgeText: { fontSize: 11, fontWeight: '800', color: '#15803d' },
+  photoBtn: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  photoBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
   editBtn: { backgroundColor: '#0284c7', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6 },
   reset: { backgroundColor: '#6366f1', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6 },
   toggle: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6 },
@@ -523,10 +705,9 @@ const s = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     width: '100%',
-    maxWidth: 500,
+    maxWidth: 520,
     padding: 18,
     gap: 12,
-    boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -537,6 +718,48 @@ const s = StyleSheet.create({
     paddingBottom: 8,
   },
   modalTitle: { fontSize: 17, fontWeight: '800', color: '#0f3a61' },
+  modalPhotoCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  modalPhotoPreview: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 2,
+    borderColor: '#0284c7',
+  },
+  modalPhotoPlaceholder: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  modalUploadBtn: {
+    backgroundColor: '#0284c7',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  modalUploadBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  modalRemoveBtn: {
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+  },
+  modalRemoveBtnText: { color: '#dc2626', fontWeight: '700', fontSize: 12 },
   modalFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

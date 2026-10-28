@@ -25,6 +25,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 
 import {
   API_BASE,
+  api,
 } from '../lib/api';
 
 import {
@@ -41,6 +42,7 @@ import {
   hasGuardianBiometricToken,
   getBiometricAccount,
   getRoleBiometricToken,
+  saveRoleBiometricToken,
 } from '../lib/guardianDevice';
 
 import {
@@ -105,11 +107,17 @@ export default function Login() {
   ] = useState(false);
 
   const [fingerprintRole, setFingerprintRole] = useState<string | null>(null);
-  const quickLoginLabel = fingerprintRole === 'teacher' ? 'Teacher Quick Login' : fingerprintRole === 'admin' ? 'Admin Quick Login' : 'Guardian Quick Login';
+  const quickLoginLabel = fingerprintRole === 'gateman'
+    ? 'Gateman Quick Login'
+    : fingerprintRole === 'teacher'
+    ? 'Teacher Quick Login'
+    : fingerprintRole === 'admin'
+    ? 'Admin Quick Login'
+    : 'Guardian Quick Login';
 
 
   // =====================================
-  // CHECK SAVED GUARDIAN
+  // CHECK SAVED ACCOUNT / GATEMAN FINGERPRINT
   // =====================================
 
   useEffect(() => {
@@ -140,10 +148,12 @@ export default function Login() {
             ? await getRoleBiometricToken(savedBiometricAccount.role)
             : null;
 
+          const isGatemanTarget = savedBiometricAccount?.role === 'gateman' ||
+            String(savedBiometricAccount?.loginId || loginId || '').toLowerCase().startsWith('gateman');
 
           if (
             savedRoleToken &&
-            ['admin','teacher'].includes(String(savedBiometricAccount?.role)) &&
+            ['admin','teacher','gateman'].includes(String(savedBiometricAccount?.role)) &&
             Platform.OS !== 'web'
           ) {
             setGuardianLoginId(savedBiometricAccount?.loginId || null);
@@ -151,9 +161,16 @@ export default function Login() {
             setFingerprintAvailable(true);
             setUserId(savedBiometricAccount?.loginId || '');
             setUsePasswordLogin(false);
+          } else if (isGatemanTarget && Platform.OS !== 'web') {
+            const gId = savedBiometricAccount?.loginId || loginId || 'gateman01';
+            setGuardianLoginId(gId);
+            setFingerprintRole('gateman');
+            setFingerprintAvailable(true);
+            setUserId(gId);
+            setUsePasswordLogin(false);
           } else if (enabled && loginId) {
             setGuardianLoginId(loginId);
-            setFingerprintRole('guardian');
+            setFingerprintRole(loginId.toLowerCase().startsWith('gateman') ? 'gateman' : 'guardian');
             setUserId(loginId);
             setUsePasswordLogin(false);
           } else if (
@@ -180,6 +197,21 @@ export default function Login() {
     checkGuardian();
 
   }, []);
+
+  // Auto-prompt fingerprint for Gateman on mobile/native devices
+  useEffect(() => {
+    if (
+      fingerprintRole === 'gateman' &&
+      fingerprintAvailable &&
+      !usePasswordLogin &&
+      Platform.OS !== 'web'
+    ) {
+      const timer = setTimeout(() => {
+        void loginWithFingerprint();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [fingerprintRole, fingerprintAvailable, usePasswordLogin]);
 
 
   // =====================================
@@ -275,7 +307,25 @@ export default function Login() {
 
 
         if (['gateman','office','library'].includes(data.user.role)) {
-          await saveGuardianDeviceAccount(data.user.login_id || userId.trim());
+          const staffLoginId = data.user.login_id || userId.trim();
+          await saveGuardianDeviceAccount(staffLoginId);
+          if (data.user.role === 'gateman' && Platform.OS !== 'web') {
+            try {
+              const hasHw = await LocalAuthentication.hasHardwareAsync();
+              const isEn = await LocalAuthentication.isEnrolledAsync();
+              if (hasHw && isEn) {
+                const bioReg = await api('/api/biometric/register', {
+                  method: 'POST',
+                  body: JSON.stringify({ device_name: `Gateman Device (${staffLoginId})` })
+                });
+                if (bioReg?.device_token) {
+                  await saveRoleBiometricToken('gateman', bioReg.device_token, staffLoginId);
+                }
+              }
+            } catch (bioErr) {
+              console.log('Gateman auto biometric setup:', bioErr);
+            }
+          }
           router.replace(panelForRole(data.user.role) as any);
           return;
         }
@@ -341,7 +391,7 @@ export default function Login() {
 
       } catch (e: any) {
 
-        const message = offlineMessage(e);
+        const message = `${e?.message || 'Error'} [URL: ${API_BASE}/api/login]`;
 
         setLoginError(message);
 
@@ -504,6 +554,18 @@ export default function Login() {
 
         if (!deviceToken) {
 
+          if (fingerprintRole === 'gateman') {
+            Alert.alert(
+              'Fingerprint Setup Required',
+              'Please login with Password once to enable and link your fingerprint on this device.',
+              [
+                { text: 'Login with Password', onPress: () => setUsePasswordLogin(true) }
+              ]
+            );
+            setUsePasswordLogin(true);
+            return;
+          }
+
           Alert.alert(
             'Fingerprint Login',
             'Fingerprint Login is not enabled on this device.'
@@ -557,13 +619,13 @@ export default function Login() {
             .authenticateAsync({
 
               promptMessage:
-                fingerprintRole === 'teacher' ? 'Teacher Login' : fingerprintRole === 'admin' ? 'Admin Login' : 'Guardian Login',
+                fingerprintRole === 'gateman' ? 'Gateman Fingerprint Login' : fingerprintRole === 'teacher' ? 'Teacher Login' : fingerprintRole === 'admin' ? 'Admin Login' : 'Guardian Login',
 
               cancelLabel:
                 'Cancel',
 
               fallbackLabel:
-                'Use mPIN',
+                fingerprintRole === 'gateman' ? 'Use Password' : 'Use mPIN',
 
             });
 
@@ -741,7 +803,9 @@ export default function Login() {
             <Text
               style={styles.quickHelp}
             >
-              Log in with mPIN or Fingerprint.
+              {fingerprintRole === 'gateman'
+                ? 'Scan your fingerprint to open the Gateman Scanner.'
+                : 'Log in with mPIN or Fingerprint.'}
             </Text>
 
 
@@ -766,61 +830,67 @@ export default function Login() {
                 />
 
 
-                <Text
-                  style={styles.orText}
-                >
-                  OR
-                </Text>
+                {fingerprintRole !== 'gateman' && (
+                  <Text
+                    style={styles.orText}
+                  >
+                    OR
+                  </Text>
+                )}
 
               </>
 
             )}
 
 
-            {/* MPIN */}
+            {/* MPIN (Guardian only) */}
 
-            <Text style={styles.fieldLabel}>Enter 6-digit mPIN</Text>
-            <Field
-              value={mpin}
+            {fingerprintRole !== 'gateman' && (
+              <>
+                <Text style={styles.fieldLabel}>Enter 6-digit mPIN</Text>
+                <Field
+                  value={mpin}
 
-              onChangeText={(
-                value: string
-              ) => {
+                  onChangeText={(
+                    value: string
+                  ) => {
 
-                setMpin(
-                  value
-                    .replace(
-                      /\D/g,
-                      ''
-                    )
-                    .slice(0, 6)
-                );
+                    setMpin(
+                      value
+                        .replace(
+                          /\D/g,
+                          ''
+                        )
+                        .slice(0, 6)
+                    );
 
-              }}
+                  }}
 
-              placeholder="Enter 6 Digit mPIN"
+                  placeholder="Enter 6 Digit mPIN"
 
-              keyboardType="numeric"
+                  keyboardType="numeric"
 
-              secureTextEntry
+                  secureTextEntry
 
-              maxLength={6}
-            />
+                  maxLength={6}
+                />
 
 
-            <Button
+                <Button
 
-              title={
-                mpinBusy
-                  ? 'Please wait...'
-                  : 'Login with mPIN'
-              }
+                  title={
+                    mpinBusy
+                      ? 'Please wait...'
+                      : 'Login with mPIN'
+                  }
 
-              onPress={
-                loginWithMpin
-              }
+                  onPress={
+                    loginWithMpin
+                  }
 
-            />
+                />
+              </>
+            )}
 
 
             <TouchableOpacity

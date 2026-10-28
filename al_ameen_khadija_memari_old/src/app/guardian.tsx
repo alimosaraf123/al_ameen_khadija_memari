@@ -19,7 +19,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as WebBrowser from 'expo-web-browser';
 import * as Sharing from 'expo-sharing';
-
+import { GestureHandlerRootView, PinchGestureHandler, State } from 'react-native-gesture-handler';
 import { api, API_BASE } from '../lib/api';
 import { clearSession, getToken } from '../lib/auth';
 import {

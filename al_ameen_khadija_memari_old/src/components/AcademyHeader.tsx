@@ -12,6 +12,18 @@ import { router } from 'expo-router';
 import { clearSession, getUser } from '../lib/auth';
 import { api, API_BASE } from '../lib/api';
 
+const DEFAULT_GATEMAN_PHOTO_URL = 'https://res.cloudinary.com/dftzjdhb/image/upload/v1793159487/staff/aparna_mondal.jpg';
+
+const cleanPhotoUrl = (url?: string | null) => {
+  if (!url) return DEFAULT_GATEMAN_PHOTO_URL;
+  let finalUrl = url;
+  if (/^https?:/.test(finalUrl)) {
+    return finalUrl.replace(/\.webp$/i, '.jpg');
+  }
+  const clean = finalUrl.startsWith('/') ? finalUrl : `/${finalUrl}`;
+  return `${API_BASE || ''}${clean}`.replace(/\.webp$/i, '.jpg');
+};
+
 const homeFor = (role: string) =>
   role === 'guardian' ? '/guardian' :
   role === 'teacher' ? '/teacher' :
@@ -46,18 +58,38 @@ export default function AcademyHeader({
   profilePhoto,
 }: HeaderProps = {}) {
   const [user, setUser] = useState<any>(null);
-  const [headerPhoto, setHeaderPhoto] = useState(profilePhoto || '');
+  const [headerPhoto, setHeaderPhoto] = useState(profilePhoto ? cleanPhotoUrl(profilePhoto) : '');
 
   useEffect(() => {
     void getUser<any>().then(async currentUser => {
       setUser(currentUser);
-      if (currentUser?.role === 'teacher' && !profilePhoto) {
+      if (profilePhoto) {
+        setHeaderPhoto(cleanPhotoUrl(profilePhoto));
+        return;
+      }
+      if (currentUser?.photo_url) {
+        setHeaderPhoto(cleanPhotoUrl(currentUser.photo_url));
+        return;
+      }
+      if (currentUser?.role === 'teacher') {
         try {
           const response = await api('/api/teachers/me');
           const photo = response?.teacher?.photo_url || '';
-          setHeaderPhoto(photo ? (/^https?:/.test(photo) ? photo : API_BASE + photo) : '');
+          setHeaderPhoto(photo ? cleanPhotoUrl(photo) : '');
         } catch {
           setHeaderPhoto('');
+        }
+      } else if (currentUser?.role === 'gateman') {
+        try {
+          const response = await api('/api/service-panels/staff/me');
+          const photo = response?.staff?.photo_url || '';
+          if (photo) {
+            setHeaderPhoto(cleanPhotoUrl(photo));
+          } else {
+            setHeaderPhoto(DEFAULT_GATEMAN_PHOTO_URL);
+          }
+        } catch {
+          setHeaderPhoto(DEFAULT_GATEMAN_PHOTO_URL);
         }
       }
     });
@@ -69,6 +101,7 @@ export default function AcademyHeader({
   };
 
   const showTeacherActions = isTeacher(user);
+  const gatemanDisplayName = user?.full_name && !user.full_name.startsWith('Gateman') ? user.full_name : 'Aparna Mondal';
 
   return (
     <View style={[styles.header, compact && styles.compactHeader, fixed && styles.fixedHeader]}>
@@ -79,13 +112,20 @@ export default function AcademyHeader({
           accessibilityLabel="Al-Ameen Mission Academy Memari logo"
           style={[styles.logo, compact && styles.compactLogo]}
         />
-        <Text style={styles.name}>Al-Ameen Mission Academy Memari</Text>
-        {headerPhoto ? (
+        <View style={{ flexShrink: 1 }}>
+          <Text style={styles.name}>Al-Ameen Mission Academy Memari</Text>
+          {user?.role === 'gateman' ? (
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#047857', marginTop: 1 }}>
+              👮 Gate Duty: {gatemanDisplayName}
+            </Text>
+          ) : null}
+        </View>
+        {user?.role === 'gateman' || headerPhoto ? (
           <Image
-            source={{ uri: headerPhoto }}
+            source={{ uri: (headerPhoto && headerPhoto !== 'local_gateman') ? headerPhoto : DEFAULT_GATEMAN_PHOTO_URL }}
             resizeMode="cover"
-            accessibilityLabel="Teacher profile photo"
-            style={styles.teacherPhoto}
+            accessibilityLabel="Gateman profile photo"
+            style={[styles.teacherPhoto, { borderColor: '#059669' }]}
           />
         ) : null}
       </View>

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Image,
+  Modal,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -11,13 +12,21 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { api, imageUrl, API_BASE } from '../lib/api';
 import { getUser } from '../lib/auth';
+import {
+  getRoleBiometricToken,
+  saveRoleBiometricToken,
+  clearRoleBiometricToken,
+} from '../lib/guardianDevice';
 import AcademyHeader from '../components/AcademyHeader';
 import CardQrScanner from '../components/CardQrScanner';
 import { Select } from '../components/StudentDirectory';
 import { checkVisitingSchedule } from '../lib/visitingSchedule';
 import { confirmAction } from '../lib/confirm';
+
+const DEFAULT_GATEMAN_PHOTO_URL = 'https://res.cloudinary.com/dftzjdhb/image/upload/v1793159487/staff/aparna_mondal.jpg';
 
 const PERSON_OPTIONS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((n) => ({
   value: n,
@@ -25,19 +34,24 @@ const PERSON_OPTIONS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((n) => 
 }));
 
 const safeImageUrl = (url?: string | null) => {
-  if (!url) return '';
-  if (/^https?:/.test(url)) return url;
+  if (!url) return DEFAULT_GATEMAN_PHOTO_URL;
+  let finalUrl = url;
+  if (/^https?:/.test(finalUrl)) {
+    return finalUrl.replace(/\.webp$/i, '.jpg');
+  }
   if (typeof imageUrl === 'function') {
     try {
-      return imageUrl(url);
+      const res = imageUrl(finalUrl);
+      if (res) return res.replace(/\.webp$/i, '.jpg');
     } catch {}
   }
-  const clean = url.startsWith('/') ? url : `/${url}`;
-  return `${API_BASE || ''}${clean}`;
+  const clean = finalUrl.startsWith('/') ? finalUrl : `/${finalUrl}`;
+  return `${API_BASE || ''}${clean}`.replace(/\.webp$/i, '.jpg');
 };
 
 export default function Gateman() {
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [showGreetingModal, setShowGreetingModal] = useState(true);
   const [reg, setReg] = useState('');
   const [data, setData] = useState<any>(null);
   const [busy, setBusy] = useState(false);
@@ -46,7 +60,53 @@ export default function Gateman() {
   const [visitorTab, setVisitorTab] = useState<'inside' | 'all'>('inside');
   const [sourcePersons, setSourcePersons] = useState<Record<string, string>>({});
   const [visitPersons, setVisitPersons] = useState<Record<number, string>>({});
+  const [fingerprintEnabled, setFingerprintEnabled] = useState(false);
   const inputRef = useRef<any>(null);
+
+  
+  const [isOnDuty, setIsOnDuty] = useState(false);
+  const [dutyStartTime, setDutyStartTime] = useState<string | null>(null);
+  const [dutyBusy, setDutyBusy] = useState(false);
+
+  const checkDutyStatus = async () => {
+    try {
+      const res = await api('/api/service-panels/gate-duty/status');
+      if (res?.on_duty) {
+        setIsOnDuty(true);
+        setDutyStartTime(res.start_time);
+      }
+    } catch {}
+  };
+
+  const handleStartDuty = async () => {
+    setDutyBusy(true);
+    try {
+      const res = await api('/api/service-panels/gate-duty/start', { method: 'POST' });
+      setIsOnDuty(true);
+      setDutyStartTime(res.start_time);
+      setShowGreetingModal(false);
+      Alert.alert('Gate Duty Started', 'ডিউটি শুরু হয়েছে এবং Staff Attendance-এ আপনি Present হিসেবে রেকর্ড হয়েছেন!');
+    } catch (e: any) {
+      Alert.alert('Duty Start Error', e.message || 'Could not record duty start.');
+    } finally {
+      setDutyBusy(false);
+    }
+  };
+
+  const handleEndDuty = async () => {
+    const confirmed = await confirmAction('End Gate Duty', 'আপনি কি আজকের গেট ডিউটি সমাপ্ত করতে চান?');
+    if (!confirmed) return;
+    setDutyBusy(true);
+    try {
+      await api('/api/service-panels/gate-duty/end', { method: 'POST' });
+      setIsOnDuty(false);
+      Alert.alert('Gate Duty Ended', 'আজকের গেট ডিউটি সমাপ্ত হয়েছে।');
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setDutyBusy(false);
+    }
+  };
 
   const cleanBarcode = (val: string) => {
     let v = String(val || '').trim();
@@ -67,9 +127,90 @@ export default function Gateman() {
   };
 
   useEffect(() => {
-    void getUser<any>().then(setCurrentUser);
+    void getUser<any>().then(async (user) => {
+      let u = user;
+      if (!u?.photo_url || !u?.full_name || u?.full_name?.startsWith('Gateman')) {
+        try {
+          const res = await api('/api/service-panels/staff/me');
+          if (res?.staff) {
+            u = { ...u, ...res.staff };
+          }
+        } catch {}
+      }
+      setCurrentUser(u);
+    });
     void loadToday();
+    void checkDutyStatus();
+    if (Platform.OS !== 'web') {
+      void getRoleBiometricToken('gateman').then((token) => setFingerprintEnabled(!!token));
+    }
   }, []);
+
+  useEffect(() => {
+    // Show greeting modal upon load, dismiss after 12 seconds
+    setShowGreetingModal(true);
+    const timer = setTimeout(() => {
+      setShowGreetingModal(false);
+    }, 12000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const getTimeGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) {
+      return { bengali: 'শুভ সকাল', english: 'Good Morning', icon: '🌅' };
+    }
+    if (hour >= 12 && hour < 17) {
+      return { bengali: 'শুভ দুপুর', english: 'Good Afternoon', icon: '☀️' };
+    }
+    if (hour >= 17 && hour < 21) {
+      return { bengali: 'শুভ সন্ধ্যা', english: 'Good Evening', icon: '🌇' };
+    }
+    return { bengali: 'শুভ রাত্রি / ডিউটি স্বাগতম', english: 'Duty Welcome', icon: '🌙' };
+  };
+
+  const gatemanName = currentUser?.full_name && !currentUser.full_name.startsWith('Gateman')
+    ? currentUser.full_name
+    : (currentUser?.name && !currentUser.name.startsWith('Gateman') ? currentUser.name : 'Aparna Mondal');
+  const gatemanLoginId = currentUser?.login_id || 'gateman01';
+  const gatemanPhotoUri = (currentUser?.photo_url && currentUser.photo_url.trim())
+    ? safeImageUrl(currentUser.photo_url)
+    : DEFAULT_GATEMAN_PHOTO_URL;
+  const timeGreeting = getTimeGreeting();
+
+  const toggleGatemanFingerprint = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Mobile App Only', 'Fingerprint login can be configured in the mobile app.');
+      return;
+    }
+    try {
+      if (fingerprintEnabled) {
+        await clearRoleBiometricToken('gateman');
+        setFingerprintEnabled(false);
+        Alert.alert('Fingerprint Disabled', 'Fingerprint login for Gateman has been disabled on this device.');
+      } else {
+        const hasHw = await LocalAuthentication.hasHardwareAsync();
+        const isEn = await LocalAuthentication.isEnrolledAsync();
+        if (!hasHw || !isEn) {
+          Alert.alert('Fingerprint Unavailable', 'Please set up fingerprint authentication in your device Settings first.');
+          return;
+        }
+        const auth = await LocalAuthentication.authenticateAsync({ promptMessage: 'Confirm Fingerprint for Gateman Login' });
+        if (!auth.success) return;
+        const reg = await api('/api/biometric/register', {
+          method: 'POST',
+          body: JSON.stringify({ device_name: `Gateman Device (${currentUser?.login_id || 'gateman'})` })
+        });
+        if (reg?.device_token) {
+          await saveRoleBiometricToken('gateman', reg.device_token, currentUser?.login_id || 'gateman01');
+          setFingerprintEnabled(true);
+          Alert.alert('Success', 'Fingerprint Login is now enabled as DEFAULT for Gateman on this device!');
+        }
+      }
+    } catch (e: any) {
+      Alert.alert('Fingerprint Error', e.message);
+    }
+  };
 
   // Hardware barcode scanner listener for web
   useEffect(() => {
@@ -409,35 +550,125 @@ export default function Gateman() {
       <ScrollView contentContainerStyle={s.body}>
         <AcademyHeader />
 
-        {/* ON DUTY GATEMAN BANNER */}
-        <View style={{
-          backgroundColor: '#0f3a61',
-          paddingHorizontal: 16,
-          paddingVertical: 12,
-          borderRadius: 10,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 10,
-          borderWidth: 1,
-          borderColor: '#1d4e7d',
-        }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Text style={{ fontSize: 26 }}>👮</Text>
-            <View>
-              <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>
-                On Duty: {currentUser?.full_name || currentUser?.name || currentUser?.login_id || 'Gateman'}
+        {/* LOGIN WELCOME GREETING MODAL */}
+        <Modal
+          visible={showGreetingModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowGreetingModal(false)}
+        >
+          <View style={s.greetingOverlay}>
+            <View style={s.greetingCard}>
+              {/* Header Badge */}
+              <View style={s.greetingHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 16 }}>👮‍♀️</Text>
+                  <Text style={s.greetingHeaderBadge}>AL-AMEEN MISSION GATE DUTY</Text>
+                </View>
+                <TouchableOpacity
+                  style={s.greetingCloseButton}
+                  onPress={() => setShowGreetingModal(false)}
+                >
+                  <Text style={s.greetingCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Photo */}
+              <View style={s.greetingPhotoContainer}>
+                <Image
+                  source={{ uri: gatemanPhotoUri || DEFAULT_GATEMAN_PHOTO_URL }}
+                  style={s.greetingPhoto}
+                  resizeMode="cover"
+                />
+                <View style={s.greetingStatusDot}>
+                  <Text style={{ fontSize: 12 }}>🟢</Text>
+                </View>
+              </View>
+
+              {/* Greeting Text */}
+              <Text style={s.greetingTimeText}>
+                {timeGreeting.icon} {timeGreeting.bengali}!
               </Text>
-              <Text style={{ color: '#93c5fd', fontSize: 12, marginTop: 2 }}>
-                Login ID: <Text style={{ fontWeight: '800', color: '#fff' }}>{currentUser?.login_id || '—'}</Text> · All entry/exit operations are recorded under your ID
+              <Text style={s.greetingNameText}>
+                {gatemanName}
+              </Text>
+              <Text style={s.greetingSubText}>
+                {timeGreeting.english} · গেট ডিউটিতে আপনাকে স্বাগতম
+              </Text>
+
+              {/* Info Details */}
+              <View style={s.greetingDetailsBox}>
+                <View style={s.greetingDetailRow}>
+                  <Text style={s.greetingDetailLabel}>Gate Post:</Text>
+                  <Text style={s.greetingDetailVal}>Main Campus Gate (মূল ফটক - ১)</Text>
+                </View>
+                <View style={s.greetingDetailRow}>
+                  <Text style={s.greetingDetailLabel}>Gateman ID:</Text>
+                  <Text style={s.greetingDetailVal}>{gatemanLoginId} · Staff ID: 786786</Text>
+                </View>
+                <View style={s.greetingDetailRow}>
+                  <Text style={s.greetingDetailLabel}>Campus:</Text>
+                  <Text style={s.greetingDetailVal}>Al-Ameen Academy Memari</Text>
+                </View>
+                <View style={s.greetingDetailRow}>
+                  <Text style={s.greetingDetailLabel}>Date & Time:</Text>
+                  <Text style={s.greetingDetailVal}>
+                    {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Continue button */}
+              <TouchableOpacity
+                style={s.greetingStartButton}
+                onPress={() => setShowGreetingModal(false)}
+              >
+                <Text style={s.greetingStartButtonText}>
+                  ডিউটি শুরু করুন (Start Gate Duty) →
+                </Text>
+              </TouchableOpacity>
+
+              <Text style={s.greetingAutoDismissText}>
+                স্বয়ংক্রিয়ভাবে কয়েক সেকেন্ডে বন্ধ হবে...
               </Text>
             </View>
           </View>
-          <View style={{ backgroundColor: 'rgba(255,255,255,0.18)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 }}>
-            <Text style={{ color: '#e0f2fe', fontSize: 11, fontWeight: '700' }}>
-              4 Active Gateman Logins Available
-            </Text>
+        </Modal>
+
+        {/* ON DUTY GATEMAN WELCOME & STATUS BANNER */}
+        <View style={s.dutyBannerCard}>
+          <View style={s.dutyBannerMainRow}>
+            {/* Gateman Photo Avatar */}
+            <TouchableOpacity
+              style={s.dutyAvatarWrapper}
+              onPress={() => setShowGreetingModal(true)}
+              activeOpacity={0.8}
+            >
+              <Image
+                source={{ uri: gatemanPhotoUri || DEFAULT_GATEMAN_PHOTO_URL }}
+                style={s.dutyAvatarImage}
+                resizeMode="cover"
+              />
+              <View style={s.dutyAvatarOnlineDot} />
+            </TouchableOpacity>
+
+            {/* Name & Duty Greeting Info */}
+            <View style={{ flex: 1, minWidth: 200 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <Text style={s.dutyGreetingSalutation}>
+                  {timeGreeting.icon} {timeGreeting.bengali},
+                </Text>
+                <View style={s.dutyActiveChip}>
+                  <Text style={s.dutyActiveChipText}>🟢 অন-ডিউটি (On Duty)</Text>
+                </View>
+              </View>
+              <Text style={s.dutyGatemanName} numberOfLines={1}>
+                {gatemanName}
+              </Text>
+              <Text style={s.dutySubDetails}>
+                Gate Security · Login: <Text style={{ color: '#fff', fontWeight: '800' }}>{gatemanLoginId}</Text> · Staff ID: 786786
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -1214,5 +1445,257 @@ const s = StyleSheet.create({
   scheduleBannerMsgAlert: {
     color: '#dc2626',
     fontWeight: '700',
+  },
+
+  /* Greeting Modal Styles */
+  greetingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    ...Platform.select({
+      web: { backdropFilter: 'blur(8px)' } as any,
+      default: {},
+    }),
+  },
+  greetingCard: {
+    backgroundColor: '#ffffff',
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  greetingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 16,
+  },
+  greetingHeaderBadge: {
+    color: '#047857',
+    fontWeight: '900',
+    fontSize: 12,
+    letterSpacing: 0.5,
+  },
+  greetingCloseButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  greetingCloseText: {
+    color: '#64748b',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  greetingPhotoContainer: {
+    position: 'relative',
+    marginBottom: 14,
+  },
+  greetingPhoto: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    borderWidth: 4,
+    borderColor: '#10b981',
+  },
+  greetingStatusDot: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 2,
+    borderWidth: 2,
+    borderColor: '#10b981',
+  },
+  greetingTimeText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#059669',
+    marginBottom: 2,
+  },
+  greetingNameText: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#0f172a',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  greetingSubText: {
+    fontSize: 12,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  greetingDetailsBox: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 12,
+    width: '100%',
+    gap: 7,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 18,
+  },
+  greetingDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  greetingDetailLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  greetingDetailVal: {
+    fontSize: 12,
+    color: '#0f172a',
+    fontWeight: '800',
+  },
+  greetingStartButton: {
+    backgroundColor: '#059669',
+    width: '100%',
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  greetingStartButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  greetingAutoDismissText: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+
+  /* Duty Banner Card */
+  dutyBannerCard: {
+    backgroundColor: '#0c2d48',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#1b4d75',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  dutyBannerMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  dutyAvatarWrapper: {
+    position: 'relative',
+  },
+  dutyAvatarImage: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    borderWidth: 2.5,
+    borderColor: '#34d399',
+  },
+  dutyAvatarOnlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#22c55e',
+    borderWidth: 2,
+    borderColor: '#0c2d48',
+  },
+  dutyGreetingSalutation: {
+    color: '#a7f3d0',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  dutyActiveChip: {
+    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#22c55e',
+  },
+  dutyActiveChipText: {
+    color: '#86efac',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  dutyGatemanName: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '900',
+    marginTop: 1,
+  },
+  dutySubDetails: {
+    color: '#93c5fd',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  dutyBannerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginLeft: 'auto',
+    flexWrap: 'wrap',
+  },
+  dutyGreetingBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  dutyGreetingBtnText: {
+    color: '#f8fafc',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  dutyFingerprintBtn: {
+    backgroundColor: '#1e3a8a',
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: '#60a5fa',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  dutyFingerprintActiveBtn: {
+    backgroundColor: '#059669',
+    borderColor: '#34d399',
+  },
+  dutyFingerprintBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
   },
 });

@@ -1,8 +1,30 @@
-const express=require('express'),bcrypt=require('bcryptjs'),pool=require('../db');
-const{auth,allow}=require('../middleware/auth');const asyncHandler=require('../utils/asyncHandler');const router=express.Router();
+const express=require('express'),bcrypt=require('bcryptjs'),pool=require('../db'),multer=require('multer'),sharp=require('sharp');
+const{auth,allow}=require('../middleware/auth');const asyncHandler=require('../utils/asyncHandler');
+const{uploadBuffer,deleteCloudinaryUrl}=require('../utils/cloudStorage');
+const router=express.Router();
+const photoUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:8*1024*1024}}).single('photo');
 const schemaReady=pool.query(`
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN('super_admin','admin','teacher','guardian','gateman','office','library'));
 CREATE TABLE IF NOT EXISTS service_staff_profiles(id BIGSERIAL PRIMARY KEY,user_id BIGINT UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,staff_id VARCHAR(100) UNIQUE NOT NULL,name VARCHAR(150) NOT NULL,staff_role VARCHAR(30) NOT NULL CHECK(staff_role IN('gateman','office','library')),mobile VARCHAR(30),created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+ALTER TABLE service_staff_profiles ADD COLUMN IF NOT EXISTS photo_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT;
+CREATE TABLE IF NOT EXISTS gate_duty_logs (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  staff_id VARCHAR(100),
+  staff_name VARCHAR(150),
+  duty_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  start_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  end_time TIMESTAMPTZ,
+  status VARCHAR(30) NOT NULL DEFAULT 'on_duty',
+  device_info TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_gate_duty_logs_date ON gate_duty_logs(duty_date, user_id);
+ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS punch_in TIMESTAMPTZ;
+ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS punch_out TIMESTAMPTZ;
+ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS remark TEXT;
+
 CREATE TABLE IF NOT EXISTS gate_entry_logs(id BIGSERIAL PRIMARY KEY,student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,permission_type VARCHAR(20) NOT NULL CHECK(permission_type IN('visit','gate_pass')),permission_id BIGINT NOT NULL,entered_by BIGINT REFERENCES users(id) ON DELETE SET NULL,entered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),remarks TEXT);
 CREATE TABLE IF NOT EXISTS gate_guardian_visit_entries(id BIGSERIAL PRIMARY KEY,student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,visitor_name VARCHAR(180) NOT NULL,visitor_relation VARCHAR(100) NOT NULL,visitor_source VARCHAR(30) NOT NULL CHECK(visitor_source IN('father','mother','visitor1','visitor2')),entered_by BIGINT REFERENCES users(id) ON DELETE SET NULL,entered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),remarks TEXT);
 ALTER TABLE gate_guardian_visit_entries DROP CONSTRAINT IF EXISTS gate_guardian_visit_entries_visitor_source_check;
@@ -37,9 +59,44 @@ CREATE TABLE IF NOT EXISTS library_loans(id BIGSERIAL PRIMARY KEY,book_id BIGINT
 DO $$ BEGIN IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='library_loans' AND column_name='issued_at' AND data_type='date') THEN ALTER TABLE library_loans ALTER COLUMN issued_at DROP DEFAULT; ALTER TABLE library_loans ALTER COLUMN issued_at TYPE TIMESTAMPTZ USING issued_at::timestamp AT TIME ZONE 'Asia/Kolkata'; ALTER TABLE library_loans ALTER COLUMN issued_at SET DEFAULT NOW(); END IF; END $$;
 `);
 const admin=allow('super_admin','admin');
-router.get('/staff',auth,admin,asyncHandler(async(req,res)=>{await schemaReady;const q=await pool.query(`SELECT p.*,u.login_id,u.role,u.is_active FROM service_staff_profiles p JOIN users u ON u.id=p.user_id ORDER BY p.staff_role,p.name`);res.json({success:true,staff:q.rows})}));
+router.get('/staff/me',auth,allow('gateman','office','library','super_admin','admin'),asyncHandler(async(req,res)=>{
+  await schemaReady;
+  const staff=(await pool.query(`SELECT p.*,u.login_id,u.role,COALESCE(p.name,u.full_name) full_name,COALESCE(p.photo_url,u.photo_url) photo_url FROM users u LEFT JOIN service_staff_profiles p ON p.user_id=u.id WHERE u.id=$1 LIMIT 1`,[req.user.userId])).rows[0];
+  if(!staff)return res.status(404).json({success:false,message:'Staff profile not found'});
+  res.json({success:true,staff});
+}));
+router.get('/staff',auth,admin,asyncHandler(async(req,res)=>{await schemaReady;const q=await pool.query(`SELECT p.*,u.login_id,u.role,u.is_active,COALESCE(p.photo_url,u.photo_url) photo_url FROM service_staff_profiles p JOIN users u ON u.id=p.user_id ORDER BY p.staff_role,p.name`);res.json({success:true,staff:q.rows})}));
 router.post('/staff',auth,admin,asyncHandler(async(req,res)=>{await schemaReady;const b=req.body||{},role=String(b.role||'');if(!['gateman','office','library'].includes(role)||!b.staff_id||!b.name||!b.login_id||!b.password||b.password!==b.confirm_password)return res.status(400).json({success:false,message:'Role, staff ID, name, user ID, password and matching confirmation are required'});const c=await pool.connect();try{await c.query('BEGIN');const u=(await c.query(`INSERT INTO users(login_id,password_hash,full_name,role) VALUES($1,$2,$3,$4) RETURNING id`,[String(b.login_id).trim().toLowerCase(),await bcrypt.hash(String(b.password),12),String(b.name).trim(),role])).rows[0];const p=(await c.query(`INSERT INTO service_staff_profiles(user_id,staff_id,name,staff_role,mobile) VALUES($1,$2,$3,$4,$5) RETURNING *`,[u.id,String(b.staff_id).trim(),String(b.name).trim(),role,b.mobile||null])).rows[0];await c.query('COMMIT');res.status(201).json({success:true,staff:p})}catch(e){await c.query('ROLLBACK');if(e.code==='23505')return res.status(409).json({success:false,message:'User ID or Staff ID already exists'});throw e}finally{c.release()}}));
-router.patch('/staff/:id',auth,admin,asyncHandler(async(req,res)=>{await schemaReady;const b=req.body||{};if(b.password&&b.password!==b.confirm_password)return res.status(400).json({success:false,message:'Password confirmation does not match'});const p=(await pool.query('SELECT * FROM service_staff_profiles WHERE id=$1',[req.params.id])).rows[0];if(!p)return res.status(404).json({success:false,message:'Staff not found'});const newName=b.name?String(b.name).trim():null;const newMobile=b.mobile!==undefined?(b.mobile?String(b.mobile).trim():null):null;const newStaffId=b.staff_id?String(b.staff_id).trim():null;if(newName||b.mobile!==undefined||newStaffId){await pool.query(`UPDATE service_staff_profiles SET name=COALESCE($1, name), mobile=CASE WHEN $2::boolean THEN $3 ELSE mobile END, staff_id=COALESCE($4, staff_id) WHERE id=$5`,[newName,b.mobile!==undefined,newMobile,newStaffId,req.params.id]);if(newName){await pool.query('UPDATE users SET full_name=$1 WHERE id=$2',[newName,p.user_id])}}await pool.query('UPDATE users SET is_active=COALESCE($1,is_active),password_hash=CASE WHEN $2::text IS NULL THEN password_hash ELSE $2 END,password_change_required=CASE WHEN $2::text IS NULL THEN password_change_required ELSE TRUE END WHERE id=$3',[b.is_active, b.password?await bcrypt.hash(String(b.password),12):null,p.user_id]);res.json({success:true})}));
+router.patch('/staff/:id',auth,admin,asyncHandler(async(req,res)=>{await schemaReady;const b=req.body||{};if(b.password&&b.password!==b.confirm_password)return res.status(400).json({success:false,message:'Password confirmation does not match'});const p=(await pool.query('SELECT * FROM service_staff_profiles WHERE id=$1',[req.params.id])).rows[0];if(!p)return res.status(404).json({success:false,message:'Staff not found'});const newName=b.name?String(b.name).trim():null;const newMobile=b.mobile!==undefined?(b.mobile?String(b.mobile).trim():null):null;const newStaffId=b.staff_id?String(b.staff_id).trim():null;if(newName||b.mobile!==undefined||newStaffId){await pool.query(`UPDATE service_staff_profiles SET name=COALESCE($1, name), mobile=CASE WHEN $2::boolean THEN $3 ELSE mobile END, staff_id=COALESCE($4, staff_id) WHERE id=$5`,[newName,b.mobile!==undefined,newMobile,newStaffId,req.params.id]);if(newName){await pool.query('UPDATE users SET full_name=$1 WHERE id=$2',[newName,p.user_id])}}if(b.photo_url!==undefined){await pool.query('UPDATE service_staff_profiles SET photo_url=$1 WHERE id=$2',[b.photo_url||null,p.id]);await pool.query('UPDATE users SET photo_url=$1 WHERE id=$2',[b.photo_url||null,p.user_id]);}await pool.query('UPDATE users SET is_active=COALESCE($1,is_active),password_hash=CASE WHEN $2::text IS NULL THEN password_hash ELSE $2 END,password_change_required=CASE WHEN $2::text IS NULL THEN password_change_required ELSE TRUE END WHERE id=$3',[b.is_active, b.password?await bcrypt.hash(String(b.password),12):null,p.user_id]);res.json({success:true})}));
+
+router.post('/staff/:id/photo',auth,admin,(req,res,next)=>photoUpload(req,res,err=>err?res.status(400).json({success:false,message:'Photo must be under 8 MB'}):next()),asyncHandler(async(req,res)=>{
+  await schemaReady;
+  if(!req.file||!req.file.mimetype.startsWith('image/'))return res.status(400).json({success:false,message:'Please choose an image file (JPEG, PNG, WEBP)'});
+  const staff=(await pool.query('SELECT p.*,u.id as user_table_id FROM service_staff_profiles p JOIN users u ON u.id=p.user_id WHERE p.id=$1',[req.params.id])).rows[0];
+  if(!staff)return res.status(404).json({success:false,message:'Staff profile not found'});
+  const compressed=await sharp(req.file.buffer).rotate().resize(480,480,{fit:'cover',position:'attention'}).webp({quality:80,effort:4}).toBuffer();
+  const uploaded=await uploadBuffer(compressed,{folder:'al-ameen/staff-photos',publicId:'staff-'+staff.id+'-'+Date.now(),resourceType:'image',format:'webp'});
+  try{
+    const updated=await pool.query('UPDATE service_staff_profiles SET photo_url=$1 WHERE id=$2 RETURNING *',[uploaded.url,staff.id]);
+    await pool.query('UPDATE users SET photo_url=$1 WHERE id=$2',[uploaded.url,staff.user_id]);
+    if(staff.photo_url&&staff.photo_url.includes('cloudinary')){await deleteCloudinaryUrl(staff.photo_url).catch(()=>{});}
+    res.json({success:true,message:'Photo uploaded successfully',photo_url:uploaded.url,staff:updated.rows[0]});
+  }catch(err){
+    await deleteCloudinaryUrl(uploaded.url).catch(()=>{});
+    throw err;
+  }
+}));
+router.delete('/staff/:id/photo',auth,admin,asyncHandler(async(req,res)=>{
+  await schemaReady;
+  const staff=(await pool.query('SELECT p.* FROM service_staff_profiles p WHERE p.id=$1',[req.params.id])).rows[0];
+  if(!staff)return res.status(404).json({success:false,message:'Staff profile not found'});
+  if(staff.photo_url&&staff.photo_url.includes('cloudinary')){await deleteCloudinaryUrl(staff.photo_url).catch(()=>{});}
+  await pool.query('UPDATE service_staff_profiles SET photo_url=NULL WHERE id=$1',[staff.id]);
+  await pool.query('UPDATE users SET photo_url=NULL WHERE id=$1',[staff.user_id]);
+  res.json({success:true,message:'Photo removed successfully'});
+}));
+
+
 router.get('/gate-today',auth,allow('gateman','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const [q,v]=await Promise.all([pool.query(`
 SELECT 'visit' permission_type,v.id permission_id,v.token_no,s.id student_id,s.registration_no,s.student_name,s.class_name,s.photo_url,r.room_name,v.visitor_name detail_name,v.visitor_relation detail_relation,v.visit_at permission_at,v.duration_minutes,COALESCE(v.person_count, 1)::int person_count,NULL::text reason,EXISTS(SELECT 1 FROM gate_entry_logs gl WHERE gl.permission_type='visit' AND gl.permission_id=v.id AND gl.entered_at::date=CURRENT_DATE) entered
 FROM student_visits v JOIN students s ON s.id=v.student_id LEFT JOIN rooms r ON r.id=s.room_id
@@ -210,3 +267,139 @@ router.delete('/library/loans/:id',auth,allow('super_admin','admin'),asyncHandle
 }));
 module.exports=router;
 
+
+
+// ==========================================
+// GATE DUTY & STAFF ATTENDANCE INTEGRATION
+// ==========================================
+
+router.get('/gate-duty/status', auth, allow('gateman','super_admin','admin'), asyncHandler(async(req,res)=>{
+  await schemaReady;
+  const userId = req.user.userId;
+  const todayDuty = (await pool.query(
+    "SELECT * FROM gate_duty_logs WHERE user_id = $1 AND duty_date = CURRENT_DATE ORDER BY start_time DESC LIMIT 1",
+    [userId]
+  )).rows[0] || null;
+
+  const staff = (await pool.query(
+    "SELECT p.* FROM service_staff_profiles p WHERE p.user_id = $1 LIMIT 1",
+    [userId]
+  )).rows[0];
+
+  let attendanceStatus = null;
+  if (staff) {
+    const t = (await pool.query(
+      "SELECT id FROM teachers WHERE staff_id = $1 OR user_id = $2 LIMIT 1",
+      [staff.staff_id, userId]
+    )).rows[0];
+    if (t) {
+      const att = (await pool.query(
+        "SELECT status, punch_in, punch_out FROM staff_attendance WHERE teacher_id = $1 AND attendance_date = CURRENT_DATE",
+        [t.id]
+      )).rows[0];
+      if (att) attendanceStatus = att.status;
+    }
+  }
+
+  res.json({
+    success: true,
+    on_duty: !!(todayDuty && todayDuty.status === 'on_duty' && !todayDuty.end_time),
+    duty: todayDuty,
+    attendance: attendanceStatus,
+    start_time: todayDuty?.start_time || null
+  });
+}));
+
+router.post('/gate-duty/start', auth, allow('gateman','super_admin','admin'), asyncHandler(async(req,res)=>{
+  await schemaReady;
+  const userId = req.user.userId;
+
+  // 1. Get staff info
+  let staff = (await pool.query(
+    "SELECT p.*, u.full_name, u.login_id FROM service_staff_profiles p JOIN users u ON u.id = p.user_id WHERE p.user_id = $1",
+    [userId]
+  )).rows[0];
+
+  if (!staff) {
+    const u = (await pool.query("SELECT * FROM users WHERE id = $1", [userId])).rows[0];
+    staff = { user_id: userId, staff_id: u?.login_id, name: u?.full_name || 'Gateman' };
+  }
+
+  // 2. Find or create in teachers table so it connects to staff_attendance
+  let teacher = (await pool.query(
+    "SELECT id FROM teachers WHERE staff_id = $1 OR user_id = $2 LIMIT 1",
+    [staff.staff_id, userId]
+  )).rows[0];
+
+  if (!teacher) {
+    teacher = (await pool.query(
+      "INSERT INTO teachers(staff_id, name, designation, is_active, user_id, profile_details) VALUES($1, $2, 'Security Guard', TRUE, $3, $4::jsonb) RETURNING id",
+      [staff.staff_id, staff.name, userId, JSON.stringify({ staff_type: 'Security Guard', staff_category: 'Nonteaching' })]
+    )).rows[0];
+  }
+
+  // 3. Mark in staff_attendance as 'Present'
+  if (teacher?.id) {
+    await pool.query(`
+      INSERT INTO staff_attendance(teacher_id, attendance_date, status, marked_by, punch_in, remark, updated_at)
+      VALUES($1, CURRENT_DATE, 'Present', $2, NOW(), 'Gate Duty Start', NOW())
+      ON CONFLICT(teacher_id, attendance_date)
+      DO UPDATE SET status = 'Present', punch_in = COALESCE(staff_attendance.punch_in, NOW()), remark = 'Gate Duty Start', updated_at = NOW()
+    `, [teacher.id, userId]);
+  }
+
+  // 4. Record in gate_duty_logs
+  let duty = (await pool.query(
+    "SELECT * FROM gate_duty_logs WHERE user_id = $1 AND duty_date = CURRENT_DATE AND status = 'on_duty' ORDER BY start_time DESC LIMIT 1",
+    [userId]
+  )).rows[0];
+
+  if (!duty) {
+    duty = (await pool.query(
+      "INSERT INTO gate_duty_logs(user_id, staff_id, staff_name, duty_date, start_time, status) VALUES($1, $2, $3, CURRENT_DATE, NOW(), 'on_duty') RETURNING *",
+      [userId, staff.staff_id, staff.name]
+    )).rows[0];
+  }
+
+  res.json({
+    success: true,
+    message: 'Gate duty started! Attendance marked as Present.',
+    duty,
+    attendance: 'Present',
+    start_time: duty.start_time
+  });
+}));
+
+router.post('/gate-duty/end', auth, allow('gateman','super_admin','admin'), asyncHandler(async(req,res)=>{
+  await schemaReady;
+  const userId = req.user.userId;
+
+  const duty = (await pool.query(
+    "UPDATE gate_duty_logs SET end_time = NOW(), status = 'completed' WHERE user_id = $1 AND duty_date = CURRENT_DATE AND status = 'on_duty' RETURNING *",
+    [userId]
+  )).rows[0];
+
+  const staff = (await pool.query(
+    "SELECT p.* FROM service_staff_profiles p WHERE p.user_id = $1 LIMIT 1",
+    [userId]
+  )).rows[0];
+
+  if (staff) {
+    const t = (await pool.query(
+      "SELECT id FROM teachers WHERE staff_id = $1 OR user_id = $2 LIMIT 1",
+      [staff.staff_id, userId]
+    )).rows[0];
+    if (t) {
+      await pool.query(
+        "UPDATE staff_attendance SET punch_out = NOW(), updated_at = NOW() WHERE teacher_id = $1 AND attendance_date = CURRENT_DATE",
+        [t.id]
+      );
+    }
+  }
+
+  res.json({
+    success: true,
+    message: 'Gate duty ended successfully.',
+    duty
+  });
+}));

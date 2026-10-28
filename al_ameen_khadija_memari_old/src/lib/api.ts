@@ -21,7 +21,7 @@ export const getApiBase = () => {
       return `${window.location.protocol}//${host}:3000`;
     }
   }
-  return configuredApiBase || 'https://alameenk.onrender.com';
+  return 'https://alameenk.onrender.com';
 };
 
 export const API_BASE = getApiBase();

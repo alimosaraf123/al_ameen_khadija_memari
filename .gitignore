@@ -1,5 +1,11 @@
 al_ameen_memari_release.apk
 installed-check.apk
 *.apk
+*.idsig
+*.bin
+*.bundle
+*.mp4
+*.log
+extracted_assets/
 tmp/
 tmpframes/
