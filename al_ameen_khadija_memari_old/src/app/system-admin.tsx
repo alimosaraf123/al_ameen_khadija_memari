@@ -5,7 +5,7 @@ const modules=[
  ['guardians','Guardians > Guardian Records'],
  ['rooms','Rooms > Room List'],['rooms_support','Rooms > Room Lookup'],['attendance','Rooms > Evening Attendance'],['behavior','Rooms > Student Behaviour'],['problems','Rooms > Room Problems'],
  ['gate_passes','Gate Pass > Generate & Records'],['visits','Visiting Day > Permission & Records'],
- ['marks','Exams > Weekly Test'],['terminal_exams','Exams > Terminal Exam'],['published_results','Exams > Published Results'],
+ ['marks','Exams > Weekly Test'],['omr_evaluation','Exams > OMR Exam & Evaluation'],['terminal_exams','Exams > Terminal Exam'],['published_results','Exams > Published Results'],
  ['routines','Routine'],['notices','Notice'],['deposit_fund','Student Deposit Fund'],
  ['service_staff','Service Panels > Staff Accounts (ID / Password Reset)'],['gateman_panel','Service Panels > Gateman'],['office_panel','Service Panels > Office'],['library_panel','Service Panels > Library'],['dining_stock','Office > Dining Stock'],
  ['audit_log','Activity Audit Log']

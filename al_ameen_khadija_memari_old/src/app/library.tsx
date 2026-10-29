@@ -230,6 +230,8 @@ export default function Library() {
 
   const [status, setStatus] = useState('issued');
   const [statusQ, setStatusQ] = useState('');
+  const [statusFrom, setStatusFrom] = useState('');
+  const [statusTo, setStatusTo] = useState('');
   const [records, setRecords] = useState<any[]>([]);
 
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -297,14 +299,21 @@ export default function Library() {
     }
   };
 
-  const loadStatus = async (next = status) => {
+  const loadStatus = async (
+    next = status,
+    nextFrom = statusFrom,
+    nextTo = statusTo,
+    nextQ = statusQ
+  ) => {
     try {
-      const d = await api(
+      let url =
         '/api/service-panels/library/status?status=' +
-          encodeURIComponent(next) +
-          '&q=' +
-          encodeURIComponent(statusQ)
-      );
+        encodeURIComponent(next) +
+        '&q=' +
+        encodeURIComponent(nextQ);
+      if (nextFrom) url += '&from=' + encodeURIComponent(nextFrom);
+      if (nextTo) url += '&to=' + encodeURIComponent(nextTo);
+      const d = await api(url);
       setRecords(d.records || []);
     } catch (e: any) {
       Alert.alert('Book Status', e.message);
@@ -1252,7 +1261,7 @@ export default function Library() {
                 value={status}
                 onChange={(v: string) => {
                   setStatus(v);
-                  void loadStatus(v);
+                  void loadStatus(v, statusFrom, statusTo, statusQ);
                 }}
                 options={[
                   { value: 'issued', label: 'Currently Issued (ইস্যু করা বইগুলি)' },
@@ -1266,10 +1275,43 @@ export default function Library() {
                 p="Search book / student / registration"
                 v={statusQ}
                 set={setStatusQ}
+                onSubmitEditing={() => void loadStatus(status, statusFrom, statusTo, statusQ)}
+                returnKeyType="search"
               />
-              <TouchableOpacity style={s.primary} onPress={() => loadStatus()}>
+              <View style={s.statusDateGroup}>
+                <DatePickerField
+                  label="From Date"
+                  value={statusFrom}
+                  onChange={setStatusFrom}
+                  style={s.statusDateWrap}
+                />
+                <Text style={s.statusDateToText}>TO</Text>
+                <DatePickerField
+                  label="To Date"
+                  value={statusTo}
+                  onChange={setStatusTo}
+                  style={s.statusDateWrap}
+                />
+              </View>
+              <TouchableOpacity
+                style={s.primary}
+                onPress={() => void loadStatus(status, statusFrom, statusTo, statusQ)}
+              >
                 <Text style={s.white}>Search</Text>
               </TouchableOpacity>
+              {(!!statusFrom || !!statusTo || !!statusQ) && (
+                <TouchableOpacity
+                  style={s.light}
+                  onPress={() => {
+                    setStatusFrom('');
+                    setStatusTo('');
+                    setStatusQ('');
+                    void loadStatus(status, '', '', '');
+                  }}
+                >
+                  <Text style={{ fontWeight: '700', color: '#475569' }}>Clear</Text>
+                </TouchableOpacity>
+              )}
             </View>
             <StatusTable
               status={status}
@@ -1907,6 +1949,21 @@ const s = StyleSheet.create({
     backgroundColor: '#d8f2fb',
     padding: 12,
     borderRadius: 8,
+  },
+  statusDateGroup: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  statusDateWrap: {
+    marginBottom: 0,
+    minWidth: 140,
+  },
+  statusDateToText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#475569',
+    paddingBottom: 12,
   },
   input: {
     minWidth: 190,

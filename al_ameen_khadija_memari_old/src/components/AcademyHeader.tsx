@@ -24,12 +24,15 @@ const cleanPhotoUrl = (url?: string | null) => {
   return `${API_BASE || ''}${clean}`.replace(/\.webp$/i, '.jpg');
 };
 
-const homeFor = (role: string) =>
-  role === 'guardian' ? '/guardian' :
-  role === 'teacher' ? '/teacher' :
-  role === 'gateman' ? '/gateman' :
-  role === 'office' ? '/office' :
-  role === 'library' ? '/library' : '/superadmin';
+const homeFor = (role?: string) => {
+  const r = String(role || '').trim().toLowerCase();
+  if (r === 'guardian') return '/guardian';
+  if (r === 'teacher') return '/teacher';
+  if (r === 'gateman') return '/gateman';
+  if (r === 'office') return '/office';
+  if (r === 'library') return '/library';
+  return '/superadmin';
+};
 
 const isTeacher = (user: any) =>
   [user?.role, user?.staff_role, user?.user_role, user?.user?.role, user?.data?.role]
@@ -61,7 +64,40 @@ type HeaderProps = {
 
 function HeaderLink({ path, style, onPress, children }: { path: string; style: any; onPress: () => void; children: React.ReactNode }) {
   if (Platform.OS === 'web') {
-    return <a href={path} onClick={(event) => { event.preventDefault(); onPress(); }} style={{ ...StyleSheet.flatten(style), textDecorationLine: 'none', textDecoration: 'none' } as any}>{children}</a>;
+    return (
+      <a
+        href={path}
+        onClick={(event) => {
+          if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
+            event.preventDefault();
+            try {
+              onPress();
+            } catch (err) {
+              console.warn('Navigation error:', err);
+            }
+            if (typeof window !== 'undefined') {
+              try {
+                router.replace(path as any);
+              } catch (_) {}
+              if (window.location.pathname !== path) {
+                window.location.href = path;
+              }
+            }
+          }
+        }}
+        style={{
+          ...StyleSheet.flatten(style),
+          textDecorationLine: 'none',
+          textDecoration: 'none',
+          cursor: 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        } as any}
+      >
+        {children}
+      </a>
+    );
   }
   return <TouchableOpacity style={style} onPress={onPress}>{children}</TouchableOpacity>;
 }
@@ -197,7 +233,19 @@ export default function AcademyHeader({
             style={[styles.actions, compact && styles.compactActions]}
             contentContainerStyle={styles.actionsContent}
           >
-            <HeaderLink path={homeFor(user.role)} style={styles.home} onPress={() => router.push(homeFor(user.role) as any)}>
+            <HeaderLink
+              path={homeFor(user?.role || user?.data?.role || user?.user_role)}
+              style={styles.home}
+              onPress={() => {
+                const target = homeFor(user?.role || user?.data?.role || user?.user_role);
+                try {
+                  router.replace(target as any);
+                } catch (_) {}
+                if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                  window.location.href = target;
+                }
+              }}
+            >
               <Text style={styles.actionText}>Home</Text>
             </HeaderLink>
 
@@ -257,8 +305,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     zIndex: 100,
     elevation: 4,
+    position: 'relative',
     ...Platform.select({
-      web: { position: 'sticky' as any, top: 0, boxShadow: '0 2px 8px rgba(15,23,42,0.08)' },
+      web: { boxShadow: '0 2px 8px rgba(15,23,42,0.08)' },
       default: {},
     }),
   },

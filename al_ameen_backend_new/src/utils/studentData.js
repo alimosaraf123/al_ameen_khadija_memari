@@ -36,6 +36,8 @@ const studentFields = [
   'caste_name',
   'blood_group',
   'admitted_school_name',
+  'school_reg_no',
+  'council_reg_no',
   'stream',
   'is_handicapped',
   'is_orphan',

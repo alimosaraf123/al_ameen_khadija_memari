@@ -1,0 +1,21 @@
+{
+  "exam_name": "Class X Biology Annual Test",
+  "total_questions": 35,
+  "marks_per_correct": 1.0,
+  "negative_mark": 0.25,
+  "full_marks": 35.0,
+  "answer_key": {
+    "1": "C", "2": "D", "3": "B", "4": "C", "5": "B",
+    "6": "B", "7": "C", "8": "B", "9": "C", "10": "B",
+    "11": "B", "12": "C", "13": "B", "14": "C", "15": "D",
+    "16": "A", "17": "D", "18": "A", "19": "D", "20": "B",
+    "21": "B", "22": "C", "23": "D", "24": "A", "25": "B",
+    "26": "C", "27": "D", "28": "C", "29": "C", "30": "B",
+    "31": "D", "32": "D", "33": "C", "34": "C", "35": "C"
+  },
+  "students_master": {
+    "49787": { "name": "MOSAMMAT AMINA SULTANA", "class": "X-A", "school": "AL-AMEEN MISSION ACADEMY" },
+    "2262117692": { "name": "TAHSINA NAZ", "class": "X-A", "school": "AL-AMEEN MISSION ACADEMY" },
+    "2262118804": { "name": "AMINA UMME AIMAN", "class": "X-B", "school": "DEBIPUR STATION GIRLS HIGH SCHOOL" }
+  }
+}

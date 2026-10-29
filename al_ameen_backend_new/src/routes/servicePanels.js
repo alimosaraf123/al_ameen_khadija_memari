@@ -146,6 +146,8 @@ router.post('/dining/transaction',auth,allow('office','super_admin','admin'),asy
 router.get('/library/status',auth,allow('library','super_admin','admin'),asyncHandler(async(req,res)=>{
   await schemaReady;
   const status=String(req.query.status||'issued'),search='%'+String(req.query.q||'').trim()+'%';
+  const fromDate=(req.query.from&&String(req.query.from).trim())?String(req.query.from).trim():null;
+  const toDate=(req.query.to&&String(req.query.to).trim())?String(req.query.to).trim():null;
   if(status==='never_issued'){
     const q=await pool.query(`
       SELECT b.id book_id, b.accession_no, b.book_number, b.title, b.author,
@@ -157,8 +159,10 @@ router.get('/library/status',auth,allow('library','super_admin','admin'),asyncHa
       WHERE b.is_active=TRUE
         AND NOT EXISTS(SELECT 1 FROM library_loans l WHERE l.book_id=b.id)
         AND ($1='%%' OR b.title ILIKE $1 OR b.accession_no ILIKE $1 OR COALESCE(b.book_number,'') ILIKE $1 OR COALESCE(b.author,'') ILIKE $1)
+        AND ($2::text IS NULL OR (b.purchase_date IS NOT NULL AND b.purchase_date >= $2::date))
+        AND ($3::text IS NULL OR (b.purchase_date IS NOT NULL AND b.purchase_date <= $3::date))
       ORDER BY b.title, b.accession_no
-    `,[search]);
+    `,[search,fromDate,toDate]);
     return res.json({success:true,status,records:q.rows});
   }
   if(status==='returned'){
@@ -172,8 +176,10 @@ router.get('/library/status',auth,allow('library','super_admin','admin'),asyncHa
       JOIN students s ON s.id=l.student_id
       WHERE l.returned_at IS NOT NULL
         AND ($1='%%' OR b.title ILIKE $1 OR b.accession_no ILIKE $1 OR COALESCE(b.book_number,'') ILIKE $1 OR s.student_name ILIKE $1 OR s.registration_no ILIKE $1)
+        AND ($2::text IS NULL OR (COALESCE(l.returned_at, l.issued_at) AT TIME ZONE 'Asia/Kolkata')::date >= $2::date)
+        AND ($3::text IS NULL OR (COALESCE(l.returned_at, l.issued_at) AT TIME ZONE 'Asia/Kolkata')::date <= $3::date)
       ORDER BY l.returned_at DESC
-    `,[search]);
+    `,[search,fromDate,toDate]);
     return res.json({success:true,status,records:q.rows});
   }
   if(status==='all_loans'){
@@ -186,8 +192,10 @@ router.get('/library/status',auth,allow('library','super_admin','admin'),asyncHa
       JOIN library_books b ON b.id=l.book_id
       JOIN students s ON s.id=l.student_id
       WHERE ($1='%%' OR b.title ILIKE $1 OR b.accession_no ILIKE $1 OR COALESCE(b.book_number,'') ILIKE $1 OR s.student_name ILIKE $1 OR s.registration_no ILIKE $1)
+        AND ($2::text IS NULL OR (l.issued_at AT TIME ZONE 'Asia/Kolkata')::date >= $2::date)
+        AND ($3::text IS NULL OR (l.issued_at AT TIME ZONE 'Asia/Kolkata')::date <= $3::date)
       ORDER BY l.issued_at DESC
-    `,[search]);
+    `,[search,fromDate,toDate]);
     return res.json({success:true,status,records:q.rows});
   }
   if(status==='issued'){
@@ -201,8 +209,10 @@ router.get('/library/status',auth,allow('library','super_admin','admin'),asyncHa
       JOIN students s ON s.id=l.student_id
       WHERE l.returned_at IS NULL
         AND ($1='%%' OR b.title ILIKE $1 OR b.accession_no ILIKE $1 OR COALESCE(b.book_number,'') ILIKE $1 OR s.student_name ILIKE $1 OR s.registration_no ILIKE $1)
+        AND ($2::text IS NULL OR (l.issued_at AT TIME ZONE 'Asia/Kolkata')::date >= $2::date)
+        AND ($3::text IS NULL OR (l.issued_at AT TIME ZONE 'Asia/Kolkata')::date <= $3::date)
       ORDER BY l.issued_at DESC
-    `,[search]);
+    `,[search,fromDate,toDate]);
     return res.json({success:true,status,records:q.rows});
   }
   const q=await pool.query(`
@@ -212,8 +222,10 @@ router.get('/library/status',auth,allow('library','super_admin','admin'),asyncHa
     FROM library_books b
     WHERE b.is_active=TRUE AND b.available_copies>0
       AND ($1='%%' OR b.title ILIKE $1 OR b.accession_no ILIKE $1 OR COALESCE(b.author,'') ILIKE $1)
+      AND ($2::text IS NULL OR (b.purchase_date IS NOT NULL AND b.purchase_date >= $2::date))
+      AND ($3::text IS NULL OR (b.purchase_date IS NOT NULL AND b.purchase_date <= $3::date))
     ORDER BY b.title,b.accession_no
-  `,[search]);
+  `,[search,fromDate,toDate]);
   res.json({success:true,status:'available',records:q.rows});
 }));
 router.get('/library/books',auth,allow('library','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const q=await pool.query(`SELECT b.*,(SELECT COUNT(*) FROM library_loans l WHERE l.book_id=b.id AND l.returned_at IS NULL) issued_count FROM library_books b WHERE b.is_active=TRUE AND ($1='' OR b.title ILIKE $2 OR b.accession_no ILIKE $2) AND ($3='' OR b.category=$3) AND ($4='' OR b.book_class=$4) ORDER BY b.title`,[String(req.query.q||''),'%'+String(req.query.q||'')+'%',String(req.query.category||''),String(req.query.book_class||'')]);res.json({success:true,books:q.rows})}));
