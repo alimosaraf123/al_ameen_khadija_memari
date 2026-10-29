@@ -43,12 +43,26 @@ export default function ClassResults() {
       selected.kind === 'terminal'
         ? subjects.map(x => `<th>${x.subject_name}<br>F.M.-${Number(x.full_marks)}</th>`).join('')
         : '<th>Marks Obtained</th>';
+    // Compute rank for each student based on total marks
+    const rankMap: Record<string, number> = {};
+    if (selected.kind === 'terminal') {
+      const totals = students.map((s: any) => ({
+        id: s.student_id || s.registration_no,
+        total: subjects.reduce((a: number, sub: any) => a + (Number(s.marks?.[sub.id]) || 0), 0)
+      }));
+      totals.sort((a: any, b: any) => b.total - a.total);
+      let rank = 1;
+      for (let i = 0; i < totals.length; i++) {
+        if (i > 0 && totals[i].total < totals[i - 1].total) rank = i + 1;
+        rankMap[totals[i].id] = rank;
+      }
+    }
     const rows = students
       .map(
         (x: any, i: number) =>
           `<tr><td>${i + 1}</td><td>${x.registration_no}</td><td class="name">${x.student_name}</td>${
             selected.kind === 'terminal'
-              ? subjects.map(y => `<td>${x.marks?.[y.id] ?? 'Absent'}</td>`).join('')
+              ? subjects.map(y => `<td>${x.marks?.[y.id] ?? 'Absent'}</td>`).join('') + `<td><b>${rankMap[x.student_id || x.registration_no] ?? '-'}</b></td>`
               : `<td>${x.obtained_marks === null ? 'Absent' : Number(x.obtained_marks)}</td>`
           }</tr>`
       )
@@ -61,7 +75,7 @@ export default function ClassResults() {
               selected.exam_date || ''
             ).slice(0, 10)} &nbsp; | &nbsp; Subject: ${selected.subject_name}`
           : `${selected.exam_name} | Class ${selected.class_name}`
-      }</h3><table><tr><th>Sl</th><th>Reg.</th><th>Name</th>${heads}</tr>${rows}</table>`
+      }</h3><table><tr><th>Sl</th><th>Reg.</th><th>Name</th>${heads}${selected.kind === 'terminal' ? '<th>Rank</th>' : ''}</tr>${rows}</table>`
     });
   };
 
@@ -100,7 +114,19 @@ export default function ClassResults() {
     )}</th><th>${subjects.reduce((a: any, x: any) => a + Number(x.oral_marks || 0), 0)}</th><th>${full}</th><th>-</th><th>-</th><th>${total}</th><th>${grade(
       total,
       full
-    )}</th></tr></table><div class="summary">Percentage: ${pct}% &nbsp; | &nbsp; Result: ${
+    // Compute rank for this student
+    const allTotals = students.map((s: any) => ({
+      id: s.student_id || s.registration_no,
+      total: subjects.reduce((a: number, sub: any) => a + (Number(s.marks?.[sub.id]) || 0), 0)
+    }));
+    allTotals.sort((a: any, b: any) => b.total - a.total);
+    let studentRank = '-';
+    let rk = 1;
+    for (let i = 0; i < allTotals.length; i++) {
+      if (i > 0 && allTotals[i].total < allTotals[i - 1].total) rk = i + 1;
+      if (allTotals[i].id === (st.student_id || st.registration_no)) { studentRank = String(rk); break; }
+    }
+    )}</th></tr></table><div class="summary">Percentage: ${pct}% &nbsp; | &nbsp; Rank: ${studentRank} &nbsp; | &nbsp; Result: ${
       subjects.some((sub: any) => st.marks?.[sub.id] === 'Absent') ? 'Incomplete' : 'Pass'
     }</div><div class="sign"><span>Class Teacher</span><span>Guardian</span><span>Principal</span></div></section>`;
 

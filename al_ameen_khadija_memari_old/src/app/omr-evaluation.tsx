@@ -43,40 +43,28 @@ const makeBlankKey = (count = 35): Record<string, string> => {
   return k;
 };
 
-const getInitialActiveConfig = () => {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    try {
-      const cached = localStorage.getItem('omr_active_config');
-      if (cached) return JSON.parse(cached);
-    } catch (_) {}
-  }
-  return null;
-};
-
 export default function OmrEvaluation() {
-  const initialConfig = React.useMemo(() => getInitialActiveConfig(), []);
-
-  // Exam Configuration & Inputs (Restored from active cache if available)
-  const [examName, setExamName] = useState(() => initialConfig?.examName || '');
-  const [totalQuestions, setTotalQuestions] = useState(() => initialConfig?.totalQuestions ? String(initialConfig.totalQuestions) : '');
-  const [marksPerCorrect, setMarksPerCorrect] = useState(() => initialConfig?.marksPerCorrect ? String(initialConfig.marksPerCorrect) : '');
-  const [negativeMark, setNegativeMark] = useState(() => initialConfig?.negativeMark !== undefined && initialConfig?.negativeMark !== '' ? String(initialConfig.negativeMark) : '');
-  const [fullMarks, setFullMarks] = useState(() => initialConfig?.fullMarks ? String(initialConfig.fullMarks) : '');
+  // Exam Configuration & Inputs (Starts fresh & blank on page load)
+  const [examName, setExamName] = useState<string>('');
+  const [totalQuestions, setTotalQuestions] = useState<string>('35');
+  const [marksPerCorrect, setMarksPerCorrect] = useState<string>('1.0');
+  const [negativeMark, setNegativeMark] = useState<string>('0.0');
+  const [fullMarks, setFullMarks] = useState<string>('35.0');
 
   // Answer Key
   const [showKeyModal, setShowKeyModal] = useState(false);
-  const [answerKey, setAnswerKey] = useState<Record<string, string>>(() => (initialConfig?.answerKey && Object.keys(initialConfig.answerKey).length > 0) ? initialConfig.answerKey : makeBlankKey(35));
+  const [answerKey, setAnswerKey] = useState<Record<string, string>>(() => makeBlankKey(35));
 
   // Answer Key Presets (DB & LocalStorage)
   const [presetList, setPresetList] = useState<any[]>([]);
-  const [selectedPresetId, setSelectedPresetId] = useState<string>(() => initialConfig?.selectedPresetId || '');
-  const [presetNameInput, setPresetNameInput] = useState<string>(() => initialConfig?.examName || '');
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('');
+  const [presetNameInput, setPresetNameInput] = useState<string>('');
   const [savingPreset, setSavingPreset] = useState<boolean>(false);
   const [multiSelectMode, setMultiSelectMode] = useState<boolean>(false);
 
   // State
   const [evaluating, setEvaluating] = useState(false);
-  const [results, setResults] = useState<StudentResult[]>(() => Array.isArray(initialConfig?.results) ? initialConfig.results : []);
+  const [results, setResults] = useState<StudentResult[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<StudentResult | null>(null);
   const [folderInfo, setFolderInfo] = useState({ path: 'd:\\memari_soft\\omr_scans', total: 0 });
   const fileInputRef = React.useRef<any>(null);
@@ -88,9 +76,12 @@ export default function OmrEvaluation() {
   const [syncingTerminal, setSyncingTerminal] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Multi-school & Class filter & Search for results table
+  // Filters: School, Class, Rank, Reg No, Student Name & Search for results table
   const [selectedSchoolFilter, setSelectedSchoolFilter] = useState<string>('ALL');
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('ALL');
+  const [filterRank, setFilterRank] = useState<string>('ALL');
+  const [filterRegNo, setFilterRegNo] = useState<string>('');
+  const [filterStudentName, setFilterStudentName] = useState<string>('');
   const [resultSearchQuery, setResultSearchQuery] = useState<string>('');
   const [resultSortBy, setResultSortBy] = useState<string>('rank');
 
@@ -272,60 +263,27 @@ export default function OmrEvaluation() {
     return [];
   };
 
-  // Initial load: Fetch saved presets, folder info, and auto-restore latest evaluation if workspace has no cached results
+  // Initial load: Ensure workspace starts 100% fresh and blank every time the page is opened
   useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('omr_active_config');
+      } catch (_) {}
+    }
+    setResults([]);
+    setSelectedStudent(null);
+    setExamName('');
+    setPresetNameInput('');
+    setTotalQuestions('35');
+    setMarksPerCorrect('1.0');
+    setNegativeMark('0.0');
+    setFullMarks('35.0');
+    setSelectedPresetId('');
+    setAnswerKey(makeBlankKey(35));
+    setSyncStatusMsg(null);
     loadFolderInfo();
     loadTerminalTargets();
-
-    const init = async () => {
-      // If no cached results exist in localStorage, auto-restore the latest evaluated exam from backend database records
-      if (!initialConfig || !Array.isArray(initialConfig.results) || initialConfig.results.length === 0) {
-        try {
-          const res = await fetch(`${API_BASE}/api/omr/records`);
-          const data = await res.json();
-          if (data && data.success && Array.isArray(data.records) && data.records.length > 0) {
-            const latestId = data.records[0].id;
-            const recRes = await fetch(`${API_BASE}/api/omr/records/${latestId}`);
-            const recData = await recRes.json();
-            if (recData && recData.success && recData.record) {
-              const rec = recData.record;
-              setExamName(rec.exam_name || '');
-              setPresetNameInput(rec.exam_name || '');
-              setTotalQuestions(rec.total_questions ? String(rec.total_questions) : '35');
-              setMarksPerCorrect(rec.marks_per_correct !== undefined ? String(rec.marks_per_correct) : '1.0');
-              setNegativeMark(rec.negative_mark !== undefined ? String(rec.negative_mark) : '0.0');
-              setFullMarks(rec.full_marks !== undefined ? String(rec.full_marks) : '35.0');
-
-              let parsedKey = rec.answer_key;
-              if (typeof parsedKey === 'string') {
-                try { parsedKey = JSON.parse(parsedKey); } catch (_) {}
-              }
-              if (parsedKey && typeof parsedKey === 'object') {
-                const qCount = parseInt(rec.total_questions, 10) || 35;
-                const cleanKey: Record<string, string> = {};
-                for (let i = 1; i <= qCount; i++) {
-                  const v = (parsedKey && (parsedKey[String(i)] || parsedKey[i])) || '';
-                  cleanKey[String(i)] = String(v).trim().toUpperCase();
-                }
-                setAnswerKey(cleanKey);
-              }
-
-              let parsedResults = rec.results;
-              if (typeof parsedResults === 'string') {
-                try { parsedResults = JSON.parse(parsedResults); } catch (_) {}
-              }
-              if (Array.isArray(parsedResults) && parsedResults.length > 0) {
-                setResults(parsedResults);
-              }
-            }
-          }
-        } catch (_) {}
-      }
-
-      await loadPresets();
-    };
-
-    init();
+    loadPresets();
   }, []);
 
   // Inject print styles so that in Print Preview (Ctrl+P or Print Button), ONLY the Master Merit List is printed
@@ -440,23 +398,7 @@ export default function OmrEvaluation() {
     }
   }, []);
 
-  // Auto-persist active exam key, settings & results in localStorage across refreshes & schools
-  useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('omr_active_config', JSON.stringify({
-          examName,
-          totalQuestions,
-          marksPerCorrect,
-          negativeMark,
-          fullMarks,
-          answerKey,
-          selectedPresetId,
-          results
-        }));
-      } catch (_) {}
-    }
-  }, [examName, totalQuestions, marksPerCorrect, negativeMark, fullMarks, answerKey, selectedPresetId, results]);
+  // Workspace always starts fresh and blank on every page visit (no auto-restoring old results from localStorage)
 
   // Derived filtered results
   const schoolList = Array.from(new Set(results.map(r => r.school_name).filter(Boolean)));
@@ -470,6 +412,35 @@ export default function OmrEvaluation() {
     if (selectedClassFilter && selectedClassFilter !== 'ALL') {
       list = list.filter(r => (r.class_name || '').trim().toLowerCase() === selectedClassFilter.trim().toLowerCase());
     }
+    // Filter by Rank (Top 5, Top 10, Top 20, Top 50, etc.)
+    if (filterRank === 'top5') {
+      list = list.filter(r => r.rank <= 5);
+    } else if (filterRank === 'top10') {
+      list = list.filter(r => r.rank <= 10);
+    } else if (filterRank === 'top20') {
+      list = list.filter(r => r.rank <= 20);
+    } else if (filterRank === 'top50') {
+      list = list.filter(r => r.rank <= 50);
+    } else if (filterRank && filterRank !== 'ALL') {
+      const rNum = parseInt(filterRank, 10);
+      if (!isNaN(rNum)) {
+        list = list.filter(r => r.rank === rNum);
+      }
+    }
+    // Filter by Registration No / Mission ID
+    if (filterRegNo.trim()) {
+      const reg = filterRegNo.trim().toLowerCase();
+      list = list.filter(r =>
+        (r.registration_no || '').toLowerCase().includes(reg) ||
+        (r.mission_reg_no || '').toLowerCase().includes(reg)
+      );
+    }
+    // Filter by Student Name
+    if (filterStudentName.trim()) {
+      const sName = filterStudentName.trim().toLowerCase();
+      list = list.filter(r => (r.student_name || '').toLowerCase().includes(sName));
+    }
+    // Global Search Query
     if (resultSearchQuery.trim()) {
       const q = resultSearchQuery.trim().toLowerCase();
       list = list.filter(r =>
@@ -480,17 +451,24 @@ export default function OmrEvaluation() {
         (r.class_name || '').toLowerCase().includes(q)
       );
     }
+    // Sorting
     if (resultSortBy === 'score_asc') {
       list.sort((a, b) => a.final_score - b.final_score);
     } else if (resultSortBy === 'name_asc') {
       list.sort((a, b) => (a.student_name || '').localeCompare(b.student_name || ''));
+    } else if (resultSortBy === 'name_desc') {
+      list.sort((a, b) => (b.student_name || '').localeCompare(a.student_name || ''));
     } else if (resultSortBy === 'reg_asc') {
       list.sort((a, b) => (a.registration_no || '').localeCompare(b.registration_no || ''));
+    } else if (resultSortBy === 'reg_desc') {
+      list.sort((a, b) => (b.registration_no || '').localeCompare(a.registration_no || ''));
+    } else if (resultSortBy === 'rank_desc') {
+      list.sort((a, b) => b.rank - a.rank);
     } else {
       list.sort((a, b) => a.rank - b.rank);
     }
     return list;
-  }, [results, selectedSchoolFilter, selectedClassFilter, resultSearchQuery, resultSortBy]);
+  }, [results, selectedSchoolFilter, selectedClassFilter, filterRank, filterRegNo, filterStudentName, resultSearchQuery, resultSortBy]);
 
   // Push evaluated marks to Terminal Exam as Draft
   const handlePushToTerminalExam = async () => {
@@ -558,6 +536,9 @@ export default function OmrEvaluation() {
       setSelectedStudent(null);
       setSelectedSchoolFilter('ALL');
       setSelectedClassFilter('ALL');
+      setFilterRank('ALL');
+      setFilterRegNo('');
+      setFilterStudentName('');
       setResultSearchQuery('');
       setResultSortBy('rank');
       setSyncStatusMsg(null);
@@ -588,6 +569,9 @@ export default function OmrEvaluation() {
       setSelectedStudent(null);
       setSelectedSchoolFilter('ALL');
       setSelectedClassFilter('ALL');
+      setFilterRank('ALL');
+      setFilterRegNo('');
+      setFilterStudentName('');
       setResultSearchQuery('');
       setResultSortBy('rank');
       setSyncStatusMsg(null);
@@ -602,16 +586,7 @@ export default function OmrEvaluation() {
       setFolderInfo({ ...folderInfo, total: 0 });
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         try {
-          localStorage.setItem('omr_active_config', JSON.stringify({
-            examName: '',
-            totalQuestions: '',
-            marksPerCorrect: '',
-            negativeMark: '',
-            fullMarks: '',
-            selectedPresetId: '',
-            answerKey: makeBlankKey(35),
-            results: []
-          }));
+          localStorage.removeItem('omr_active_config');
         } catch (_) {}
       }
       Alert.alert('Workspace Cleared', 'All previous data and scanned sheets have been wiped. The space is now completely blank and ready for a new evaluation.');
@@ -1041,7 +1016,23 @@ export default function OmrEvaluation() {
           >
           <View style={styles.cardHeader}>
             <View>
-              <Text style={styles.pageTitle}>OMR Exam & Evaluation System</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#e2e8f0',
+                    paddingHorizontal: 11,
+                    paddingVertical: 6,
+                    borderRadius: 6,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 5
+                  }}
+                  onPress={() => (router.canGoBack() ? router.back() : router.replace('/superadmin'))}
+                >
+                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#1e293b' }}>⬅️ Back</Text>
+                </TouchableOpacity>
+                <Text style={styles.pageTitle}>OMR Exam & Evaluation System</Text>
+              </View>
               <Text style={styles.pageSubtitle}>Automatic sheet recognition, scoring & Master Merit List generation</Text>
             </View>
             <View style={styles.topBtnGroup}>
@@ -1405,11 +1396,12 @@ export default function OmrEvaluation() {
             >
               <View style={styles.tableFilterLeft}>
                 {/* Search Box & Button */}
+                {/* Global Search Box & Button */}
                 <View style={styles.searchBoxWrap}>
                   <Text style={styles.searchIcon}>🔍</Text>
                   <TextInput
                     style={styles.searchTextInput}
-                    placeholder="Search student name, Reg No, Roll No..."
+                    placeholder="Search any text..."
                     placeholderTextColor="#64748b"
                     value={resultSearchQuery}
                     onChangeText={setResultSearchQuery}
@@ -1421,20 +1413,65 @@ export default function OmrEvaluation() {
                   ) : null}
                 </View>
 
-                <TouchableOpacity
-                  style={{
-                    backgroundColor: '#0F52BA',
-                    paddingHorizontal: 14,
-                    paddingVertical: 7,
-                    borderRadius: 6,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 5
-                  }}
-                  onPress={() => {}}
-                >
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#ffffff' }}>Search</Text>
-                </TouchableOpacity>
+                {/* 🏆 Rank Filter */}
+                <View style={styles.filterSelectWrap}>
+                  <Text style={styles.filterSelectLabel}>Rank:</Text>
+                  {Platform.OS === 'web' ? (
+                    <select
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid #cbd5e1',
+                        backgroundColor: '#ffffff',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        color: '#1e293b'
+                      }}
+                      value={filterRank}
+                      onChange={(e: any) => setFilterRank(e.target.value)}
+                    >
+                      <option value="ALL">All Ranks</option>
+                      <option value="top5">Top 5</option>
+                      <option value="top10">Top 10</option>
+                      <option value="top20">Top 20</option>
+                      <option value="top50">Top 50</option>
+                    </select>
+                  ) : null}
+                </View>
+
+                {/* 🆔 Reg No Filter */}
+                <View style={styles.filterInputWrap}>
+                  <Text style={styles.filterSelectLabel}>Reg No:</Text>
+                  <TextInput
+                    style={styles.filterTextInput}
+                    placeholder="Filter Reg No..."
+                    placeholderTextColor="#94a3b8"
+                    value={filterRegNo}
+                    onChangeText={setFilterRegNo}
+                  />
+                  {filterRegNo ? (
+                    <TouchableOpacity onPress={() => setFilterRegNo('')} style={styles.clearSearchBtn}>
+                      <Text style={styles.clearSearchText}>✕</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+
+                {/* 👤 Student Name Filter */}
+                <View style={styles.filterInputWrap}>
+                  <Text style={styles.filterSelectLabel}>Student Name:</Text>
+                  <TextInput
+                    style={styles.filterTextInput}
+                    placeholder="Filter Name..."
+                    placeholderTextColor="#94a3b8"
+                    value={filterStudentName}
+                    onChangeText={setFilterStudentName}
+                  />
+                  {filterStudentName ? (
+                    <TouchableOpacity onPress={() => setFilterStudentName('')} style={styles.clearSearchBtn}>
+                      <Text style={styles.clearSearchText}>✕</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
 
                 {/* School Filter Dropdown (if multiple schools exist) */}
                 {schoolList.length > 1 && (
@@ -1512,25 +1549,30 @@ export default function OmrEvaluation() {
                       onChange={(e: any) => setResultSortBy(e.target.value)}
                     >
                       <option value="rank">Rank (Highest Score First)</option>
-                      <option value="score_asc">Lowest Score First</option>
+                      <option value="rank_desc">Rank (Lowest Score First)</option>
                       <option value="name_asc">Student Name (A → Z)</option>
-                      <option value="reg_asc">Registration No</option>
+                      <option value="name_desc">Student Name (Z → A)</option>
+                      <option value="reg_asc">Registration No (Asc)</option>
+                      <option value="reg_desc">Registration No (Desc)</option>
                     </select>
                   ) : null}
                 </View>
 
                 {/* Reset Filters button if any filter is active */}
-                {(resultSearchQuery || selectedSchoolFilter !== 'ALL' || selectedClassFilter !== 'ALL' || resultSortBy !== 'rank') && (
+                {(resultSearchQuery || filterRank !== 'ALL' || filterRegNo || filterStudentName || selectedSchoolFilter !== 'ALL' || selectedClassFilter !== 'ALL' || resultSortBy !== 'rank') && (
                   <TouchableOpacity
                     style={styles.btnResetFilters}
                     onPress={() => {
                       setResultSearchQuery('');
+                      setFilterRank('ALL');
+                      setFilterRegNo('');
+                      setFilterStudentName('');
                       setSelectedSchoolFilter('ALL');
                       setSelectedClassFilter('ALL');
                       setResultSortBy('rank');
                     }}
                   >
-                    <Text style={styles.btnResetFiltersText}>🧹 Clear Filter</Text>
+                    <Text style={styles.btnResetFiltersText}>🧹 Clear Filters</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -1546,9 +1588,45 @@ export default function OmrEvaluation() {
             {/* TABLE - Maximum width given to Student Name, Correct Qs, Wrong Qs */}
             <View style={styles.tableWrapper}>
               <View style={styles.tableHeaderRow}>
-                <Text style={[styles.th, styles.colRank]}>Rank</Text>
-                <Text style={[styles.th, styles.colReg]}>Reg No</Text>
-                <Text style={[styles.th, styles.colName]}>Student Name</Text>
+                {Platform.OS === 'web' ? (
+                  <TouchableOpacity
+                    style={[styles.colRank, { cursor: 'pointer' } as any]}
+                    onPress={() => setResultSortBy(prev => prev === 'rank' ? 'rank_desc' : 'rank')}
+                  >
+                    <Text style={[styles.th, { color: '#0F52BA' }]}>
+                      Rank {resultSortBy === 'rank' ? '▼' : resultSortBy === 'rank_desc' ? '▲' : '⇅'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={[styles.th, styles.colRank]}>Rank</Text>
+                )}
+
+                {Platform.OS === 'web' ? (
+                  <TouchableOpacity
+                    style={[styles.colReg, { cursor: 'pointer' } as any]}
+                    onPress={() => setResultSortBy(prev => prev === 'reg_asc' ? 'reg_desc' : 'reg_asc')}
+                  >
+                    <Text style={[styles.th, { color: '#0F52BA' }]}>
+                      Reg No {resultSortBy === 'reg_asc' ? '▲' : resultSortBy === 'reg_desc' ? '▼' : '⇅'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={[styles.th, styles.colReg]}>Reg No</Text>
+                )}
+
+                {Platform.OS === 'web' ? (
+                  <TouchableOpacity
+                    style={[styles.colName, { cursor: 'pointer' } as any]}
+                    onPress={() => setResultSortBy(prev => prev === 'name_asc' ? 'name_desc' : 'name_asc')}
+                  >
+                    <Text style={[styles.th, { color: '#0F52BA' }]}>
+                      Student Name {resultSortBy === 'name_asc' ? '▲' : resultSortBy === 'name_desc' ? '▼' : '⇅'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={[styles.th, styles.colName]}>Student Name</Text>
+                )}
+
                 <Text style={[styles.th, styles.colClass]}>Class</Text>
                 <Text style={[styles.th, styles.colCount]}>Right</Text>
                 <Text style={[styles.th, styles.colCorrectList]}>Correct Question Numbers</Text>
@@ -2534,6 +2612,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#475569'
+  },
+  filterInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    gap: 6
+  },
+  filterTextInput: {
+    fontSize: 12,
+    color: '#0f172a',
+    padding: 0,
+    minWidth: 100,
+    maxWidth: 150
   },
   btnResetFilters: {
     paddingHorizontal: 9,

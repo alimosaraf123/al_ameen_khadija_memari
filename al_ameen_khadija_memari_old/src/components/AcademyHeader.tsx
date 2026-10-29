@@ -63,43 +63,20 @@ type HeaderProps = {
 };
 
 function HeaderLink({ path, style, onPress, children }: { path: string; style: any; onPress: () => void; children: React.ReactNode }) {
-  if (Platform.OS === 'web') {
-    return (
-      <a
-        href={path}
-        onClick={(event) => {
-          if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
-            event.preventDefault();
-            try {
-              onPress();
-            } catch (err) {
-              console.warn('Navigation error:', err);
-            }
-            if (typeof window !== 'undefined') {
-              try {
-                router.replace(path as any);
-              } catch (_) {}
-              if (window.location.pathname !== path) {
-                window.location.href = path;
-              }
-            }
-          }
-        }}
-        style={{
-          ...StyleSheet.flatten(style),
-          textDecorationLine: 'none',
-          textDecoration: 'none',
-          cursor: 'pointer',
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        } as any}
-      >
-        {children}
-      </a>
-    );
-  }
-  return <TouchableOpacity style={style} onPress={onPress}>{children}</TouchableOpacity>;
+  return (
+    <TouchableOpacity
+      style={style}
+      onPress={() => {
+        try {
+          onPress();
+        } catch (_) {
+          router.replace(path as any);
+        }
+      }}
+    >
+      {children}
+    </TouchableOpacity>
+  );
 }
 
 export default function AcademyHeader({
@@ -238,12 +215,7 @@ export default function AcademyHeader({
               style={styles.home}
               onPress={() => {
                 const target = homeFor(user?.role || user?.data?.role || user?.user_role);
-                try {
-                  router.replace(target as any);
-                } catch (_) {}
-                if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                  window.location.href = target;
-                }
+                router.replace(target as any);
               }}
             >
               <Text style={styles.actionText}>Home</Text>

@@ -232,6 +232,26 @@ export default function TerminalExams() {
     };
   }, [exams]);
 
+  // Compute rank for each student based on total marks (written + MCQ + oral)
+  const rankMap = useMemo(() => {
+    // Calculate total marks for each student
+    const totals = students.map(s => ({
+      id: s.student_id,
+      total: Number(s.written || 0) + Number(s.mcq || 0) + Number(s.oral || 0)
+    }));
+    // Sort descending by total marks
+    totals.sort((a, b) => b.total - a.total);
+    const map: Record<number, number> = {};
+    let rank = 1;
+    for (let i = 0; i < totals.length; i++) {
+      if (i > 0 && totals[i].total < totals[i - 1].total) {
+        rank = i + 1; // increment rank when score drops (handles ties)
+      }
+      map[totals[i].id] = rank;
+    }
+    return map;
+  }, [students]);
+
   // Filtered exams according to active status tab, class, and exam name
   const filteredExams = useMemo(() => {
     return exams.filter(e => {
@@ -332,12 +352,14 @@ export default function TerminalExams() {
             {students.map((x, i) => (
               <View key={x.student_id} style={s.student}>
                 <Text style={s.sl}>{i + 1}</Text>
-                <View style={{ width: 210, flexShrink: 1, marginRight: 12 }}>
-                  <Text numberOfLines={1} ellipsizeMode="tail" style={s.bold}>
-                    {x.student_name}
-                  </Text>
-                  <Text style={s.help}>Reg. {x.registration_no}</Text>
-                </View>
+        <Text style={s.rank}>{rankMap[x.student_id] ?? '-'}</Text>
+        <View style={{ width: 210, flexShrink: 1, marginRight: 12 }}>
+          <Text numberOfLines={1} ellipsizeMode="tail" style={s.bold}>
+            {x.student_name}
+          </Text>
+          <Text style={s.help}>Reg. {x.registration_no}</Text>
+        </View>
+                
                 <View style={{ width: 250, display: x.absent ? 'none' : 'flex' }}>
                   <Text style={s.help}>Written / MCQ / Oral</Text>
                   <View style={{ flexDirection: 'row', gap: 4 }}>
@@ -823,6 +845,7 @@ const s = StyleSheet.create({
   title: { fontSize: 27, fontWeight: '900', color: '#173f68', marginVertical: 12 },
   heading: { fontSize: 19, fontWeight: '900', color: '#263f58', marginVertical: 10 },
   help: { color: '#6e7d8b', fontSize: 12, marginTop: 3 },
+    rank: { fontWeight: '600', color: '#333', marginRight: 8 },
   panel: { backgroundColor: '#fff', padding: 15, borderRadius: 14, marginBottom: 18 },
   subject: {
     flexDirection: 'row',
