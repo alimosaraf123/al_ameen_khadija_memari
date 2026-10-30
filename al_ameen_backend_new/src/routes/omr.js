@@ -4,10 +4,20 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const pool = require('../db');
+const { uploadBuffer, deleteCloudinaryUrl } = require('../utils/cloudStorage');
+const { enrichOmrResults, matchResultStudent, rosterForExam, identifyResult } = require('../utils/omrIdentity');
+const { auth, allow } = require('../middleware/auth');
 
 const router = express.Router();
 
-const SCANS_DIR = path.resolve('d:/memari_soft/omr_scans');
+// Keep the scan directory configurable so the same code works on Windows,
+// Render/Linux, and other deployment environments. Render's filesystem is
+// ephemeral, but it is sufficient for the upload -> evaluate workflow; the
+// archived results are stored in PostgreSQL below.
+const defaultScansDir = process.platform === 'win32'
+  ? path.resolve(process.cwd(), '..', 'omr_scans')
+  : path.join(process.cwd(), 'omr_scans');
+const SCANS_DIR = process.env.OMR_SCANS_DIR || defaultScansDir;
 if (!fs.existsSync(SCANS_DIR)) {
   fs.mkdirSync(SCANS_DIR, { recursive: true });
 }
@@ -28,6 +38,55 @@ pool.query(`
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
   );
 `).catch(e => console.log('omr_evaluation_records table notice:', e.message));
+
+const omrAssetsSchemaReady = pool.query(`
+  CREATE TABLE IF NOT EXISTS omr_scan_assets (
+    id SERIAL PRIMARY KEY,
+    original_filename VARCHAR(255) NOT NULL,
+    cloudinary_url TEXT NOT NULL,
+    cloudinary_public_id TEXT,
+    resource_type VARCHAR(30) DEFAULT 'image',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (NOW() + INTERVAL '15 days')
+  );
+  ALTER TABLE omr_scan_assets ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+  CREATE INDEX IF NOT EXISTS idx_omr_scan_assets_expires_at ON omr_scan_assets(expires_at);
+`).catch(e => console.log('omr_scan_assets table notice:', e.message));
+
+// Older local databases may not yet have the optional school/council
+// registration columns. Without them, one missing column makes the whole
+// student-master query fail and the OMR engine falls back to Candidate #... .
+const omrStudentSchemaReady = pool.query(`
+  ALTER TABLE students ADD COLUMN IF NOT EXISTS admitted_school_name VARCHAR(200);
+  ALTER TABLE students ADD COLUMN IF NOT EXISTS school_reg_no VARCHAR(100);
+  ALTER TABLE students ADD COLUMN IF NOT EXISTS council_reg_no VARCHAR(100);
+`).catch(e => console.log('omr student columns notice:', e.message));
+
+const RETENTION_DAYS = Math.max(1, Number(process.env.OMR_SCAN_RETENTION_DAYS || 15));
+
+async function cleanupExpiredOmrAssets() {
+  await omrAssetsSchemaReady;
+  const expired = await pool.query(`
+    SELECT id, cloudinary_url
+    FROM omr_scan_assets
+    WHERE expires_at <= NOW()
+    ORDER BY expires_at ASC
+    LIMIT 100
+  `);
+  for (const asset of expired.rows) {
+    try {
+      await deleteCloudinaryUrl(asset.cloudinary_url);
+      await pool.query('DELETE FROM omr_scan_assets WHERE id = $1', [asset.id]);
+    } catch (err) {
+      console.error('OMR Cloudinary cleanup failed:', asset.id, err.message);
+    }
+  }
+}
+
+// Also runs when the service receives traffic after sleeping on Render.
+setTimeout(() => cleanupExpiredOmrAssets().catch(err => console.error('OMR cleanup notice:', err.message)), 5000).unref();
+setInterval(() => cleanupExpiredOmrAssets().catch(err => console.error('OMR cleanup notice:', err.message)), 6 * 60 * 60 * 1000).unref();
 
 // Multer storage for scanning uploads
 const storage = multer.diskStorage({
@@ -66,13 +125,24 @@ function runOmrEngine(config, imagePaths) {
     fs.writeFileSync(imagesPath, JSON.stringify(imagePaths, null, 2), 'utf-8');
 
     const scriptPath = path.join(__dirname, '../../scripts/omr_engine.py');
-    const py = spawn('python', [scriptPath, configPath, imagesPath]);
+    const pythonCommand = process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
+    const py = spawn(pythonCommand, [scriptPath, configPath, imagesPath], {
+      env: { ...process.env, PYTHONUNBUFFERED: '1' }
+    });
 
     let stdout = '';
     let stderr = '';
 
     py.stdout.on('data', (d) => { stdout += d.toString(); });
     py.stderr.on('data', (d) => { stderr += d.toString(); });
+
+    // Without an error handler, a missing Python executable leaves the
+    // request hanging forever on Render instead of returning a useful 500.
+    py.on('error', (err) => {
+      try { fs.unlinkSync(configPath); } catch (_) {}
+      try { fs.unlinkSync(imagesPath); } catch (_) {}
+      reject(new Error(`Unable to start OMR engine (${pythonCommand}): ${err.message}`));
+    });
 
     py.on('close', (code) => {
       try { fs.unlinkSync(configPath); } catch (_) {}
@@ -95,29 +165,33 @@ function runOmrEngine(config, imagePaths) {
 // 1. Get Student Master Data from Database
 router.get('/students-master', async (req, res) => {
   try {
+    await omrStudentSchemaReady;
     const q = await pool.query(`
-      SELECT id, admission_no, roll_no, name, class_name, section, full_address
+      SELECT id, registration_no, student_name, admission_no, roll_no, class_name,
+             admitted_school_name, school_reg_no, council_reg_no
       FROM students
       WHERE is_active = TRUE
-      LIMIT 500
+      ORDER BY student_name
     `);
     res.json({ success: true, students: q.rows });
   } catch (e) {
-    res.json({ success: true, students: [] });
+    res.status(500).json({ success: false, message: 'Could not load OMR student records: ' + e.message });
   }
 });
 
 // 2. Info about the OMR Scans Folder
-router.get('/folder-info', (req, res) => {
+router.get('/folder-info', async (req, res) => {
   try {
+    await omrAssetsSchemaReady;
     if (!fs.existsSync(SCANS_DIR)) {
       fs.mkdirSync(SCANS_DIR, { recursive: true });
     }
     const files = fs.readdirSync(SCANS_DIR).filter(f => /\.(jpe?g|png)$/i.test(f));
+    const cloudCount = await pool.query('SELECT COUNT(*)::int AS count FROM omr_scan_assets WHERE is_active=TRUE AND expires_at > NOW()');
     res.json({
       success: true,
       folder_path: SCANS_DIR,
-      total_files: files.length,
+      total_files: Math.max(files.length, cloudCount.rows[0].count),
       files: files
     });
   } catch (err) {
@@ -127,37 +201,68 @@ router.get('/folder-info', (req, res) => {
 
 // 3. Upload new OMR sheets from browser
 router.post('/upload', (req, res) => {
-  upload.array('sheets', 500)(req, res, (err) => {
+  upload.array('sheets', 500)(req, res, async (err) => {
     if (err) {
       console.error('Multer Upload Error:', err);
       return res.status(400).json({ success: false, message: err.message || 'File upload failed' });
     }
+    const uploadedAssets = [];
     try {
+      await omrAssetsSchemaReady;
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ success: false, message: 'No OMR sheets were uploaded.' });
+      }
+
+      for (const file of req.files) {
+        const stored = await uploadBuffer(fs.readFileSync(file.path), {
+          folder: 'al-ameen/omr-scans',
+          format: 'original'
+        });
+        await pool.query(`
+          INSERT INTO omr_scan_assets (original_filename, cloudinary_url, cloudinary_public_id, resource_type, expires_at)
+          VALUES ($1, $2, $3, $4, NOW() + ($5 || ' days')::interval)
+        `, [file.originalname || file.filename, stored.url, stored.publicId, stored.resourceType, RETENTION_DAYS]);
+        uploadedAssets.push(stored.url);
+        try { fs.unlinkSync(file.path); } catch (_) {}
+      }
+
       const uploadedCount = req.files ? req.files.length : 0;
       const allFiles = fs.readdirSync(SCANS_DIR).filter(f => /\.(jpe?g|png)$/i.test(f));
+      const cloudFiles = await pool.query('SELECT COUNT(*)::int AS count FROM omr_scan_assets WHERE is_active=TRUE AND expires_at > NOW()');
       res.json({
         success: true,
         message: `${uploadedCount} sheets uploaded successfully`,
         folder_path: SCANS_DIR,
         uploaded_count: uploadedCount,
-        total_files: allFiles.length
+        total_files: Math.max(allFiles.length, cloudFiles.rows[0].count),
+        storage: 'cloudinary',
+        retention_days: RETENTION_DAYS
       });
     } catch (e) {
+      for (const url of uploadedAssets) {
+        await deleteCloudinaryUrl(url).catch(() => {});
+      }
+      for (const file of req.files || []) {
+        try { fs.unlinkSync(file.path); } catch (_) {}
+      }
       res.status(500).json({ success: false, message: e.message });
     }
   });
 });
 
 // 4. Clear folder
-router.post('/clear-folder', (req, res) => {
+router.post('/clear-folder', async (req, res) => {
   try {
+    await omrAssetsSchemaReady;
     const files = fs.readdirSync(SCANS_DIR);
     for (const file of files) {
       if (/\.(jpe?g|png)$/i.test(file)) {
         try { fs.unlinkSync(path.join(SCANS_DIR, file)); } catch (_) {}
       }
     }
-    res.json({ success: true, message: 'Scan folder cleared' });
+    // Keep earlier uploads for 15 days when starting another school/exam.
+    await pool.query('UPDATE omr_scan_assets SET is_active=FALSE WHERE is_active=TRUE');
+    res.json({ success: true, message: 'Workspace cleared; Cloudinary scans remain until expiry' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -165,6 +270,10 @@ router.post('/clear-folder', (req, res) => {
 
 // 5. Evaluate OMR Sheets (Runs Python Engine)
 router.post('/evaluate', async (req, res) => {
+  const temporaryCloudFiles = [];
+  const originalNames = new Map();
+  const scanAssetIds = new Map();
+  let temporaryCloudDir;
   try {
     const {
       exam_name = 'Class X Biology Annual Test',
@@ -178,6 +287,8 @@ router.post('/evaluate', async (req, res) => {
       use_demo_samples = false
     } = req.body || {};
 
+    await omrAssetsSchemaReady;
+    await omrStudentSchemaReady;
     let imagePaths = uploaded_images;
 
     // Check SCANS_DIR first
@@ -189,6 +300,32 @@ router.post('/evaluate', async (req, res) => {
         if (found.length > 0) {
           imagePaths = found;
         }
+      }
+    }
+
+    // Uploaded scans are stored in Cloudinary, so materialize them only for
+    // the Python evaluation process and remove these temporary files after it
+    // finishes. This keeps Render disk usage low.
+    if (!imagePaths || imagePaths.length === 0) {
+      const assets = await pool.query(`
+        SELECT id, original_filename, cloudinary_url
+        FROM omr_scan_assets
+        WHERE is_active=TRUE AND expires_at > NOW()
+        ORDER BY uploaded_at ASC
+      `);
+      const tempRoot = path.join(__dirname, '../../tmp');
+      fs.mkdirSync(tempRoot, { recursive: true });
+      temporaryCloudDir = fs.mkdtempSync(path.join(tempRoot, 'omr-eval-'));
+      for (const asset of assets.rows) {
+        const response = await fetch(asset.cloudinary_url, { signal: AbortSignal.timeout(60000) });
+        if (!response.ok) throw new Error(`Could not download OMR scan from Cloudinary (${response.status})`);
+        const filename = path.basename(asset.original_filename || 'sheet.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
+        const target = path.join(temporaryCloudDir, `${asset.id}_${filename}`);
+        originalNames.set(path.basename(target), asset.original_filename || filename);
+        scanAssetIds.set(path.basename(target), asset.id);
+        temporaryCloudFiles.push(target);
+        fs.writeFileSync(target, Buffer.from(await response.arrayBuffer()));
+        imagePaths = [...(imagePaths || []), target];
       }
     }
 
@@ -226,6 +363,7 @@ router.post('/evaluate', async (req, res) => {
     let studentsMaster = {
       ...(custom_students || {})
     };
+    let studentRows = [];
 
     try {
       const dbStudents = await pool.query(`
@@ -233,6 +371,7 @@ router.post('/evaluate', async (req, res) => {
         FROM students
         WHERE is_active = TRUE
       `);
+      studentRows = dbStudents.rows;
       for (const row of dbStudents.rows) {
         const rawSchool = (row.admitted_school_name || '').trim();
         const cleanSchool = rawSchool.toUpperCase().includes('MEMARI') ? '' : rawSchool;
@@ -250,7 +389,7 @@ router.post('/evaluate', async (req, res) => {
         if (row.roll_no) studentsMaster[String(row.roll_no).trim()] = info;
       }
     } catch (dbErr) {
-      console.log('Student DB fetch notice:', dbErr.message);
+      throw new Error('Could not load student records for OMR matching: ' + dbErr.message);
     }
 
     const effectiveNegativeMark = req.body.negative_mark !== undefined && req.body.negative_mark !== null && req.body.negative_mark !== ''
@@ -268,12 +407,20 @@ router.post('/evaluate', async (req, res) => {
     };
 
     const result = await runOmrEngine(config, imagePaths);
+    if (result?.success && Array.isArray(result.results)) {
+      result.results = await enrichOmrResults(result.results, imagePaths, studentRows, {
+        examName: exam_name, className: req.body.class_name || '',
+      });
+      result.results = result.results.map(row => ({ ...row,
+        scan_asset_id: scanAssetIds.get(row.file) || null,
+        file: originalNames.get(row.file) || row.file }));
+    }
     if (result && result.success && Array.isArray(result.results) && result.results.length > 0) {
       try {
-        await pool.query(`
+        const saved = await pool.query(`
           INSERT INTO omr_evaluation_records (
             exam_name, total_questions, marks_per_correct, negative_mark, full_marks, total_candidates, answer_key, results, scanned_files
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id
         `, [
           exam_name || 'OMR Exam',
           Number(total_questions),
@@ -283,8 +430,9 @@ router.post('/evaluate', async (req, res) => {
           result.results.length,
           JSON.stringify(finalKey),
           JSON.stringify(result.results),
-          JSON.stringify(imagePaths.map(p => path.basename(p)))
+          JSON.stringify(imagePaths.map(p => originalNames.get(path.basename(p)) || path.basename(p)))
         ]);
+        result.record_id = saved.rows[0].id;
       } catch (saveErr) {
         console.log('Notice: Could not archive evaluation record:', saveErr.message);
       }
@@ -293,6 +441,13 @@ router.post('/evaluate', async (req, res) => {
   } catch (err) {
     console.error('OMR Evaluation Error:', err);
     res.status(500).json({ success: false, message: err.message });
+  } finally {
+    for (const tempFile of temporaryCloudFiles) {
+      try { fs.unlinkSync(tempFile); } catch (_) {}
+    }
+    if (temporaryCloudDir) {
+      try { fs.rmdirSync(temporaryCloudDir); } catch (_) {}
+    }
   }
 });
 
@@ -309,11 +464,8 @@ router.get('/terminal-targets', async (req, res) => {
       LEFT JOIN teachers t ON t.id = tes.teacher_id
       WHERE te.status NOT IN ('published', 'ready', 'completed')
         AND tes.status NOT IN ('submitted', 'approved', 'published')
-        AND NOT EXISTS (
-          SELECT 1 FROM terminal_marks tm 
-          WHERE tm.exam_subject_id = tes.id 
-            AND (tm.obtained_marks IS NOT NULL OR tm.written_marks IS NOT NULL OR tm.mcq_obtained IS NOT NULL)
-        )
+        -- Existing draft marks are protected by insert-only sync below;
+        -- keep the subject available to import the remaining candidates.
       ORDER BY te.id DESC, s.subject_name ASC
     `);
     res.json({ success: true, targets: q.rows });
@@ -326,6 +478,7 @@ router.get('/terminal-targets', async (req, res) => {
 router.post('/sync-terminal', async (req, res) => {
   const client = await pool.connect();
   try {
+    await omrStudentSchemaReady;
     const {
       exam_subject_id,
       results = [], // Array of { registration_no, student_name, final_score, school_name }
@@ -344,7 +497,7 @@ router.post('/sync-terminal', async (req, res) => {
 
     // 1. Get Subject Assignment info
     const subRes = await client.query(`
-      SELECT tes.*, te.class_name, te.exam_name, s.subject_name
+      SELECT tes.*, te.class_name, te.exam_name, te.status AS exam_status, s.subject_name
       FROM terminal_exam_subjects tes
       JOIN terminal_exams te ON te.id = tes.terminal_exam_id
       JOIN subjects s ON s.id = tes.subject_id
@@ -357,6 +510,11 @@ router.post('/sync-terminal', async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(404).json({ success: false, message: 'Target Terminal Exam Subject not found' });
     }
+    if (['published', 'ready', 'completed'].includes(assignment.exam_status) ||
+        ['submitted', 'approved', 'published'].includes(assignment.status)) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ success: false, message: 'This terminal subject is locked. Reopen it as a draft before importing OMR marks.' });
+    }
 
     // 2. Fetch all active students in this class (or all classes for cross-registration)
     const stRes = await client.query(`
@@ -366,31 +524,8 @@ router.post('/sync-terminal', async (req, res) => {
     `);
     const allStudents = stRes.rows;
 
-    const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-
-    // Build index maps
-    const byMissionReg = new Map();
-    const bySchoolReg = new Map();
-    const byCouncilReg = new Map();
-    const byName = new Map();
-
-    for (const st of allStudents) {
-      if (st.registration_no) byMissionReg.set(String(st.registration_no).trim(), st);
-      if (st.school_reg_no) bySchoolReg.set(String(st.school_reg_no).trim(), st);
-      if (st.council_reg_no) byCouncilReg.set(String(st.council_reg_no).trim(), st);
-      if (st.admission_no) byMissionReg.set(String(st.admission_no).trim(), st);
-      if (st.roll_no) byMissionReg.set(String(st.roll_no).trim(), st);
-      
-      const n = norm(st.student_name);
-      if (n) {
-        const isTargetClass = norm(st.class_name) === norm(assignment.class_name);
-        if (!byName.has(n) || isTargetClass) {
-          byName.set(n, st);
-        }
-      }
-    }
-
     let syncedCount = 0;
+    let existingCount = 0;
     const syncedList = [];
     const unmappedList = [];
 
@@ -400,40 +535,33 @@ router.post('/sync-terminal', async (req, res) => {
       const name = String(item.student_name || '').trim();
       const school = String(item.school_name || '').trim();
 
-      // Find matching student
-      let matchedStudent = null;
-      if (reg && byMissionReg.has(reg)) {
-        matchedStudent = byMissionReg.get(reg);
-      } else if (reg && bySchoolReg.has(reg)) {
-        matchedStudent = bySchoolReg.get(reg);
-      } else if (reg && byCouncilReg.has(reg)) {
-        matchedStudent = byCouncilReg.get(reg);
-      } else if (name && byName.has(norm(name))) {
-        matchedStudent = byName.get(norm(name));
-      }
+      // OCR-enriched results carry the actual Mission ID. Use that same
+      // identity for syncing, restricted to the selected terminal class.
+      const matchedStudent = matchResultStudent(item, allStudents, assignment.class_name);
 
       if (matchedStudent) {
+        // Add new candidates only. Never overwrite an existing grade when
+        // more sheets for the same subject arrive in a subsequent batch.
+        const inserted = await client.query(`
+          INSERT INTO terminal_marks(exam_subject_id, student_id, obtained_marks, mcq_obtained, entered_by)
+          VALUES($1, $2, $3, $3, $4)
+          ON CONFLICT(exam_subject_id, student_id) DO NOTHING
+          RETURNING student_id
+        `, [assignment.id, matchedStudent.id, score, default_entered_by]);
+        if (!inserted.rowCount) {
+          existingCount++;
+          continue;
+        }
+
         // Auto-save school_reg_no / admitted_school_name if not saved yet
         if (reg && reg.length >= 6 && (!matchedStudent.school_reg_no || !matchedStudent.admitted_school_name)) {
           await client.query(`
             UPDATE students
-            SET school_reg_no = COALESCE(school_reg_no, $1),
-                admitted_school_name = COALESCE(admitted_school_name, $2)
+            SET school_reg_no = COALESCE(NULLIF(school_reg_no, ''), $1),
+                admitted_school_name = COALESCE(NULLIF(admitted_school_name, ''), $2)
             WHERE id = $3
           `, [reg, school || null, matchedStudent.id]);
         }
-
-        // Upsert into terminal_marks
-        await client.query(`
-          INSERT INTO terminal_marks(exam_subject_id, student_id, obtained_marks, mcq_obtained, entered_by)
-          VALUES($1, $2, $3, $3, $4)
-          ON CONFLICT(exam_subject_id, student_id)
-          DO UPDATE SET
-            mcq_obtained = EXCLUDED.mcq_obtained,
-            obtained_marks = COALESCE(terminal_marks.written_marks, 0) + EXCLUDED.mcq_obtained + COALESCE(terminal_marks.oral_obtained, 0),
-            remarks = CASE WHEN terminal_marks.remarks = 'Absent' THEN NULL ELSE terminal_marks.remarks END,
-            entered_by = EXCLUDED.entered_by
-        `, [assignment.id, matchedStudent.id, score, default_entered_by]);
 
         syncedCount++;
         syncedList.push({
@@ -453,6 +581,14 @@ router.post('/sync-terminal', async (req, res) => {
       }
     }
 
+    if (syncedCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(existingCount ? 409 : 422).json({ success: false,
+        message: existingCount ? `${existingCount} candidates already have marks. Review existing marks in Terminal Exams.` :
+          'No candidates matched the selected terminal class. Check the Mission IDs and target class.',
+        synced_count: 0, existing_count: existingCount, unmapped_count: unmappedList.length, unmapped: unmappedList });
+    }
+
     // Keep subject status as 'assigned' (meaning DRAFT!)
     await client.query(`
       UPDATE terminal_exam_subjects
@@ -464,8 +600,9 @@ router.post('/sync-terminal', async (req, res) => {
 
     res.json({
       success: true,
-      message: `${syncedCount} student marks pushed to ${assignment.exam_name} (${assignment.class_name} - ${assignment.subject_name}) as Draft!`,
+      message: `${syncedCount} student marks pushed to ${assignment.exam_name} (${assignment.class_name} - ${assignment.subject_name}) as Draft!${existingCount ? ` ${existingCount} existing marks were skipped.` : ''}`,
       synced_count: syncedCount,
+      existing_count: existingCount,
       unmapped_count: unmappedList.length,
       synced: syncedList,
       unmapped: unmappedList,
@@ -597,10 +734,74 @@ router.get('/records/:id', async (req, res) => {
     if (q.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Record not found' });
     }
-    res.json({ success: true, record: q.rows[0] });
+    const record = q.rows[0];
+    if (Array.isArray(record.results) && record.results.some(row => row.scanned_name)) {
+      await omrStudentSchemaReady;
+      const students = await pool.query(`SELECT id, registration_no, student_name, class_name,
+        admission_no, admitted_school_name, school_reg_no, council_reg_no FROM students WHERE is_active=TRUE`);
+      record.results = await enrichOmrResults(record.results, [], students.rows, { examName: record.exam_name });
+    }
+    res.json({ success: true, record });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
+});
+
+// Resolve through the archived candidate, never a client-supplied filename or URL.
+router.get('/records/:id/scan', auth, allow('super_admin', 'admin', 'teacher'), async (req, res) => {
+  try {
+    await omrAssetsSchemaReady;
+    const record = (await pool.query('SELECT * FROM omr_evaluation_records WHERE id=$1', [req.params.id])).rows[0];
+    const candidate = record?.results?.find(row => String(row.registration_no) === String(req.query.registration_no));
+    if (!candidate) return res.status(404).json({ success: false, message: 'OMR candidate not found.' });
+    // Older archives predate asset IDs. Only consider scans uploaded before that evaluation.
+    const assets = candidate.scan_asset_id
+      ? await pool.query('SELECT cloudinary_url, expires_at FROM omr_scan_assets WHERE id=$1 AND expires_at>NOW()', [candidate.scan_asset_id])
+      : await pool.query(`SELECT cloudinary_url, expires_at FROM omr_scan_assets
+          WHERE original_filename=$1 AND uploaded_at <= $2 AND expires_at>NOW()
+          ORDER BY uploaded_at DESC LIMIT 1`, [candidate.file, record.created_at]);
+    if (!assets.rows.length) return res.status(410).json({ success: false,
+      message: 'This OMR scan is unavailable or its 15-day retention has expired. The result is still saved.' });
+    res.json({ success: true, url: assets.rows[0].cloudinary_url });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Explicit identity confirmation for handwriting the automatic readers cannot
+// resolve. Copy identity from the real roster; preserve every score/answer.
+router.patch('/records/:id/identity', auth, allow('super_admin', 'admin', 'teacher'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await omrStudentSchemaReady;
+    const reg = String(req.body?.registration_no || '').trim();
+    const studentId = String(req.body?.student_id || '');
+    if (!reg || !/^\d+$/.test(studentId) || !/^\d+$/.test(String(req.params.id))) {
+      return res.status(400).json({ success: false, message: 'Choose a Mission student for this OMR candidate.' });
+    }
+    await client.query('BEGIN');
+    const record = (await client.query('SELECT * FROM omr_evaluation_records WHERE id=$1 FOR UPDATE', [req.params.id])).rows[0];
+    if (!record) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Evaluation record not found. Run Evaluation again.' });
+    }
+    const index = record.results.findIndex(result => String(result.registration_no).trim() === reg);
+    const students = await client.query(`SELECT id,registration_no,student_name,class_name,admitted_school_name
+      FROM students WHERE is_active=TRUE AND id=$1`, [studentId]);
+    const student = rosterForExam(students.rows, { examName: record.exam_name })[0];
+    if (index < 0 || !student) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, message: 'Choose an active student from the exam class.' });
+    }
+    record.results[index] = identifyResult(record.results[index], student, 'manual');
+    record.results[index].identity_verified_by = req.user.userId;
+    await client.query('UPDATE omr_evaluation_records SET results=$1::jsonb WHERE id=$2', [JSON.stringify(record.results), record.id]);
+    await client.query('COMMIT');
+    res.json({ success: true, result: record.results[index] });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ success: false, message: error.message });
+  } finally { client.release(); }
 });
 
 // 13. Delete a Past Evaluation Record
@@ -614,8 +815,9 @@ router.delete('/records/:id', async (req, res) => {
 });
 
 // 14. Get list of currently uploaded scans in folder
-router.get('/scans-list', (req, res) => {
+router.get('/scans-list', async (req, res) => {
   try {
+    await omrAssetsSchemaReady;
     if (!fs.existsSync(SCANS_DIR)) {
       return res.json({ success: true, files: [] });
     }
@@ -633,7 +835,13 @@ router.get('/scans-list', (req, res) => {
           return { name: f, size: 0, modified: null };
         }
       });
-    res.json({ success: true, files });
+    const cloud = await pool.query(`
+      SELECT id, original_filename AS name, NULL::bigint AS size, uploaded_at AS modified
+      FROM omr_scan_assets
+      WHERE expires_at > NOW()
+      ORDER BY uploaded_at DESC
+    `);
+    res.json({ success: true, files: cloud.rows.length ? cloud.rows : files });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

@@ -11,7 +11,22 @@ const GROUPS=['v_x','xi_xii','coaching'];
 const validDate=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''));
 const xml=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const short=(v,n=24)=>{const s=String(v||'-');return s.length>n?s.slice(0,n-1)+'…':s};
+async function teacherOnlyGridData(data){
+ const rows=await pool.query(`SELECT t.id FROM teachers t LEFT JOIN users u ON u.id=t.user_id
+  WHERE t.is_active=TRUE AND COALESCE(u.is_active,TRUE)=TRUE AND CASE
+   WHEN NULLIF(LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))),'') IS NOT NULL
+     OR NULLIF(LOWER(TRIM(COALESCE(t.profile_details->>'type_of_staff',''))),'') IS NOT NULL
+   THEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) IN ('teacher','teachers')
+     OR LOWER(TRIM(COALESCE(t.profile_details->>'type_of_staff',''))) IN ('teacher','teachers')
+   ELSE LOWER(COALESCE(u.role,''))='teacher' OR LOWER(COALESCE(t.designation,'')) LIKE '%teacher%'
+  END`);
+ const ids=new Set(rows.rows.map(row=>String(row.id)));
+ const source=data&&typeof data==='object'?data:{};
+ const cells=Object.fromEntries(Object.entries(source.cells||{}).filter(([,cell])=>ids.has(String(cell?.teacher_id||''))));
+ return {...source,cells};
+}
 async function renderRoutineJpg({group,date,data}){
+ data=await teacherOnlyGridData(data);
  const academic=group!=='coaching';let columns=academic?(data.periods||[]):(data.rooms||[]);const rows=academic?(data.classes||[]):(data.times||[]);if(!academic){const used=new Set(Object.entries(data.cells||{}).filter(([,cell])=>cell&&cell.teacher_id).map(([key])=>String(key).split('|').slice(1).join('|')));const filtered=columns.filter((room)=>used.has(String(room)));if(filtered.length)columns=filtered;}
  const firstWidth=155,cellWidth=Math.max(150,Math.min(230,Math.floor((1500-firstWidth)/Math.max(columns.length,1)))),rowHeight=88,headerHeight=100,width=firstWidth+cellWidth*Math.max(columns.length,1)+40,height=Math.max(430,190+headerHeight+rowHeight*Math.max(rows.length,1));
  const groupTitle={v_x:'Class V-X',xi_xii:'Class XI-XII',coaching:'Coaching'}[group]||group;
@@ -71,19 +86,26 @@ router.get('/manager',auth,allow('super_admin','admin'),asyncHandler(async(req,r
  const group=String(req.query.group||'v_x'),date=String(req.query.date||new Date().toISOString().slice(0,10));
  if(!GROUPS.includes(group)||!validDate(date))return res.status(400).json({success:false,message:'Valid group and date are required'});
  const r=await pool.query(`SELECT g.*,u.full_name updated_by_name,
-  CASE WHEN g.routine_date=$2::date AND g.routine_kind='daily' THEN 'final' ELSE 'master' END source
+  CASE WHEN g.routine_date=$2::date AND g.routine_kind='draft' THEN 'draft'
+       WHEN g.routine_date=$2::date AND g.routine_kind='daily' THEN 'final' ELSE 'master' END source
   FROM routine_manager_grids g LEFT JOIN users u ON u.id=g.created_by
-  WHERE g.group_name=$1 AND ((g.routine_date=$2::date AND g.routine_kind='daily') OR
+  WHERE g.group_name=$1 AND ((g.routine_date=$2::date AND g.routine_kind IN ('draft','daily')) OR
   (g.is_master=TRUE AND EXTRACT(DOW FROM g.routine_date)=EXTRACT(DOW FROM $2::date)))
-  ORDER BY (g.routine_date=$2::date AND g.routine_kind='daily') DESC,g.updated_at DESC LIMIT 1`,[group,date]);
- res.json({success:true,routine:r.rows[0]||null});
+  ORDER BY CASE WHEN g.routine_date=$2::date AND g.routine_kind='draft' THEN 3
+                WHEN g.routine_date=$2::date AND g.routine_kind='daily' THEN 2 ELSE 1 END DESC,
+           g.updated_at DESC LIMIT 1`,[group,date]);
+ const routine=r.rows[0]||null;
+ if(routine)routine.grid_data=await teacherOnlyGridData(routine.grid_data);
+ res.json({success:true,routine});
 }));
 
 router.get('/manager/master',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
  const group=String(req.query.group||'v_x'),day=Number(req.query.day);
  if(!GROUPS.includes(group)||!Number.isInteger(day)||day<0||day>6)return res.status(400).json({success:false,message:'Valid group and weekday are required'});
  const r=await pool.query(`SELECT g.*,u.full_name updated_by_name,'master' source FROM routine_manager_grids g LEFT JOIN users u ON u.id=g.created_by WHERE g.group_name=$1 AND g.routine_kind='master' AND g.is_master=TRUE AND EXTRACT(DOW FROM g.routine_date)=$2 ORDER BY g.updated_at DESC LIMIT 1`,[group,day]);
- res.json({success:true,routine:r.rows[0]||null});
+ const routine=r.rows[0]||null;
+ if(routine)routine.grid_data=await teacherOnlyGridData(routine.grid_data);
+ res.json({success:true,routine});
 }));
 
 router.get('/manager/backup',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
@@ -105,7 +127,7 @@ router.post('/manager/backup/restore',auth,allow('super_admin','admin'),asyncHan
   await client.query('BEGIN');
   for(const item of items){
    const group=String(item.group_name||''),kind=String(item.routine_kind||'');
-   if(!GROUPS.includes(group)||!['daily','master'].includes(kind)||!validDate(item.routine_date)||!item.grid_data||typeof item.grid_data!=='object')throw new Error('Backup contains an invalid routine entry.');
+   if(!GROUPS.includes(group)||!['daily','draft','master'].includes(kind)||!validDate(item.routine_date)||!item.grid_data||typeof item.grid_data!=='object')throw new Error('Backup contains an invalid routine entry.');
    const isMaster=kind==='master'&&item.is_master===true,isPublished=kind==='daily'&&item.is_published===true;
    const result=await client.query(`INSERT INTO routine_manager_grids(group_name,routine_date,routine_kind,grid_data,is_master,is_published,created_by)
     VALUES($1,$2,$3,$4::jsonb,$5,$6,$7) ON CONFLICT(group_name,routine_date,routine_kind) DO NOTHING RETURNING id,group_name,routine_date,routine_kind,is_published`,[group,item.routine_date,kind,JSON.stringify(item.grid_data),isMaster,isPublished,req.user.userId]);
@@ -131,7 +153,7 @@ router.get('/manager/report',auth,allow('super_admin','admin'),asyncHandler(asyn
  const q=await pool.query(`SELECT to_char(routine_date,'YYYY-MM-DD') routine_date,grid_data FROM routine_manager_grids WHERE group_name=$1
   AND routine_kind='daily' AND is_published=TRUE AND to_char(routine_date,'YYYY-MM')=$2 ORDER BY routine_date`,[group,month]);
  const rows=[],totals=new Map();
- for(const routine of q.rows){const data=routine.grid_data||{};if(data.no_class)continue;
+ for(const routine of q.rows){const data=await teacherOnlyGridData(routine.grid_data||{});if(data.no_class)continue;
   for(const[position,cell]of Object.entries(data.cells||{})){if(!cell||!cell.teacher_id)continue;
    const p=position.split('|'),item={date:String(routine.routine_date).slice(0,10),class_or_room:group==='coaching'?p[1]:p[0],period_or_time:group==='coaching'?p[0]:p[1],subject:cell.subject||'',teacher_id:String(cell.teacher_id),teacher_name:cell.teacher_name||'Teacher'};
    rows.push(item);const countKey=data.combined_class_counting?item.teacher_id+'|'+item.period_or_time:item.teacher_id+'|'+item.class_or_room+'|'+item.period_or_time;if(!data.__counted)data.__counted={};if(!data.__counted[countKey]){data.__counted[countKey]=true;const old=totals.get(item.teacher_id)||{teacher_id:item.teacher_id,teacher_name:item.teacher_name,class_count:0};old.class_count++;totals.set(item.teacher_id,old);}
@@ -141,20 +163,21 @@ router.get('/manager/report',auth,allow('super_admin','admin'),asyncHandler(asyn
 }));
 
 router.post('/manager',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
- const b=req.body||{},saveMode=b.save_mode==='master'?'master':'final';
+ const b=req.body||{},saveMode=['master','draft','final'].includes(b.save_mode)?b.save_mode:'final';
  if(!GROUPS.includes(b.group_name)||!validDate(b.routine_date))return res.status(400).json({success:false,message:'Valid group and date are required'});
- const kind=saveMode==='master'?'master':'daily',isMaster=saveMode==='master',published=saveMode==='final';
+ const kind=saveMode==='master'?'master':saveMode==='draft'?'draft':'daily',isMaster=saveMode==='master',published=saveMode==='final',gridData=await teacherOnlyGridData(b.grid_data||{});
  const r=await pool.query(`INSERT INTO routine_manager_grids(group_name,routine_date,routine_kind,grid_data,is_master,is_published,created_by)
   VALUES($1,$2,$3,$4::jsonb,$5,$6,$7) ON CONFLICT(group_name,routine_date,routine_kind) DO UPDATE SET
   grid_data=EXCLUDED.grid_data,is_master=EXCLUDED.is_master,is_published=EXCLUDED.is_published,
-  created_by=EXCLUDED.created_by,updated_at=NOW() RETURNING *`,[b.group_name,b.routine_date,kind,JSON.stringify(b.grid_data||{}),isMaster,published,req.user.userId]);
+  created_by=EXCLUDED.created_by,updated_at=NOW() RETURNING *`,[b.group_name,b.routine_date,kind,JSON.stringify(gridData),isMaster,published,req.user.userId]);
  if(isMaster)await pool.query(`UPDATE routine_manager_grids SET is_master=FALSE WHERE group_name=$1
   AND routine_kind='master' AND id<>$2 AND EXTRACT(DOW FROM routine_date)=EXTRACT(DOW FROM $3::date)`,[b.group_name,r.rows[0].id,b.routine_date]);
- const publishedImageUrl=isMaster?null:await publishRoutineJpg({group:b.group_name,date:b.routine_date,data:b.grid_data||{},userId:req.user.userId});
+ if(published)await pool.query(`DELETE FROM routine_manager_grids WHERE group_name=$1 AND routine_date=$2 AND routine_kind='draft'`,[b.group_name,b.routine_date]);
+ const publishedImageUrl=published?await publishRoutineJpg({group:b.group_name,date:b.routine_date,data:gridData,userId:req.user.userId}):null;
  // Published routines are an internal staff/teacher update. Keep the notice
  // targeted to teachers only so it never appears in guardian notifications.
  if(!isMaster){const notice=(await pool.query(`INSERT INTO notices(title,notice_text,notice_type,published_by) VALUES($1,$2,'routine',$3) RETURNING id`,[`New ${b.group_name} routine published`,`Routine for ${b.group_name} on ${b.routine_date} is now available.`,req.user.userId])).rows[0];await pool.query(`INSERT INTO notice_targets(notice_id,target_type,target_value) VALUES($1,'role','teacher')`,[notice.id]);sendPushForNotice(notice.id).catch(error=>console.error('Routine push notification failed:',error.message));}
- res.json({success:true,routine:r.rows[0],published_image_url:publishedImageUrl,message:isMaster?'Weekday Master routine saved':'Final routine published as JPG'});
+ res.json({success:true,routine:r.rows[0],published_image_url:publishedImageUrl,message:isMaster?'Weekday Master routine saved':saveMode==='draft'?'Routine draft saved':'Final routine published as JPG'});
 }));
 
 // Update only the coaching time labels across every saved weekly master.
@@ -199,7 +222,7 @@ router.delete('/manager/:id',auth,allow('super_admin','admin'),asyncHandler(asyn
   const groupTitle={v_x:'Class V-X',xi_xii:'Class XI-XII',coaching:'Coaching'}[item.group_name]||item.group_name;
   await pool.query('UPDATE routines SET is_active=FALSE WHERE routine_date=$1 AND title=$2',[item.routine_date,`${groupTitle} Routine`]);
  }
- res.json({success:true,message:item.routine_kind==='daily'?'Published routine deleted':'Master routine deleted'});
+ res.json({success:true,message:item.routine_kind==='daily'?'Published routine deleted':item.routine_kind==='draft'?'Draft routine deleted':'Master routine deleted'});
 }));
 // Upload disks may be empty after deployment. Rebuild only published routine images.
 router.servePublishedImage=asyncHandler(async(req,res,next)=>{

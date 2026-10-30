@@ -28,7 +28,7 @@ function uploadBuffer(buffer, options = {}) {
       overwrite: false,
       unique_filename: false,
       use_filename: false,
-      ...(resourceType === 'image' ? { format: options.format || 'webp' } : {}),
+      ...(resourceType === 'image' && options.format !== 'original' ? { format: options.format || 'webp' } : {}),
     }, (error, result) => error ? reject(error) : resolve({
       url: result.secure_url,
       publicId: result.public_id,

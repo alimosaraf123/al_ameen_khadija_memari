@@ -10,6 +10,8 @@
     "migrate:cloudinary": "node scripts/migrateCloudinary.js"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
+    "@tesseract.js-data/eng": "^1.0.0",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.7.0",
     "cors": "^2.8.5",
@@ -21,6 +23,7 @@
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.4.299",
     "pg": "^8.16.3",
-    "sharp": "^0.35.5"
+    "sharp": "^0.35.5",
+    "tesseract.js": "^7.0.0"
   }
 }

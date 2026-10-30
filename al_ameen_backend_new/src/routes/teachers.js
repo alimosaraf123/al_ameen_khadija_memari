@@ -54,7 +54,7 @@ router.patch('/me', auth, allow('teacher'), asyncHandler(async(req,res)=>{
 router.get('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res)=>{
   await teacherDetailsSchemaReady;
   const result = await pool.query(`
-    SELECT t.*, u.login_id, u.full_name, u.is_active AS user_active,
+    SELECT t.*, u.login_id, u.full_name, u.role AS user_role, u.is_active AS user_active,
       COALESCE((
         SELECT json_agg(DISTINCT subject_name)
         FROM (

@@ -7,19 +7,22 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
+  Image,
   Platform,
   Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import AcademyHeader from '../components/AcademyHeader';
-import { API_BASE } from '../lib/api';
+import { API_BASE, api } from '../lib/api';
 
 interface StudentResult {
   rank: number;
   file: string;
   registration_no: string;
   mission_reg_no?: string;
+  student_id?: string;
+  identity_match?: string;
   student_name: string;
   school_name: string;
   class_name: string;
@@ -42,6 +45,28 @@ const makeBlankKey = (count = 35): Record<string, string> => {
   }
   return k;
 };
+
+// Archives created by older evaluator versions may omit one or more question
+// arrays. Keep the table and export view usable for those records as well.
+const normalizeStudentResult = (raw: any): StudentResult => ({
+  ...raw,
+  file: String(raw?.file || ''),
+  registration_no: String(raw?.registration_no || ''),
+  mission_reg_no: raw?.mission_reg_no ? String(raw.mission_reg_no) : undefined,
+  student_name: String(raw?.student_name || 'Candidate'),
+  school_name: String(raw?.school_name || ''),
+  class_name: String(raw?.class_name || ''),
+  correct_questions: Array.isArray(raw?.correct_questions) ? raw.correct_questions : [],
+  wrong_questions: Array.isArray(raw?.wrong_questions) ? raw.wrong_questions : [],
+  blank_questions: Array.isArray(raw?.blank_questions) ? raw.blank_questions : [],
+  student_answers: raw?.student_answers && typeof raw.student_answers === 'object' ? raw.student_answers : {},
+  correct_count: Number(raw?.correct_count || 0),
+  wrong_count: Number(raw?.wrong_count || 0),
+  blank_count: Number(raw?.blank_count || 0),
+  final_score: Number(raw?.final_score || 0),
+  full_marks: Number(raw?.full_marks || 0),
+  total_questions: Number(raw?.total_questions || 0),
+});
 
 export default function OmrEvaluation() {
   // Exam Configuration & Inputs (Starts fresh & blank on page load)
@@ -66,9 +91,68 @@ export default function OmrEvaluation() {
   const [evaluating, setEvaluating] = useState(false);
   const [results, setResults] = useState<StudentResult[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<StudentResult | null>(null);
+  const [evaluationRecordId, setEvaluationRecordId] = useState<number | null>(null);
+  const [scanStudent, setScanStudent] = useState<StudentResult | null>(null);
+  const [scanUrl, setScanUrl] = useState('');
+  const [scanError, setScanError] = useState('');
+  const [scanZoom, setScanZoom] = useState(1);
+  useEffect(() => {
+    if (!scanStudent) return;
+    let active = true;
+    setScanUrl(''); setScanError(''); setScanZoom(1);
+    if (!evaluationRecordId) {
+      setScanError('Open the saved result from Past Records or run evaluation again to view this scan.');
+      return;
+    }
+    api(`/api/omr/records/${evaluationRecordId}/scan?registration_no=${encodeURIComponent(scanStudent.registration_no)}`)
+      .then(data => { if (active) setScanUrl(data.url); })
+      .catch(error => { if (active) setScanError(error.message || 'Could not load OMR scan.'); });
+    return () => { active = false; };
+  }, [scanStudent, evaluationRecordId]);
+  const [missionStudents, setMissionStudents] = useState<any[]>([]);
+  const [identityChoice, setIdentityChoice] = useState('');
+  const [identitySearch, setIdentitySearch] = useState('');
+  const [identitySaving, setIdentitySaving] = useState(false);
+  const [identityEditing, setIdentityEditing] = useState(false);
+  const [identityError, setIdentityError] = useState('');
   const [folderInfo, setFolderInfo] = useState({ path: 'd:\\memari_soft\\omr_scans', total: 0 });
   const fileInputRef = React.useRef<any>(null);
   const cameraInputRef = React.useRef<any>(null);
+
+  useEffect(() => {
+    if (!selectedStudent) return;
+    let active = true;
+    setIdentityChoice(selectedStudent.student_id || '');
+    setIdentityEditing(!selectedStudent.mission_reg_no);
+    setIdentitySearch('');
+    setIdentityError('');
+    api('/api/omr/students-master').then(data => {
+      if (active) setMissionStudents(data.students || []);
+    }).catch(error => { if (active) setIdentityError(error.message); });
+    return () => { active = false; };
+  }, [selectedStudent?.registration_no]);
+
+  const saveMissionIdentity = async () => {
+    if (!selectedStudent || !identityChoice) return;
+    if (!evaluationRecordId) {
+      setIdentityError('Run Evaluation again to save the student identity.');
+      return;
+    }
+    setIdentitySaving(true);
+    setIdentityError('');
+    try {
+      const data = await api(`/api/omr/records/${evaluationRecordId}/identity`, {
+        method: 'PATCH', body: JSON.stringify({
+          registration_no: selectedStudent.registration_no, student_id: identityChoice,
+        }),
+      });
+      setResults(previous => previous.map(result =>
+        result.registration_no === selectedStudent.registration_no ? data.result : result));
+      setSelectedStudent(data.result);
+      setIdentityEditing(false);
+    } catch (error: any) { setIdentityError(error.message); }
+    finally { setIdentitySaving(false); }
+  };
 
   // Terminal Exam Sync State
   const [terminalTargets, setTerminalTargets] = useState<any[]>([]);
@@ -139,6 +223,7 @@ export default function OmrEvaluation() {
       const data = await res.json();
       if (data && data.success && data.record) {
         const rec = data.record;
+        setEvaluationRecordId(Number(rec.id));
         setExamName(rec.exam_name || '');
         setPresetNameInput(rec.exam_name || '');
         setTotalQuestions(rec.total_questions ? String(rec.total_questions) : '35');
@@ -165,7 +250,7 @@ export default function OmrEvaluation() {
           try { parsedResults = JSON.parse(parsedResults); } catch (_) {}
         }
         if (Array.isArray(parsedResults)) {
-          setResults(parsedResults);
+          setResults(parsedResults.map(normalizeStudentResult));
         }
 
         setShowArchiveModal(false);
@@ -808,7 +893,8 @@ export default function OmrEvaluation() {
 
       const data = await res.json();
       if (data && data.success && Array.isArray(data.results)) {
-        setResults(data.results);
+        setResults(data.results.map(normalizeStudentResult));
+        setEvaluationRecordId(data.record_id ? Number(data.record_id) : null);
       } else {
         Alert.alert('Error', data.message || 'Evaluation failed');
       }
@@ -1644,14 +1730,17 @@ export default function OmrEvaluation() {
                   {...(Platform.OS === 'web' ? { className: 'omr-table-row' } as any : {})}
                 >
                   <Text style={[styles.td, styles.colRank, styles.rankBadge]}>{item.rank}</Text>
-                  <View style={[styles.td, styles.colReg]}>
+                  <TouchableOpacity style={[styles.td, styles.colReg]}
+                    accessibilityRole="button" accessibilityLabel={`View OMR for ${item.student_name}`}
+                    onPress={event => { event.stopPropagation(); setScanUrl(''); setScanError(''); setScanStudent(item); }}>
                     <Text style={styles.boldMono}>{item.registration_no}</Text>
                     {item.mission_reg_no ? (
                       <Text style={styles.missionSubText}>ID: {item.mission_reg_no}</Text>
                     ) : null}
-                  </View>
+                  </TouchableOpacity>
                   <View style={[styles.td, styles.colName]}>
                     <Text style={styles.studentNameText}>{item.student_name}</Text>
+                    {!item.mission_reg_no && <Text style={{ color: '#b45309', fontSize: 11 }}>Tap to link Mission student</Text>}
                   </View>
                   <View style={[styles.td, styles.colClass]}>
                     <Text style={styles.classText}>{item.class_name}</Text>
@@ -2413,6 +2502,29 @@ export default function OmrEvaluation() {
         </Modal>
 
         {/* MODAL: STUDENT OMR DETAILS */}
+        <Modal visible={!!scanStudent} transparent animationType="fade" onRequestClose={() => setScanStudent(null)}>
+          <View style={styles.modalOverlay}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, width: '95%', maxWidth: 1000, height: '95%' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+                <Text style={{ flex: 1, fontWeight: '700' }}>OMR — {scanStudent?.student_name} | {scanStudent?.registration_no}</Text>
+                <TouchableOpacity accessibilityLabel="Zoom out" onPress={() => setScanZoom(z => Math.max(1, z - 0.5))}><Text>−</Text></TouchableOpacity>
+                <Text>{Math.round(scanZoom * 100)}%</Text>
+                <TouchableOpacity accessibilityLabel="Zoom in" onPress={() => setScanZoom(z => Math.min(3, z + 0.5))}><Text>＋</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => setScanStudent(null)}><Text style={{ color: '#b91c1c', fontWeight: '700' }}>Close ✕</Text></TouchableOpacity>
+              </View>
+              {!!scanError ? <Text style={{ color: '#b91c1c' }}>{scanError}</Text> : !scanUrl ? <Text>Loading OMR scan…</Text> : (
+                <ScrollView horizontal style={{ flex: 1 }}>
+                  <ScrollView style={{ width: 700 * scanZoom }}>
+                    <Image source={{ uri: scanUrl }} resizeMode="contain"
+                      style={{ width: 700 * scanZoom, height: 990 * scanZoom }}
+                      onError={() => setScanError('OMR image could not be loaded. It may have expired after 15 days. Your result is still saved.')} />
+                  </ScrollView>
+                </ScrollView>
+              )}
+            </View>
+          </View>
+        </Modal>
+
         <Modal visible={!!selectedStudent} transparent animationType="fade" onRequestClose={() => setSelectedStudent(null)}>
           <View style={styles.modalOverlay}>
             <View style={[styles.modalBox, { maxWidth: 650 }]}>
@@ -2422,11 +2534,40 @@ export default function OmrEvaluation() {
                   <Text style={{ fontSize: 13, color: '#64748b' }}>
                     Reg No: {selectedStudent?.registration_no} | Class: {selectedStudent?.class_name} | {selectedStudent?.school_name}
                   </Text>
+                  <TouchableOpacity onPress={() => setIdentityEditing(true)}>
+                    <Text style={{ color: '#1565c0', marginTop: 4 }}>Match / correct Mission student</Text>
+                  </TouchableOpacity>
                 </View>
                 <TouchableOpacity onPress={() => setSelectedStudent(null)}>
                   <Text style={styles.closeBtn}>✕</Text>
                 </TouchableOpacity>
               </View>
+
+              {Platform.OS === 'web' && selectedStudent && identityEditing && (
+                <View style={{ padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 8 }}>
+                  <Text style={{ fontWeight: '700', color: '#173b67', marginBottom: 6 }}>Mission Student / নাম ও Mission ID</Text>
+                  <TextInput value={identitySearch} onChangeText={setIdentitySearch}
+                    placeholder="Search student name or Mission ID" style={{ padding: 8, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 5, marginBottom: 6 }} />
+                  <select aria-label="Choose Mission student" value={identityChoice}
+                    onChange={event => setIdentityChoice(event.target.value)}
+                    style={{ width: '100%', padding: 9, border: '1px solid #cbd5e1', borderRadius: 5 }}>
+                    <option value="">-- Choose the student shown on this OMR --</option>
+                    {missionStudents.filter(student => {
+                      const sameClass = String(student.class_name || '').replace(/[^a-z0-9]/gi, '').toLowerCase() ===
+                        String(selectedStudent.class_name || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+                      const search = identitySearch.trim().toLowerCase();
+                      return sameClass && (!search || `${student.student_name} ${student.registration_no}`.toLowerCase().includes(search));
+                    }).map(student => <option key={student.id} value={String(student.id)}>
+                      {student.registration_no} — {student.student_name}
+                    </option>)}
+                  </select>
+                  <TouchableOpacity onPress={saveMissionIdentity} disabled={!identityChoice || identitySaving}
+                    style={{ padding: 10, backgroundColor: '#1565c0', borderRadius: 5, marginTop: 8, opacity: !identityChoice || identitySaving ? 0.5 : 1 }}>
+                    <Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center' }}>{identitySaving ? 'Saving...' : 'Save Name & Mission ID'}</Text>
+                  </TouchableOpacity>
+                  {!!identityError && <Text style={{ color: '#dc2626', marginTop: 6 }}>{identityError}</Text>}
+                </View>
+              )}
 
               <View style={styles.statsSummary}>
                 <View style={styles.statCard}>

@@ -10,35 +10,67 @@ import { STUDENT_CLASSES, isVisibleStudentClass } from '../lib/studentClasses';
 import { filterStudents, studentSession, normalizeStudentClass } from '../lib/studentDirectory';
 
 type Option = { value: string; label: string };
-export function Select({ label, value, options, onChange, searchable=false, style }: { label: string; value: string; options: Option[]; onChange: (value: string) => void; searchable?: boolean; style?: any }) {
+export function Select({ label, value, options, onChange, searchable=false, style, panelWidth, panelMaxHeight }: { label: string; value: string; options: Option[]; onChange: (value: string) => void; searchable?: boolean; style?: any; panelWidth?: number; panelMaxHeight?: number }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [previewLabel, setPreviewLabel] = useState('');
+  const [activeIndex, setActiveIndex] = useState(-1);
   const [anchor, setAnchor] = useState({ x: 16, y: 60, width: 280, maxHeight: 380 });
   const buttonRef = useRef<any>(null);
+  const lastKeyboardAction = useRef({ key: '', at: 0 });
   const visibleOptions = searchable && query ? options.filter(option => option.label.toLowerCase().includes(query.toLowerCase())) : options;
+  const previewOption = (index: number) => {
+    const next = Math.max(0, Math.min(index, visibleOptions.length - 1));
+    setActiveIndex(next);
+    setPreviewLabel(visibleOptions[next]?.label || '');
+  };
+  const chooseOption = (option?: Option) => {
+    if (!option) return;
+    onChange(option.value);
+    setOpen(false);
+  };
+  const handleSearchKey = (event: any) => {
+    const rawKey = event?.key || event?.nativeEvent?.key || event?.code || event?.nativeEvent?.code;
+    const key = String(rawKey || '').toLowerCase();
+    const normalizedKey = key === 'arrowdown' || key === 'down' ? 'down'
+      : key === 'arrowup' || key === 'up' ? 'up'
+      : key === 'enter' || key === 'return' ? 'enter'
+      : key === 'escape' || key === 'esc' ? 'escape' : '';
+    if (!normalizedKey) return;
+    const now = Date.now();
+    if (lastKeyboardAction.current.key === normalizedKey && now - lastKeyboardAction.current.at < 60) return;
+    lastKeyboardAction.current = { key: normalizedKey, at: now };
+    if (normalizedKey === 'escape') { event.preventDefault?.(); setOpen(false); return; }
+    if (!visibleOptions.length) return;
+    if (normalizedKey === 'down') { event.preventDefault?.(); previewOption(activeIndex + 1); return; }
+    if (normalizedKey === 'up') { event.preventDefault?.(); previewOption(activeIndex - 1); return; }
+    if (normalizedKey === 'enter' && activeIndex >= 0) { event.preventDefault?.(); chooseOption(visibleOptions[Math.min(activeIndex, visibleOptions.length - 1)]); }
+  };
 
   const handleOpen = (event: any) => {
     const w = Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerWidth : 1200;
     const h = Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerHeight : 800;
 
     const calculate = (bx: number, by: number, bw: number, bh: number) => {
-      const dropdownW = Math.min(340, Math.max(220, Math.min(Math.max(bw, 220), w - 16)));
+      const preferredWidth = panelWidth || 340;
+      const preferredHeight = panelMaxHeight || 380;
+      const dropdownW = Math.max(220, Math.min(preferredWidth, w - 16));
       let left = bx;
       if (left + dropdownW > w - 12) {
         left = Math.max(8, w - dropdownW - 12);
       }
       if (left < 8) left = 8;
 
-      const estimatedH = Math.min(380, (searchable ? 100 : 54) + Math.max(visibleOptions.length, 1) * 46);
+      const estimatedH = Math.min(preferredHeight, (searchable ? 100 : 54) + Math.max(visibleOptions.length, 1) * 46);
       const spaceBelow = h - (by + bh) - 12;
       const spaceAbove = by - 12;
 
       let top: number;
       let maxHeight: number;
 
-      if (spaceBelow >= Math.min(estimatedH, 160) || spaceBelow >= spaceAbove) {
+      if (spaceBelow >= estimatedH || spaceBelow >= spaceAbove) {
         top = by + bh + 4;
-        maxHeight = Math.max(120, Math.min(380, spaceBelow - 8));
+        maxHeight = Math.max(120, Math.min(preferredHeight, spaceBelow - 8));
       } else {
         const actualH = Math.min(estimatedH, Math.max(120, spaceAbove - 8));
         top = Math.max(8, by - actualH - 4);
@@ -47,6 +79,8 @@ export function Select({ label, value, options, onChange, searchable=false, styl
 
       setAnchor({ x: Math.round(left), y: Math.round(top), width: dropdownW, maxHeight: Math.round(maxHeight) });
       setQuery('');
+      setPreviewLabel('');
+      setActiveIndex(-1);
       setOpen(true);
     };
 
@@ -83,10 +117,10 @@ export function Select({ label, value, options, onChange, searchable=false, styl
       <Text style={[s.selectText,!value&&s.selectPlaceholder]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{options.find(o => o.value === value)?.label || label}  ▼</Text>
     </TouchableOpacity>
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-      <View style={[s.overlay,Platform.OS==='web'&&s.webSelectOverlay]}><Pressable accessibilityRole="button" accessibilityLabel="Close dropdown" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} onPress={() => setOpen(false)} /><View style={[s.selectPanel,Platform.OS==='web'&&{position:'absolute',left:anchor.x,top:anchor.y,width:anchor.width,maxHeight:anchor.maxHeight,borderWidth:1,borderColor:'#cbd5e1'}] }>
+      <View style={[s.overlay,Platform.OS==='web'&&s.webSelectOverlay]}><Pressable accessibilityRole="button" accessibilityLabel="Close dropdown" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} onPress={() => setOpen(false)} /><View style={[s.selectPanel,Platform.OS!=='web'&&panelWidth ? {maxWidth:panelWidth} : false,Platform.OS!=='web'&&panelMaxHeight ? {maxHeight:panelMaxHeight} : false,Platform.OS==='web'&&{position:'absolute',left:anchor.x,top:anchor.y,width:anchor.width,maxWidth:anchor.width,maxHeight:anchor.maxHeight,borderWidth:1,borderColor:'#cbd5e1'}] }>
         <Text style={s.panelTitle}>{label}</Text>
-        {searchable && <TextInput autoFocus value={query} onChangeText={setQuery} placeholder={label ? `Search ${label}...` : "Type to search..."} style={[s.search, { width: '100%', marginBottom: 8 }]} />}
-        <ScrollView keyboardShouldPersistTaps="handled">{visibleOptions.map(option => <TouchableOpacity key={option.value} accessibilityRole="button" accessibilityState={{ selected: value === option.value }} style={[s.option, value === option.value && s.selected]} onPress={() => { onChange(option.value); setOpen(false); }}>
+        {searchable && <TextInput autoFocus value={previewLabel || query} onChangeText={text => { setQuery(text); setPreviewLabel(''); setActiveIndex(-1); }} placeholder={label ? `Search ${label}...` : "Type to search..."} style={[s.search, { width: '100%', marginBottom: 8 }]} {...(Platform.OS === 'web' ? { onKeyDown: handleSearchKey, onKeyPress: handleSearchKey } as any : { onKeyPress: handleSearchKey })} />}
+        <ScrollView keyboardShouldPersistTaps="handled">{visibleOptions.map((option, index) => <TouchableOpacity key={option.value} accessibilityRole="button" accessibilityState={{ selected: value === option.value }} style={[s.option, value === option.value && s.selected, index === activeIndex && { backgroundColor: '#e0f2fe', borderLeftWidth: 4, borderLeftColor: '#2563eb' }]} onPress={() => chooseOption(option)}>
           <Text>{option.label}{value === option.value ? '  Selected' : ''}</Text>
         </TouchableOpacity>)}</ScrollView>
 

@@ -11,6 +11,40 @@ Node.js + Express + Neon PostgreSQL backend for the Al-Ameen Khadija Memari mobi
 6. Remove `ADMIN_PASSWORD` from `.env` after the admin is created.
 7. Start: `npm start`
 
+## Render deployment (OMR)
+
+The OMR evaluator uses Python with OpenCV and NumPy. For a Node web service on
+Render, set the service's build command to:
+
+~~~sh
+npm install && python3 -m pip install -r requirements.txt
+~~~
+
+Keep the start command as `npm start`. The OMR scan directory is selected at
+runtime and no longer depends on the Windows `d:/memari_soft` path. You may set
+`OMR_SCANS_DIR` to an absolute writable directory if needed.
+
+OMR uploads require the same Cloudinary environment variables shown in
+`.env.example`. Uploaded scan images go to `al-ameen/omr-scans`, are retained
+for 15 days by default (`OMR_SCAN_RETENTION_DAYS` can override this), and are
+then removed by the backend cleanup job. Evaluation results remain in
+PostgreSQL.
+
+When a school/council registration is not yet linked to a student, OMR identity
+matching reads the sheet's handwritten name and matches it to the exam's student
+roster. English OCR data is bundled with the Node dependencies. Results store the
+student's real name, Mission registration and student ID before archiving or
+terminal draft sync. Ambiguous names remain unmatched. New OMR uploads preserve
+their original image format.
+
+Both named OMR forms and signature-only forms are supported. The Python engine
+detects the identity-field boxes and the OCR layer preserves blue handwriting.
+Unresolved cursive signatures use a local TrOCR handwriting worker; its model is
+downloaded once to `tmp/omr-handwriting-model` and then reused from disk. An
+unresolved candidate can also be linked explicitly through the result details'
+Mission Student selector. This stores the confirmed name and Mission ID in the
+evaluation archive while preserving answers and scores.
+
 ## Important
 - Never commit `.env`.
 - Rotate credentials that were exposed in screenshots/chats.

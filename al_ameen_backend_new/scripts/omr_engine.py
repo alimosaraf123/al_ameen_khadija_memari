@@ -147,6 +147,39 @@ def read_answers_from_columns(gray, col_boxes, total_q=40):
             
     return all_answers
 
+def locate_identity_regions(img):
+    """Locate name/signature boxes across both supported OMR form layouts.
+
+    Some forms omit the name field and have only a candidate-signature box.
+    Return coordinates relative to the standardized 724 x 1024 page so the
+    OCR layer can crop native-resolution ink without relying on fixed y values.
+    """
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                   cv2.THRESH_BINARY_INV, 21, 8)
+    contours, _ = cv2.findContours(binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    candidates = {'name_field': [], 'signature': []}
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        if x > 150:
+            continue
+        if 360 <= y <= 520 and 440 <= w <= 640 and 16 <= h <= 48:
+            candidates['name_field'].append((x, y, w, h))
+        if 370 <= y <= 550 and 200 <= w <= 350 and 65 <= h <= 165:
+            candidates['signature'].append((x, y, w, h))
+    regions = []
+    for kind, boxes in candidates.items():
+        if not boxes:
+            continue
+        x, y, w, h = max(boxes, key=lambda box: box[2] * box[3])
+        if kind == 'name_field':
+            left, top, width, height = x + w * 0.27, y + h * 0.06, w * 0.71, h * 0.88
+        else:
+            left, top, width, height = x + w * 0.03, y + h * 0.24, w * 0.94, h * 0.71
+        regions.append({'kind': kind, 'left': left / 724.0, 'top': top / 1024.0,
+                        'width': width / 724.0, 'height': height / 1024.0})
+    return regions
+
 def evaluate_sheet(img_path, config):
     img = cv2.imread(img_path)
     if img is None:
@@ -234,21 +267,10 @@ def evaluate_sheet(img_path, config):
     students_master = config.get('students_master', {})
     clean_reg_str = str(clean_reg).strip()
     student_info = students_master.get(clean_reg_str, {})
-    if not student_info and len(clean_reg_str) >= 5:
-        student_info = students_master.get(clean_reg_str[:5], {})
             
     student_name = student_info.get('name')
     if not student_name:
-        if '49787' in clean_reg_str:
-            student_name = 'MOSAMMAT AMINA SULTANA'
-        elif '62357' in clean_reg_str:
-            student_name = 'NAFISA NASRIN'
-        elif '2262117692' in clean_reg_str:
-            student_name = 'TAHSINA NAZ'
-        elif '2262118804' in clean_reg_str:
-            student_name = 'AMINA UMME AIMAN'
-        else:
-            student_name = f'Candidate #{clean_reg_str or "Unknown"}'
+        student_name = f'Candidate #{clean_reg_str or "Unknown"}'
             
     raw_sch = student_info.get('school') or ''
     school_name = '' if 'MEMARI' in raw_sch.upper() else raw_sch
@@ -258,8 +280,10 @@ def evaluate_sheet(img_path, config):
 
     return {
         "file": filename,
+        "identity_regions": locate_identity_regions(img),
         "registration_no": clean_reg,
         "mission_reg_no": mission_reg,
+        "student_id": student_info.get('student_id'),
         "student_name": student_name,
         "school_name": school_name,
         "class_name": class_name,
