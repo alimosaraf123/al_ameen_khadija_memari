@@ -101,19 +101,6 @@ export default function ClassResults() {
           }</td></tr>`
       )
       .join('');
-    const html = `<style>@page{size:A4 portrait;margin:12mm}body{font-family:Arial;color:#111}.sheet{border:2px solid #174f75;padding:12mm;min-height:240mm}header{display:flex;align-items:center;border-bottom:2px solid #174f75;padding-bottom:8px}header img{width:28mm;height:34mm;object-fit:cover;border:1px solid #555;margin-left:auto}h1,h2{text-align:center;margin:6px}h1{font-size:22px}.student{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:14px 0;font-size:14px}table{border-collapse:collapse;width:100%;margin-top:15px}th,td{border:1px solid #222;padding:8px;text-align:center}th:first-child,td:first-child{text-align:left}.summary{margin-top:14px;font-weight:bold}.sign{display:flex;justify-content:space-between;margin-top:90px}</style><section class="sheet"><header><div style="flex:1"><h1>Al-Ameen Mission Academy Memari</h1><div style="text-align:center">Memari, Purba Bardhaman - 713146</div></div>${
-      photo ? `<img src="${photo}" onerror="this.style.display='none'"/>` : ''
-    }</header><h2>TERMINAL EXAMINATION RESULT</h2><div class="student"><div><b>Student Name:</b> ${
-      st.student_name
-    }</div><div><b>Registration:</b> ${st.registration_no}</div><div><b>Father's Name:</b> ${
-      st.father_name || st.guardian_name || st.mother_name || '-'
-    }</div><div><b>Class:</b> ${selected.class_name}</div></div><table><tr><th rowspan="2">Subject</th><th colspan="3">FULL MARKS</th><th colspan="3">MARKS OBTAINED</th><th rowspan="2">GRADE</th></tr><tr><th>Written</th><th>Oral</th><th>Total</th><th>Written</th><th>Oral</th><th>Total</th></tr>${rows}<tr><th>Grand Total</th><th>${subjects.reduce(
-      (a: any, x: any) =>
-        a + Number(x.theory_marks || Number(x.full_marks || 0) - Number(x.oral_marks || 0)),
-      0
-    )}</th><th>${subjects.reduce((a: any, x: any) => a + Number(x.oral_marks || 0), 0)}</th><th>${full}</th><th>-</th><th>-</th><th>${total}</th><th>${grade(
-      total,
-      full
     // Compute rank for this student
     const allTotals = students.map((s: any) => ({
       id: s.student_id || s.registration_no,
@@ -126,9 +113,13 @@ export default function ClassResults() {
       if (i > 0 && allTotals[i].total < allTotals[i - 1].total) rk = i + 1;
       if (allTotals[i].id === (st.student_id || st.registration_no)) { studentRank = String(rk); break; }
     }
-    )}</th></tr></table><div class="summary">Percentage: ${pct}% &nbsp; | &nbsp; Rank: ${studentRank} &nbsp; | &nbsp; Result: ${
-      subjects.some((sub: any) => st.marks?.[sub.id] === 'Absent') ? 'Incomplete' : 'Pass'
-    }</div><div class="sign"><span>Class Teacher</span><span>Guardian</span><span>Principal</span></div></section>`;
+    const grandWritten = subjects.reduce((a: any, x: any) => a + Number(x.theory_marks || Number(x.full_marks || 0) - Number(x.oral_marks || 0)), 0);
+    const grandOral = subjects.reduce((a: any, x: any) => a + Number(x.oral_marks || 0), 0);
+    const overallGrade = grade(total, full);
+    const resultStatus = subjects.some((sub: any) => st.marks?.[sub.id] === 'Absent') ? 'Incomplete' : 'Pass';
+    const html = `<style>@page{size:A4 portrait;margin:12mm}body{font-family:Arial;color:#111}.sheet{border:2px solid #174f75;padding:10mm 12mm 12mm;min-height:240mm}header{display:flex;align-items:center;border-bottom:2px solid #174f75;padding-bottom:8px;gap:10px}.logo-img{width:22mm;height:22mm;object-fit:contain;flex-shrink:0}.school-info{flex:1;text-align:center}.photo-img{width:28mm;height:34mm;object-fit:cover;border:1px solid #555;flex-shrink:0}h1{font-size:20px;margin:4px 0}h2{text-align:center;margin:10px 0 6px;font-size:16px;letter-spacing:1px}.student{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:12px 0;font-size:14px}table{border-collapse:collapse;width:100%;margin-top:12px}th,td{border:1px solid #222;padding:7px;text-align:center}th:first-child,td:first-child{text-align:left}.summary{margin-top:12px;font-size:14px}.rank-box{display:inline-block;margin-top:12px;padding:8px 24px;border:2.5px solid #174f75;border-radius:6px;background:#eef4fb;font-size:18px;font-weight:bold;color:#174f75;letter-spacing:1px}.sign{display:flex;justify-content:space-between;margin-top:80px}</style><section class="sheet"><header><img class="logo-img" src="/al-ameen-logo.jpg" onerror="this.style.display='none'"/><div class="school-info"><h1>Al-Ameen Mission Academy Memari</h1><div>Memari, Purba Bardhaman - 713146</div></div>${
+      photo ? `<img class="photo-img" src="${photo}" onerror="this.style.display='none'"/>` : '<div style="width:28mm"></div>'
+    }</header><h2>TERMINAL EXAMINATION RESULT</h2><div class="student"><div><b>Student Name:</b> ${st.student_name}</div><div><b>Registration:</b> ${st.registration_no}</div><div><b>Father's Name:</b> ${st.father_name || st.guardian_name || st.mother_name || '-'}</div><div><b>Class:</b> ${selected.class_name}</div></div><table><tr><th rowspan="2">Subject</th><th colspan="3">FULL MARKS</th><th colspan="3">MARKS OBTAINED</th><th rowspan="2">GRADE</th></tr><tr><th>Written</th><th>Oral</th><th>Total</th><th>Written</th><th>Oral</th><th>Total</th></tr>${rows}<tr><th>Grand Total</th><th>${grandWritten}</th><th>${grandOral}</th><th>${full}</th><th>-</th><th>-</th><th>${total}</th><th>${overallGrade}</th></tr></table><div class="summary">Percentage: <b>${pct}%</b> &nbsp;|&nbsp; Result: <b>${resultStatus}</b></div><div style="text-align:center"><div class="rank-box">🏆 Class Rank: ${studentRank}</div></div><div class="sign"><span>Class Teacher</span><span>Guardian</span><span>Principal</span></div></section>`;
 
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const w = window.open('', '_blank', 'width=900,height=900');
