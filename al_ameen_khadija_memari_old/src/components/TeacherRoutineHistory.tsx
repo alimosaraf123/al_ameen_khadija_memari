@@ -1,6 +1,6 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {ActivityIndicator,Animated,Image,Modal,Pressable,ScrollView,StyleSheet,Text,TouchableOpacity,View} from 'react-native';
-import {PinchGestureHandler,State} from 'react-native-gesture-handler';
+import {ActivityIndicator,Animated,Image,Modal,PanResponder,Platform,Pressable,ScrollView,StyleSheet,Text,TouchableOpacity,View} from 'react-native';
+import {PanGestureHandler,PinchGestureHandler,State} from 'react-native-gesture-handler';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import AcademyHeader from './AcademyHeader';
 import {API_BASE,api} from '../lib/api';
@@ -23,10 +23,21 @@ export function RoutineCard({item}:{item:any}){
  const [aspectRatio,setAspectRatio]=useState(2);
  const [zoom,setZoom]=useState(1);
  const pinchScale=useRef(new Animated.Value(1)).current;
+ const panX=useRef(new Animated.Value(0)).current,panY=useRef(new Animated.Value(0)).current;
+ const [panOffset,setPanOffset]=useState({x:0,y:0});
  const baseZoom=useRef(1);
+ const webPanResponder=useRef(PanResponder.create({
+  onStartShouldSetPanResponder:()=>Platform.OS==='web'&&baseZoom.current>1,
+  onMoveShouldSetPanResponder:()=>Platform.OS==='web'&&baseZoom.current>1,
+  onPanResponderMove:(_,gesture)=>{panX.setValue(gesture.dx);panY.setValue(gesture.dy)},
+  onPanResponderRelease:(_,gesture)=>{setPanOffset(current=>({x:current.x+Number(gesture.dx||0),y:current.y+Number(gesture.dy||0)}));panX.setValue(0);panY.setValue(0)},
+  onPanResponderTerminate:()=>{panX.setValue(0);panY.setValue(0)},
+ })).current;
  useEffect(()=>{Image.getSize(url,(width,height)=>{if(width>0&&height>0)setAspectRatio(width/height);},()=>{});},[url]);
- const openPreview=()=>{baseZoom.current=1;setZoom(1);pinchScale.setValue(1);setExpanded(true)};
+ const openPreview=()=>{baseZoom.current=1;setZoom(1);pinchScale.setValue(1);panX.setValue(0);panY.setValue(0);setPanOffset({x:0,y:0});setExpanded(true)};
  const onPinchStateChange=(event:any)=>{if(event.nativeEvent.oldState===State.ACTIVE){const next=Math.min(4,Math.max(1,baseZoom.current*Number(event.nativeEvent.scale||1)));baseZoom.current=next;setZoom(next);pinchScale.setValue(1)}};
+ const onPanStateChange=(event:any)=>{if(event.nativeEvent.oldState!==State.ACTIVE)return;const dx=Number(event.nativeEvent.translationX||0),dy=Number(event.nativeEvent.translationY||0);setPanOffset(current=>({x:current.x+dx,y:current.y+dy}));panX.setValue(0);panY.setValue(0)};
+ if(expanded)return <View style={s.routineItem}><Modal visible transparent animationType="fade" onRequestClose={()=>setExpanded(false)}><Pressable style={s.imageBackdrop} onPress={()=>setExpanded(false)}><View style={s.imageModal} onStartShouldSetResponder={()=>true}><View style={s.imageModalHeader}><Text style={s.imageModalTitle}>{item.title||'Published Routine'}</Text><Text style={s.zoomHint}>Pinch to zoom / Drag to move / {Math.round(zoom*100)}%</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Close routine image" onPress={()=>setExpanded(false)} style={s.closeButton}><Text style={s.closeText}>X</Text></TouchableOpacity></View><PanGestureHandler enabled={Platform.OS!=='web'&&zoom>1} onGestureEvent={Animated.event([{nativeEvent:{translationX:panX,translationY:panY}}],{useNativeDriver:true})} onHandlerStateChange={onPanStateChange}><Animated.View style={s.zoomArea} {...(Platform.OS==='web'?webPanResponder.panHandlers:{})}><PinchGestureHandler onGestureEvent={Animated.event([{nativeEvent:{scale:pinchScale}}],{useNativeDriver:true})} onHandlerStateChange={onPinchStateChange}><Animated.View style={s.zoomContent}><Animated.Image source={{uri:url}} resizeMode="contain" style={[s.expandedImage,{transform:[{scale:Animated.multiply(pinchScale,zoom)},{translateX:panOffset.x},{translateY:panOffset.y},{translateX:panX},{translateY:panY}]}]}/></Animated.View></PinchGestureHandler></Animated.View></PanGestureHandler></View></Pressable></Modal></View>;
  return <View style={s.routineItem}><Text style={s.routineTitle}>{item.title||'Published Routine'}</Text><Text style={s.routineMeta}>{routineDate(item)}</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Open routine image" onPress={openPreview}><RoutineImage url={url}/></TouchableOpacity><TouchableOpacity accessibilityRole="button" style={s.openButton} onPress={openPreview}><Text style={s.routineOpen}>Open</Text></TouchableOpacity><Modal visible={expanded} transparent animationType="fade" onRequestClose={()=>setExpanded(false)}><Pressable style={s.imageBackdrop} onPress={()=>setExpanded(false)}><View style={s.imageModal} onStartShouldSetResponder={()=>true}><View style={s.imageModalHeader}><Text style={s.imageModalTitle}>{item.title||'Published Routine'}</Text><Text style={s.zoomHint}>Pinch to zoom · {Math.round(zoom*100)}%</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Close routine image" onPress={()=>setExpanded(false)} style={s.closeButton}><Text style={s.closeText}>X</Text></TouchableOpacity></View><PinchGestureHandler onGestureEvent={Animated.event([{nativeEvent:{scale:pinchScale}}],{useNativeDriver:true})} onHandlerStateChange={onPinchStateChange}><Animated.View style={s.zoomArea}><Animated.Image source={{uri:url}} resizeMode="contain" style={[s.expandedImage,{aspectRatio,transform:[{scale:Animated.multiply(pinchScale,zoom)}]}]}/></Animated.View></PinchGestureHandler></View></Pressable></Modal></View>;
 }
 
@@ -67,6 +78,7 @@ const s=StyleSheet.create({
  zoomHint:{fontSize:11,color:'#607080',marginHorizontal:8},
  closeButton:{backgroundColor:'#b52d3a',borderRadius:7,paddingHorizontal:13,paddingVertical:7},
  closeText:{color:'#fff',fontWeight:'900',fontSize:16},
- zoomArea:{width:'100%',height:'100%',flex:1,overflow:'hidden',backgroundColor:'#f3f4f6',borderRadius:7},
- expandedImage:{width:'100%',height:'100%',backgroundColor:'#f3f4f6',borderRadius:7}
+ zoomArea:{width:'100%',height:'100%',flex:1,position:'relative',overflow:'hidden',backgroundColor:'#f3f4f6',borderRadius:7},
+ zoomContent:{width:'100%',height:'100%',flex:1,position:'absolute',top:0,left:0},
+ expandedImage:{width:'100%',height:'100%',backgroundColor:'#f3f4f6',borderRadius:7,transformOrigin:'center center' as any}
 });

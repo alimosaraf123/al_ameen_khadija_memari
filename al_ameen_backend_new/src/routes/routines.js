@@ -1,7 +1,6 @@
 const express=require('express');
 const fs=require('fs');
 const path=require('path');
-const {sendPushForNotice}=require('../utils/pushNotifications');
 const sharp=require('sharp');
 const pool=require('../db');
 const {auth,allow}=require('../middleware/auth');
@@ -28,12 +27,14 @@ async function teacherOnlyGridData(data){
 async function renderRoutineJpg({group,date,data}){
  data=await teacherOnlyGridData(data);
  const academic=group!=='coaching';let columns=academic?(data.periods||[]):(data.rooms||[]);const rows=academic?(data.classes||[]):(data.times||[]);if(!academic){const used=new Set(Object.entries(data.cells||{}).filter(([,cell])=>cell&&cell.teacher_id).map(([key])=>String(key).split('|').slice(1).join('|')));const filtered=columns.filter((room)=>used.has(String(room)));if(filtered.length)columns=filtered;}
+ const offRows=new Set((academic?(data.off_classes||[]):(data.off_times||[])).map(String));
  const firstWidth=155,cellWidth=Math.max(150,Math.min(230,Math.floor((1500-firstWidth)/Math.max(columns.length,1)))),rowHeight=88,headerHeight=100,width=firstWidth+cellWidth*Math.max(columns.length,1)+40,height=Math.max(430,190+headerHeight+rowHeight*Math.max(rows.length,1));
  const groupTitle={v_x:'Class V-X',xi_xii:'Class XI-XII',coaching:'Coaching'}[group]||group;
  let body=`<rect width="100%" height="100%" fill="#fff"/><text x="${width/2}" y="45" text-anchor="middle" font-size="29" font-weight="700" fill="#173f77">Al-Ameen Mission Academy Memari</text><text x="${width/2}" y="80" text-anchor="middle" font-size="22" font-weight="700">${xml(groupTitle)} Routine - ${xml(date)}</text>`;
  if(data.no_class)body+=`<text x="${width/2}" y="210" text-anchor="middle" font-size="34" font-weight="700" fill="#9a1e25">No class / coaching</text>`;
- else{const top=120,left=20;body+=`<rect x="${left}" y="${top}" width="${firstWidth}" height="${headerHeight}" fill="#cfe1f4" stroke="#789"/><text x="${left+firstWidth/2}" y="${top+55}" text-anchor="middle" font-size="17" font-weight="700">${academic?'Class / Period':'Time / Room'}</text>`;columns.forEach((column,index)=>{const x=left+firstWidth+index*cellWidth,label=academic?`${column[0]||''} ${column[1]||''}`:column;body+=`<rect x="${x}" y="${top}" width="${cellWidth}" height="${headerHeight}" fill="#cfe1f4" stroke="#789"/><text x="${x+cellWidth/2}" y="${top+43}" text-anchor="middle" font-size="16" font-weight="700">${xml(short(label,22))}</text>`});rows.forEach((row,rowIndex)=>{const y=top+headerHeight+rowIndex*rowHeight;body+=`<rect x="${left}" y="${y}" width="${firstWidth}" height="${rowHeight}" fill="#dce9f6" stroke="#789"/><text x="${left+firstWidth/2}" y="${y+50}" text-anchor="middle" font-size="17" font-weight="700">${xml(short(row,20))}</text>`;columns.forEach((column,columnIndex)=>{const x=left+firstWidth+columnIndex*cellWidth,key=academic?`${row}|${columnIndex}`:`${row}|${column}`,cell=(data.cells||{})[key]||{},tiffin=academic&&String(column?.[0]||'').toLowerCase()==='tiffin';body+=`<rect x="${x}" y="${y}" width="${cellWidth}" height="${rowHeight}" fill="${tiffin?'#fff0be':rowIndex%2?'#f1f7fd':'#fff'}" stroke="#789"/>`;if(tiffin)body+=`<text x="${x+cellWidth/2}" y="${y+50}" text-anchor="middle" font-size="17" font-weight="700">TIFFIN</text>`;else{if(academic&&cell.subject)body+=`<text x="${x+cellWidth/2}" y="${y+34}" text-anchor="middle" font-size="16" font-weight="700">${xml(short(cell.subject,20))}</text>`;if(cell.teacher_name)body+=`<text x="${x+cellWidth/2}" y="${y+(academic?61:50)}" text-anchor="middle" font-size="${academic?17:18}"${String(cell.teacher_name).length>16?` textLength="${cellWidth-16}" lengthAdjust="spacingAndGlyphs"`:""}>${xml(short(cell.teacher_name,22))}</text>`}})})}
- body+=`<text x="${width-25}" y="${height-25}" text-anchor="end" font-size="14" font-style="italic">Published routine</text>`;
+ else{const top=120,left=20;body+=`<rect x="${left}" y="${top}" width="${firstWidth}" height="${headerHeight}" fill="#cfe1f4" stroke="#789"/><text x="${left+firstWidth/2}" y="${top+55}" text-anchor="middle" font-size="17" font-weight="700">${academic?'Class / Period':'Time / Room'}</text>`;columns.forEach((column,index)=>{const x=left+firstWidth+index*cellWidth,label=academic?`${column[0]||''} ${column[1]||''}`:column;body+=`<rect x="${x}" y="${top}" width="${cellWidth}" height="${headerHeight}" fill="#cfe1f4" stroke="#789"/><text x="${x+cellWidth/2}" y="${top+43}" text-anchor="middle" font-size="16" font-weight="700">${xml(short(label,22))}</text>`});rows.forEach((row,rowIndex)=>{const y=top+headerHeight+rowIndex*rowHeight,rowOff=offRows.has(String(row));body+=`<rect x="${left}" y="${y}" width="${firstWidth}" height="${rowHeight}" fill="#dce9f6" stroke="#789"/><text x="${left+firstWidth/2}" y="${y+50}" text-anchor="middle" font-size="17" font-weight="700">${xml(short(row,20))}</text>`;columns.forEach((column,columnIndex)=>{const x=left+firstWidth+columnIndex*cellWidth,key=academic?`${row}|${columnIndex}`:`${row}|${column}`,cell=(data.cells||{})[key]||{},tiffin=academic&&String(column?.[0]||'').toLowerCase()==='tiffin';body+=`<rect x="${x}" y="${y}" width="${cellWidth}" height="${rowHeight}" fill="${rowOff?'#fce7e7':tiffin?'#fff0be':rowIndex%2?'#f1f7fd':'#fff'}" stroke="#789"/>`;if(rowOff){if(columnIndex===0)body+=`<text x="${x+cellWidth/2}" y="${y+50}" text-anchor="middle" font-size="17" font-weight="700" fill="#9a1e25">${academic?'NO CLASS':'NO COACHING'}</text>`}else if(tiffin)body+=`<text x="${x+cellWidth/2}" y="${y+50}" text-anchor="middle" font-size="17" font-weight="700">TIFFIN</text>`;else{if(academic&&cell.subject)body+=`<text x="${x+cellWidth/2}" y="${y+34}" text-anchor="middle" font-size="16" font-weight="700">${xml(short(cell.subject,20))}</text>`;if(cell.teacher_name)body+=`<text x="${x+cellWidth/2}" y="${y+(academic?61:50)}" text-anchor="middle" font-size="${academic?17:18}"${String(cell.teacher_name).length>16?` textLength="${cellWidth-16}" lengthAdjust="spacingAndGlyphs"`:""}>${xml(short(cell.teacher_name,22))}</text>`}})})}
+ const footerDate=validDate(date)?String(date).split('-').reverse().join('-'):String(date),footerTime=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Asia/Kolkata'}).toUpperCase();
+ body+=`<text x="${width-25}" y="${height-25}" text-anchor="end" font-size="14" font-style="italic">${xml(`By N. Khatun, Date: ${footerDate}, Time: ${footerTime}`)}</text>`;
  return sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${body}</svg>`)).jpeg({quality:90}).toBuffer();
 }
 async function publishRoutineJpg({group,date,data,userId}){
@@ -48,14 +49,17 @@ async function publishRoutineJpg({group,date,data,userId}){
 
 router.get('/',auth,allow('super_admin','admin','teacher'),asyncHandler(async(req,res)=>{
  const teacher=req.user.role==='teacher';
- const r=await pool.query(`SELECT r.* FROM routines r
+ const r=await pool.query(`SELECT * FROM (
+  SELECT r.*,ROW_NUMBER() OVER(PARTITION BY r.title ORDER BY r.published_at DESC NULLS LAST,r.id DESC) routine_rank
+  FROM routines r
   WHERE r.is_active=TRUE ${teacher?'AND r.file_url IS NOT NULL':''}
-  AND EXISTS (
-    SELECT 1 FROM routine_manager_grids g
-    WHERE g.routine_kind='daily' AND g.is_published=TRUE
-      AND g.routine_date=r.routine_date
-      AND r.title=CASE g.group_name WHEN 'v_x' THEN 'Class V-X Routine' WHEN 'xi_xii' THEN 'Class XI-XII Routine' WHEN 'coaching' THEN 'Coaching Routine' ELSE r.title END
-  ) ORDER BY r.published_at DESC`);
+    AND EXISTS (
+      SELECT 1 FROM routine_manager_grids g
+      WHERE g.routine_kind='daily' AND g.is_published=TRUE
+        AND g.routine_date=r.routine_date
+        AND r.title=CASE g.group_name WHEN 'v_x' THEN 'Class V-X Routine' WHEN 'xi_xii' THEN 'Class XI-XII Routine' WHEN 'coaching' THEN 'Coaching Routine' ELSE r.title END
+    )
+ ) recent WHERE ${teacher?'routine_rank<=7':'TRUE'} ORDER BY published_at DESC NULLS LAST,id DESC`);
  res.json({success:true,routines:r.rows});
 }));
 router.post('/',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
@@ -174,9 +178,8 @@ router.post('/manager',auth,allow('super_admin','admin'),asyncHandler(async(req,
   AND routine_kind='master' AND id<>$2 AND EXTRACT(DOW FROM routine_date)=EXTRACT(DOW FROM $3::date)`,[b.group_name,r.rows[0].id,b.routine_date]);
  if(published)await pool.query(`DELETE FROM routine_manager_grids WHERE group_name=$1 AND routine_date=$2 AND routine_kind='draft'`,[b.group_name,b.routine_date]);
  const publishedImageUrl=published?await publishRoutineJpg({group:b.group_name,date:b.routine_date,data:gridData,userId:req.user.userId}):null;
- // Published routines are an internal staff/teacher update. Keep the notice
- // targeted to teachers only so it never appears in guardian notifications.
- if(!isMaster){const notice=(await pool.query(`INSERT INTO notices(title,notice_text,notice_type,published_by) VALUES($1,$2,'routine',$3) RETURNING id`,[`New ${b.group_name} routine published`,`Routine for ${b.group_name} on ${b.routine_date} is now available.`,req.user.userId])).rows[0];await pool.query(`INSERT INTO notice_targets(notice_id,target_type,target_value) VALUES($1,'role','teacher')`,[notice.id]);sendPushForNotice(notice.id).catch(error=>console.error('Routine push notification failed:',error.message));}
+ // Routines remain available in the teacher dashboard, but routine publication
+ // deliberately creates no notice or push notification.
  res.json({success:true,routine:r.rows[0],published_image_url:publishedImageUrl,message:isMaster?'Weekday Master routine saved':saveMode==='draft'?'Routine draft saved':'Final routine published as JPG'});
 }));
 
