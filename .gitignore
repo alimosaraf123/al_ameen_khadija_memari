@@ -10,3 +10,5 @@ installed-check.apk
 extracted_assets/
 tmp/
 tmpframes/
+__pycache__/  
+*.pyc 

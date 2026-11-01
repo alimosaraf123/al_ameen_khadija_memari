@@ -1,6 +1,13 @@
 const {decryptTemporaryPassword,saveTemporaryPassword}=require('../utils/guardianTemporaryCredentials');
 const {generateGuardianPassword,revokeGuardianAccess,resetAllGuardianPasswords}=require('../utils/guardianCredentials');
 const {getMonthlyFeeDue}=require('../utils/monthlyFees');
+const {
+  getPortalCredentials,
+  savePortalCredentials,
+  loginToPortal,
+  getFeesReportData,
+  FEES_REPORT_URL,
+} = require('../utils/alAmeenAccounts');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -13,7 +20,11 @@ const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
 const temporarySchemaReady=pool.query(fs.readFileSync(path.join(__dirname,'../../sql/guardian-temporary-credentials.sql'),'utf8'));
-const depositFundSchemaReady = pool.query('ALTER TABLE students ADD COLUMN IF NOT EXISTS sdf_book_no VARCHAR(100)');
+const depositFundSchemaReady = Promise.all([
+  pool.query('ALTER TABLE students ADD COLUMN IF NOT EXISTS sdf_book_no VARCHAR(100)'),
+  pool.query("ALTER TABLE student_deposit_transactions ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(20)"),
+  pool.query("ALTER TABLE student_deposit_transactions ADD COLUMN IF NOT EXISTS bill_number VARCHAR(50)")
+]);
 router.get('/temporary-passwords',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
  await temporarySchemaReady;
  const r=await pool.query("SELECT u.id,u.login_id,t.encrypted_password FROM guardian_temporary_credentials t JOIN users u ON u.id=t.user_id WHERE u.role='guardian' AND u.password_change_required=TRUE");
@@ -2073,6 +2084,117 @@ router.get('/admin/deposit-fund-statement', auth, allow('super_admin', 'admin'),
   summary.balance=balances.reduce((total,row)=>total+Number(row.balance||0),0);summary.advance=Math.max(0,summary.balance);summary.due=Math.max(0,-summary.balance);
   res.json({success:true,registration_no:registrationNo||null,date:fromDate&&toDate&&fromDate===toDate?fromDate:null,from_date:fromDate||null,to_date:toDate||null,student,transactions:rows,due_entries:dueEntries,balances,summary});
 }));
+
+// ADMIN / SUPER ADMIN: Check Al-Ameen Accounts portal status
+router.get('/admin/fees-portal-status', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
+  const creds = await getPortalCredentials();
+  res.json({
+    success: true,
+    configured: !!(creds.cookie || (creds.username && creds.password)),
+    username: creds.username ? creds.username : null,
+    has_cookie: !!creds.cookie,
+    portal_url: creds.portalUrl || FEES_REPORT_URL,
+  });
+}));
+
+// ADMIN / SUPER ADMIN: Update Al-Ameen Accounts portal credentials, URL or session cookie
+router.post('/admin/fees-portal-credentials', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
+  const { portal_url, portalUrl, username, password, cookie } = req.body || {};
+  const targetUrl = String(portal_url || portalUrl || '').trim();
+
+  if (cookie) {
+    await savePortalCredentials({ portalUrl: targetUrl || undefined, cookie: String(cookie).trim() });
+    return res.json({ success: true, message: 'Portal session cookie saved successfully.' });
+  }
+
+  const user = String(username || '').trim();
+  const pass = String(password || '').trim();
+  if (!user || !pass) {
+    if (targetUrl) {
+      await savePortalCredentials({ portalUrl: targetUrl });
+      return res.json({ success: true, message: 'Portal URL updated successfully.' });
+    }
+    return res.status(400).json({ success: false, message: 'Username/Email and Password are required.' });
+  }
+
+  try {
+    const sessionCookie = await loginToPortal(user, pass);
+    await savePortalCredentials({ portalUrl: targetUrl || undefined, username: user, password: pass, cookie: sessionCookie });
+    res.json({ success: true, message: 'Logged in and credentials saved successfully.' });
+  } catch (err) {
+    await savePortalCredentials({ portalUrl: targetUrl || undefined, username: user, password: pass });
+    res.status(400).json({ success: false, message: err.message || 'Login to Al-Ameen Accounts failed.' });
+  }
+}));
+
+// ADMIN / SUPER ADMIN: collected fees report from https://alameenmission.net/alameen/accounts/?action=fees_report
+router.get('/admin/fees-report', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
+  const fromDate = String(req.query.from_date || '').trim();
+  const toDate = String(req.query.to_date || '').trim();
+  const session = String(req.query.session || '').trim();
+  const source = String(req.query.source || 'portal').trim();
+
+  const validDate = value => !value || /^\d{4}-\d{2}-\d{2}$/.test(value);
+  if (!validDate(fromDate) || !validDate(toDate)) {
+    return res.status(400).json({ success: false, message: 'Dates must be in YYYY-MM-DD format' });
+  }
+  if (fromDate && toDate && fromDate > toDate) {
+    return res.status(400).json({ success: false, message: 'From Date cannot be after To Date' });
+  }
+
+  // 1. Primary: Live fetch from Al-Ameen Accounts Portal
+  if (source !== 'local') {
+    try {
+      const portalReport = await getFeesReportData({
+        fromDate,
+        toDate,
+        session,
+        branch: 'Memari',
+      });
+      return res.json(portalReport);
+    } catch (portalErr) {
+      console.error('Fees report portal error:', portalErr);
+      return res.status(502).json({
+        success: false,
+        error: portalErr.message || 'Failed to fetch fees report from portal',
+        portal_url: FEES_REPORT_URL,
+      });
+    }
+  }
+
+  // 2. Fallback / local source
+  await depositFundSchemaReady;
+  const params = [];
+  const filters = ["t.transaction_type='deposit'"];
+  if (fromDate) { params.push(fromDate); filters.push(`t.transaction_date >= ${params.length}::date`); }
+  if (toDate) { params.push(toDate); filters.push(`t.transaction_date <= ${params.length}::date`); }
+  const rows = (await pool.query(`
+    SELECT t.id,t.student_id,t.transaction_date,t.amount,t.details,t.reference_no,
+      t.created_by,COALESCE(NULLIF(TRIM(t.bill_number),''),t.id::text) AS bill_number,
+      s.registration_no,s.student_name,s.class_name,s.roll_no,
+      CASE
+        WHEN LOWER(COALESCE(t.payment_mode,''))='cash' THEN 'cash'
+        WHEN LOWER(CONCAT_WS(' ',t.details,t.reference_no)) ~ '(^|[^a-z])cash/' THEN 'cash'
+        ELSE 'online'
+      END AS payment_mode
+    FROM student_deposit_transactions t
+    JOIN students s ON s.id=t.student_id
+    WHERE ${filters.join(' AND ')}
+    ORDER BY t.transaction_date DESC NULLS LAST,t.id DESC
+  `, params)).rows;
+
+  res.json({
+    success: true,
+    source: 'local',
+    from_date: fromDate || null,
+    to_date: toDate || null,
+    bill_count: new Set(rows.map(row => String(row.bill_number || '').trim()).filter(Boolean)).size,
+    total_amount: rows.reduce((sum, row) => sum + Number(row.amount || 0), 0),
+    online_amount: rows.filter(row => row.payment_mode === 'online').reduce((sum, row) => sum + Number(row.amount || 0), 0),
+    cash_amount: rows.filter(row => row.payment_mode === 'cash').reduce((sum, row) => sum + Number(row.amount || 0), 0),
+    fees: rows,
+  });
+}));
 // ========================================
 // ADMIN / SUPER ADMIN:
 // STUDENT DEPOSIT FUND DETAILS
@@ -2341,6 +2463,8 @@ router.post(
       details,
       reference_no,
       transaction_date,
+      payment_mode,
+      bill_number,
     } = req.body || {};
 
 
@@ -2426,6 +2550,8 @@ router.post(
           amount,
           details,
           reference_no,
+          payment_mode,
+          bill_number,
           created_by
         )
 
@@ -2437,7 +2563,9 @@ router.post(
           $4,
           $5,
           $6,
-          $7
+          $7,
+          $8,
+          $9
         )
 
         RETURNING *
@@ -2458,6 +2586,14 @@ router.post(
 
           reference_no
             ? String(reference_no).trim()
+            : null,
+
+          transaction_type === 'deposit' && ['cash','online'].includes(String(payment_mode || '').toLowerCase())
+            ? String(payment_mode).toLowerCase()
+            : null,
+
+          bill_number
+            ? String(bill_number).trim().slice(0, 50)
             : null,
 
           req.user.userId,

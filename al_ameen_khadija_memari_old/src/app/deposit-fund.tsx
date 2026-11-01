@@ -85,6 +85,8 @@ export default function DepositFund() {
   const [details, setDetails] =
     useState('Cash');
 
+  const [paymentMode, setPaymentMode] = useState<'cash' | 'online'>('cash');
+
   const [sdfBookNo, setSdfBookNo] = useState('');
   const [bookNoEditing, setBookNoEditing] = useState(true);
 
@@ -92,6 +94,8 @@ export default function DepositFund() {
     referenceNo,
     setReferenceNo
   ] = useState('');
+
+  const [billNumber, setBillNumber] = useState('');
 
   const [
     saving,
@@ -435,6 +439,12 @@ export default function DepositFund() {
                   referenceNo.trim() ||
                   null,
 
+                payment_mode:
+                  transactionType === 'deposit' ? paymentMode : null,
+
+                bill_number:
+                  transactionType === 'deposit' ? billNumber.trim() || null : null,
+
               }),
 
           }
@@ -456,7 +466,11 @@ export default function DepositFund() {
 
         setDetails('Cash');
 
+        setPaymentMode('cash');
+
         setReferenceNo('');
+
+        setBillNumber('');
 
 
         await loadFund(
@@ -907,6 +921,14 @@ export default function DepositFund() {
               </View>
 
 
+              {transactionType === 'deposit' && <View style={styles.paymentModeRow}>
+                <Text style={styles.paymentModeLabel}>Payment Mode</Text>
+                {(['cash', 'online'] as const).map(mode => <TouchableOpacity key={mode} onPress={() => setPaymentMode(mode)} style={[styles.paymentModeButton, paymentMode === mode && styles.paymentModeSelected]}>
+                  <Text style={[styles.paymentModeText, paymentMode === mode && styles.paymentModeSelectedText]}>{mode === 'online' ? 'Online (EDC)' : 'Cash'}</Text>
+                </TouchableOpacity>)}
+              </View>}
+
+
               <Field
 
                 placeholder="Amount"
@@ -968,6 +990,15 @@ export default function DepositFund() {
                 returnKeyType="done"
 
               />
+
+
+              {transactionType === 'deposit' && <Field
+                placeholder="Bill Number (Optional)"
+                value={billNumber}
+                onChangeText={setBillNumber}
+                onSubmitEditing={saveTransaction}
+                returnKeyType="done"
+              />}
 
 
               <Button
@@ -1468,6 +1499,43 @@ whatsappText: {
       flexDirection: 'row',
       gap: 10,
       marginBottom: 14,
+    },
+
+    paymentModeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginBottom: 12,
+    },
+
+    paymentModeLabel: {
+      fontWeight: '800',
+      color: '#334155',
+      marginRight: 4,
+    },
+
+    paymentModeButton: {
+      borderWidth: 1,
+      borderColor: '#94a3b8',
+      borderRadius: 7,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      backgroundColor: '#fff',
+    },
+
+    paymentModeSelected: {
+      backgroundColor: '#1769c2',
+      borderColor: '#1769c2',
+    },
+
+    paymentModeText: {
+      color: '#334155',
+      fontWeight: '800',
+    },
+
+    paymentModeSelectedText: {
+      color: '#fff',
     },
 
     typeButton: {

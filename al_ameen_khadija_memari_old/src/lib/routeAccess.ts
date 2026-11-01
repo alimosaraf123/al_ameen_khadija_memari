@@ -4,7 +4,7 @@ export const PRIVATE_ROUTES = [
   'service-staff','routines','rooms','room-assignments','problems','office','notices',
   'marks','library','illness','id-cards','guardians','guardian','guardian-student',
   'gateman','gate-pass','dues','documents','dining-stock','deposit-fund',
-  'deposit-fund-report','class-results','behavior','asset-register','audit-log','attendance',
+  'deposit-fund-report','fees','class-results','behavior','asset-register','audit-log','attendance',
 ] as const;
 export function canOpenRoute(route:string,user:any) {
   if(!user?.is_active || !user?.role)return false;
