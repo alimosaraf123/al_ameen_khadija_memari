@@ -121,9 +121,11 @@ export default function TerminalExams() {
       const m = x.mcq === '' ? null : Number(x.mcq);
       const o = x.oral === '' ? null : Number(x.oral);
       if (submit_mode === 'final' && w === null && m === null && o === null)
-        errors[x.student_id] = 'Enter Written or Oral marks';
+        errors[x.student_id] = 'Enter marks';
       else if (w !== null && w > Number(entry.theory_marks))
         errors[x.student_id] = `Written marks cannot exceed ${entry.theory_marks}`;
+      else if (m !== null && m > Number(entry.mcq_marks || 0))
+        errors[x.student_id] = `MCQ marks cannot exceed ${entry.mcq_marks}`;
       else if (o !== null && o > Number(entry.oral_marks))
         errors[x.student_id] = `Oral marks cannot exceed ${entry.oral_marks}`;
       else if ((Number(w) || 0) + (Number(m) || 0) + (Number(o) || 0) > Number(entry.full_marks))
