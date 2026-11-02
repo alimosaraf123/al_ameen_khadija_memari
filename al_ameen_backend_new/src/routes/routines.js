@@ -147,7 +147,7 @@ router.post('/manager/backup/restore',auth,allow('super_admin','admin'),asyncHan
 router.get('/manager/history',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
  const r=await pool.query(`SELECT g.id,g.group_name,g.routine_date,g.routine_kind,g.is_master,g.is_published,g.updated_at,
   g.grid_data->>'no_class' no_class,u.full_name updated_by_name FROM routine_manager_grids g
-  LEFT JOIN users u ON u.id=g.created_by WHERE g.group_name=$1
+  LEFT JOIN users u ON u.id=g.created_by WHERE g.group_name=$1 AND g.is_master=FALSE AND g.routine_kind!='master'
   ORDER BY g.routine_date DESC,g.updated_at DESC LIMIT 120`,[String(req.query.group||'v_x')]);
  res.json({success:true,routines:r.rows});
 }));
