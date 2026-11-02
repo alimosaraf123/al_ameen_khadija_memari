@@ -15,10 +15,12 @@ import { router } from 'expo-router';
 import AcademyHeader from '../components/AcademyHeader';
 import { Field } from '../components/ui';
 import { Select } from '../components/StudentDirectory';
-import { api } from '../lib/api';
+import { api, API_BASE } from '../lib/api';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { SUBJECTS, SUBJECT_OPTIONS } from '../lib/subjects';
 import DatePickerField from '../components/DatePickerField';
-import { getUser } from '../lib/auth';
+import { getToken, getUser } from '../lib/auth';
 import { STUDENT_CLASSES } from '../lib/studentClasses';
 import { confirmAction, successMessage } from '../lib/confirm';
 
@@ -39,6 +41,55 @@ export default function TerminalExams() {
     session_name: '2026',
     subjects: [{ ...blank }]
   });
+  const [downloadingExcel, setDownloadingExcel] = useState<number | null>(null);
+
+  const downloadSubjectExcel = async (subjectId: number, subjectName?: string, examName?: string) => {
+    try {
+      setDownloadingExcel(subjectId);
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/terminal-exams/subjects/${subjectId}/excel`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Excel download failed');
+      }
+      const blob = await res.blob();
+      const cleanSubject = (subjectName || 'subject').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const cleanExam = (examName || 'exam').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const fileName = `terminal-marks-${cleanExam}-${cleanSubject}.xlsx`;
+
+      if (Platform.OS === 'web') {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const base64 = (reader.result as string).split(',')[1];
+          const fileUri = `${(FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory || ''}${fileName}`;
+          await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: (FileSystem as any).EncodingType?.Base64 || 'base64' });
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(fileUri, {
+              mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              dialogTitle: 'Download Subject Excel'
+            });
+          } else {
+            Alert.alert('Excel Downloaded', `File saved to ${fileUri}`);
+          }
+        };
+        reader.readAsDataURL(blob);
+      }
+    } catch (e: any) {
+      Alert.alert('Download Error', e.message || 'Failed to download Excel');
+    } finally {
+      setDownloadingExcel(null);
+    }
+  };
+
   const [entry, setEntry] = useState<any>(null);
   const [students, setStudents] = useState<any[]>([]);
   const [markErrors, setMarkErrors] = useState<Record<number, string>>({});
@@ -326,22 +377,44 @@ export default function TerminalExams() {
               <TouchableOpacity onPress={() => setEntry(null)}>
                 <Text style={s.link}>← Back to exams</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => router.push('/omr-evaluation' as any)}
-                style={{
-                  backgroundColor: '#0F52BA',
-                  paddingHorizontal: 12,
-                  paddingVertical: 6,
-                  borderRadius: 7,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 6
-                }}
-              >
-                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>
-                  📷 OMR Scan & Auto-Fill MCQ
-                </Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                <TouchableOpacity
+                  disabled={downloadingExcel === entry.id}
+                  onPress={() => downloadSubjectExcel(entry.id, entry.subject_name, entry.exam_name)}
+                  style={{
+                    backgroundColor: '#16a34a',
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 7,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  {downloadingExcel === entry.id ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : null}
+                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>
+                    📊 Print / Export Excel
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => router.push('/omr-evaluation' as any)}
+                  style={{
+                    backgroundColor: '#0F52BA',
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 7,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>
+                    📷 OMR Scan & Auto-Fill MCQ
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <Text style={s.heading}>
@@ -766,32 +839,58 @@ export default function TerminalExams() {
                     <View style={s.cardExpandedBody}>
                       <View style={s.assignmentGrid}>
                         {(e.subjects || []).map((x: any) => (
-                          <TouchableOpacity
+                          <View
                             key={x.id}
-                            onPress={() => open(x.id)}
                             style={[
                               s.assignment,
-                              x.status === 'submitted' && s.assignmentSubmitted
+                              x.status === 'submitted' && s.assignmentSubmitted,
+                              { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }
                             ]}
                           >
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Text style={s.bold}>
-                                {x.subject_name} - Full {x.full_marks}
+                            <TouchableOpacity
+                              onPress={() => open(x.id)}
+                              style={{ flex: 1, marginRight: 8 }}
+                            >
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Text style={s.bold}>
+                                  {x.subject_name} - Full {x.full_marks}
+                                </Text>
+                                <Text
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: '800',
+                                    color: x.status === 'submitted' ? '#166534' : '#b45309'
+                                  }}
+                                >
+                                  {x.status === 'submitted' ? '✓ Submitted' : '⏳ Pending'}
+                                </Text>
+                              </View>
+                              <Text style={s.help}>
+                                {x.teacher_name || 'Unassigned'} • {x.status}
                               </Text>
-                              <Text
-                                style={{
-                                  fontSize: 11,
-                                  fontWeight: '800',
-                                  color: x.status === 'submitted' ? '#166534' : '#b45309'
-                                }}
-                              >
-                                {x.status === 'submitted' ? '✓ Submitted' : '⏳ Pending'}
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              disabled={downloadingExcel === x.id}
+                              onPress={() => downloadSubjectExcel(x.id, x.subject_name, e.exam_name)}
+                              style={{
+                                backgroundColor: '#15803d',
+                                paddingHorizontal: 10,
+                                paddingVertical: 6,
+                                borderRadius: 6,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4
+                              }}
+                            >
+                              {downloadingExcel === x.id ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                              ) : null}
+                              <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>
+                                📊 Excel
                               </Text>
-                            </View>
-                            <Text style={s.help}>
-                              {x.teacher_name || 'Unassigned'} • {x.status}
-                            </Text>
-                          </TouchableOpacity>
+                            </TouchableOpacity>
+                          </View>
                         ))}
                       </View>
 
