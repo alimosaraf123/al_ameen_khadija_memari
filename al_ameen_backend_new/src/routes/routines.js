@@ -1,4 +1,5 @@
 const express=require('express');
+const ExcelJS=require('exceljs');
 const fs=require('fs');
 const path=require('path');
 const sharp=require('sharp');
@@ -151,19 +152,122 @@ router.get('/manager/history',auth,allow('super_admin','admin'),asyncHandler(asy
  res.json({success:true,routines:r.rows});
 }));
 
-router.get('/manager/report',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
- const group=String(req.query.group||'v_x'),month=String(req.query.month||new Date().toISOString().slice(0,7));
- if(!GROUPS.includes(group)||!/^\d{4}-\d{2}$/.test(month))return res.status(400).json({success:false,message:'Valid group and month are required'});
- const q=await pool.query(`SELECT to_char(routine_date,'YYYY-MM-DD') routine_date,grid_data FROM routine_manager_grids WHERE group_name=$1
-  AND routine_kind='daily' AND is_published=TRUE AND to_char(routine_date,'YYYY-MM')=$2 ORDER BY routine_date`,[group,month]);
- const rows=[],totals=new Map();
- for(const routine of q.rows){const data=await teacherOnlyGridData(routine.grid_data||{});if(data.no_class)continue;
-  for(const[position,cell]of Object.entries(data.cells||{})){if(!cell||!cell.teacher_id)continue;
-   const p=position.split('|'),item={date:String(routine.routine_date).slice(0,10),class_or_room:group==='coaching'?p[1]:p[0],period_or_time:group==='coaching'?p[0]:p[1],subject:cell.subject||'',teacher_id:String(cell.teacher_id),teacher_name:cell.teacher_name||'Teacher'};
-   rows.push(item);const countKey=data.combined_class_counting?item.teacher_id+'|'+item.period_or_time:item.teacher_id+'|'+item.class_or_room+'|'+item.period_or_time;if(!data.__counted)data.__counted={};if(!data.__counted[countKey]){data.__counted[countKey]=true;const old=totals.get(item.teacher_id)||{teacher_id:item.teacher_id,teacher_name:item.teacher_name,class_count:0};old.class_count++;totals.set(item.teacher_id,old);}
+async function generateMonthlyReportData(month){
+ const parts=String(month||'').split('-'),y=parts[0],m=parseInt(parts[1],10);
+ const monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
+ const monthLabel=`${monthNames[m-1]||month} - ${y}`;
+ const teachersRes=await pool.query(`SELECT t.id, t.name, COALESCE(NULLIF(t.subject,''),'General') as subject
+  FROM teachers t LEFT JOIN users u ON u.id=t.user_id
+  WHERE t.is_active=TRUE AND COALESCE(u.is_active,TRUE)=TRUE AND CASE
+   WHEN NULLIF(LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))),'') IS NOT NULL
+     OR NULLIF(LOWER(TRIM(COALESCE(t.profile_details->>'type_of_staff',''))),'') IS NOT NULL
+   THEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) IN ('teacher','teachers')
+     OR LOWER(TRIM(COALESCE(t.profile_details->>'type_of_staff',''))) IN ('teacher','teachers')
+   ELSE LOWER(COALESCE(u.role,''))='teacher' OR LOWER(COALESCE(t.designation,'')) LIKE '%teacher%'
+  END ORDER BY t.subject, t.name`);
+ const teacherMap=new Map();
+ teachersRes.rows.forEach(t=>{teacherMap.set(String(t.id),{id:String(t.id),name:t.name,subject:t.subject,xi_xii:0,ix_x:0,coaching:0,total:0});});
+ const q=await pool.query(`SELECT group_name, to_char(routine_date,'YYYY-MM-DD') as routine_date, grid_data
+  FROM routine_manager_grids WHERE routine_kind='daily' AND is_published=TRUE AND to_char(routine_date,'YYYY-MM')=$1
+  ORDER BY routine_date`,[month]);
+ for(const row of q.rows){
+  const group=row.group_name,data=await teacherOnlyGridData(row.grid_data||{});
+  if(data.no_class)continue;
+  const cells=data.cells||{},seenTeacherSlots=new Set();
+  for(const[pos,cell]of Object.entries(cells)){
+   if(!cell||!cell.teacher_id)continue;
+   const tId=String(cell.teacher_id);
+   if(!teacherMap.has(tId))continue;
+   const p=pos.split('|'),slot=group==='coaching'?p[0]:p[1];
+   const countKey=data.combined_class_counting?`${tId}|${slot}`:`${tId}|${pos}`;
+   if(seenTeacherSlots.has(countKey))continue;
+   seenTeacherSlots.add(countKey);
+   const rec=teacherMap.get(tId);
+   if(group==='xi_xii')rec.xi_xii++;
+   else if(group==='v_x')rec.ix_x++;
+   else if(group==='coaching')rec.coaching++;
+   rec.total++;
   }
  }
- res.json({success:true,rows,totals:[...totals.values()].sort((a,b)=>a.teacher_name.localeCompare(b.teacher_name))});
+ const teachers=[...teacherMap.values()].map((t,idx)=>({sl:idx+1,...t}));
+ const totals={xi_xii:teachers.reduce((s,t)=>s+t.xi_xii,0),ix_x:teachers.reduce((s,t)=>s+t.ix_x,0),coaching:teachers.reduce((s,t)=>s+t.coaching,0),grand_total:teachers.reduce((s,t)=>s+t.total,0)};
+ return {month,monthLabel,schoolName:'Al - Ameen Mission Academy Memari',teachers,totals};
+}
+
+async function buildMonthlyReportWorkbook({month,monthLabel,schoolName,teachers,totals}){
+ const wb=new ExcelJS.Workbook();
+ wb.creator='Al-Ameen Mission Academy Memari';
+ const ws=wb.addWorksheet('Monthly Report');
+ ws.mergeCells('A1:G1');
+ const t1=ws.getCell('A1');
+ t1.value=schoolName;
+ t1.font={name:'Calibri',size:16,bold:true,color:{argb:'FF1F4E78'}};
+ t1.alignment={horizontal:'center',vertical:'middle'};
+ ws.getRow(1).height=28;
+
+ ws.mergeCells('A2:G2');
+ const t2=ws.getCell('A2');
+ t2.value=monthLabel;
+ t2.font={name:'Calibri',size:14,bold:true,color:{argb:'FF1F4E78'}};
+ t2.alignment={horizontal:'center',vertical:'middle'};
+ ws.getRow(2).height=24;
+ ws.getRow(3).height=10;
+
+ const headerRow=ws.getRow(4);
+ headerRow.height=26;
+ headerRow.values=['SL','Subject',"Teacher's Name",'XI-XII','IX-X','Coaching','Total'];
+ const thinBorder={top:{style:'thin',color:{argb:'FF000000'}},left:{style:'thin',color:{argb:'FF000000'}},bottom:{style:'thin',color:{argb:'FF000000'}},right:{style:'thin',color:{argb:'FF000000'}}};
+ headerRow.eachCell((cell,colNumber)=>{
+  cell.font={name:'Calibri',size:12,bold:true,underline:true,color:{argb:'FFCC0000'}};
+  cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFFFF'}};
+  cell.alignment={horizontal:colNumber===1||colNumber>=4?'center':'left',vertical:'middle'};
+  cell.border=thinBorder;
+ });
+
+ teachers.forEach((t,i)=>{
+  const rIdx=5+i,r=ws.getRow(rIdx);
+  r.height=22;
+  const isEven=i%2===1;
+  const rowFill={type:'pattern',pattern:'solid',fgColor:{argb:isEven?'FFEAF2FA':'FFFFFFFF'}};
+  r.values=[t.sl,t.subject,t.name,t.xi_xii||'',t.ix_x||'',t.coaching||'',t.total||''];
+  r.eachCell({includeEmpty:true},(cell,colNumber)=>{
+   cell.font={name:'Calibri',size:11,bold:colNumber===7};
+   cell.fill=rowFill;
+   cell.border=thinBorder;
+   cell.alignment={horizontal:colNumber===1||colNumber>=4?'center':'left',vertical:'middle'};
+  });
+ });
+
+ const totalRowIdx=5+teachers.length,totalRow=ws.getRow(totalRowIdx);
+ totalRow.height=25;
+ totalRow.values=['','','Total Classes',totals.xi_xii,totals.ix_x,totals.coaching,totals.grand_total];
+ totalRow.eachCell({includeEmpty:true},(cell,colNumber)=>{
+  cell.font={name:'Calibri',size:11,bold:true,color:{argb:'FF1F4E78'}};
+  cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFD9E1F2'}};
+  cell.border={top:{style:'medium',color:{argb:'FF000000'}},bottom:{style:'double',color:{argb:'FF000000'}},left:{style:'thin',color:{argb:'FF000000'}},right:{style:'thin',color:{argb:'FF000000'}}};
+  cell.alignment={horizontal:colNumber>=4?'center':'right',vertical:'middle'};
+ });
+
+ ws.columns=[{width:8},{width:18},{width:30},{width:14},{width:14},{width:16},{width:14}];
+ return wb;
+}
+
+router.get('/manager/report',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ const month=String(req.query.month||new Date().toISOString().slice(0,7));
+ if(!/^\d{4}-\d{2}$/.test(month))return res.status(400).json({success:false,message:'Valid month (YYYY-MM) is required'});
+ const reportData=await generateMonthlyReportData(month);
+ res.json({success:true,...reportData});
+}));
+
+router.get('/manager/report/excel',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ const month=String(req.query.month||new Date().toISOString().slice(0,7));
+ if(!/^\d{4}-\d{2}$/.test(month))return res.status(400).json({success:false,message:'Valid month (YYYY-MM) is required'});
+ const reportData=await generateMonthlyReportData(month);
+ const wb=await buildMonthlyReportWorkbook(reportData);
+ res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+ res.setHeader('Content-Disposition',`attachment; filename="Monthly-Report-${month}.xlsx"`);
+ await wb.xlsx.write(res);
+ res.end();
 }));
 
 router.post('/manager',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
