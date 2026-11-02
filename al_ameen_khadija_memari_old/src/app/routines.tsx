@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useRef,useState}from'react';
-import{ActivityIndicator,Alert,PanResponder,Platform,ScrollView,StyleSheet,Text,TextInput,TouchableOpacity,View}from'react-native';
+import{ActivityIndicator,Alert,Modal,PanResponder,Platform,ScrollView,StyleSheet,Text,TextInput,TouchableOpacity,View}from'react-native';
 import{SafeAreaView}from'react-native-safe-area-context';
 import{useRouter}from'expo-router';
 import*as DocumentPicker from'expo-document-picker';
@@ -59,6 +59,7 @@ export default function Routines(){
  const[clearedDuplicates,setClearedDuplicates]=useState<string[]>([]);
  const[history,setHistory]=useState<any[]>([]),[historyOpen,setHistoryOpen]=useState(false);
  const[reportOpen,setReportOpen]=useState(false),[month,setMonth]=useState(today.slice(0,7)),[report,setReport]=useState<any>(null),[downloadingReport,setDownloadingReport]=useState(false),[expandReport,setExpandReport]=useState(false),[reportFilter,setReportFilter]=useState('');
+ const[teacherSheetModal,setTeacherSheetModal]=useState<{teacher:any;kind:'coaching'|'xi_xii'|'v_x'|'all'}|null>(null),[downloadingTeacherExcel,setDownloadingTeacherExcel]=useState(false);
  const[countWidth,setCountWidth]=useState(190),countWidthRef=useRef(190);
  const pageScrollRef=useRef<ScrollView>(null),pageScrollYRef=useRef(0),pendingPageScrollYRef=useRef<number|null>(null);
  const countResizeResponder=useRef(PanResponder.create({onStartShouldSetPanResponder:()=>true,onMoveShouldSetPanResponder:()=>true,onPanResponderMove:(_,gesture)=>{const next=Math.max(100,Math.min(420,countWidthRef.current-gesture.dx));setCountWidth(next)},onPanResponderRelease:(_,gesture)=>{const next=Math.max(100,Math.min(420,countWidthRef.current-gesture.dx));countWidthRef.current=next;setCountWidth(next)}})).current;
@@ -185,6 +186,78 @@ async function save(mode:'master'|'draft'|'final'){
   const q=reportFilter.trim().toLowerCase();
   return list.filter((t:any)=>String(t.name||'').toLowerCase().includes(q)||String(t.subject||'').toLowerCase().includes(q));
  },[report,reportFilter]);
+ function formatDateDDMM(dStr:string){if(!dStr)return'';const parts=String(dStr).split('-');return parts.length===3?`${parts[2]}-${parts[1]}-${parts[0]}`:dStr}
+ const selectedTeacherClasses:any[]=useMemo(()=>{
+  if(!teacherSheetModal?.teacher)return[];
+  const t=teacherSheetModal.teacher,k=teacherSheetModal.kind;
+  if(k==='xi_xii')return t.xi_xii_classes||[];
+  if(k==='v_x')return t.v_x_classes||[];
+  if(k==='all'){
+   return [...(t.coaching_classes||[]),...(t.xi_xii_classes||[]),...(t.v_x_classes||[])].sort((a:any,b:any)=>String(a.date).localeCompare(String(b.date)));
+  }
+  return t.coaching_classes||[];
+ },[teacherSheetModal]);
+
+ const selectedTeacherTotalDuration=useMemo(()=>{
+  let mins=0;
+  for(const c of selectedTeacherClasses){mins+=c.duration_minutes||0}
+  const h=Math.floor(mins/60),m=mins%60;
+  if(h>0&&m>0)return `${h} Hours ${m} Mins`;
+  if(h>0)return `${h} Hours`;
+  if(m>0)return `${m} Mins`;
+  return '-';
+ },[selectedTeacherClasses]);
+
+ const filledTeacherRows=useMemo(()=>{
+  const count=Math.max(selectedTeacherClasses.length,18);
+  return Array.from({length:count},(_,i)=>selectedTeacherClasses[i]||null);
+ },[selectedTeacherClasses]);
+
+ const modalSheetTitle=useMemo(()=>{
+  const k=teacherSheetModal?.kind||'coaching';
+  const sess=report?.sessionName||'2026-27';
+  if(k==='xi_xii')return `Record Sheet for Teachers Class XI-XII Classes for the Session-${sess}`;
+  if(k==='v_x')return `Record Sheet for Teachers Class V-X Classes for the Session-${sess}`;
+  if(k==='all')return `Record Sheet for Teachers All Classes for the Session-${sess}`;
+  return `Record Sheet for Teachers Coaching Classes for the Session-${sess}`;
+ },[teacherSheetModal,report]);
+
+ async function downloadTeacherRecordExcel(){
+  if(!teacherSheetModal||downloadingTeacherExcel)return;
+  setDownloadingTeacherExcel(true);
+  try{
+   const token=await getToken();
+   const {teacher,kind}=teacherSheetModal;
+   const url=`${API_BASE}/api/routines/manager/report/teacher-excel?month=${month}&teacher_id=${teacher.id}&kind=${kind}`;
+   if(Platform.OS==='web'&&typeof window!=='undefined'){
+    const resp=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});
+    if(!resp.ok){
+     const err=await resp.json().catch(()=>({}));
+     throw new Error(err.message||'Failed to download Excel');
+    }
+    const blob=await resp.blob();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    const safeName=(teacher.name||'Teacher').replace(/[^a-zA-Z0-9_-]/g,'_');
+    a.download=`${safeName}_${kind.toUpperCase()}_Record_${month}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+   }else{
+    Alert.alert('Notice','Excel download is supported on web browser.');
+   }
+  }catch(e:any){Alert.alert('Download Error',e.message)}
+  finally{setDownloadingTeacherExcel(false)}
+ }
+
+ function printTeacherRecordSheet(){
+  if(Platform.OS==='web'&&typeof window!=='undefined'){
+   window.print();
+  }else{
+   Alert.alert('Print','Printing is supported on web browser.');
+  }
+ }
  async function loadReport(){try{const d=await api(`/api/routines/manager/report?month=${month}`);setReport(d);setReportOpen(true)}catch(e:any){Alert.alert('Monthly Report Error',e.message)}}
  async function downloadMonthlyRecord(){
   if(downloadingReport)return;
@@ -375,11 +448,29 @@ async function save(mode:'master'|'draft'|'final'){
          <View key={t.id||idx} style={[s.reportRow,isEven?s.reportRowAlt:s.reportRowWhite]}>
           <View style={[s.reportCell,{width:48}]}><Text style={s.reportCellText}>{t.sl}</Text></View>
           <View style={[s.reportCell,{width:130,alignItems:'flex-start'}]}><Text style={s.reportCellText}>{t.subject}</Text></View>
-          <View style={[s.reportCell,{width:220,alignItems:'flex-start'}]}><Text style={[s.reportCellText,s.bold]}>{t.name}</Text></View>
-          <View style={[s.reportCell,{width:90}]}><Text style={[s.reportCellText,t.xi_xii>0&&s.bold]}>{t.xi_xii||'-'}</Text></View>
-          <View style={[s.reportCell,{width:90}]}><Text style={[s.reportCellText,t.ix_x>0&&s.bold]}>{t.ix_x||'-'}</Text></View>
-          <View style={[s.reportCell,{width:100}]}><Text style={[s.reportCellText,t.coaching>0&&s.bold]}>{t.coaching||'-'}</Text></View>
-          <View style={[s.reportCell,{width:90}]}><Text style={[s.reportCellText,s.bold,t.total>0&&{color:'#1e40af'}]}>{t.total||'-'}</Text></View>
+          <TouchableOpacity onPress={()=>setTeacherSheetModal({teacher:t,kind:t.coaching>0?'coaching':'all'})} style={[s.reportCell,{width:220,alignItems:'flex-start'}]}>
+           <Text style={[s.reportCellText,s.bold,{color:'#1e3a8a',textDecorationLine:'underline'}]}>{t.name}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={()=>t.xi_xii>0&&setTeacherSheetModal({teacher:t,kind:'xi_xii'})} style={[s.reportCell,{width:90}]}>
+           <View style={[t.xi_xii>0&&s.clickableBadge]}>
+            <Text style={[s.reportCellText,t.xi_xii>0&&s.clickableBadgeText]}>{t.xi_xii||'-'}</Text>
+           </View>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={()=>t.ix_x>0&&setTeacherSheetModal({teacher:t,kind:'v_x'})} style={[s.reportCell,{width:90}]}>
+           <View style={[t.ix_x>0&&s.clickableBadge]}>
+            <Text style={[s.reportCellText,t.ix_x>0&&s.clickableBadgeText]}>{t.ix_x||'-'}</Text>
+           </View>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={()=>t.coaching>0&&setTeacherSheetModal({teacher:t,kind:'coaching'})} style={[s.reportCell,{width:100}]}>
+           <View style={[t.coaching>0&&s.clickableBadgeCoaching]}>
+            <Text style={[s.reportCellText,t.coaching>0&&s.clickableBadgeCoachingText]}>{t.coaching||'-'}</Text>
+           </View>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={()=>t.total>0&&setTeacherSheetModal({teacher:t,kind:'all'})} style={[s.reportCell,{width:90}]}>
+           <View style={[t.total>0&&s.clickableBadgeTotal]}>
+            <Text style={[s.reportCellText,s.bold,t.total>0&&{color:'#1e40af'}]}>{t.total||'-'}</Text>
+           </View>
+          </TouchableOpacity>
          </View>
         );
        })}
@@ -404,10 +495,171 @@ async function save(mode:'master'|'draft'|'final'){
      </ScrollView>
     </View>
    )}
+   {Platform.OS==='web'&&(
+    <style>{`
+     @media print {
+      body * {
+       visibility: hidden !important;
+      }
+      #printable-teacher-record-sheet, #printable-teacher-record-sheet * {
+       visibility: visible !important;
+      }
+      #printable-teacher-record-sheet {
+       position: absolute !important;
+       left: 0 !important;
+       top: 0 !important;
+       width: 100% !important;
+       max-width: 100% !important;
+       margin: 0 !important;
+       padding: 6mm 10mm !important;
+       background: #ffffff !important;
+       border: none !important;
+       box-shadow: none !important;
+      }
+      @page {
+       size: A4 portrait;
+       margin: 8mm;
+      }
+     }
+    `}</style>
+   )}
+   {teacherSheetModal&&(
+    <Modal visible={true} transparent animationType="fade" onRequestClose={()=>setTeacherSheetModal(null)}>
+     <View style={s.modalOverlay}>
+      <View style={s.modalContainer}>
+       <View style={s.modalHeaderBar}>
+        <View style={s.modalTabGroup}>
+         <TouchableOpacity onPress={()=>setTeacherSheetModal(prev=>prev?{...prev,kind:'coaching'}:null)} style={[s.modalTab,teacherSheetModal.kind==='coaching'&&s.modalTabActive]}>
+          <Text style={[s.modalTabText,teacherSheetModal.kind==='coaching'&&s.modalTabTextActive]}>Coaching ({teacherSheetModal.teacher.coaching||0})</Text>
+         </TouchableOpacity>
+         <TouchableOpacity onPress={()=>setTeacherSheetModal(prev=>prev?{...prev,kind:'xi_xii'}:null)} style={[s.modalTab,teacherSheetModal.kind==='xi_xii'&&s.modalTabActive]}>
+          <Text style={[s.modalTabText,teacherSheetModal.kind==='xi_xii'&&s.modalTabTextActive]}>XI-XII ({teacherSheetModal.teacher.xi_xii||0})</Text>
+         </TouchableOpacity>
+         <TouchableOpacity onPress={()=>setTeacherSheetModal(prev=>prev?{...prev,kind:'v_x'}:null)} style={[s.modalTab,teacherSheetModal.kind==='v_x'&&s.modalTabActive]}>
+          <Text style={[s.modalTabText,teacherSheetModal.kind==='v_x'&&s.modalTabTextActive]}>Class V-X ({teacherSheetModal.teacher.ix_x||0})</Text>
+         </TouchableOpacity>
+         <TouchableOpacity onPress={()=>setTeacherSheetModal(prev=>prev?{...prev,kind:'all'}:null)} style={[s.modalTab,teacherSheetModal.kind==='all'&&s.modalTabActive]}>
+          <Text style={[s.modalTabText,teacherSheetModal.kind==='all'&&s.modalTabTextActive]}>All ({teacherSheetModal.teacher.total||0})</Text>
+         </TouchableOpacity>
+        </View>
+        <View style={s.modalActionsGroup}>
+         <TouchableOpacity disabled={downloadingTeacherExcel} onPress={downloadTeacherRecordExcel} style={s.modalExcelBtn}>
+          <Text style={s.modalBtnText}>{downloadingTeacherExcel?'Downloading...':'📥 Download Excel'}</Text>
+         </TouchableOpacity>
+         <TouchableOpacity onPress={printTeacherRecordSheet} style={s.modalPrintBtn}>
+          <Text style={s.modalBtnText}>🖨️ Print / Save as PDF</Text>
+         </TouchableOpacity>
+         <TouchableOpacity onPress={()=>setTeacherSheetModal(null)} style={s.modalCloseBtn}>
+          <Text style={s.modalBtnText}>✕ Close</Text>
+         </TouchableOpacity>
+        </View>
+       </View>
+       <ScrollView style={s.modalScrollBody} contentContainerStyle={s.modalScrollContent}>
+        <View id="printable-teacher-record-sheet" style={s.paperSheet}>
+         <Text style={s.paperSchoolTitle}>Al-Ameen Mission Academy, Memari</Text>
+         <Text style={s.paperSchoolSub}>Memari :: Purba Bardhaman</Text>
+         <Text style={s.paperUnitTitle}>Girls Unit</Text>
+         <Text style={s.paperDocTitle}>{modalSheetTitle}</Text>
+         <View style={s.paperTeacherInfoRow}>
+          <Text style={s.paperTeacherInfoText}>
+           <Text style={s.bold}>Name of the Teacher: </Text>
+           <Text style={[s.bold,{textDecorationLine:'underline'}]}>{teacherSheetModal.teacher.name}</Text>
+          </Text>
+          <Text style={s.paperTeacherInfoText}>
+           <Text style={s.bold}>Sub : </Text>
+           <Text style={[s.bold,{textDecorationLine:'underline'}]}>{teacherSheetModal.teacher.subject||'General'}</Text>
+           <Text style={{color:'#64748b'}}>  ({report?.monthLabel||month})</Text>
+          </Text>
+         </View>
+         <View style={s.paperTable}>
+          <View style={[s.paperTableRow,s.paperTableHeaderRow]}>
+           <View style={[s.paperCell,{width:50}]}><Text style={s.paperHeaderCellText}>Sl. No.</Text></View>
+           <View style={[s.paperCell,{width:105}]}><Text style={s.paperHeaderCellText}>Date</Text></View>
+           <View style={[s.paperCell,{width:100}]}><Text style={s.paperHeaderCellText}>Day</Text></View>
+           <View style={[s.paperCell,{width:115}]}><Text style={s.paperHeaderCellText}>Class</Text></View>
+           <View style={[s.paperCell,{width:100}]}><Text style={s.paperHeaderCellText}>Class Start</Text></View>
+           <View style={[s.paperCell,{width:100}]}><Text style={s.paperHeaderCellText}>Class End</Text></View>
+           <View style={[s.paperCell,{width:130}]}><Text style={s.paperHeaderCellText}>Duration of Class</Text></View>
+          </View>
+          {filledTeacherRows.map((item:any,idx:number)=>(
+           <View key={idx} style={s.paperTableRow}>
+            <View style={[s.paperCell,{width:50}]}><Text style={s.paperCellText}>{idx+1}</Text></View>
+            <View style={[s.paperCell,{width:105}]}><Text style={s.paperCellText}>{item?formatDateDDMM(item.date):''}</Text></View>
+            <View style={[s.paperCell,{width:100}]}><Text style={s.paperCellText}>{item?item.day:''}</Text></View>
+            <View style={[s.paperCell,{width:115}]}><Text style={[s.paperCellText,item&&s.bold]}>{item?item.class_name:''}</Text></View>
+            <View style={[s.paperCell,{width:100}]}><Text style={s.paperCellText}>{item?item.start_time:''}</Text></View>
+            <View style={[s.paperCell,{width:100}]}><Text style={s.paperCellText}>{item?item.end_time:''}</Text></View>
+            <View style={[s.paperCell,{width:130}]}><Text style={s.paperCellText}>{item?item.duration:''}</Text></View>
+           </View>
+          ))}
+          <View style={[s.paperTableRow,s.paperTableTotalRow]}>
+           <View style={[s.paperCell,{width:370,alignItems:'flex-start',paddingLeft:12}]}>
+            <Text style={[s.bold,{fontSize:12,color:'#1e293b'}]}>Total Classes: {selectedTeacherClasses.length}</Text>
+           </View>
+           <View style={[s.paperCell,{width:330,alignItems:'flex-end',paddingRight:12}]}>
+            <Text style={[s.bold,{fontSize:12,color:'#1e293b'}]}>Total Duration: {selectedTeacherTotalDuration}</Text>
+           </View>
+          </View>
+         </View>
+         <View style={s.paperSignatureRow}>
+          <View style={s.paperSignatureBox}>
+           <View style={s.paperSignatureLine}/>
+           <Text style={s.paperSignatureLabel}>Teacher's Signature</Text>
+          </View>
+          <View style={s.paperSignatureBox}>
+           <View style={s.paperSignatureLine}/>
+           <Text style={s.paperSignatureLabel}>In-Charge / Principal Signature</Text>
+          </View>
+         </View>
+        </View>
+       </ScrollView>
+      </View>
+     </View>
+    </Modal>
+   )}
   </View>}
  </ScrollView></SafeAreaView>
 }
 
-const s=StyleSheet.create({compactControlButton:{paddingVertical:6,paddingHorizontal:8,flexShrink:0},page:{flex:1,backgroundColor:'#eef4fb'},content:{padding:4,paddingBottom:20,width:'100%',maxWidth:2200,alignSelf:'center'},nav:{flexDirection:'row',gap:4,marginTop:2},navButton:{backgroundColor:'#e2ecf8',borderRadius:5,paddingVertical:6,paddingHorizontal:9},button:{backgroundColor:'#e2ecf8',borderRadius:6,padding:11},sticky:{backgroundColor:'#eef4fb',paddingBottom:2},banner:{backgroundColor:'#173f77',padding:8,marginTop:3,borderRadius:6,flexDirection:'row',justifyContent:'space-between',alignItems:'center'},title:{color:'#fff',fontSize:20,fontWeight:'900'},save:{backgroundColor:'#1473d4',padding:12,borderRadius:6},white:{color:'#fff',fontWeight:'800'},tabs:{flexDirection:'row',gap:4,marginVertical:2,flexWrap:'wrap'},tab:{backgroundColor:'#fff',borderWidth:1,borderColor:'#aac0da',borderRadius:5,paddingVertical:5,paddingHorizontal:8},active:{backgroundColor:'#1768c5'},bold:{fontWeight:'800'},controls:{backgroundColor:'#fff',padding:1,flexDirection:'row',alignItems:'center',gap:4,flexWrap:'wrap',width:'100%',alignSelf:'stretch'},date:{borderWidth:1,borderColor:'#b8c9db',borderRadius:5,padding:0,width:140,height:44,marginBottom:0},source:{backgroundColor:'#e5edf6',padding:10,borderRadius:6,fontWeight:'700'},master:{backgroundColor:'#ccebd8'},check:{backgroundColor:'#fff1c8',padding:10,borderRadius:6,borderWidth:1,borderColor:'#e5c979'},duplicateCheck:{backgroundColor:'#fff1c8',borderColor:'#e5c979'},checked:{backgroundColor:'#ffd1d1',borderColor:'#dc5961'},masterButton:{backgroundColor:'#8a5a11',padding:11,borderRadius:6},offPanel:{backgroundColor:'#fff',borderWidth:1,borderColor:'#e5c979',borderRadius:8,padding:10,marginTop:4,gap:8},offTitle:{fontWeight:'900',color:'#7c5200'},offRow:{flexDirection:'row',alignItems:'center',gap:8,flexWrap:'wrap'},offSelect:{minWidth:260,flexGrow:1},offButton:{backgroundColor:'#1768c5',padding:10,borderRadius:6},offFullButton:{backgroundColor:'#fff1c8',padding:9,borderRadius:6,borderWidth:1,borderColor:'#e5c979',alignSelf:'flex-start'},offSummary:{fontWeight:'800',color:'#7c5200'},offCell:{backgroundColor:'#fce7e7',borderColor:'#e5a1a1'},offText:{color:'#9a1e25',fontWeight:'900',textAlign:'center'},combinedNote:{backgroundColor:'#f5f0ff',borderColor:'#c084fc',borderWidth:1,borderRadius:8,padding:10,marginVertical:8},combinedNoteTitle:{color:'#6b21a8',fontWeight:'800',fontSize:13},combinedNoteList:{color:'#581c87',fontWeight:'700',fontSize:12,marginTop:4},combinedHighlightToggle:{backgroundColor:'#eedcfc',paddingVertical:3,paddingHorizontal:8,borderRadius:4,borderWidth:1,borderColor:'#d8b4fe'},combinedHighlightToggleText:{color:'#6b21a8',fontWeight:'800',fontSize:11},combinedCell:{backgroundColor:'#f5f0ff',borderColor:'#a855f7',borderWidth:1.5},combinedSubjectText:{color:'#581c87',fontWeight:'700'},combinedTeacherText:{color:'#581c87',fontWeight:'900'},combinedChecked:{backgroundColor:'#f3e8ff',borderColor:'#a855f7'},note:{backgroundColor:'#fee2e2',borderColor:'#f87171',borderWidth:1,borderRadius:8,padding:10,marginVertical:8},noteTitle:{color:'#991b1b',fontWeight:'800',fontSize:13,marginBottom:3},noteList:{color:'#7f1d1d',fontWeight:'700',fontSize:12},workspace:{flexDirection:'row',alignItems:'flex-start',gap:8,width:'100%',...Platform.select({web:{height:'auto' as any,minHeight:0 as any,maxHeight:'82vh' as any,overflow:'visible' as any},default:{}})},workspaceCoaching:{flexDirection:'column',alignItems:'stretch',gap:0,...Platform.select({web:{height:'auto' as any,minHeight:0 as any,overflow:'visible' as any},default:{}})},workspaceVertical:{flex:1,...Platform.select({web:{height:'auto' as any,maxHeight:'82vh' as any,overflowY:'auto' as any,overflowX:'auto' as any,paddingRight:12},default:{}})},workspaceVerticalCoaching:{width:'100%',flex:0,...Platform.select({web:{height:'auto' as any,maxHeight:405 as any,overflowY:'auto' as any,overflowX:'auto' as any},default:{}})},workspaceScroll:{flex:1,...Platform.select({web:{overflow:'visible' as any},default:{}})},tableHeaderRow:{zIndex:100,...Platform.select({web:{position:'sticky' as any,top:0,zIndex:100,backgroundColor:'#cfe1f4'},default:{}})},stickyTop:{...Platform.select({web:{position:'sticky' as any,top:0,zIndex:90,backgroundColor:'#d6e6f5'},default:{}})},stickyLeft:{...Platform.select({web:{position:'sticky' as any,left:0,zIndex:80,backgroundColor:'#dce9f6'},default:{}})},bodyTable:{borderTopWidth:0,paddingTop:0,alignSelf:'flex-start',minWidth:'100%'},table:{borderWidth:1,borderColor:'#b8cde3',backgroundColor:'#fff',alignSelf:'flex-start',minWidth:'100%'},row:{flexDirection:'row'},alt:{backgroundColor:'#f1f7fd'},rowEven:{backgroundColor:'#f4f8fc'},rowOdd:{backgroundColor:'#eaf2fa'},headerText:{fontSize:13,color:'#102a45',fontWeight:'800'},timeText:{fontSize:13,color:'#102a45',fontWeight:'800'},head:{width:138,flexShrink:0,minHeight:44,backgroundColor:'#d6e6f5',borderRightWidth:1,borderBottomWidth:1,borderColor:'#b8cde3',alignItems:'center',justifyContent:'center',padding:2},rowHead:{width:100,flexShrink:0,minHeight:44,borderRightWidth:1,borderBottomWidth:1,borderColor:'#b8cde3',alignItems:'center',justifyContent:'center'},classHeadEven:{backgroundColor:'#dce9f6'},classHeadOdd:{backgroundColor:'#ffffff'},classRowEven:{backgroundColor:'#eaf2fa'},classRowOdd:{backgroundColor:'#ffffff'},coachHead:{width:115,minHeight:40,backgroundColor:'#d6e6f5'},coachRowHead:{width:105,minHeight:38,backgroundColor:'#dce9f6'},coach:{width:115,flexShrink:0,minHeight:38,height:38,borderRightWidth:1,borderBottomWidth:1,borderColor:'#bcd1e6',padding:0,justifyContent:'center',alignItems:'stretch'},coachSelect:{backgroundColor:'transparent',borderWidth:0,borderRadius:0,minHeight:38,height:'100%',width:'100%',paddingHorizontal:2,paddingVertical:0,justifyContent:'center',alignItems:'center'},coachSelectText:{fontFamily:'System',fontSize:13,fontWeight:'700',color:'#1e3a5f',textAlign:'center'},coachText:{textAlign:'center',fontSize:13,fontWeight:'700',color:'#1e3a5f'},cell:{width:138,flexShrink:0,minHeight:54,height:54,borderRightWidth:1,borderBottomWidth:1,borderColor:'#bcd1e6',padding:0,justifyContent:'space-between',alignItems:'stretch'},cellSubjectSelect:{backgroundColor:'transparent',borderWidth:0,borderRadius:0,minHeight:26,height:26,paddingHorizontal:2,paddingVertical:0,justifyContent:'center',alignItems:'center',borderBottomWidth:1,borderBottomColor:'#d4e2f0'},cellSubjectSelectText:{fontFamily:'System',fontSize:13,fontWeight:'600',color:'#17365d',textAlign:'center'},cellTeacherSelect:{backgroundColor:'transparent',borderWidth:0,borderRadius:0,minHeight:26,height:26,paddingHorizontal:2,paddingVertical:0,justifyContent:'center',alignItems:'center'},cellTeacherSelectText:{fontFamily:'System',fontSize:13,fontWeight:'800',color:'#091e36',textAlign:'center'},tiffin:{width:82,flexShrink:0,backgroundColor:'#fff0be',alignItems:'center',justifyContent:'center',paddingHorizontal:2},conflict:{backgroundColor:'#fee2e2',borderColor:'#ef4444',borderWidth:2,zIndex:2},conflictSelect:{backgroundColor:'transparent',borderWidth:0},conflictSelectText:{color:'#0f172a',fontWeight:'800'},conflictText:{color:'#991b1b',fontWeight:'800'},subject:{fontWeight:'900',textAlign:'center'},center:{textAlign:'center',fontSize:14,lineHeight:20},outTeacher:{backgroundColor:'#fff7ed',borderColor:'#f97316',borderWidth:2},count:{width:190,backgroundColor:'#fff',borderWidth:1,borderColor:'#c7d7e8',borderRadius:8,padding:9,...Platform.select({web:{maxHeight:'82vh' as any,overflowY:'auto' as any},default:{}})},countResizeHandle:{width:10,minHeight:120,alignSelf:'stretch',backgroundColor:'#dbe8f5',borderRadius:5,alignItems:'center',justifyContent:'center',cursor:'ew-resize' as any},resizeMark:{fontSize:18,fontWeight:'900',color:'#6b8096'},countTitle:{fontSize:17,fontWeight:'900',marginBottom:8},countRow:{flexDirection:'row',borderBottomWidth:1,borderColor:'#c7d7e8',padding:7},total:{flexDirection:'row',justifyContent:'space-between',backgroundColor:'#c8def7',padding:8},bottomCountPanel:{marginTop:10,backgroundColor:'#fff',borderWidth:1,borderColor:'#c7d7e8',borderRadius:8,padding:10,width:'100%'},bottomCountHeader:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:8,paddingBottom:6,borderBottomWidth:1,borderColor:'#e2ecf6'},bottomCountTitle:{fontSize:15,fontWeight:'900',color:'#173f77'},bottomTotalBadge:{backgroundColor:'#1768c5',paddingVertical:4,paddingHorizontal:12,borderRadius:6},bottomTotalText:{color:'#fff',fontWeight:'800',fontSize:14},bottomCountGrid:{flexDirection:'row',flexWrap:'wrap',gap:6},bottomCountChip:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',backgroundColor:'#f1f7fd',borderWidth:1,borderColor:'#bcd2ea',borderRadius:6,paddingVertical:5,paddingHorizontal:8,minWidth:140,flexGrow:1,maxWidth:240},bottomCountName:{fontSize:13,fontWeight:'700',color:'#1e3a5f',flex:1,marginRight:6},bottomCountNum:{backgroundColor:'#fff',borderWidth:1,borderColor:'#97b8de',borderRadius:4,paddingHorizontal:6,paddingVertical:1},bottomCountNumText:{fontSize:13,fontWeight:'900',color:'#1768c5'},bottomCountEmpty:{color:'#64748b',fontStyle:'italic',padding:6},noClass:{backgroundColor:'#fff',padding:50,alignItems:'center',borderRadius:10},noClassText:{fontSize:22,fontWeight:'900',color:'#8b2630'},bottom:{marginTop:16,backgroundColor:'#fff',borderRadius:10,padding:12},bottomButtons:{flexDirection:'row',gap:8,flexWrap:'wrap',alignItems:'center'},month:{borderWidth:1,borderColor:'#b8c9db',borderRadius:6,padding:10,width:110},historyRow:{flexDirection:'row',alignItems:'center',borderBottomWidth:1,borderColor:'#dae4ee',paddingVertical:9},delete:{backgroundColor:'#b62934',padding:9,borderRadius:6},reportContainer:{marginTop:14,backgroundColor:'#fff',borderRadius:8,borderWidth:1,borderColor:'#94a3b8',padding:14,width:'100%'},reportHeaderBar:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10,marginBottom:12,paddingBottom:10,borderBottomWidth:1,borderColor:'#cbd5e1'},reportSchoolTitle:{fontSize:20,fontWeight:'900',color:'#1f4e78',textAlign:'center'},reportMonthTitle:{fontSize:16,fontWeight:'800',color:'#1f4e78',textAlign:'center',marginTop:2},reportActionButtons:{flexDirection:'row',gap:8,alignItems:'center',flexWrap:'wrap'},reportDownloadBtn:{backgroundColor:'#15803d',paddingVertical:8,paddingHorizontal:14,borderRadius:6},reportDownloadBtnText:{color:'#fff',fontWeight:'800',fontSize:13},reportPrintBtn:{backgroundColor:'#1e40af',paddingVertical:8,paddingHorizontal:14,borderRadius:6},reportPrintBtnText:{color:'#fff',fontWeight:'800',fontSize:13},reportCloseBtn:{backgroundColor:'#64748b',paddingVertical:8,paddingHorizontal:12,borderRadius:6},reportCloseBtnText:{color:'#fff',fontWeight:'800',fontSize:13},reportFilterRow:{flexDirection:'row',alignItems:'center',gap:8,marginBottom:10,flexWrap:'wrap'},reportSearchInput:{backgroundColor:'#f8fafc',borderWidth:1,borderColor:'#cbd5e1',borderRadius:6,paddingHorizontal:10,paddingVertical:6,minWidth:220,fontSize:13},reportExpandBtn:{backgroundColor:'#e2e8f0',paddingVertical:6,paddingHorizontal:10,borderRadius:6,borderWidth:1,borderColor:'#cbd5e1'},reportExpandBtnText:{color:'#1e293b',fontWeight:'800',fontSize:12},reportCountBadge:{color:'#475569',fontSize:12,fontWeight:'700',marginLeft:'auto'},reportScrollBox:{width:'100%',...Platform.select({web:{maxHeight:'70vh' as any,overflowY:'auto' as any,overflowX:'auto' as any},default:{maxHeight:550}})},reportStickyHeader:{...Platform.select({web:{position:'sticky' as any,top:0,zIndex:20,backgroundColor:'#ffffff'},default:{}})},reportTable:{borderWidth:1,borderColor:'#000',alignSelf:'flex-start'},reportRow:{flexDirection:'row'},reportHeaderRow:{backgroundColor:'#ffffff',borderBottomWidth:1,borderColor:'#000'},reportHeaderText:{color:'#cc0000',fontWeight:'800',textDecorationLine:'underline',fontSize:13},reportCell:{borderRightWidth:1,borderBottomWidth:1,borderColor:'#000',paddingHorizontal:8,paddingVertical:6,justifyContent:'center',alignItems:'center'},reportCellText:{fontSize:12,color:'#0f172a'},reportRowWhite:{backgroundColor:'#ffffff'},reportRowAlt:{backgroundColor:'#eaf2fa'},reportTotalRow:{backgroundColor:'#d9e1f2',borderTopWidth:1,borderColor:'#000'},masterPanel:{backgroundColor:'#fff',borderWidth:1,borderColor:'#c6d7e8',borderRadius:8,padding:10,marginBottom:8,flexDirection:'row',flexWrap:'wrap',gap:9,alignItems:'center'},masterSelect:{minWidth:190},masterDayText:{fontWeight:'900',color:'#17613c',backgroundColor:'#d9f0e2',padding:10,borderRadius:6},masterAction:{backgroundColor:'#1768c5',padding:11,borderRadius:6},coachingFormat:{backgroundColor:'#e4f2ff',borderWidth:1,borderColor:'#a9cbea',padding:10,borderRadius:8,marginBottom:8},coachingHelp:{color:'#365b7c',fontWeight:'700',marginTop:3},examPublic:{backgroundColor:'#fff',marginTop:14,padding:12,borderRadius:10,borderWidth:1,borderColor:'#c6d7e8'},examRow:{paddingVertical:9,borderBottomWidth:1,borderColor:'#d7e2ed',flexDirection:'row'},tools:{backgroundColor:'#fff',marginTop:14,padding:12,borderRadius:10},toolTabs:{flexDirection:'row',flexWrap:'wrap',gap:8,marginVertical:8},toolButton:{backgroundColor:'#dceafb',padding:11,borderRadius:7},panel:{borderTopWidth:1,borderColor:'#d3deea',paddingTop:12,marginTop:8,gap:8},panelTitle:{fontSize:18,fontWeight:'900',color:'#173f77'},formField:{minWidth:240,flexGrow:1},label:{fontWeight:'800',color:'#36516e'},configInput:{borderWidth:1,borderColor:'#b8c9db',borderRadius:7,padding:12,minWidth:230,minHeight:46,backgroundColor:'#fff'},multiline:{minHeight:105,textAlignVertical:'top'},subjectChecks:{flexDirection:'row',flexWrap:'wrap',gap:7},subjectCheck:{borderWidth:1,borderColor:'#b9c9da',paddingHorizontal:8,paddingVertical:6,borderRadius:5,backgroundColor:'#fff'},subjectChecked:{backgroundColor:'#1768c5',borderColor:'#1768c5'},subjectSaving:{opacity:.5},subjectCheckText:{fontSize:12,color:'#263d54'},subjectCheckedText:{color:'#fff',fontWeight:'900'},assignHeader:{flexDirection:'row',flexWrap:'wrap',gap:10,alignItems:'center'},assignHelp:{color:'#61758a',marginBottom:5},assignList:{maxHeight:430,borderWidth:1,borderColor:'#d2deea',borderRadius:8},teacherSubjectRow:{padding:11,borderBottomWidth:1,borderColor:'#d7e2ed'},teacherSubjectName:{fontWeight:'900',color:'#173f77',fontSize:15,marginBottom:8}});
+const s=StyleSheet.create({compactControlButton:{paddingVertical:6,paddingHorizontal:8,flexShrink:0},page:{flex:1,backgroundColor:'#eef4fb'},content:{padding:4,paddingBottom:20,width:'100%',maxWidth:2200,alignSelf:'center'},nav:{flexDirection:'row',gap:4,marginTop:2},navButton:{backgroundColor:'#e2ecf8',borderRadius:5,paddingVertical:6,paddingHorizontal:9},button:{backgroundColor:'#e2ecf8',borderRadius:6,padding:11},sticky:{backgroundColor:'#eef4fb',paddingBottom:2},banner:{backgroundColor:'#173f77',padding:8,marginTop:3,borderRadius:6,flexDirection:'row',justifyContent:'space-between',alignItems:'center'},title:{color:'#fff',fontSize:20,fontWeight:'900'},save:{backgroundColor:'#1473d4',padding:12,borderRadius:6},white:{color:'#fff',fontWeight:'800'},tabs:{flexDirection:'row',gap:4,marginVertical:2,flexWrap:'wrap'},tab:{backgroundColor:'#fff',borderWidth:1,borderColor:'#aac0da',borderRadius:5,paddingVertical:5,paddingHorizontal:8},active:{backgroundColor:'#1768c5'},bold:{fontWeight:'800'},controls:{backgroundColor:'#fff',padding:1,flexDirection:'row',alignItems:'center',gap:4,flexWrap:'wrap',width:'100%',alignSelf:'stretch'},date:{borderWidth:1,borderColor:'#b8c9db',borderRadius:5,padding:0,width:140,height:44,marginBottom:0},source:{backgroundColor:'#e5edf6',padding:10,borderRadius:6,fontWeight:'700'},master:{backgroundColor:'#ccebd8'},check:{backgroundColor:'#fff1c8',padding:10,borderRadius:6,borderWidth:1,borderColor:'#e5c979'},duplicateCheck:{backgroundColor:'#fff1c8',borderColor:'#e5c979'},checked:{backgroundColor:'#ffd1d1',borderColor:'#dc5961'},masterButton:{backgroundColor:'#8a5a11',padding:11,borderRadius:6},offPanel:{backgroundColor:'#fff',borderWidth:1,borderColor:'#e5c979',borderRadius:8,padding:10,marginTop:4,gap:8},offTitle:{fontWeight:'900',color:'#7c5200'},offRow:{flexDirection:'row',alignItems:'center',gap:8,flexWrap:'wrap'},offSelect:{minWidth:260,flexGrow:1},offButton:{backgroundColor:'#1768c5',padding:10,borderRadius:6},offFullButton:{backgroundColor:'#fff1c8',padding:9,borderRadius:6,borderWidth:1,borderColor:'#e5c979',alignSelf:'flex-start'},offSummary:{fontWeight:'800',color:'#7c5200'},offCell:{backgroundColor:'#fce7e7',borderColor:'#e5a1a1'},offText:{color:'#9a1e25',fontWeight:'900',textAlign:'center'},combinedNote:{backgroundColor:'#f5f0ff',borderColor:'#c084fc',borderWidth:1,borderRadius:8,padding:10,marginVertical:8},combinedNoteTitle:{color:'#6b21a8',fontWeight:'800',fontSize:13},combinedNoteList:{color:'#581c87',fontWeight:'700',fontSize:12,marginTop:4},combinedHighlightToggle:{backgroundColor:'#eedcfc',paddingVertical:3,paddingHorizontal:8,borderRadius:4,borderWidth:1,borderColor:'#d8b4fe'},combinedHighlightToggleText:{color:'#6b21a8',fontWeight:'800',fontSize:11},combinedCell:{backgroundColor:'#f5f0ff',borderColor:'#a855f7',borderWidth:1.5},combinedSubjectText:{color:'#581c87',fontWeight:'700'},combinedTeacherText:{color:'#581c87',fontWeight:'900'},combinedChecked:{backgroundColor:'#f3e8ff',borderColor:'#a855f7'},note:{backgroundColor:'#fee2e2',borderColor:'#f87171',borderWidth:1,borderRadius:8,padding:10,marginVertical:8},noteTitle:{color:'#991b1b',fontWeight:'800',fontSize:13,marginBottom:3},noteList:{color:'#7f1d1d',fontWeight:'700',fontSize:12},workspace:{flexDirection:'row',alignItems:'flex-start',gap:8,width:'100%',...Platform.select({web:{height:'auto' as any,minHeight:0 as any,maxHeight:'82vh' as any,overflow:'visible' as any},default:{}})},workspaceCoaching:{flexDirection:'column',alignItems:'stretch',gap:0,...Platform.select({web:{height:'auto' as any,minHeight:0 as any,overflow:'visible' as any},default:{}})},workspaceVertical:{flex:1,...Platform.select({web:{height:'auto' as any,maxHeight:'82vh' as any,overflowY:'auto' as any,overflowX:'auto' as any,paddingRight:12},default:{}})},workspaceVerticalCoaching:{width:'100%',flex:0,...Platform.select({web:{height:'auto' as any,maxHeight:405 as any,overflowY:'auto' as any,overflowX:'auto' as any},default:{}})},workspaceScroll:{flex:1,...Platform.select({web:{overflow:'visible' as any},default:{}})},tableHeaderRow:{zIndex:100,...Platform.select({web:{position:'sticky' as any,top:0,zIndex:100,backgroundColor:'#cfe1f4'},default:{}})},stickyTop:{...Platform.select({web:{position:'sticky' as any,top:0,zIndex:90,backgroundColor:'#d6e6f5'},default:{}})},stickyLeft:{...Platform.select({web:{position:'sticky' as any,left:0,zIndex:80,backgroundColor:'#dce9f6'},default:{}})},bodyTable:{borderTopWidth:0,paddingTop:0,alignSelf:'flex-start',minWidth:'100%'},table:{borderWidth:1,borderColor:'#b8cde3',backgroundColor:'#fff',alignSelf:'flex-start',minWidth:'100%'},row:{flexDirection:'row'},alt:{backgroundColor:'#f1f7fd'},rowEven:{backgroundColor:'#f4f8fc'},rowOdd:{backgroundColor:'#eaf2fa'},headerText:{fontSize:13,color:'#102a45',fontWeight:'800'},timeText:{fontSize:13,color:'#102a45',fontWeight:'800'},head:{width:138,flexShrink:0,minHeight:44,backgroundColor:'#d6e6f5',borderRightWidth:1,borderBottomWidth:1,borderColor:'#b8cde3',alignItems:'center',justifyContent:'center',padding:2},rowHead:{width:100,flexShrink:0,minHeight:44,borderRightWidth:1,borderBottomWidth:1,borderColor:'#b8cde3',alignItems:'center',justifyContent:'center'},classHeadEven:{backgroundColor:'#dce9f6'},classHeadOdd:{backgroundColor:'#ffffff'},classRowEven:{backgroundColor:'#eaf2fa'},classRowOdd:{backgroundColor:'#ffffff'},coachHead:{width:115,minHeight:40,backgroundColor:'#d6e6f5'},coachRowHead:{width:105,minHeight:38,backgroundColor:'#dce9f6'},coach:{width:115,flexShrink:0,minHeight:38,height:38,borderRightWidth:1,borderBottomWidth:1,borderColor:'#bcd1e6',padding:0,justifyContent:'center',alignItems:'stretch'},coachSelect:{backgroundColor:'transparent',borderWidth:0,borderRadius:0,minHeight:38,height:'100%',width:'100%',paddingHorizontal:2,paddingVertical:0,justifyContent:'center',alignItems:'center'},coachSelectText:{fontFamily:'System',fontSize:13,fontWeight:'700',color:'#1e3a5f',textAlign:'center'},coachText:{textAlign:'center',fontSize:13,fontWeight:'700',color:'#1e3a5f'},cell:{width:138,flexShrink:0,minHeight:54,height:54,borderRightWidth:1,borderBottomWidth:1,borderColor:'#bcd1e6',padding:0,justifyContent:'space-between',alignItems:'stretch'},cellSubjectSelect:{backgroundColor:'transparent',borderWidth:0,borderRadius:0,minHeight:26,height:26,paddingHorizontal:2,paddingVertical:0,justifyContent:'center',alignItems:'center',borderBottomWidth:1,borderBottomColor:'#d4e2f0'},cellSubjectSelectText:{fontFamily:'System',fontSize:13,fontWeight:'600',color:'#17365d',textAlign:'center'},cellTeacherSelect:{backgroundColor:'transparent',borderWidth:0,borderRadius:0,minHeight:26,height:26,paddingHorizontal:2,paddingVertical:0,justifyContent:'center',alignItems:'center'},cellTeacherSelectText:{fontFamily:'System',fontSize:13,fontWeight:'800',color:'#091e36',textAlign:'center'},tiffin:{width:82,flexShrink:0,backgroundColor:'#fff0be',alignItems:'center',justifyContent:'center',paddingHorizontal:2},conflict:{backgroundColor:'#fee2e2',borderColor:'#ef4444',borderWidth:2,zIndex:2},conflictSelect:{backgroundColor:'transparent',borderWidth:0},conflictSelectText:{color:'#0f172a',fontWeight:'800'},conflictText:{color:'#991b1b',fontWeight:'800'},subject:{fontWeight:'900',textAlign:'center'},center:{textAlign:'center',fontSize:14,lineHeight:20},outTeacher:{backgroundColor:'#fff7ed',borderColor:'#f97316',borderWidth:2},count:{width:190,backgroundColor:'#fff',borderWidth:1,borderColor:'#c7d7e8',borderRadius:8,padding:9,...Platform.select({web:{maxHeight:'82vh' as any,overflowY:'auto' as any},default:{}})},countResizeHandle:{width:10,minHeight:120,alignSelf:'stretch',backgroundColor:'#dbe8f5',borderRadius:5,alignItems:'center',justifyContent:'center',cursor:'ew-resize' as any},resizeMark:{fontSize:18,fontWeight:'900',color:'#6b8096'},countTitle:{fontSize:17,fontWeight:'900',marginBottom:8},countRow:{flexDirection:'row',borderBottomWidth:1,borderColor:'#c7d7e8',padding:7},total:{flexDirection:'row',justifyContent:'space-between',backgroundColor:'#c8def7',padding:8},bottomCountPanel:{marginTop:10,backgroundColor:'#fff',borderWidth:1,borderColor:'#c7d7e8',borderRadius:8,padding:10,width:'100%'},bottomCountHeader:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:8,paddingBottom:6,borderBottomWidth:1,borderColor:'#e2ecf6'},bottomCountTitle:{fontSize:15,fontWeight:'900',color:'#173f77'},bottomTotalBadge:{backgroundColor:'#1768c5',paddingVertical:4,paddingHorizontal:12,borderRadius:6},bottomTotalText:{color:'#fff',fontWeight:'800',fontSize:14},bottomCountGrid:{flexDirection:'row',flexWrap:'wrap',gap:6},bottomCountChip:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',backgroundColor:'#f1f7fd',borderWidth:1,borderColor:'#bcd2ea',borderRadius:6,paddingVertical:5,paddingHorizontal:8,minWidth:140,flexGrow:1,maxWidth:240},bottomCountName:{fontSize:13,fontWeight:'700',color:'#1e3a5f',flex:1,marginRight:6},bottomCountNum:{backgroundColor:'#fff',borderWidth:1,borderColor:'#97b8de',borderRadius:4,paddingHorizontal:6,paddingVertical:1},bottomCountNumText:{fontSize:13,fontWeight:'900',color:'#1768c5'},bottomCountEmpty:{color:'#64748b',fontStyle:'italic',padding:6},noClass:{backgroundColor:'#fff',padding:50,alignItems:'center',borderRadius:10},noClassText:{fontSize:22,fontWeight:'900',color:'#8b2630'},bottom:{marginTop:16,backgroundColor:'#fff',borderRadius:10,padding:12},bottomButtons:{flexDirection:'row',gap:8,flexWrap:'wrap',alignItems:'center'},month:{borderWidth:1,borderColor:'#b8c9db',borderRadius:6,padding:10,width:110},historyRow:{flexDirection:'row',alignItems:'center',borderBottomWidth:1,borderColor:'#dae4ee',paddingVertical:9},delete:{backgroundColor:'#b62934',padding:9,borderRadius:6},reportContainer:{marginTop:14,backgroundColor:'#fff',borderRadius:8,borderWidth:1,borderColor:'#94a3b8',padding:14,width:'100%'},reportHeaderBar:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10,marginBottom:12,paddingBottom:10,borderBottomWidth:1,borderColor:'#cbd5e1'},reportSchoolTitle:{fontSize:20,fontWeight:'900',color:'#1f4e78',textAlign:'center'},reportMonthTitle:{fontSize:16,fontWeight:'800',color:'#1f4e78',textAlign:'center',marginTop:2},reportActionButtons:{flexDirection:'row',gap:8,alignItems:'center',flexWrap:'wrap'},reportDownloadBtn:{backgroundColor:'#15803d',paddingVertical:8,paddingHorizontal:14,borderRadius:6},reportDownloadBtnText:{color:'#fff',fontWeight:'800',fontSize:13},reportPrintBtn:{backgroundColor:'#1e40af',paddingVertical:8,paddingHorizontal:14,borderRadius:6},reportPrintBtnText:{color:'#fff',fontWeight:'800',fontSize:13},reportCloseBtn:{backgroundColor:'#64748b',paddingVertical:8,paddingHorizontal:12,borderRadius:6},reportCloseBtnText:{color:'#fff',fontWeight:'800',fontSize:13},reportFilterRow:{flexDirection:'row',alignItems:'center',gap:8,marginBottom:10,flexWrap:'wrap'},reportSearchInput:{backgroundColor:'#f8fafc',borderWidth:1,borderColor:'#cbd5e1',borderRadius:6,paddingHorizontal:10,paddingVertical:6,minWidth:220,fontSize:13},reportExpandBtn:{backgroundColor:'#e2e8f0',paddingVertical:6,paddingHorizontal:10,borderRadius:6,borderWidth:1,borderColor:'#cbd5e1'},reportExpandBtnText:{color:'#1e293b',fontWeight:'800',fontSize:12},reportCountBadge:{color:'#475569',fontSize:12,fontWeight:'700',marginLeft:'auto'},reportScrollBox:{width:'100%',...Platform.select({web:{maxHeight:'70vh' as any,overflowY:'auto' as any,overflowX:'auto' as any},default:{maxHeight:550}})},reportStickyHeader:{...Platform.select({web:{position:'sticky' as any,top:0,zIndex:20,backgroundColor:'#ffffff'},default:{}})},reportTable:{borderWidth:1,borderColor:'#000',alignSelf:'flex-start'},reportRow:{flexDirection:'row'},reportHeaderRow:{backgroundColor:'#ffffff',borderBottomWidth:1,borderColor:'#000'},reportHeaderText:{color:'#cc0000',fontWeight:'800',textDecorationLine:'underline',fontSize:13},reportCell:{borderRightWidth:1,borderBottomWidth:1,borderColor:'#000',paddingHorizontal:8,paddingVertical:6,justifyContent:'center',alignItems:'center'},reportCellText:{fontSize:12,color:'#0f172a'},reportRowWhite:{backgroundColor:'#ffffff'},reportRowAlt:{backgroundColor:'#eaf2fa'},reportTotalRow:{backgroundColor:'#d9e1f2',borderTopWidth:1,borderColor:'#000'},masterPanel:{backgroundColor:'#fff',borderWidth:1,borderColor:'#c6d7e8',borderRadius:8,padding:10,marginBottom:8,flexDirection:'row',flexWrap:'wrap',gap:9,alignItems:'center'},masterSelect:{minWidth:190},masterDayText:{fontWeight:'900',color:'#17613c',backgroundColor:'#d9f0e2',padding:10,borderRadius:6},masterAction:{backgroundColor:'#1768c5',padding:11,borderRadius:6},coachingFormat:{backgroundColor:'#e4f2ff',borderWidth:1,borderColor:'#a9cbea',padding:10,borderRadius:8,marginBottom:8},coachingHelp:{color:'#365b7c',fontWeight:'700',marginTop:3},examPublic:{backgroundColor:'#fff',marginTop:14,padding:12,borderRadius:10,borderWidth:1,borderColor:'#c6d7e8'},examRow:{paddingVertical:9,borderBottomWidth:1,borderColor:'#d7e2ed',flexDirection:'row'},tools:{backgroundColor:'#fff',marginTop:14,padding:12,borderRadius:10},toolTabs:{flexDirection:'row',flexWrap:'wrap',gap:8,marginVertical:8},toolButton:{backgroundColor:'#dceafb',padding:11,borderRadius:7},panel:{borderTopWidth:1,borderColor:'#d3deea',paddingTop:12,marginTop:8,gap:8},panelTitle:{fontSize:18,fontWeight:'900',color:'#173f77'},formField:{minWidth:240,flexGrow:1},label:{fontWeight:'800',color:'#36516e'},configInput:{borderWidth:1,borderColor:'#b8c9db',borderRadius:7,padding:12,minWidth:230,minHeight:46,backgroundColor:'#fff'},multiline:{minHeight:105,textAlignVertical:'top'},subjectChecks:{flexDirection:'row',flexWrap:'wrap',gap:7},subjectCheck:{borderWidth:1,borderColor:'#b9c9da',paddingHorizontal:8,paddingVertical:6,borderRadius:5,backgroundColor:'#fff'},subjectChecked:{backgroundColor:'#1768c5',borderColor:'#1768c5'},subjectSaving:{opacity:.5},subjectCheckText:{fontSize:12,color:'#263d54'},subjectCheckedText:{color:'#fff',fontWeight:'900'},assignHeader:{flexDirection:'row',flexWrap:'wrap',gap:10,alignItems:'center'},assignHelp:{color:'#61758a',marginBottom:5},assignList:{maxHeight:430,borderWidth:1,borderColor:'#d2deea',borderRadius:8},teacherSubjectRow:{padding:11,borderBottomWidth:1,borderColor:'#d7e2ed'},teacherSubjectName:{fontWeight:'900',color:'#173f77',fontSize:15,marginBottom:8},
+modalOverlay:{flex:1,backgroundColor:'rgba(15,23,42,0.65)',justifyContent:'center',alignItems:'center',padding:10},
+modalContainer:{backgroundColor:'#f8fafc',borderRadius:10,width:'100%',maxWidth:860,...Platform.select({web:{maxHeight:'94vh' as any},default:{maxHeight:650}}),borderWidth:1,borderColor:'#cbd5e1',overflow:'hidden'},
+modalHeaderBar:{backgroundColor:'#1e293b',paddingHorizontal:14,paddingVertical:10,flexDirection:'row',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8},
+modalTabGroup:{flexDirection:'row',gap:6,flexWrap:'wrap'},
+modalTab:{paddingHorizontal:10,paddingVertical:6,borderRadius:6,backgroundColor:'#334155'},
+modalTabActive:{backgroundColor:'#2563eb'},
+modalTabText:{color:'#cbd5e1',fontSize:12,fontWeight:'700'},
+modalTabTextActive:{color:'#ffffff',fontWeight:'900'},
+modalActionsGroup:{flexDirection:'row',gap:8,alignItems:'center',flexWrap:'wrap'},
+modalExcelBtn:{backgroundColor:'#16a34a',paddingHorizontal:12,paddingVertical:7,borderRadius:6},
+modalPrintBtn:{backgroundColor:'#2563eb',paddingHorizontal:12,paddingVertical:7,borderRadius:6},
+modalCloseBtn:{backgroundColor:'#475569',paddingHorizontal:10,paddingVertical:7,borderRadius:6},
+modalBtnText:{color:'#ffffff',fontWeight:'800',fontSize:12},
+modalScrollBody:{width:'100%'},
+modalScrollContent:{padding:16,alignItems:'center'},
+paperSheet:{backgroundColor:'#ffffff',width:'100%',maxWidth:760,padding:24,borderRadius:4,borderWidth:1,borderColor:'#d1d5db',...Platform.select({web:{boxShadow:'0 4px 12px rgba(0,0,0,0.1)'} as any,default:{}})},
+paperSchoolTitle:{fontSize:20,fontWeight:'900',color:'#000000',textAlign:'center'},
+paperSchoolSub:{fontSize:13,fontWeight:'700',color:'#000000',textAlign:'center',marginTop:2},
+paperUnitTitle:{fontSize:13,fontWeight:'700',color:'#000000',textAlign:'center',marginTop:2},
+paperDocTitle:{fontSize:14,fontWeight:'800',color:'#000000',textAlign:'center',marginTop:8,marginBottom:14},
+paperTeacherInfoRow:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:12,paddingBottom:6,borderBottomWidth:1,borderColor:'#94a3b8',flexWrap:'wrap',gap:6},
+paperTeacherInfoText:{fontSize:13,color:'#000000'},
+paperTable:{borderWidth:1,borderColor:'#000000',width:'100%'},
+paperTableRow:{flexDirection:'row',borderBottomWidth:1,borderColor:'#000000'},
+paperTableHeaderRow:{backgroundColor:'#f8fafc',borderBottomWidth:1,borderColor:'#000000'},
+paperTableTotalRow:{backgroundColor:'#f1f5f9'},
+paperCell:{borderRightWidth:1,borderColor:'#000000',paddingHorizontal:6,paddingVertical:5,justifyContent:'center',alignItems:'center'},
+paperHeaderCellText:{fontSize:12,fontWeight:'800',color:'#000000',textAlign:'center'},
+paperCellText:{fontSize:12,color:'#000000',textAlign:'center'},
+paperSignatureRow:{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-end',marginTop:48,paddingHorizontal:16},
+paperSignatureBox:{alignItems:'center',width:220},
+paperSignatureLine:{width:'100%',borderTopWidth:1,borderStyle:'dashed',borderColor:'#000000',marginBottom:6},
+paperSignatureLabel:{fontSize:12,fontWeight:'700',color:'#000000'},
+clickableBadgeCoaching:{backgroundColor:'#e0e7ff',borderRadius:12,paddingHorizontal:10,paddingVertical:2,borderWidth:1,borderColor:'#818cf8'},
+clickableBadgeCoachingText:{color:'#3730a3',fontWeight:'900',fontSize:13},
+clickableBadge:{backgroundColor:'#f1f5f9',borderRadius:12,paddingHorizontal:8,paddingVertical:2,borderWidth:1,borderColor:'#cbd5e1'},
+clickableBadgeText:{color:'#1e293b',fontWeight:'800',fontSize:12},
+clickableBadgeTotal:{backgroundColor:'#dbeafe',borderRadius:12,paddingHorizontal:8,paddingVertical:2,borderWidth:1,borderColor:'#93c5fd'}
+});
 
 

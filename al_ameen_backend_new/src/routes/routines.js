@@ -152,10 +152,42 @@ router.get('/manager/history',auth,allow('super_admin','admin'),asyncHandler(asy
  res.json({success:true,routines:r.rows});
 }));
 
+function getSlotDuration(slotStr){
+ if(!slotStr)return{start:'-',end:'-',duration:'-',minutes:0};
+ const parts=String(slotStr).replace(/–/g,'-').split('-');
+ const start=(parts[0]||'').trim();
+ const end=(parts[1]||'').trim();
+ if(!start||!end)return{start:start||'-',end:end||'-',duration:'-',minutes:0};
+ const[sh,sm]=start.split(':').map(Number);
+ const[eh,em]=end.split(':').map(Number);
+ let sMin=sh*60+(sm||0);
+ let eMin=eh*60+(em||0);
+ if(eMin<sMin)eMin+=12*60;
+ let diff=eMin-sMin;
+ if(diff<=0||diff>240)diff=60;
+ const hrs=Math.floor(diff/60);
+ const mins=diff%60;
+ let durStr='';
+ if(hrs>0&&mins>0)durStr=`${hrs} hr ${mins} mins`;
+ else if(hrs>0)durStr=`${hrs} hr`;
+ else durStr=`${mins} mins`;
+ return{start,end,duration:durStr,minutes:diff};
+}
+
+const DEFAULT_V_X_PERIODS=[
+ ['1st','10:00-10:40'],['2nd','10:40-11:20'],['3rd','11:20-12:00'],['4th','12:00-12:40'],
+ ['Tiffin','12:40-1:40'],['5th','1:40-2:20'],['6th','2:20-3:00'],['7th','3:00-3:40']
+];
+const DEFAULT_XI_XII_PERIODS=[
+ ['1st','6:30-7:30'],['2nd','7:30-8:30'],['3rd','8:30-9:30'],['4th','10:00-11:00'],
+ ['5th','11:00-12:00'],['6th','12:00-1:00']
+];
+
 async function generateMonthlyReportData(month){
  const parts=String(month||'').split('-'),y=parts[0],m=parseInt(parts[1],10);
  const monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
  const monthLabel=`${monthNames[m-1]||month} - ${y}`;
+ const sessionName=`${y}-${Number(String(y).slice(2))+1}`;
  const teachersRes=await pool.query(`SELECT t.id, t.name, COALESCE(NULLIF(t.subject,''),'General') as subject
   FROM teachers t LEFT JOIN users u ON u.id=t.user_id
   WHERE t.is_active=TRUE AND COALESCE(u.is_active,TRUE)=TRUE AND CASE
@@ -166,13 +198,29 @@ async function generateMonthlyReportData(month){
    ELSE LOWER(COALESCE(u.role,''))='teacher' OR LOWER(COALESCE(t.designation,'')) LIKE '%teacher%'
   END ORDER BY t.subject, t.name`);
  const teacherMap=new Map();
- teachersRes.rows.forEach(t=>{teacherMap.set(String(t.id),{id:String(t.id),name:t.name,subject:t.subject,xi_xii:0,ix_x:0,coaching:0,total:0});});
+ teachersRes.rows.forEach(t=>{
+  teacherMap.set(String(t.id),{
+   id:String(t.id),
+   name:t.name,
+   subject:t.subject,
+   xi_xii:0,
+   ix_x:0,
+   coaching:0,
+   total:0,
+   coaching_classes:[],
+   xi_xii_classes:[],
+   v_x_classes:[]
+  });
+ });
  const q=await pool.query(`SELECT group_name, to_char(routine_date,'YYYY-MM-DD') as routine_date, grid_data
   FROM routine_manager_grids WHERE routine_kind='daily' AND is_published=TRUE AND to_char(routine_date,'YYYY-MM')=$1
   ORDER BY routine_date`,[month]);
  for(const row of q.rows){
   const group=row.group_name,data=await teacherOnlyGridData(row.grid_data||{});
   if(data.no_class)continue;
+  const dateStr=row.routine_date;
+  const dObj=new Date(dateStr+'T00:00:00Z');
+  const dayName=dObj.toLocaleDateString('en-US',{weekday:'long',timeZone:'UTC'});
   const cells=data.cells||{},seenTeacherSlots=new Set();
   for(const[pos,cell]of Object.entries(cells)){
    if(!cell||!cell.teacher_id)continue;
@@ -183,15 +231,63 @@ async function generateMonthlyReportData(month){
    if(seenTeacherSlots.has(countKey))continue;
    seenTeacherSlots.add(countKey);
    const rec=teacherMap.get(tId);
-   if(group==='xi_xii')rec.xi_xii++;
-   else if(group==='v_x')rec.ix_x++;
-   else if(group==='coaching')rec.coaching++;
+   if(group==='coaching'){
+    rec.coaching++;
+    const dur=getSlotDuration(p[0]);
+    rec.coaching_classes.push({
+     date:dateStr,
+     day:dayName,
+     class_name:p[1]||'Coaching',
+     time_slot:p[0],
+     start_time:dur.start,
+     end_time:dur.end,
+     duration:dur.duration,
+     duration_minutes:dur.minutes,
+     subject:cell.subject||rec.subject||'Coaching'
+    });
+   }else if(group==='xi_xii'){
+    rec.xi_xii++;
+    const periods=Array.isArray(data.periods)&&data.periods.length?data.periods:DEFAULT_XI_XII_PERIODS;
+    const periodIdx=parseInt(p[1],10);
+    const periodInfo=periods[periodIdx]||['Period '+(periodIdx+1),''];
+    const dur=getSlotDuration(periodInfo[1]);
+    rec.xi_xii_classes.push({
+     date:dateStr,
+     day:dayName,
+     class_name:p[0]||'XI-XII',
+     period:periodInfo[0],
+     time_slot:periodInfo[1],
+     start_time:dur.start,
+     end_time:dur.end,
+     duration:dur.duration,
+     duration_minutes:dur.minutes,
+     subject:cell.subject||rec.subject||'General'
+    });
+   }else if(group==='v_x'){
+    rec.ix_x++;
+    const periods=Array.isArray(data.periods)&&data.periods.length?data.periods:DEFAULT_V_X_PERIODS;
+    const periodIdx=parseInt(p[1],10);
+    const periodInfo=periods[periodIdx]||['Period '+(periodIdx+1),''];
+    const dur=getSlotDuration(periodInfo[1]);
+    rec.v_x_classes.push({
+     date:dateStr,
+     day:dayName,
+     class_name:p[0]||'V-X',
+     period:periodInfo[0],
+     time_slot:periodInfo[1],
+     start_time:dur.start,
+     end_time:dur.end,
+     duration:dur.duration,
+     duration_minutes:dur.minutes,
+     subject:cell.subject||rec.subject||'General'
+    });
+   }
    rec.total++;
   }
  }
  const teachers=[...teacherMap.values()].map((t,idx)=>({sl:idx+1,...t}));
  const totals={xi_xii:teachers.reduce((s,t)=>s+t.xi_xii,0),ix_x:teachers.reduce((s,t)=>s+t.ix_x,0),coaching:teachers.reduce((s,t)=>s+t.coaching,0),grand_total:teachers.reduce((s,t)=>s+t.total,0)};
- return {month,monthLabel,schoolName:'Al - Ameen Mission Academy Memari',teachers,totals};
+ return {month,monthLabel,sessionName,schoolName:'Al - Ameen Mission Academy Memari',teachers,totals};
 }
 
 async function buildMonthlyReportWorkbook({month,monthLabel,schoolName,teachers,totals}){
@@ -266,6 +362,206 @@ router.get('/manager/report/excel',auth,allow('super_admin','admin'),asyncHandle
  const wb=await buildMonthlyReportWorkbook(reportData);
  res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
  res.setHeader('Content-Disposition',`attachment; filename="Monthly-Report-${month}.xlsx"`);
+ await wb.xlsx.write(res);
+ res.end();
+}));
+
+async function buildTeacherCoachingWorkbook({teacher,month,monthLabel,schoolName,classes,sessionName,sheetKind}){
+ const wb=new ExcelJS.Workbook();
+ wb.creator='Al-Ameen Mission Academy Memari';
+ const kindTitle=sheetKind==='xi_xii'?'Class XI-XII':sheetKind==='v_x'?'Class V-X':sheetKind==='all'?'All':'Coaching';
+ const ws=wb.addWorksheet(`${teacher.name.slice(0,15)} ${kindTitle}`);
+
+ ws.mergeCells('A1:G1');
+ const t1=ws.getCell('A1');
+ t1.value='Al-Ameen Mission Academy, Memari';
+ t1.font={name:'Calibri',size:16,bold:true,color:{argb:'FF1F4E78'}};
+ t1.alignment={horizontal:'center',vertical:'middle'};
+ ws.getRow(1).height=24;
+
+ ws.mergeCells('A2:G2');
+ const t2=ws.getCell('A2');
+ t2.value='Memari :: Purba Bardhaman';
+ t2.font={name:'Calibri',size:12,bold:true,color:{argb:'FF000000'}};
+ t2.alignment={horizontal:'center',vertical:'middle'};
+ ws.getRow(2).height=18;
+
+ ws.mergeCells('A3:G3');
+ const t3=ws.getCell('A3');
+ t3.value='Girls Unit';
+ t3.font={name:'Calibri',size:12,bold:true,color:{argb:'FF000000'}};
+ t3.alignment={horizontal:'center',vertical:'middle'};
+ ws.getRow(3).height=18;
+
+ ws.mergeCells('A4:G4');
+ const t4=ws.getCell('A4');
+ t4.value=`Record Sheet for Teachers ${kindTitle} Classes for the Session-${sessionName||'2026-27'}`;
+ t4.font={name:'Calibri',size:13,bold:true,color:{argb:'FF1F4E78'}};
+ t4.alignment={horizontal:'center',vertical:'middle'};
+ ws.getRow(4).height=22;
+
+ ws.getRow(5).height=8;
+
+ ws.mergeCells('A6:D6');
+ const tInfo1=ws.getCell('A6');
+ tInfo1.value=`Name of the Teacher: ${teacher.name}`;
+ tInfo1.font={name:'Calibri',size:11,bold:true};
+ tInfo1.alignment={horizontal:'left',vertical:'middle'};
+
+ ws.mergeCells('E6:G6');
+ const tInfo2=ws.getCell('E6');
+ tInfo2.value=`Sub : ${teacher.subject||'General'}    (${monthLabel})`;
+ tInfo2.font={name:'Calibri',size:11,bold:true};
+ tInfo2.alignment={horizontal:'left',vertical:'middle'};
+ ws.getRow(6).height=22;
+
+ ws.getRow(7).height=8;
+
+ const headers=['Sl. No.','Date','Day','Class','Class Start','Class End','Duration of Class'];
+ const hRow=ws.getRow(8);
+ hRow.height=24;
+ headers.forEach((h,idx)=>{
+  const cell=hRow.getCell(idx+1);
+  cell.value=h;
+  cell.font={name:'Calibri',size:11,bold:true,color:{argb:'FF000000'}};
+  cell.alignment={horizontal:'center',vertical:'middle'};
+  cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF2F2F2'}};
+  cell.border={top:{style:'thin'},left:{style:'thin'},bottom:{style:'thin'},right:{style:'thin'}};
+ });
+
+ const totalRows=Math.max(classes.length,18);
+ let totalMinutes=0;
+
+ for(let i=0;i<totalRows;i++){
+  const item=classes[i];
+  const rIdx=9+i;
+  const row=ws.getRow(rIdx);
+  row.height=20;
+
+  const c1=row.getCell(1);
+  c1.value=i+1;
+  c1.alignment={horizontal:'center',vertical:'middle'};
+
+  const c2=row.getCell(2);
+  c2.value=item?item.date.split('-').reverse().join('-'):'';
+  c2.alignment={horizontal:'center',vertical:'middle'};
+
+  const c3=row.getCell(3);
+  c3.value=item?item.day:'';
+  c3.alignment={horizontal:'center',vertical:'middle'};
+
+  const c4=row.getCell(4);
+  c4.value=item?item.class_name:'';
+  c4.alignment={horizontal:'center',vertical:'middle'};
+
+  const c5=row.getCell(5);
+  c5.value=item?item.start_time:'';
+  c5.alignment={horizontal:'center',vertical:'middle'};
+
+  const c6=row.getCell(6);
+  c6.value=item?item.end_time:'';
+  c6.alignment={horizontal:'center',vertical:'middle'};
+
+  const c7=row.getCell(7);
+  c7.value=item?item.duration:'';
+  c7.alignment={horizontal:'center',vertical:'middle'};
+
+  if(item&&item.duration_minutes){
+   totalMinutes+=item.duration_minutes;
+  }
+
+  for(let c=1;c<=7;c++){
+   row.getCell(c).font={name:'Calibri',size:11};
+   row.getCell(c).border={top:{style:'thin'},left:{style:'thin'},bottom:{style:'thin'},right:{style:'thin'}};
+  }
+ }
+
+ const sumIdx=9+totalRows;
+ const sumRow=ws.getRow(sumIdx);
+ sumRow.height=24;
+ ws.mergeCells(`A${sumIdx}:D${sumIdx}`);
+ const s1=ws.getCell(`A${sumIdx}`);
+ s1.value=`Total Classes: ${classes.length}`;
+ s1.font={name:'Calibri',size:11,bold:true,color:{argb:'FF1F4E78'}};
+ s1.alignment={horizontal:'left',vertical:'middle',indent:1};
+
+ const totHrs=Math.floor(totalMinutes/60);
+ const totMins=totalMinutes%60;
+ let totDurStr='';
+ if(totHrs>0&&totMins>0)totDurStr=`${totHrs} Hours ${totMins} Mins`;
+ else if(totHrs>0)totDurStr=`${totHrs} Hours`;
+ else if(totMins>0)totDurStr=`${totMins} Mins`;
+ else totDurStr='-';
+
+ ws.mergeCells(`E${sumIdx}:G${sumIdx}`);
+ const s2=ws.getCell(`E${sumIdx}`);
+ s2.value=`Total Duration: ${totDurStr}`;
+ s2.font={name:'Calibri',size:11,bold:true,color:{argb:'FF1F4E78'}};
+ s2.alignment={horizontal:'right',vertical:'middle'};
+
+ for(let c=1;c<=7;c++){
+  sumRow.getCell(c).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE9EEF4'}};
+  sumRow.getCell(c).border={top:{style:'thin'},left:{style:'thin'},bottom:{style:'thin'},right:{style:'thin'}};
+ }
+
+ const sigRowIdx=sumIdx+3;
+ ws.mergeCells(`A${sigRowIdx}:C${sigRowIdx}`);
+ const sig1=ws.getCell(`A${sigRowIdx}`);
+ sig1.value="Teacher's Signature";
+ sig1.font={name:'Calibri',size:11,bold:true};
+ sig1.border={top:{style:'dashed'}};
+ sig1.alignment={horizontal:'center',vertical:'middle'};
+
+ ws.mergeCells(`E${sigRowIdx}:G${sigRowIdx}`);
+ const sig2=ws.getCell(`E${sigRowIdx}`);
+ sig2.value="In-Charge / Principal Signature";
+ sig2.font={name:'Calibri',size:11,bold:true};
+ sig2.border={top:{style:'dashed'}};
+ sig2.alignment={horizontal:'center',vertical:'middle'};
+
+ ws.columns=[
+  {width:10},
+  {width:15},
+  {width:15},
+  {width:18},
+  {width:14},
+  {width:14},
+  {width:22}
+ ];
+
+ return wb;
+}
+
+router.get('/manager/report/teacher-excel',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ const month=String(req.query.month||new Date().toISOString().slice(0,7));
+ const teacherId=String(req.query.teacher_id||'');
+ const kind=String(req.query.kind||'coaching');
+ if(!/^\d{4}-\d{2}$/.test(month)||!teacherId){
+  return res.status(400).json({success:false,message:'Valid month (YYYY-MM) and teacher_id are required'});
+ }
+ const reportData=await generateMonthlyReportData(month);
+ const teacher=(reportData.teachers||[]).find(t=>String(t.id)===teacherId);
+ if(!teacher)return res.status(404).json({success:false,message:'Teacher not found in monthly report'});
+
+ let classes=[];
+ if(kind==='xi_xii')classes=teacher.xi_xii_classes||[];
+ else if(kind==='v_x')classes=teacher.v_x_classes||[];
+ else if(kind==='all')classes=[...(teacher.coaching_classes||[]),...(teacher.xi_xii_classes||[]),...(teacher.v_x_classes||[])].sort((a,b)=>a.date.localeCompare(b.date));
+ else classes=teacher.coaching_classes||[];
+
+ const wb=await buildTeacherCoachingWorkbook({
+  teacher,
+  month,
+  monthLabel:reportData.monthLabel,
+  schoolName:reportData.schoolName,
+  classes,
+  sessionName:reportData.sessionName,
+  sheetKind:kind
+ });
+
+ const safeName=(teacher.name||'Teacher').replace(/[^a-zA-Z0-9_-]/g,'_');
+ res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+ res.setHeader('Content-Disposition',`attachment; filename="${safeName}_${kind.toUpperCase()}_Record_${month}.xlsx"`);
  await wb.xlsx.write(res);
  res.end();
 }));
