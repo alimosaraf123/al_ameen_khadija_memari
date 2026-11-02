@@ -71,7 +71,9 @@ export default function Fees() {
       if (customSession) query.set('session', customSession);
       query.set('branch', 'Memari');
 
-      const data = await api('/api/guardians/admin/fees-report?' + query.toString());
+      const data = await api('/api/guardians/admin/fees-report?' + query.toString(), {
+        timeoutMs: 120000,
+      });
       if (data?.need_login) {
         setReport(null);
         setSettingsOpen(true);

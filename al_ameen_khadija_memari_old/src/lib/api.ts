@@ -60,7 +60,7 @@ export async function api(
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
-    15000
+    (options as any)?.timeoutMs || 90000
   );
 
   const activeApiBase = Platform.OS === 'web' ? getApiBase() : API_BASE;

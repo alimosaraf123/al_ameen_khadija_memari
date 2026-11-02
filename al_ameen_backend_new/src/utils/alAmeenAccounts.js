@@ -226,7 +226,7 @@ async function fetchPortalPage(url, method = 'POST', body = null, cookie = '') {
     headers,
     body: body ? body.toString() : undefined,
     redirect: 'follow',
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(60000),
   });
 
   const text = await res.text();
@@ -257,7 +257,44 @@ async function ensureValidCookie() {
   throw new Error('Al-Ameen Accounts credentials or valid session cookie required.');
 }
 
-async function querySessionBills(sessionYear, sdate, edate, cookie) {
+// In-memory cache for past dates
+const chunkCache = new Map();
+const reportCache = new Map();
+
+const pad = n => String(n).padStart(2, '0');
+const toYmd = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+
+function daysBetween(d1, d2) {
+  const [y1, m1, day1] = d1.split('-').map(Number);
+  const [y2, m2, day2] = d2.split('-').map(Number);
+  const diff = new Date(y2, m2 - 1, day2) - new Date(y1, m1 - 1, day1);
+  return Math.round(diff / (1000 * 60 * 60 * 24)) + 1;
+}
+
+function splitDateRange(sdate, edate, maxDays = 5) {
+  const chunks = [];
+  const [sy, sm, sd] = sdate.split('-').map(Number);
+  const [ey, em, ed] = edate.split('-').map(Number);
+  let curr = new Date(sy, sm - 1, sd);
+  const end = new Date(ey, em - 1, ed);
+  while (curr <= end) {
+    const chunkEnd = new Date(curr);
+    chunkEnd.setDate(chunkEnd.getDate() + maxDays - 1);
+    if (chunkEnd > end) chunkEnd.setTime(end.getTime());
+    chunks.push({ sdate: toYmd(curr), edate: toYmd(chunkEnd) });
+    curr = new Date(chunkEnd);
+    curr.setDate(curr.getDate() + 1);
+  }
+  return chunks;
+}
+
+async function querySingleSessionChunk(sessionYear, sdate, edate, cookie) {
+  const today = toYmd(new Date());
+  const cacheKey = `${sessionYear}_${sdate}_${edate}_${MEMARI_BRANCH_ID}`;
+  if (edate < today && chunkCache.has(cacheKey)) {
+    return chunkCache.get(cacheKey);
+  }
+
   const formBody = new URLSearchParams();
   formBody.set('sdate', sdate);
   formBody.set('edate', edate);
@@ -274,13 +311,49 @@ async function querySessionBills(sessionYear, sdate, edate, cookie) {
   }
 
   const { rows } = parseFeesTable(res.text);
-  return rows.map(r => ({ ...r, session: sessionYear }));
+  const result = rows.map(r => ({ ...r, session: sessionYear }));
+
+  if (edate < today) {
+    chunkCache.set(cacheKey, result);
+  }
+
+  return result;
+}
+
+async function querySessionBills(sessionYear, sdate, edate, cookie) {
+  const days = daysBetween(sdate, edate);
+  if (days <= 5) {
+    return querySingleSessionChunk(sessionYear, sdate, edate, cookie);
+  }
+
+  const chunks = splitDateRange(sdate, edate, 5);
+  const chunkResults = [];
+
+  for (let i = 0; i < chunks.length; i += 2) {
+    const batch = chunks.slice(i, i + 2);
+    const batchRes = await Promise.all(
+      batch.map(ch => querySingleSessionChunk(sessionYear, ch.sdate, ch.edate, cookie).catch(err => {
+        console.error(`Error querying chunk ${ch.sdate} to ${ch.edate} for session ${sessionYear}:`, err.message);
+        return [];
+      }))
+    );
+    for (const res of batchRes) {
+      chunkResults.push(...res);
+    }
+  }
+
+  return chunkResults;
 }
 
 async function getFeesReportData({ fromDate = '', toDate = '', session = '', branch = 'Memari' } = {}) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toYmd(new Date());
   const sdate = fromDate || today;
   const edate = toDate || sdate;
+  const reportKey = `${sdate}_${edate}_${session || 'last_3_sessions'}_${branch}`;
+
+  if (edate < today && reportCache.has(reportKey)) {
+    return reportCache.get(reportKey);
+  }
 
   let cookie;
   try {
@@ -314,21 +387,19 @@ async function getFeesReportData({ fromDate = '', toDate = '', session = '', bra
   const allBills = [];
   const seenBillIds = new Set();
 
-  // Query sessions in parallel
-  const results = await Promise.all(
-    targetSessions.map(sess => querySessionBills(sess, sdate, edate, cookie).catch(err => {
-      console.error(`Session ${sess} query error:`, err.message);
-      return [];
-    }))
-  );
-
-  for (const sessionRows of results) {
-    for (const r of sessionRows) {
-      const key = `${r.bill_number}-${r.transaction_date}-${r.registration_no}`;
-      if (!seenBillIds.has(key)) {
-        seenBillIds.add(key);
-        allBills.push(r);
+  // Query sessions sequentially to prevent PHP session lock deadlock
+  for (const sess of targetSessions) {
+    try {
+      const sessionRows = await querySessionBills(sess, sdate, edate, cookie);
+      for (const r of sessionRows) {
+        const key = `${r.bill_number}-${r.transaction_date}-${r.registration_no}`;
+        if (!seenBillIds.has(key)) {
+          seenBillIds.add(key);
+          allBills.push(r);
+        }
       }
+    } catch (err) {
+      console.error(`Session ${sess} query error:`, err.message);
     }
   }
 
@@ -337,7 +408,7 @@ async function getFeesReportData({ fromDate = '', toDate = '', session = '', bra
   const onlineAmount = allBills.filter(b => b.payment_mode === 'online').reduce((sum, b) => sum + Number(b.amount || 0), 0);
   const cashAmount = allBills.filter(b => b.payment_mode === 'cash').reduce((sum, b) => sum + Number(b.amount || 0), 0);
 
-  return {
+  const report = {
     success: true,
     source: 'portal',
     portal_url: FEES_REPORT_URL,
@@ -354,6 +425,12 @@ async function getFeesReportData({ fromDate = '', toDate = '', session = '', bra
     cash_amount: Number(cashAmount.toFixed(2)),
     fees: allBills,
   };
+
+  if (edate < today) {
+    reportCache.set(reportKey, report);
+  }
+
+  return report;
 }
 
 module.exports = {
