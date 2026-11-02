@@ -17,6 +17,7 @@ import { Field } from '../components/ui';
 import { Select } from '../components/StudentDirectory';
 import { api, API_BASE } from '../lib/api';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 import { SUBJECTS, SUBJECT_OPTIONS } from '../lib/subjects';
 import DatePickerField from '../components/DatePickerField';
@@ -41,6 +42,104 @@ export default function TerminalExams() {
     session_name: '2026',
     subjects: [{ ...blank }]
   });
+  const [uploadingExcel, setUploadingExcel] = useState<number | null>(null);
+
+  const downloadMasterExcel = async (examId: number, examName?: string, className?: string) => {
+    try {
+      setDownloadingExcel(examId);
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/terminal-exams/${examId}/master-excel`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Excel download failed');
+      }
+      const blob = await res.blob();
+      const cleanExam = (examName || 'exam').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const cleanClass = (className || 'class').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const fileName = `terminal-master-${cleanExam}-${cleanClass}.xlsx`;
+
+      if (Platform.OS === 'web') {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const base64 = (reader.result as string).split(',')[1];
+          const fileUri = `${(FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory || ''}${fileName}`;
+          await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: (FileSystem as any).EncodingType?.Base64 || 'base64' });
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(fileUri, {
+              mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              dialogTitle: 'Download All Subjects Excel'
+            });
+          } else {
+            Alert.alert('Excel Downloaded', `File saved to ${fileUri}`);
+          }
+        };
+        reader.readAsDataURL(blob);
+      }
+    } catch (e: any) {
+      Alert.alert('Download Error', e.message || 'Failed to download Excel');
+    } finally {
+      setDownloadingExcel(null);
+    }
+  };
+
+  const uploadMasterExcel = async (examId: number) => {
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({
+        type: [
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'application/vnd.ms-excel',
+          'application/octet-stream',
+          '.xlsx'
+        ],
+        copyToCacheDirectory: true
+      });
+
+      if (picked.canceled || !picked.assets?.[0]) return;
+      const asset = picked.assets[0];
+
+      setUploadingExcel(examId);
+
+      const token = await getToken();
+      const fd = new FormData();
+      if (Platform.OS === 'web' && (asset as any).file) {
+        fd.append('file', (asset as any).file);
+      } else {
+        fd.append('file', {
+          uri: asset.uri,
+          name: asset.name || 'marks.xlsx',
+          type: asset.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        } as any);
+      }
+
+      const res = await fetch(`${API_BASE}/api/terminal-exams/${examId}/upload-excel`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to upload Excel');
+      }
+
+      Alert.alert('Excel Upload Successful', data.message || 'Marks updated successfully.');
+      await load();
+    } catch (e: any) {
+      Alert.alert('Upload Error', e.message || 'Could not upload Excel file.');
+    } finally {
+      setUploadingExcel(null);
+    }
+  };
+
   const [downloadingExcel, setDownloadingExcel] = useState<number | null>(null);
 
   const downloadSubjectExcel = async (subjectId: number, subjectName?: string, examName?: string) => {
@@ -837,60 +936,103 @@ export default function TerminalExams() {
                   {/* EXPANDED CONTENT: All Subjects & Admin action buttons */}
                   {expanded && (
                     <View style={s.cardExpandedBody}>
-                      <View style={s.assignmentGrid}>
-                        {(e.subjects || []).map((x: any) => (
-                          <View
-                            key={x.id}
-                            style={[
-                              s.assignment,
-                              x.status === 'submitted' && s.assignmentSubmitted,
-                              { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }
-                            ]}
+                      {/* Master Excel Action Bar for All Subjects */}
+                      <View style={{
+                        flexDirection: 'row',
+                        flexWrap: 'wrap',
+                        gap: 10,
+                        backgroundColor: '#f1f5f9',
+                        padding: 12,
+                        borderRadius: 10,
+                        marginBottom: 14,
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        borderWidth: 1,
+                        borderColor: '#e2e8f0'
+                      }}>
+                        <View style={{ flex: 1, minWidth: 200 }}>
+                          <Text style={{ fontWeight: '800', color: '#1e293b', fontSize: 14 }}>
+                            📊 All Subjects Master Excel
+                          </Text>
+                          <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                            Download a single Excel sheet for all subjects, fill marks, and upload.
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                          <TouchableOpacity
+                            disabled={downloadingExcel === e.id}
+                            onPress={() => downloadMasterExcel(e.id, e.exam_name, e.class_name)}
+                            style={{
+                              backgroundColor: '#0F52BA',
+                              paddingHorizontal: 13,
+                              paddingVertical: 8,
+                              borderRadius: 7,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 6
+                            }}
                           >
-                            <TouchableOpacity
-                              onPress={() => open(x.id)}
-                              style={{ flex: 1, marginRight: 8 }}
-                            >
-                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Text style={s.bold}>
-                                  {x.subject_name} - Full {x.full_marks}
-                                </Text>
-                                <Text
-                                  style={{
-                                    fontSize: 11,
-                                    fontWeight: '800',
-                                    color: x.status === 'submitted' ? '#166534' : '#b45309'
-                                  }}
-                                >
-                                  {x.status === 'submitted' ? '✓ Submitted' : '⏳ Pending'}
-                                </Text>
-                              </View>
-                              <Text style={s.help}>
-                                {x.teacher_name || 'Unassigned'} • {x.status}
-                              </Text>
-                            </TouchableOpacity>
+                            {downloadingExcel === e.id ? (
+                              <ActivityIndicator size="small" color="#fff" />
+                            ) : null}
+                            <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>
+                              📥 Download All Subjects Excel
+                            </Text>
+                          </TouchableOpacity>
 
+                          {admin && (
                             <TouchableOpacity
-                              disabled={downloadingExcel === x.id}
-                              onPress={() => downloadSubjectExcel(x.id, x.subject_name, e.exam_name)}
+                              disabled={uploadingExcel === e.id}
+                              onPress={() => uploadMasterExcel(e.id)}
                               style={{
                                 backgroundColor: '#15803d',
-                                paddingHorizontal: 10,
-                                paddingVertical: 6,
-                                borderRadius: 6,
+                                paddingHorizontal: 13,
+                                paddingVertical: 8,
+                                borderRadius: 7,
                                 flexDirection: 'row',
                                 alignItems: 'center',
-                                gap: 4
+                                gap: 6
                               }}
                             >
-                              {downloadingExcel === x.id ? (
+                              {uploadingExcel === e.id ? (
                                 <ActivityIndicator size="small" color="#fff" />
                               ) : null}
-                              <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>
-                                📊 Excel
+                              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>
+                                📤 Upload All Subjects Excel
                               </Text>
                             </TouchableOpacity>
-                          </View>
+                          )}
+                        </View>
+                      </View>
+
+                      <View style={s.assignmentGrid}>
+                        {(e.subjects || []).map((x: any) => (
+                          <TouchableOpacity
+                            key={x.id}
+                            onPress={() => open(x.id)}
+                            style={[
+                              s.assignment,
+                              x.status === 'submitted' && s.assignmentSubmitted
+                            ]}
+                          >
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Text style={s.bold}>
+                                {x.subject_name} - Full {x.full_marks}
+                              </Text>
+                              <Text
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: '800',
+                                  color: x.status === 'submitted' ? '#166534' : '#b45309'
+                                }}
+                              >
+                                {x.status === 'submitted' ? '✓ Submitted' : '⏳ Pending'}
+                              </Text>
+                            </View>
+                            <Text style={s.help}>
+                              {x.teacher_name || 'Unassigned'} • {x.status}
+                            </Text>
+                          </TouchableOpacity>
                         ))}
                       </View>
 

@@ -1,5 +1,5 @@
 const {terminalMarkLimits}=require('../utils/terminalMarkLimits');
-const express=require('express');const {sendPushForNotice}=require('../utils/pushNotifications');const ExcelJS=require('exceljs');const pool=require('../db');const {auth,allow}=require('../middleware/auth');const asyncHandler=require('../utils/asyncHandler');const router=express.Router();const marksSchemaReady=pool.query("ALTER TABLE terminal_marks ADD COLUMN IF NOT EXISTS written_marks NUMERIC(8,2), ADD COLUMN IF NOT EXISTS mcq_obtained NUMERIC(8,2), ADD COLUMN IF NOT EXISTS oral_obtained NUMERIC(8,2)");const terminalExamSchemaReady=pool.query("ALTER TABLE terminal_exam_subjects ADD COLUMN IF NOT EXISTS mcq_marks NUMERIC(8,2)");
+const express=require('express');const {sendPushForNotice}=require('../utils/pushNotifications');const ExcelJS=require('exceljs');const multer=require('multer');const excelUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:15*1024*1024}}).single('file');const pool=require('../db');const {auth,allow}=require('../middleware/auth');const asyncHandler=require('../utils/asyncHandler');const router=express.Router();const marksSchemaReady=pool.query("ALTER TABLE terminal_marks ADD COLUMN IF NOT EXISTS written_marks NUMERIC(8,2), ADD COLUMN IF NOT EXISTS mcq_obtained NUMERIC(8,2), ADD COLUMN IF NOT EXISTS oral_obtained NUMERIC(8,2)");const terminalExamSchemaReady=pool.query("ALTER TABLE terminal_exam_subjects ADD COLUMN IF NOT EXISTS mcq_marks NUMERIC(8,2)");
 router.get('/',auth,allow('super_admin','admin','teacher'),asyncHandler(async(req,res)=>{const teacher=req.user.role==='teacher';const r=await pool.query(`SELECT te.*,COUNT(tes.id)::int subject_count,COUNT(tes.id) FILTER(WHERE tes.status='submitted')::int submitted_count,json_agg(json_build_object('id',tes.id,'subject_name',s.subject_name,'full_marks',tes.full_marks,'theory_marks',tes.theory_marks,'mcq_marks',tes.mcq_marks,'oral_marks',tes.oral_marks,'exam_date',tes.exam_date,'status',tes.status,'teacher_name',t.name,'teacher_staff_id',t.staff_id) ORDER BY s.subject_name) FILTER(WHERE tes.id IS NOT NULL) subjects FROM terminal_exams te LEFT JOIN terminal_exam_subjects tes ON tes.terminal_exam_id=te.id LEFT JOIN subjects s ON s.id=tes.subject_id LEFT JOIN teachers t ON t.id=tes.teacher_id WHERE ($1::boolean=FALSE OR t.user_id=$2 OR te.status='published') GROUP BY te.id ORDER BY te.created_at DESC`,[teacher,req.user.userId]);res.json({success:true,exams:r.rows});}));
 router.post('/',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{await marksSchemaReady;await terminalExamSchemaReady;const b=req.body||{},subjects=Array.isArray(b.subjects)?b.subjects:[];if(!b.exam_name||!b.class_name||!subjects.length)return res.status(400).json({success:false,message:'Exam, class and subjects are required'});const client=await pool.connect();try{await client.query('BEGIN');const exam=(await client.query(`INSERT INTO terminal_exams(exam_name,class_name,session_name,created_by) VALUES($1,$2,$3,$4) RETURNING *`,[b.exam_name,b.class_name,b.session_name||null,req.user.userId])).rows[0];for(const x of subjects){const limits=terminalMarkLimits(x);if(!x.subject_name||!x.teacher_id)throw new Error('Every subject needs subject name and teacher');const subject=(await client.query(`INSERT INTO subjects(subject_name) VALUES($1) ON CONFLICT(subject_name) DO UPDATE SET subject_name=EXCLUDED.subject_name RETURNING id`,[x.subject_name.trim()])).rows[0];await client.query(`INSERT INTO terminal_exam_subjects(terminal_exam_id,subject_id,teacher_id,full_marks,exam_date,theory_marks,mcq_marks,oral_marks) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[exam.id,subject.id,x.teacher_id,limits.total,x.exam_date||null,limits.theory,limits.mcq,limits.oral]);}await client.query('COMMIT');res.status(201).json({success:true,exam});}catch(e){await client.query('ROLLBACK');res.status(400).json({success:false,message:e.message});}finally{client.release();}}));
 router.delete('/:id',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{const client=await pool.connect();try{await client.query('BEGIN');const exam=(await client.query('SELECT * FROM terminal_exams WHERE id=$1 FOR UPDATE',[req.params.id])).rows[0];if(!exam){await client.query('ROLLBACK');return res.status(404).json({success:false,message:'Exam not found'});}if(exam.status==='published'){await client.query('ROLLBACK');return res.status(409).json({success:false,message:'Unpublish the result before deleting it'});}const marker=`terminal://exam/${exam.id}`;const notices=(await client.query('SELECT id FROM notices WHERE attachment_url=$1',[marker])).rows;for(const n of notices){await client.query('DELETE FROM notice_targets WHERE notice_id=$1',[n.id]);await client.query('DELETE FROM notices WHERE id=$1',[n.id]);}const subjects=(await client.query('SELECT id FROM terminal_exam_subjects WHERE terminal_exam_id=$1',[exam.id])).rows;for(const s of subjects)await client.query('DELETE FROM terminal_marks WHERE exam_subject_id=$1',[s.id]);await client.query('DELETE FROM terminal_exam_subjects WHERE terminal_exam_id=$1',[exam.id]);await client.query('DELETE FROM terminal_exams WHERE id=$1',[exam.id]);await client.query('COMMIT');res.json({success:true,message:'Terminal exam deleted'});}catch(e){await client.query('ROLLBACK');res.status(400).json({success:false,message:e.message});}finally{client.release();}}));
@@ -140,6 +140,359 @@ router.get('/subjects/:id/excel',auth,allow('super_admin','admin','teacher'),asy
   res.setHeader('Content-Disposition',`attachment; filename="${filename}"`);
   res.send(Buffer.from(out));
 }));
+
+function matchSubjectHeader(headerText, subjectName) {
+  const h = String(headerText || '').trim().toLowerCase();
+  const s = String(subjectName || '').trim().toLowerCase();
+  if (!h || !s) return false;
+  if (['sl', 'roll', 'reg', 'name', 'total', 'remarks', 'status', 'rank'].some(x => h.startsWith(x) || h.endsWith(x))) return false;
+  const cleanHeader = h.replace(/\[.*?\]|\(.*?\)/g, '').trim();
+  if (cleanHeader === s) return true;
+  const tokens = h.split(/[\s\-_[\]()/]+/);
+  if (tokens.includes(s)) return true;
+  const aliases = {
+    'beng': ['bengali', 'bangla'], 'eng': ['english'],
+    'eng-i': ['english-i', 'english 1', 'eng 1', 'eng1', 'engi'],
+    'eng-ii': ['english-ii', 'english 2', 'eng 2', 'eng2', 'engii'],
+    'math': ['mathematics', 'maths'], 'phy': ['physics'],
+    'chem': ['chemistry'], 'bio': ['biology'],
+    'geo': ['geography'], 'hist': ['history'],
+    'l.sc': ['lifescience', 'life science', 'lsc'],
+    'p.sc': ['physicalscience', 'physical science', 'psc'],
+    'sci': ['science'], 'comp': ['computer'],
+    'hind': ['hindi'], 'arabic': ['arab']
+  };
+  const list = aliases[s] || [];
+  return list.some(a => tokens.includes(a) || cleanHeader === a);
+}
+
+// 1. Download Master Excel for All Subjects of an Exam
+router.get('/:id/master-excel', auth, allow('super_admin', 'admin', 'teacher'), asyncHandler(async (req, res) => {
+  await marksSchemaReady;
+  const exam = (await pool.query('SELECT * FROM terminal_exams WHERE id=$1', [req.params.id])).rows[0];
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
+
+  const subjects = (await pool.query(`
+    SELECT tes.*, s.subject_name 
+    FROM terminal_exam_subjects tes 
+    JOIN subjects s ON s.id=tes.subject_id 
+    WHERE tes.terminal_exam_id=$1 
+    ORDER BY s.subject_name
+  `, [exam.id])).rows;
+
+  const students = (await pool.query(`
+    SELECT st.id, st.registration_no, st.roll_no, st.student_name 
+    FROM students st 
+    WHERE regexp_replace(lower(trim(st.class_name)), '^class\\s*[-:]?\\s*', '')=regexp_replace(lower(trim($1)), '^class\\s*[-:]?\\s*', '')
+      AND st.is_active=TRUE 
+    ORDER BY NULLIF(regexp_replace(st.roll_no, '\\D', '', 'g'), '')::int NULLS LAST, st.registration_no
+  `, [exam.class_name])).rows;
+
+  const marks = (await pool.query(`
+    SELECT tm.student_id, tm.exam_subject_id, tm.obtained_marks, tm.remarks 
+    FROM terminal_marks tm 
+    JOIN terminal_exam_subjects tes ON tes.id=tm.exam_subject_id 
+    WHERE tes.terminal_exam_id=$1
+  `, [exam.id])).rows;
+
+  const marksMap = new Map(marks.map(m => [`${m.student_id}-${m.exam_subject_id}`, m]));
+
+  const wb = new ExcelJS.Workbook();
+  const safeSheetName = `${exam.class_name}-All Subjects`.replace(/[/\\*?:[\]]/g, '').slice(0, 31);
+  const ws = wb.addWorksheet(safeSheetName, {
+    pageSetup: {
+      paperSize: 9,
+      orientation: 'landscape',
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4 }
+    }
+  });
+
+  const colHeaders = [
+    'Sl',
+    'Roll',
+    'Reg. No.',
+    'Student Name',
+    ...subjects.map(s => `${s.subject_name} [${Number(s.full_marks)}]`),
+    'Total Obtained',
+    'Status / Remarks'
+  ];
+
+  const totalCols = colHeaders.length;
+
+  const t1 = ws.addRow(['AL-AMEEN MISSION ACADEMY MEMARI']);
+  t1.font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FF173F68' } };
+  t1.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.mergeCells(1, 1, 1, totalCols);
+  ws.getRow(1).height = 26;
+
+  const t2 = ws.addRow([`${exam.exam_name.trim()} - All Subjects Mark Sheet`]);
+  t2.font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FF1E293B' } };
+  t2.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.mergeCells(2, 1, 2, totalCols);
+  ws.getRow(2).height = 22;
+
+  const meta = `Class: ${exam.class_name}     |     Session: ${exam.session_name || 'N/A'}     |     Total Subjects: ${subjects.length}     |     Status: ${exam.status}`;
+  const t3 = ws.addRow([meta]);
+  t3.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF475569' } };
+  t3.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.mergeCells(3, 1, 3, totalCols);
+  ws.getRow(3).height = 18;
+
+  ws.addRow([]);
+  ws.getRow(4).height = 6;
+
+  const hRow = ws.addRow(colHeaders);
+  hRow.height = 25;
+  hRow.eachCell(cell => {
+    cell.font = { name: 'Calibri', size: 10.5, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF173F68' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = {
+      top: { style: 'medium', color: { argb: 'FF0F172A' } },
+      bottom: { style: 'medium', color: { argb: 'FF0F172A' } },
+      left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+    };
+  });
+
+  students.forEach((st, idx) => {
+    let studentTotal = 0;
+    let anyPresent = false;
+    let anyMarksEntered = false;
+
+    const subVals = subjects.map(s => {
+      const m = marksMap.get(`${st.id}-${s.id}`);
+      if (!m) return '';
+      if (m.remarks === 'Absent') return 'Absent';
+      if (m.obtained_marks !== null && m.obtained_marks !== undefined) {
+        anyMarksEntered = true;
+        anyPresent = true;
+        const val = Number(m.obtained_marks);
+        studentTotal += val;
+        return val;
+      }
+      return '';
+    });
+
+    const rowVals = [
+      idx + 1,
+      st.roll_no || '-',
+      st.registration_no || '-',
+      st.student_name,
+      ...subVals,
+      anyMarksEntered ? studentTotal : '',
+      anyMarksEntered ? (anyPresent ? 'Present' : 'Absent') : ''
+    ];
+
+    const r = ws.addRow(rowVals);
+    r.height = 20;
+    const bgArgb = idx % 2 === 0 ? 'FFFFFFFF' : 'FFF8FAFC';
+
+    r.eachCell((cell, colNum) => {
+      cell.font = { name: 'Calibri', size: 10 };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgArgb } };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+      };
+
+      if (colNum === 4) {
+        cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+        cell.font = { name: 'Calibri', size: 10, bold: true };
+      } else {
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      }
+
+      if (cell.value === 'Absent') {
+        cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFDC2626' } };
+      }
+    });
+  });
+
+  ws.getColumn(1).width = 6;
+  ws.getColumn(2).width = 9;
+  ws.getColumn(3).width = 13;
+  ws.getColumn(4).width = 26;
+  for (let c = 5; c <= 4 + subjects.length; c++) {
+    ws.getColumn(c).width = 14;
+  }
+  ws.getColumn(5 + subjects.length).width = 15;
+  ws.getColumn(6 + subjects.length).width = 16;
+
+  const out = await wb.xlsx.writeBuffer();
+  const filename = `terminal-master-${exam.exam_name.trim().replace(/[^a-zA-Z0-9_-]/g, '_')}-${exam.class_name}.xlsx`;
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(Buffer.from(out));
+}));
+
+// 2. Upload Master Excel for All Subjects of an Exam
+router.post('/:id/upload-excel', auth, allow('super_admin', 'admin'), (req, res, next) => {
+  excelUpload(req, res, err => err ? res.status(400).json({ success: false, message: err.message }) : next());
+}, asyncHandler(async (req, res) => {
+  if (!req.file || !req.file.buffer) {
+    return res.status(400).json({ success: false, message: 'Please upload an .xlsx Excel file' });
+  }
+
+  await marksSchemaReady;
+  const exam = (await pool.query('SELECT * FROM terminal_exams WHERE id=$1', [req.params.id])).rows[0];
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
+
+  const subjects = (await pool.query(`
+    SELECT tes.*, s.subject_name 
+    FROM terminal_exam_subjects tes 
+    JOIN subjects s ON s.id=tes.subject_id 
+    WHERE tes.terminal_exam_id=$1
+  `, [exam.id])).rows;
+
+  if (!subjects.length) {
+    return res.status(400).json({ success: false, message: 'No subjects assigned for this exam' });
+  }
+
+  const students = (await pool.query(`
+    SELECT st.id, st.registration_no, st.roll_no, st.student_name 
+    FROM students st 
+    WHERE regexp_replace(lower(trim(st.class_name)), '^class\\s*[-:]?\\s*', '')=regexp_replace(lower(trim($1)), '^class\\s*[-:]?\\s*', '')
+      AND st.is_active=TRUE
+  `, [exam.class_name])).rows;
+
+  const studentByReg = new Map(students.map(st => [String(st.registration_no).trim().toLowerCase(), st]));
+  const studentByRoll = new Map(students.filter(st => st.roll_no).map(st => [String(st.roll_no).trim().toLowerCase(), st]));
+
+  const wb = new ExcelJS.Workbook();
+  try {
+    await wb.xlsx.load(req.file.buffer);
+  } catch (err) {
+    return res.status(400).json({ success: false, message: 'Could not read Excel file: ' + err.message });
+  }
+
+  const ws = wb.worksheets[0];
+  if (!ws || ws.rowCount === 0) {
+    return res.status(400).json({ success: false, message: 'The uploaded Excel sheet is empty' });
+  }
+
+  let headerRowIndex = -1;
+  let regColIdx = -1;
+  let rollColIdx = -1;
+  const subjectColMap = new Map(); // subject_id -> colIndex
+
+  for (let r = 1; r <= Math.min(15, ws.rowCount); r++) {
+    const row = ws.getRow(r);
+    row.eachCell((cell, colIdx) => {
+      const txt = String(cell.value || '').trim();
+      if (/reg(\.|s*no)?/i.test(txt)) regColIdx = colIdx;
+      if (/roll/i.test(txt)) rollColIdx = colIdx;
+
+      subjects.forEach(sub => {
+        if (matchSubjectHeader(txt, sub.subject_name)) {
+          subjectColMap.set(sub.id, colIdx);
+        }
+      });
+    });
+
+    if ((regColIdx !== -1 || rollColIdx !== -1) && subjectColMap.size > 0) {
+      headerRowIndex = r;
+      break;
+    }
+  }
+
+  if (headerRowIndex === -1 || subjectColMap.size === 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Could not detect student columns (Registration/Roll) or subject columns in the Excel file. Please use the downloaded template.'
+    });
+  }
+
+  const client = await pool.connect();
+  let updatedStudents = new Set();
+  let marksUpdatedCount = 0;
+
+  try {
+    await client.query('BEGIN');
+
+    for (let r = headerRowIndex + 1; r <= ws.rowCount; r++) {
+      const row = ws.getRow(r);
+      const regVal = regColIdx !== -1 ? String(row.getCell(regColIdx).value || '').trim().toLowerCase() : '';
+      const rollVal = rollColIdx !== -1 ? String(row.getCell(rollColIdx).value || '').trim().toLowerCase() : '';
+
+      const st = studentByReg.get(regVal) || (rollVal ? studentByRoll.get(rollVal) : null);
+      if (!st) continue;
+
+      for (const [subId, colIdx] of subjectColMap.entries()) {
+        const sub = subjects.find(s => s.id === subId);
+        const rawCell = row.getCell(colIdx).value;
+        if (rawCell === null || rawCell === undefined || String(rawCell).trim() === '') {
+          continue; // skip untouched cells
+        }
+
+        const cellStr = String(rawCell).trim().toLowerCase();
+        let isAbsent = false;
+        let markNum = null;
+        let remarks = null;
+
+        if (cellStr === 'absent' || cellStr === 'ab' || cellStr === 'a') {
+          isAbsent = true;
+          remarks = 'Absent';
+        } else {
+          markNum = parseFloat(cellStr);
+          if (isNaN(markNum) || markNum < 0) continue;
+          if (markNum > Number(sub.full_marks)) markNum = Number(sub.full_marks);
+        }
+
+        let written = null;
+        let mcq = null;
+        let oral = null;
+
+        if (!isAbsent && markNum !== null) {
+          if (Number(sub.mcq_marks) > 0 && Number(sub.theory_marks) === 0) {
+            mcq = markNum;
+            written = 0;
+            oral = 0;
+          } else if (Number(sub.theory_marks) > 0 && Number(sub.mcq_marks) === 0) {
+            written = markNum;
+            mcq = 0;
+            oral = 0;
+          }
+        }
+
+        await client.query(`
+          INSERT INTO terminal_marks(exam_subject_id, student_id, obtained_marks, written_marks, mcq_obtained, oral_obtained, remarks, entered_by)
+          VALUES($1, $2, $3, $4, $5, $6, $7, $8)
+          ON CONFLICT(exam_subject_id, student_id) DO UPDATE SET
+            obtained_marks=EXCLUDED.obtained_marks,
+            written_marks=EXCLUDED.written_marks,
+            mcq_obtained=EXCLUDED.mcq_obtained,
+            oral_obtained=EXCLUDED.oral_obtained,
+            remarks=EXCLUDED.remarks,
+            entered_by=EXCLUDED.entered_by
+        `, [sub.id, st.id, markNum, written, mcq, oral, remarks, req.user.userId]);
+
+        updatedStudents.add(st.id);
+        marksUpdatedCount++;
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({
+      success: true,
+      message: `Successfully uploaded marks for ${updatedStudents.size} students across ${subjectColMap.size} subjects (${marksUpdatedCount} total entries).`,
+      studentsCount: updatedStudents.size,
+      subjectsCount: subjectColMap.size,
+      totalEntries: marksUpdatedCount
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ success: false, message: 'Failed to save marks: ' + err.message });
+  } finally {
+    client.release();
+  }
+}));
+
 router.get('/subjects/:id/entry',auth,allow('super_admin','admin','teacher'),asyncHandler(async(req,res)=>{await marksSchemaReady;const a=(await pool.query(`SELECT tes.*,te.exam_name,te.class_name,te.status exam_status,s.subject_name,t.user_id teacher_user_id FROM terminal_exam_subjects tes JOIN terminal_exams te ON te.id=tes.terminal_exam_id JOIN subjects s ON s.id=tes.subject_id LEFT JOIN teachers t ON t.id=tes.teacher_id WHERE tes.id=$1`,[req.params.id])).rows[0];if(!a)return res.status(404).json({success:false,message:'Assignment not found'});if(req.user.role==='teacher'&&Number(a.teacher_user_id)!==Number(req.user.userId))return res.status(403).json({success:false,message:'This subject is not assigned to you'});const rows=await pool.query(`SELECT st.id student_id,st.registration_no,st.student_name,tm.obtained_marks,tm.written_marks,tm.mcq_obtained,tm.oral_obtained,tm.remarks FROM students st LEFT JOIN terminal_marks tm ON tm.student_id=st.id AND tm.exam_subject_id=$1 WHERE regexp_replace(lower(trim(st.class_name)), '^class\s*[-:]?\s*', '')=regexp_replace(lower(trim($2)), '^class\s*[-:]?\s*', '') AND st.is_active=TRUE ORDER BY st.registration_no`,[a.id,a.class_name]);res.json({success:true,assignment:a,students:rows.rows});}));
 router.post('/subjects/:id/submit',auth,allow('super_admin','admin','teacher'),asyncHandler(async(req,res)=>{await marksSchemaReady;const client=await pool.connect();try{await client.query('BEGIN');const a=(await client.query(`SELECT tes.*,te.class_name,t.user_id teacher_user_id FROM terminal_exam_subjects tes JOIN terminal_exams te ON te.id=tes.terminal_exam_id LEFT JOIN teachers t ON t.id=tes.teacher_id WHERE tes.id=$1 FOR UPDATE OF tes`,[req.params.id])).rows[0];if(!a){await client.query('ROLLBACK');return res.status(404).json({success:false,message:'Assignment not found'});}if(req.user.role==='teacher'&&Number(a.teacher_user_id)!==Number(req.user.userId)){await client.query('ROLLBACK');return res.status(403).json({success:false,message:'Not assigned to you'});}if(req.user.role==='teacher'&&a.status==='submitted'){await client.query('ROLLBACK');return res.status(409).json({success:false,message:'Marks already submitted and locked'});}const entries=Array.isArray(req.body.entries)?req.body.entries:[];const draft=req.body.submit_mode==='draft';const expected=(await client.query(`SELECT id FROM students WHERE class_name=$1 AND is_active=TRUE ORDER BY id`,[a.class_name])).rows.map(x=>Number(x.id));const supplied=new Set(entries.map(x=>Number(x.student_id)));if(!draft&&(expected.length!==entries.length||!expected.every(id=>supplied.has(id)))){await client.query('ROLLBACK');return res.status(409).json({success:false,message:'Student list changed. Reload before submitting.'});}for(const x of entries){const written=x.written_marks===null||x.written_marks===''?null:Number(x.written_marks),mcq=x.mcq_obtained===null||x.mcq_obtained===''?null:Number(x.mcq_obtained),oral=x.oral_obtained===null||x.oral_obtained===''?null:Number(x.oral_obtained),mark=written===null&&mcq===null&&oral===null?null:(Number(written)||0)+(Number(mcq)||0)+(Number(oral)||0);if(written!==null&&(written<0||written>Number(a.theory_marks)))throw new Error('Invalid written marks');if(mcq!==null&&(mcq<0||mcq>Number(a.mcq_marks||0)))throw new Error('Invalid MCQ marks');if(oral!==null&&(oral<0||oral>Number(a.oral_marks)))throw new Error('Invalid oral marks');if(mark!==null&&mark>Number(a.full_marks))throw new Error('Invalid total marks');await client.query(`INSERT INTO terminal_marks(exam_subject_id,student_id,obtained_marks,written_marks,mcq_obtained,oral_obtained,remarks,entered_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(exam_subject_id,student_id) DO UPDATE SET obtained_marks=EXCLUDED.obtained_marks,written_marks=EXCLUDED.written_marks,mcq_obtained=EXCLUDED.mcq_obtained,oral_obtained=EXCLUDED.oral_obtained,remarks=EXCLUDED.remarks,entered_by=EXCLUDED.entered_by`,[a.id,x.student_id,mark,written,mcq,oral,x.absent?'Absent':null,req.user.userId]);}await client.query(`UPDATE terminal_exam_subjects SET status=CASE WHEN $2 THEN 'assigned' ELSE 'submitted' END,submitted_at=CASE WHEN $2 THEN NULL ELSE NOW() END WHERE id=$1`,[a.id,draft]);await client.query(`UPDATE terminal_exams SET status='ready' WHERE id=$1 AND NOT EXISTS(SELECT 1 FROM terminal_exam_subjects WHERE terminal_exam_id=$1 AND status<>'submitted')`,[a.terminal_exam_id]);await client.query('COMMIT');res.json({success:true,message:'Marks submitted and locked'});}catch(e){await client.query('ROLLBACK');res.status(400).json({success:false,message:e.message});}finally{client.release();}}));
 router.get('/published',auth,allow('super_admin','admin','teacher','guardian'),asyncHandler(async(req,res)=>{const guardian=req.user.role==='guardian',args=[];if(guardian)args.push(req.user.userId);const r=await pool.query(`SELECT te.*,COUNT(tes.id)::int subject_count FROM terminal_exams te JOIN terminal_exam_subjects tes ON tes.terminal_exam_id=te.id WHERE te.status='published' ${guardian?`AND EXISTS(SELECT 1 FROM guardian_profiles gp JOIN student_guardians gs ON gs.guardian_id=gp.id JOIN students st ON st.id=gs.student_id WHERE gp.user_id=$1 AND regexp_replace(lower(trim(st.class_name)), '^class\s*[-:]?\s*', '')=regexp_replace(lower(trim(te.class_name)), '^class\s*[-:]?\s*', ''))`:''} GROUP BY te.id ORDER BY te.published_at DESC`,args);res.json({success:true,exams:r.rows});}));
