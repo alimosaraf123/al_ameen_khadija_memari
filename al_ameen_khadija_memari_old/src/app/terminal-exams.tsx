@@ -942,28 +942,41 @@ export default function TerminalExams() {
                         flexWrap: 'wrap',
                         gap: 10,
                         backgroundColor: '#f1f5f9',
-                        padding: 12,
+                        padding: 10,
                         borderRadius: 10,
                         marginBottom: 14,
                         alignItems: 'center',
-                        justifyContent: 'space-between',
+                        justifyContent: 'flex-end',
                         borderWidth: 1,
                         borderColor: '#e2e8f0'
                       }}>
-                        <View style={{ flex: 1, minWidth: 200 }}>
-                          <Text style={{ fontWeight: '800', color: '#1e293b', fontSize: 14 }}>
-                            📊 All Subjects Master Excel
+                        <TouchableOpacity
+                          disabled={downloadingExcel === e.id}
+                          onPress={() => downloadMasterExcel(e.id, e.exam_name, e.class_name)}
+                          style={{
+                            backgroundColor: '#0F52BA',
+                            paddingHorizontal: 13,
+                            paddingVertical: 8,
+                            borderRadius: 7,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 6
+                          }}
+                        >
+                          {downloadingExcel === e.id ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                          ) : null}
+                          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>
+                            📥 Download All Subjects Excel
                           </Text>
-                          <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-                            Download a single Excel sheet for all subjects, fill marks, and upload.
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                        </TouchableOpacity>
+
+                        {admin && (
                           <TouchableOpacity
-                            disabled={downloadingExcel === e.id}
-                            onPress={() => downloadMasterExcel(e.id, e.exam_name, e.class_name)}
+                            disabled={uploadingExcel === e.id}
+                            onPress={() => uploadMasterExcel(e.id)}
                             style={{
-                              backgroundColor: '#0F52BA',
+                              backgroundColor: '#15803d',
                               paddingHorizontal: 13,
                               paddingVertical: 8,
                               borderRadius: 7,
@@ -972,37 +985,14 @@ export default function TerminalExams() {
                               gap: 6
                             }}
                           >
-                            {downloadingExcel === e.id ? (
+                            {uploadingExcel === e.id ? (
                               <ActivityIndicator size="small" color="#fff" />
                             ) : null}
                             <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>
-                              📥 Download All Subjects Excel
+                              📤 Upload All Subjects Excel
                             </Text>
                           </TouchableOpacity>
-
-                          {admin && (
-                            <TouchableOpacity
-                              disabled={uploadingExcel === e.id}
-                              onPress={() => uploadMasterExcel(e.id)}
-                              style={{
-                                backgroundColor: '#15803d',
-                                paddingHorizontal: 13,
-                                paddingVertical: 8,
-                                borderRadius: 7,
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 6
-                              }}
-                            >
-                              {uploadingExcel === e.id ? (
-                                <ActivityIndicator size="small" color="#fff" />
-                              ) : null}
-                              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>
-                                📤 Upload All Subjects Excel
-                              </Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
+                        )}
                       </View>
 
                       <View style={s.assignmentGrid}>
