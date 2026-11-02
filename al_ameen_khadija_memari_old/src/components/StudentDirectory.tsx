@@ -272,7 +272,7 @@ export function Select({ label, value, options, onChange, searchable=false, styl
       onPress={handleOpen}
       style={[s.select, style]}
     >
-      <Text style={[s.selectText, !value && s.selectPlaceholder, textStyle]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+      <Text style={[s.selectText, !value && s.selectPlaceholder, textStyle]} numberOfLines={1} ellipsizeMode="tail">
         {buttonDisplay}{chevronChar ? `  ${chevronChar}` : ''}
       </Text>
     </TouchableOpacity>
