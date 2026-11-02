@@ -9,7 +9,7 @@ import { getToken } from '../lib/auth';
 import { STUDENT_CLASSES, isVisibleStudentClass } from '../lib/studentClasses';
 import { filterStudents, studentSession, normalizeStudentClass } from '../lib/studentDirectory';
 
-type Option = { value: string; label: string };
+type Option = { value: string; label: string; shortLabel?: string; keywords?: string[] };
 export function Select({ label, value, options, onChange, searchable=false, style, panelWidth, panelMaxHeight }: { label: string; value: string; options: Option[]; onChange: (value: string) => void; searchable?: boolean; style?: any; panelWidth?: number; panelMaxHeight?: number }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -17,18 +17,63 @@ export function Select({ label, value, options, onChange, searchable=false, styl
   const [activeIndex, setActiveIndex] = useState(-1);
   const [anchor, setAnchor] = useState({ x: 16, y: 60, width: 280, maxHeight: 380 });
   const buttonRef = useRef<any>(null);
+  const inputRef = useRef<any>(null);
   const lastKeyboardAction = useRef({ key: '', at: 0 });
-  const visibleOptions = searchable && query ? options.filter(option => option.label.toLowerCase().includes(query.toLowerCase())) : options;
+
+  const visibleOptions = useMemo(() => {
+    if (!searchable || !query.trim()) return options;
+    const q = query.trim().toLowerCase();
+
+    const scored = options.map((opt, origIndex) => {
+      if (!opt.value && (opt.label || '').toLowerCase().startsWith('select')) {
+        return { opt, score: -1, origIndex };
+      }
+      const lbl = (opt.label || '').toLowerCase();
+      const val = (opt.value || '').toLowerCase();
+      const short = (opt.shortLabel || '').toLowerCase();
+      const kw = (opt.keywords || []).map(k => String(k).toLowerCase());
+
+      let score = 0;
+      if (val === q || short === q || lbl === q || kw.includes(q)) {
+        score = 100;
+      } else if (val.startsWith(q) || short.startsWith(q) || lbl.startsWith(q)) {
+        score = 85;
+      } else if (kw.some(k => k.startsWith(q))) {
+        score = 80;
+      } else if (q.startsWith(val) || (short && q.startsWith(short)) || kw.some(k => q.startsWith(k))) {
+        score = 75;
+      } else if (lbl.split(/[\s\-_()/]+/).some(w => w.startsWith(q))) {
+        score = 65;
+      } else if (val.includes(q) || short.includes(q) || lbl.includes(q) || kw.some(k => k.includes(q))) {
+        score = 40;
+      }
+
+      return { opt, score, origIndex };
+    });
+
+    return scored
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score || a.origIndex - b.origIndex)
+      .map(item => item.opt);
+  }, [options, query, searchable]);
+
+  useEffect(() => {
+    if (searchable && query.trim() && visibleOptions.length > 0) {
+      setActiveIndex(0);
+    }
+  }, [query, searchable, visibleOptions]);
+
   const previewOption = (index: number) => {
     const next = Math.max(0, Math.min(index, visibleOptions.length - 1));
     setActiveIndex(next);
-    setPreviewLabel(visibleOptions[next]?.label || '');
   };
+
   const chooseOption = (option?: Option) => {
     if (!option) return;
     onChange(option.value);
     setOpen(false);
   };
+
   const handleSearchKey = (event: any) => {
     const rawKey = event?.key || event?.nativeEvent?.key || event?.code || event?.nativeEvent?.code;
     const key = String(rawKey || '').toLowerCase();
@@ -42,10 +87,111 @@ export function Select({ label, value, options, onChange, searchable=false, styl
     lastKeyboardAction.current = { key: normalizedKey, at: now };
     if (normalizedKey === 'escape') { event.preventDefault?.(); setOpen(false); return; }
     if (!visibleOptions.length) return;
-    if (normalizedKey === 'down') { event.preventDefault?.(); previewOption(activeIndex + 1); return; }
-    if (normalizedKey === 'up') { event.preventDefault?.(); previewOption(activeIndex - 1); return; }
-    if (normalizedKey === 'enter' && activeIndex >= 0) { event.preventDefault?.(); chooseOption(visibleOptions[Math.min(activeIndex, visibleOptions.length - 1)]); }
+    if (normalizedKey === 'down') {
+      event.preventDefault?.();
+      previewOption(activeIndex < 0 ? 0 : activeIndex + 1);
+      return;
+    }
+    if (normalizedKey === 'up') {
+      event.preventDefault?.();
+      previewOption(activeIndex <= 0 ? 0 : activeIndex - 1);
+      return;
+    }
+    if (normalizedKey === 'enter') {
+      event.preventDefault?.();
+      const targetIndex = activeIndex >= 0 ? activeIndex : 0;
+      if (visibleOptions[targetIndex]) {
+        chooseOption(visibleOptions[targetIndex]);
+      }
+    }
   };
+
+  useEffect(() => {
+    if (!open || Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    let buffer = '';
+    let bufferTimer: any = null;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      if (activeEl && activeEl.tagName === 'INPUT' && activeEl === inputRef.current) {
+        return;
+      }
+      if (activeEl && activeEl.tagName === 'INPUT' && activeEl !== inputRef.current) {
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setOpen(false);
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActiveIndex(prev => Math.min(prev + 1, visibleOptions.length - 1));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActiveIndex(prev => Math.max(prev - 1, 0));
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const targetIndex = activeIndex >= 0 ? activeIndex : 0;
+        if (visibleOptions[targetIndex]) {
+          chooseOption(visibleOptions[targetIndex]);
+        }
+        return;
+      }
+
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (searchable && inputRef.current) {
+          try {
+            inputRef.current.focus();
+            setQuery(prev => prev + e.key);
+            e.preventDefault();
+            return;
+          } catch (_) {}
+        }
+
+        e.preventDefault();
+        buffer += e.key.toLowerCase();
+        clearTimeout(bufferTimer);
+        bufferTimer = setTimeout(() => { buffer = ''; }, 650);
+
+        const matchIdx = visibleOptions.findIndex(o => {
+          const l = (o.label || '').toLowerCase();
+          const v = (o.value || '').toLowerCase();
+          const sl = (o.shortLabel || '').toLowerCase();
+          const kw = (o.keywords || []).map(k => String(k).toLowerCase());
+          return v.startsWith(buffer) || sl.startsWith(buffer) || l.startsWith(buffer) || kw.some(k => k.startsWith(buffer));
+        });
+
+        if (matchIdx >= 0) {
+          setActiveIndex(matchIdx);
+        } else if (buffer.length > 1) {
+          const char = e.key.toLowerCase();
+          const singleIdx = visibleOptions.findIndex(o => {
+            const l = (o.label || '').toLowerCase();
+            const v = (o.value || '').toLowerCase();
+            const sl = (o.shortLabel || '').toLowerCase();
+            const kw = (o.keywords || []).map(k => String(k).toLowerCase());
+            return v.startsWith(char) || sl.startsWith(char) || l.startsWith(char) || kw.some(k => k.startsWith(char));
+          });
+          if (singleIdx >= 0) {
+            setActiveIndex(singleIdx);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      clearTimeout(bufferTimer);
+    };
+  }, [open, visibleOptions, activeIndex, searchable]);
 
   const handleOpen = (event: any) => {
     const w = Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerWidth : 1200;
@@ -80,8 +226,16 @@ export function Select({ label, value, options, onChange, searchable=false, styl
       setAnchor({ x: Math.round(left), y: Math.round(top), width: dropdownW, maxHeight: Math.round(maxHeight) });
       setQuery('');
       setPreviewLabel('');
-      setActiveIndex(-1);
+      const currentIdx = options.findIndex(o => o.value === value);
+      setActiveIndex(currentIdx >= 0 ? currentIdx : -1);
       setOpen(true);
+      if (searchable) {
+        setTimeout(() => {
+          try {
+            inputRef.current?.focus?.();
+          } catch (_) {}
+        }, 50);
+      }
     };
 
     if (Platform.OS === 'web') {
@@ -106,20 +260,33 @@ export function Select({ label, value, options, onChange, searchable=false, styl
     calculate(cx, cy, 220, 40);
   };
 
+  const selectedOpt = options.find(o => o.value === value);
+  const buttonDisplay = selectedOpt?.shortLabel || selectedOpt?.label || label;
+
   return <>
     <TouchableOpacity
       ref={buttonRef}
       accessibilityRole="button"
-      accessibilityLabel={`${label}: ${options.find(o => o.value === value)?.label || value}`}
+      accessibilityLabel={`${label}: ${buttonDisplay}`}
       onPress={handleOpen}
       style={[s.select, style]}
     >
-      <Text style={[s.selectText,!value&&s.selectPlaceholder]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{options.find(o => o.value === value)?.label || label}  ▼</Text>
+      <Text style={[s.selectText,!value&&s.selectPlaceholder]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{buttonDisplay}  ▼</Text>
     </TouchableOpacity>
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
       <View style={[s.overlay,Platform.OS==='web'&&s.webSelectOverlay]}><Pressable accessibilityRole="button" accessibilityLabel="Close dropdown" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} onPress={() => setOpen(false)} /><View style={[s.selectPanel,Platform.OS!=='web'&&panelWidth ? {maxWidth:panelWidth} : false,Platform.OS!=='web'&&panelMaxHeight ? {maxHeight:panelMaxHeight} : false,Platform.OS==='web'&&{position:'absolute',left:anchor.x,top:anchor.y,width:anchor.width,maxWidth:anchor.width,maxHeight:anchor.maxHeight,borderWidth:1,borderColor:'#cbd5e1'}] }>
         <Text style={s.panelTitle}>{label}</Text>
-        {searchable && <TextInput autoFocus value={previewLabel || query} onChangeText={text => { setQuery(text); setPreviewLabel(''); setActiveIndex(-1); }} placeholder={label ? `Search ${label}...` : "Type to search..."} style={[s.search, { width: '100%', marginBottom: 8 }]} {...(Platform.OS === 'web' ? { onKeyDown: handleSearchKey, onKeyPress: handleSearchKey } as any : { onKeyPress: handleSearchKey })} />}
+        {searchable && (
+          <TextInput
+            ref={inputRef}
+            autoFocus
+            value={query}
+            onChangeText={text => { setQuery(text); setActiveIndex(0); }}
+            placeholder={label ? `Search ${label}...` : "Type to search..."}
+            style={[s.search, { width: '100%', marginBottom: 8 }]}
+            {...(Platform.OS === 'web' ? { onKeyDown: handleSearchKey, onKeyPress: handleSearchKey } as any : { onKeyPress: handleSearchKey })}
+          />
+        )}
         <ScrollView keyboardShouldPersistTaps="handled">{visibleOptions.map((option, index) => <TouchableOpacity key={option.value} accessibilityRole="button" accessibilityState={{ selected: value === option.value }} style={[s.option, value === option.value && s.selected, index === activeIndex && { backgroundColor: '#e0f2fe', borderLeftWidth: 4, borderLeftColor: '#2563eb' }]} onPress={() => chooseOption(option)}>
           <Text>{option.label}{value === option.value ? '  Selected' : ''}</Text>
         </TouchableOpacity>)}</ScrollView>

@@ -16,14 +16,14 @@ import AcademyHeader from '../components/AcademyHeader';
 import { Field } from '../components/ui';
 import { Select } from '../components/StudentDirectory';
 import { api } from '../lib/api';
-import { SUBJECTS } from '../lib/subjects';
+import { SUBJECTS, SUBJECT_OPTIONS } from '../lib/subjects';
 import DatePickerField from '../components/DatePickerField';
 import { getUser } from '../lib/auth';
 import { STUDENT_CLASSES } from '../lib/studentClasses';
 import { confirmAction, successMessage } from '../lib/confirm';
 
 const blank = { subject_name: '', theory_marks: '', mcq_marks: '', oral_marks: '', exam_date: '', teacher_id: '' };
-const TERMINAL_SUBJECTS = SUBJECTS;
+const TERMINAL_SUBJECTS = SUBJECT_OPTIONS;
 const SESSION_OPTIONS = Array.from({ length: 10 }, (_, i) => {
   const y = new Date().getFullYear() - 2 + i;
   return [`${y}-${y}`, `${y}-${y + 1}`];
@@ -466,12 +466,14 @@ export default function TerminalExams() {
                 <Text style={s.heading}>Create Terminal Exam</Text>
                 <Field placeholder="Exam name" value={form.exam_name} onChangeText={(v: string) => set('exam_name', v)} />
                 <Select
+                  searchable
                   label="Class"
                   value={form.class_name}
                   onChange={v => set('class_name', v)}
                   options={[{ value: '', label: 'Select class' }, ...STUDENT_CLASSES.map(v => ({ value: v, label: v }))]}
                 />
                 <Select
+                  searchable
                   label="Session"
                   value={form.session_name}
                   onChange={v => set('session_name', v)}
@@ -481,10 +483,17 @@ export default function TerminalExams() {
                   <View key={i} style={s.subject}>
                     <View style={s.flex}>
                       <Select
+                        searchable
                         label="Subject"
                         value={x.subject_name}
                         onChange={v => subject(i, 'subject_name', v)}
-                        options={[{ value: '', label: 'Select subject' }, ...TERMINAL_SUBJECTS.map(v => ({ value: v, label: v }))]}
+                        options={(() => {
+                          const list: any[] = [{ value: '', label: 'Select subject' }, ...TERMINAL_SUBJECTS];
+                          if (x.subject_name && !list.some(o => o.value === x.subject_name)) {
+                            list.push({ value: x.subject_name, label: x.subject_name, shortLabel: x.subject_name, keywords: [x.subject_name] });
+                          }
+                          return list;
+                        })()}
                       />
                     </View>
                     <View>
