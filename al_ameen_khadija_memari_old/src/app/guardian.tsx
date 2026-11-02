@@ -855,14 +855,40 @@ export default function Guardian() {
                   <Text style={styles.noticeText}>{notice.notice_text || notice.message || notice.content || notice.description}</Text>
                 )}
                 {!!notice.attachment_url && (
-                  <TouchableOpacity onPress={() => { const uri = /^https?:\/\//i.test(String(notice.attachment_url)) ? String(notice.attachment_url) : API_BASE + String(notice.attachment_url); setSelectedDocument({ document_title: notice.title || 'Notice attachment' }); setSelectedDocumentUri(uri); documentBaseZoom.current = 1; setDocumentZoom(1); documentPinchScale.setValue(1); }} activeOpacity={0.85}>
-                    <Image
-                      source={{ uri: /^https?:\/\//i.test(String(notice.attachment_url)) ? String(notice.attachment_url) : API_BASE + String(notice.attachment_url) }}
-                      style={styles.noticeAttachment}
-                      resizeMode="contain"
-                      accessibilityLabel="Notice attachment"
-                    />
-                  </TouchableOpacity>
+                  String(notice.attachment_url).startsWith('terminal://exam/') ? (
+                    <TouchableOpacity
+                      style={{
+                        marginTop: 10,
+                        paddingVertical: 9,
+                        paddingHorizontal: 16,
+                        backgroundColor: '#1d4ed8',
+                        borderRadius: 8,
+                        alignSelf: 'flex-start',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                      }}
+                      onPress={() => {
+                        const examId = Number(String(notice.attachment_url).replace('terminal://exam/', ''));
+                        setTab('result');
+                        if (examId) openTerminalResult(examId);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 13 }}>
+                        {terminalResultLoadingId === Number(String(notice.attachment_url).replace('terminal://exam/', '')) ? 'Loading Result...' : '📊 View Published Result'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity onPress={() => { const uri = /^https?:\/\//i.test(String(notice.attachment_url)) ? String(notice.attachment_url) : API_BASE + String(notice.attachment_url); setSelectedDocument({ document_title: notice.title || 'Notice attachment' }); setSelectedDocumentUri(uri); documentBaseZoom.current = 1; setDocumentZoom(1); documentPinchScale.setValue(1); }} activeOpacity={0.85}>
+                      <Image
+                        source={{ uri: /^https?:\/\//i.test(String(notice.attachment_url)) ? String(notice.attachment_url) : API_BASE + String(notice.attachment_url) }}
+                        style={styles.noticeAttachment}
+                        resizeMode="contain"
+                        accessibilityLabel="Notice attachment"
+                      />
+                    </TouchableOpacity>
+                  )
                 )}
                 {notice.notice_type !== 'gate_pass' && !!(notice.published_at || notice.created_at) && (
                   <Text style={styles.dateText}>{String(notice.published_at || notice.created_at).slice(0, 10)}</Text>
@@ -890,51 +916,64 @@ export default function Guardian() {
                 {(() => {
                   const own = (selectedTerminalResult.students || []).find((item: any) => Number(item.id) === Number(student?.id));
                   const subjects = selectedTerminalResult.subjects || [];
-                  const hasOral = subjects.some((subject: any) => Number(subject.oral_marks || 0) > 0);
-                  const students = selectedTerminalResult.students || [];
-                  const totalFor = (item: any) => subjects.reduce((sum: number, subject: any) => sum + (Number(item?.marks?.[subject.id]) || 0), 0);
-                  const ownTotal = totalFor(own);
-                  const rank = own ? 1 + students.filter((item: any) => totalFor(item) > ownTotal).length : '-';
-                  const imageHeaders = ['Subject', 'Th. FM', ...(hasOral ? ['Oral FM'] : []), 'FM', 'Th. MO', ...(hasOral ? ['Oral MO'] : []), 'Total', '%'];
-                  const imageRows = subjects.map((subject: any) => { const value = own?.marks?.[subject.id]; const total = value === 'Absent' || value == null ? null : Number(value); return [subject.subject_name, subject.theory_marks ?? '-', ...(hasOral ? [subject.oral_marks ?? '-'] : []), subject.full_marks ?? '-', own?.written_marks?.[subject.id] ?? '-', ...(hasOral ? [own?.oral_obtained?.[subject.id] ?? '-'] : []), total ?? 'Absent', total == null || !Number(subject.full_marks) ? '-' : `${((total / Number(subject.full_marks)) * 100).toFixed(2)}%`]; });
-                  void imageHeaders;
-                  void imageRows;
-                  return null;
-                })()}
-                {(() => {
-                  const own = (selectedTerminalResult.students || []).find((item: any) => Number(item.id) === Number(student?.id));
-                  const subjects = selectedTerminalResult.subjects || [];
                   const students = selectedTerminalResult.students || [];
                   const totalFor = (item: any) => subjects.reduce((sum: number, subject: any) => sum + (Number(item?.marks?.[subject.id]) || 0), 0);
                   const ownTotal = totalFor(own);
                   const rank = own ? 1 + students.filter((item: any) => totalFor(item) > ownTotal).length : '-';
                   const hasOral = subjects.some((subject: any) => Number(subject.oral_marks || 0) > 0);
+
+                  const getHighestForSubject = (subject: any) => {
+                    if (subject.highest_marks != null && subject.highest_marks !== '') {
+                      const n = Number(subject.highest_marks);
+                      if (!isNaN(n)) return n % 1 === 0 ? String(n) : n.toFixed(2);
+                    }
+                    let max: number | null = null;
+                    for (const st of students) {
+                      const val = st?.marks?.[subject.id];
+                      if (val !== undefined && val !== null && val !== 'Absent') {
+                        const num = Number(val);
+                        if (!isNaN(num) && (max === null || num > max)) {
+                          max = num;
+                        }
+                      }
+                    }
+                    return max !== null ? (max % 1 === 0 ? String(max) : max.toFixed(2)) : '-';
+                  };
+
+                  const tableHeaders = ['Subject', 'FM', 'HM', ...(hasOral ? ['Oral FM', 'Oral MO'] : []), 'Total', '%'];
+
                   return (
                     <ScrollView horizontal showsHorizontalScrollIndicator>
                       <View style={styles.terminalResultTable}>
                         <View style={[styles.weeklyRow, styles.weeklyHeader]}>
-                          {['Subject', 'Th. FM', ...(hasOral ? ['Oral FM'] : []), 'FM', 'Th. MO', ...(hasOral ? ['Oral MO'] : []), 'Total', '%'].map(label => <Text key={label} style={[styles.weeklyCell, styles.terminalResultCell]}>{label}</Text>)}
+                          {tableHeaders.map(label => (
+                            <Text key={label} style={[styles.weeklyCell, styles.terminalResultCell]}>{label}</Text>
+                          ))}
                         </View>
                         {subjects.map((subject: any, index: number) => {
                           const value = own?.marks?.[subject.id];
-                          const written = own?.written_marks?.[subject.id];
                           const oral = own?.oral_obtained?.[subject.id];
                           const total = value === 'Absent' || value == null ? null : Number(value);
                           const percentage = total == null || !Number(subject.full_marks) ? '-' : `${((total / Number(subject.full_marks)) * 100).toFixed(2)}%`;
+                          const highestMarks = getHighestForSubject(subject);
+                          const fmNum = Number(subject.full_marks);
+                          const formattedFm = !isNaN(fmNum) ? (fmNum % 1 === 0 ? String(fmNum) : fmNum.toFixed(2)) : (subject.full_marks ?? '-');
+
                           return (
                             <View key={subject.id} style={[styles.weeklyRow, index % 2 === 0 && styles.resultAltRow]}>
-                              <Text style={[styles.weeklyCell, styles.terminalResultCell]}>{subject.subject_name}</Text>
-                              <Text style={[styles.weeklyCell, styles.terminalResultCell]}>{subject.theory_marks ?? '-'}</Text>
+                              <Text style={[styles.weeklyCell, styles.terminalResultCell, { fontWeight: '700' }]}>{subject.subject_name}</Text>
+                              <Text style={[styles.weeklyCell, styles.terminalResultCell]}>{formattedFm}</Text>
+                              <Text style={[styles.weeklyCell, styles.terminalResultCell, { fontWeight: '700', color: '#15803d' }]}>{highestMarks}</Text>
                               {hasOral && <Text style={[styles.weeklyCell, styles.terminalResultCell]}>{subject.oral_marks ?? '-'}</Text>}
-                              <Text style={[styles.weeklyCell, styles.terminalResultCell]}>{subject.full_marks ?? '-'}</Text>
-                              <Text style={[styles.weeklyCell, styles.terminalResultCell]}>{written ?? '-'}</Text>
                               {hasOral && <Text style={[styles.weeklyCell, styles.terminalResultCell]}>{oral ?? '-'}</Text>}
-                              <Text style={[styles.weeklyCell, styles.terminalResultCell]}>{total ?? 'Absent'}</Text>
+                              <Text style={[styles.weeklyCell, styles.terminalResultCell, { fontWeight: '700', color: '#1e3a8a' }]}>{total ?? 'Absent'}</Text>
                               <Text style={[styles.weeklyCell, styles.terminalResultCell]}>{percentage}</Text>
                             </View>
                           );
                         })}
-                        <Text style={styles.overallResultSummary}>Overall Total: {ownTotal}  |  Overall Percentage: {subjects.reduce((sum: number, subject: any) => sum + Number(subject.full_marks || 0), 0) ? `${((ownTotal / subjects.reduce((sum: number, subject: any) => sum + Number(subject.full_marks || 0), 0)) * 100).toFixed(2)}%` : '-'}  |  Overall Rank: {rank}</Text>
+                        <Text style={styles.overallResultSummary}>
+                          Overall Total: {ownTotal}  |  Overall Percentage: {subjects.reduce((sum: number, subject: any) => sum + Number(subject.full_marks || 0), 0) ? `${((ownTotal / subjects.reduce((sum: number, subject: any) => sum + Number(subject.full_marks || 0), 0)) * 100).toFixed(2)}%` : '-'}  |  Overall Rank: {rank}
+                        </Text>
                       </View>
                     </ScrollView>
                   );
@@ -1617,7 +1656,7 @@ const styles = StyleSheet.create({
   },
 
   terminalResultTable: {
-    minWidth: 760,
+    minWidth: 540,
     borderWidth: 1,
     borderColor: '#cbd5e1',
   },
@@ -1632,7 +1671,7 @@ const styles = StyleSheet.create({
   },
 
   terminalResultCell: {
-    width: 82,
+    width: 95,
     textAlign: 'center',
   },
 
