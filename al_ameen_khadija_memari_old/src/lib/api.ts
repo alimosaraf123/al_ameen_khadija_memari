@@ -36,7 +36,7 @@ export const imageUrl = (url?: string | null) => {
 
 export async function api(
   path: string,
-  options: RequestInit = {}
+  options: (RequestInit & { timeoutMs?: number }) = {}
 ) {
   const token = await getToken();
 

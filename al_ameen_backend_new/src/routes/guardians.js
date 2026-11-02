@@ -2086,7 +2086,7 @@ router.get('/admin/deposit-fund-statement', auth, allow('super_admin', 'admin'),
 }));
 
 // ADMIN / SUPER ADMIN: Check Al-Ameen Accounts portal status
-router.get('/admin/fees-portal-status', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
+router.get('/admin/fees-portal-status', auth, allow('super_admin'), asyncHandler(async (req, res) => {
   const creds = await getPortalCredentials();
   res.json({
     success: true,
@@ -2098,7 +2098,7 @@ router.get('/admin/fees-portal-status', auth, allow('super_admin', 'admin'), asy
 }));
 
 // ADMIN / SUPER ADMIN: Update Al-Ameen Accounts portal credentials, URL or session cookie
-router.post('/admin/fees-portal-credentials', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
+router.post('/admin/fees-portal-credentials', auth, allow('super_admin'), asyncHandler(async (req, res) => {
   const { portal_url, portalUrl, username, password, cookie } = req.body || {};
   const targetUrl = String(portal_url || portalUrl || '').trim();
 

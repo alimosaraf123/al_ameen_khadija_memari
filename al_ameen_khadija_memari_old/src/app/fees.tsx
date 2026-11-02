@@ -17,6 +17,7 @@ import { router } from 'expo-router';
 import AcademyHeader from '../components/AcademyHeader';
 import DatePickerField from '../components/DatePickerField';
 import { api } from '../lib/api';
+import { getUser } from '../lib/auth';
 
 const money = (value: any) => `₹${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const dateText = (value: any) => String(value || '').slice(0, 10) || '-';
@@ -37,6 +38,7 @@ export default function Fees() {
   const [searchFilter, setSearchFilter] = useState('');
   const [report, setReport] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   // Portal settings modal
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -76,7 +78,9 @@ export default function Fees() {
       });
       if (data?.need_login) {
         setReport(null);
-        setSettingsOpen(true);
+        if (isSuperAdmin) {
+          setSettingsOpen(true);
+        }
         Alert.alert('Login Required', data.message || 'Please connect your Al-Ameen Accounts credentials.');
         return;
       }
@@ -128,7 +132,14 @@ export default function Fees() {
   };
 
   useEffect(() => {
-    void checkPortalStatus();
+    void getUser<any>().then((u) => {
+      const role = String(u?.role || '').toLowerCase();
+      const isSuper = role === 'super_admin' || role === 'superadmin';
+      setIsSuperAdmin(isSuper);
+      if (isSuper) {
+        void checkPortalStatus();
+      }
+    });
     void load(fromDate, toDate, session);
   }, []);
 
@@ -159,9 +170,11 @@ export default function Fees() {
             <Text style={styles.title}>Al-Ameen Mission Fees Collection</Text>
             <Text style={styles.subTitle}>Branch: Memari (Live from Accounts Portal)</Text>
           </View>
-          <TouchableOpacity onPress={() => setSettingsOpen(true)} style={styles.settingsButton}>
-            <Text style={styles.settingsButtonText}>⚙ Portal Settings</Text>
-          </TouchableOpacity>
+          {isSuperAdmin && (
+            <TouchableOpacity onPress={() => setSettingsOpen(true)} style={styles.settingsButton}>
+              <Text style={styles.settingsButtonText}>⚙ Portal Settings</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Filter Card */}
@@ -190,11 +203,15 @@ export default function Fees() {
           <View style={styles.alertBanner}>
             <Text style={styles.alertTitle}>⚠️ Al-Ameen Accounts Authentication Required</Text>
             <Text style={styles.alertText}>
-              Please enter your portal login credentials to fetch live collected fees report.
+              {isSuperAdmin
+                ? 'Please enter your portal login credentials to fetch live collected fees report.'
+                : 'Portal authentication is required. Please contact Super Admin to configure portal credentials.'}
             </Text>
-            <TouchableOpacity onPress={() => setSettingsOpen(true)} style={styles.alertActionBtn}>
-              <Text style={styles.white}>Connect Portal Now</Text>
-            </TouchableOpacity>
+            {isSuperAdmin && (
+              <TouchableOpacity onPress={() => setSettingsOpen(true)} style={styles.alertActionBtn}>
+                <Text style={styles.white}>Connect Portal Now</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -345,62 +362,64 @@ export default function Fees() {
           })
         )}
 
-        {/* Settings Modal */}
-        <Modal visible={settingsOpen} transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>Al-Ameen Accounts Portal Configuration</Text>
-              <Text style={styles.modalSub}>
-                Connect to Al-Ameen Mission Accounts to fetch live fees collection report for Memari branch.
-              </Text>
+        {/* Settings Modal - Super Admin Only */}
+        {isSuperAdmin && (
+          <Modal visible={settingsOpen} transparent animationType="fade">
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalBox}>
+                <Text style={styles.modalTitle}>Al-Ameen Accounts Portal Configuration</Text>
+                <Text style={styles.modalSub}>
+                  Connect to Al-Ameen Mission Accounts to fetch live fees collection report for Memari branch.
+                </Text>
 
-              <Text style={styles.inputLabel}>Portal Site URL (Fees Report Link)</Text>
-              <TextInput
-                style={styles.input}
-                value={portalUrl}
-                onChangeText={setPortalUrl}
-                placeholder="https://alameenmission.net/alameen/accounts/?action=fees_report"
-                autoCapitalize="none"
-              />
+                <Text style={styles.inputLabel}>Portal Site URL (Fees Report Link)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={portalUrl}
+                  onChangeText={setPortalUrl}
+                  placeholder="https://alameenmission.net/alameen/accounts/?action=fees_report"
+                  autoCapitalize="none"
+                />
 
-              <Text style={styles.inputLabel}>Portal Username / E-mail Address</Text>
-              <TextInput
-                style={styles.input}
-                value={portalUsername}
-                onChangeText={setPortalUsername}
-                placeholder="e.g. mosaraf"
-                autoCapitalize="none"
-              />
+                <Text style={styles.inputLabel}>Portal Username / E-mail Address</Text>
+                <TextInput
+                  style={styles.input}
+                  value={portalUsername}
+                  onChangeText={setPortalUsername}
+                  placeholder="e.g. mosaraf"
+                  autoCapitalize="none"
+                />
 
-              <Text style={styles.inputLabel}>Portal Password</Text>
-              <TextInput
-                style={styles.input}
-                value={portalPassword}
-                onChangeText={setPortalPassword}
-                placeholder="Enter accounts portal password"
-                secureTextEntry
-              />
+                <Text style={styles.inputLabel}>Portal Password</Text>
+                <TextInput
+                  style={styles.input}
+                  value={portalPassword}
+                  onChangeText={setPortalPassword}
+                  placeholder="Enter accounts portal password"
+                  secureTextEntry
+                />
 
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  onPress={() => setSettingsOpen(false)}
-                  style={styles.cancelBtn}
-                  disabled={savingSettings}
-                >
-                  <Text style={styles.cancelText}>Cancel</Text>
-                </TouchableOpacity>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    onPress={() => setSettingsOpen(false)}
+                    style={styles.cancelBtn}
+                    disabled={savingSettings}
+                  >
+                    <Text style={styles.cancelText}>Cancel</Text>
+                  </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={savePortalSettings}
-                  style={styles.saveBtn}
-                  disabled={savingSettings}
-                >
-                  <Text style={styles.white}>{savingSettings ? 'Connecting...' : 'Save & Connect'}</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={savePortalSettings}
+                    style={styles.saveBtn}
+                    disabled={savingSettings}
+                  >
+                    <Text style={styles.white}>{savingSettings ? 'Connecting...' : 'Save & Connect'}</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
-          </View>
-        </Modal>
+          </Modal>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
