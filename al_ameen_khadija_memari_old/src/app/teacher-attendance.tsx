@@ -49,6 +49,15 @@ const MONTHS = [
 
 const YEARS = ['2024', '2025', '2026', '2027', '2028', '2029', '2030'];
 
+const PAGE_SIZE_OPTIONS = [
+  { value: 10, label: '10' },
+  { value: 20, label: '20' },
+  { value: 30, label: '30' },
+  { value: 50, label: '50' },
+  { value: 100, label: '100' },
+  { value: 0, label: 'All' },
+];
+
 const STATUS_CYCLE = ['Present', 'Absent', 'Late', 'Leave', ''];
 
 const getTodayDateStr = () => {
@@ -82,7 +91,8 @@ export default function TeacherAttendance() {
   const [bulkSaving, setBulkSaving] = useState(false);
 
   const [page, setPage] = useState(1);
-  const PAGE_SIZE = 50;
+  const [pageSize, setPageSize] = useState<number>(50);
+  const [pageSizePickerOpen, setPageSizePickerOpen] = useState(false);
 
   const monthParam = `${selectedYear}-${selectedMonth}`;
 
@@ -115,11 +125,13 @@ export default function TeacherAttendance() {
     void loadGrid(monthParam);
   };
 
-  const totalPages = Math.max(1, Math.ceil(staffList.length / PAGE_SIZE));
+  const effectivePageSize = pageSize === 0 ? Math.max(1, staffList.length) : pageSize;
+  const totalPages = Math.max(1, Math.ceil(staffList.length / effectivePageSize));
   const paginatedStaff = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return staffList.slice(start, start + PAGE_SIZE);
-  }, [staffList, page]);
+    if (pageSize === 0) return staffList;
+    const start = (page - 1) * pageSize;
+    return staffList.slice(start, start + pageSize);
+  }, [staffList, page, pageSize]);
 
   const markAllPresent = async (targetDate: string = todayStr) => {
     if (targetDate > todayStr) {
@@ -333,25 +345,42 @@ export default function TeacherAttendance() {
             </TouchableOpacity>
           </View>
 
-          {/* Pagination matching Image 1 */}
-          <View style={s.paginationGroup}>
-            <TouchableOpacity
-              disabled={page <= 1}
-              onPress={() => setPage(p => Math.max(1, p - 1))}
-              style={[s.pageArrowBtn, page <= 1 && s.disabledBtn]}
-            >
-              <Text style={s.pageArrowText}>←</Text>
-            </TouchableOpacity>
-            <Text style={s.pageStatusText}>
-              Page {page} of {totalPages}
-            </Text>
-            <TouchableOpacity
-              disabled={page >= totalPages}
-              onPress={() => setPage(p => Math.min(totalPages, p + 1))}
-              style={[s.pageArrowBtn, page >= totalPages && s.disabledBtn]}
-            >
-              <Text style={s.pageArrowText}>→</Text>
-            </TouchableOpacity>
+          {/* Page Size & Pagination controls */}
+          <View style={s.paginationWrapper}>
+            <View style={s.pageSizeGroup}>
+              <Text style={s.pageSizeLabel}>Show:</Text>
+              <TouchableOpacity
+                style={s.pageSizeBtn}
+                onPress={() => setPageSizePickerOpen(true)}
+                activeOpacity={0.7}
+                accessibilityLabel="Select staff count per page"
+              >
+                <Text style={s.pageSizeBtnText}>
+                  {pageSize === 0 ? 'All' : pageSize}
+                </Text>
+                <Text style={s.dropdownArrow}>⌵</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={s.paginationGroup}>
+              <TouchableOpacity
+                disabled={page <= 1}
+                onPress={() => setPage(p => Math.max(1, p - 1))}
+                style={[s.pageArrowBtn, page <= 1 && s.disabledBtn]}
+              >
+                <Text style={s.pageArrowText}>←</Text>
+              </TouchableOpacity>
+              <Text style={s.pageStatusText}>
+                Page {page} of {totalPages}
+              </Text>
+              <TouchableOpacity
+                disabled={page >= totalPages}
+                onPress={() => setPage(p => Math.min(totalPages, p + 1))}
+                style={[s.pageArrowBtn, page >= totalPages && s.disabledBtn]}
+              >
+                <Text style={s.pageArrowText}>→</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -438,7 +467,8 @@ export default function TeacherAttendance() {
 
                 {/* Body Rows */}
                 {paginatedStaff.map((person, idx) => {
-                  const rowNumber = (page - 1) * PAGE_SIZE + idx + 1;
+                  const rowNumber =
+                    pageSize === 0 ? idx + 1 : (page - 1) * pageSize + idx + 1;
                   return (
                     <View key={person.id} style={s.row}>
                       {/* # Col */}
@@ -659,6 +689,46 @@ export default function TeacherAttendance() {
             </View>
           </Pressable>
         </Modal>
+
+        {/* Page Size Selection Modal */}
+        <Modal
+          visible={pageSizePickerOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setPageSizePickerOpen(false)}
+        >
+          <Pressable
+            style={s.modalBackdrop}
+            onPress={() => setPageSizePickerOpen(false)}
+          >
+            <View style={s.modalBox}>
+              <Text style={s.modalTitle}>Show Staff Per Page</Text>
+              {PAGE_SIZE_OPTIONS.map(opt => (
+                <TouchableOpacity
+                  key={opt.label}
+                  style={[
+                    s.modalOption,
+                    pageSize === opt.value && s.modalOptionSelected,
+                  ]}
+                  onPress={() => {
+                    setPageSize(opt.value);
+                    setPage(1);
+                    setPageSizePickerOpen(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      s.modalOptionText,
+                      pageSize === opt.value && s.modalOptionTextSelected,
+                    ]}
+                  >
+                    {opt.label === 'All' ? 'All (Show All Staff)' : `${opt.label} per page`}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Pressable>
+        </Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -826,6 +896,39 @@ const s = StyleSheet.create({
   },
 
   // Pagination
+  paginationWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  pageSizeGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pageSizeLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  pageSizeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#94a3b8',
+    borderRadius: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    minWidth: 72,
+    height: 34,
+  },
+  pageSizeBtnText: {
+    fontSize: 13,
+    color: '#0f172a',
+    fontWeight: '700',
+  },
   paginationGroup: {
     flexDirection: 'row',
     alignItems: 'center',
