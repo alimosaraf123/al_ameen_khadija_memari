@@ -214,10 +214,16 @@ router.post('/batch', auth, allow('super_admin','admin','teacher'), asyncHandler
 
     for (const entry of entries) {
       await client.query(`
-        INSERT INTO attendance(student_id,room_id,attendance_date,status,remarks,marked_by)
-        VALUES($1,$2,$3,$4,$5,$6)
+        INSERT INTO attendance(student_id,room_id,attendance_date,status,room_status,remarks,marked_by)
+        VALUES($1,$2,$3,$4,$4,$5,$6)
         ON CONFLICT(student_id,attendance_date)
-        DO UPDATE SET room_id=EXCLUDED.room_id,status=EXCLUDED.status,
+        DO UPDATE SET room_id=EXCLUDED.room_id,
+                      room_status=EXCLUDED.room_status,
+                      status=CASE 
+                        WHEN (SELECT 1 FROM daily_attendance_submissions WHERE attendance_date=$3) IS NULL 
+                        THEN EXCLUDED.status 
+                        ELSE attendance.status 
+                      END,
                       remarks=EXCLUDED.remarks,marked_by=EXCLUDED.marked_by,updated_at=NOW()
       `, [entry.student_id, room.id, attendanceDate, entry.status, entry.remarks || null, req.user.userId]);
     }
@@ -256,6 +262,14 @@ router.get('/daily', auth, allow('super_admin','admin','office','teacher'), asyn
     return res.status(400).json({ success: false, message: 'Invalid attendance date' });
   }
 
+  const dailySubResult = await pool.query(`
+    SELECT das.*, u.full_name AS submitted_by_name, u.full_name AS updated_by_name
+    FROM daily_attendance_submissions das
+    LEFT JOIN users u ON u.id = das.submitted_by
+    WHERE das.attendance_date = $1::date
+  `, [date]);
+  const isDailySubmitted = dailySubResult.rows.length > 0;
+
   const result = await pool.query(`
     SELECT 
       s.id,
@@ -287,6 +301,17 @@ router.get('/daily', auth, allow('super_admin','admin','office','teacher'), asyn
           AND (gp.returned_at IS NULL OR gp.returned_at::date > $1::date)
         ORDER BY gp.departure_at DESC LIMIT 1
       ) AS active_gatepass_reason,
+      EXISTS (
+        SELECT 1 FROM attendance_submissions sub
+        WHERE sub.room_id = s.room_id AND sub.attendance_date = $1::date
+      ) AS room_submitted,
+      CASE 
+        WHEN EXISTS (
+          SELECT 1 FROM attendance_submissions sub
+          WHERE sub.room_id = s.room_id AND sub.attendance_date = $1::date
+        ) THEN COALESCE(a.room_status, a.status)
+        ELSE NULL
+      END AS room_attendance_status,
       a.status AS saved_status,
       a.remarks AS attendance_remarks,
       a.updated_at AS attendance_updated_at,
@@ -314,10 +339,12 @@ router.get('/daily', auth, allow('super_admin','admin','office','teacher'), asyn
 
   const students = result.rows.map(row => {
     let computedStatus = 'present';
-    if (row.saved_status) {
+    if (isDailySubmitted && row.saved_status) {
       computedStatus = row.saved_status;
     } else if (row.has_active_gatepass) {
       computedStatus = 'absent';
+    } else if (row.room_attendance_status) {
+      computedStatus = row.room_attendance_status;
     } else {
       computedStatus = 'present';
     }
@@ -332,6 +359,8 @@ router.get('/daily', auth, allow('super_admin','admin','office','teacher'), asyn
       has_active_gatepass: Boolean(row.has_active_gatepass),
       active_gatepass_token: row.active_gatepass_token || null,
       active_gatepass_reason: row.active_gatepass_reason || null,
+      room_submitted: Boolean(row.room_submitted),
+      room_attendance_status: row.room_attendance_status || null,
       saved_status: row.saved_status || null,
       status: computedStatus,
       remarks: row.attendance_remarks || (row.has_active_gatepass ? `Active Gate Pass (${row.active_gatepass_token || ''})` : null),
@@ -362,15 +391,6 @@ router.get('/daily', auth, allow('super_admin','admin','office','teacher'), asyn
     return an - bn || String(a).localeCompare(String(b));
   });
 
-  const subs = await pool.query(`
-    SELECT sub.*, u.full_name AS submitted_by_name, up.full_name AS updated_by_name
-    FROM attendance_submissions sub
-    LEFT JOIN users u ON u.id = sub.submitted_by
-    LEFT JOIN users up ON up.id = sub.last_updated_by
-    WHERE sub.attendance_date = $1::date
-    ORDER BY sub.updated_at DESC LIMIT 1
-  `, [date]);
-
   res.json({
     success: true,
     date,
@@ -383,7 +403,8 @@ router.get('/daily', auth, allow('super_admin','admin','office','teacher'), asyn
     },
     classes: distinctClasses,
     rooms: distinctRooms,
-    submission: subs.rows[0] || null,
+    is_daily_submitted: isDailySubmitted,
+    submission: dailySubResult.rows[0] || null,
     students,
   });
 }));
@@ -443,27 +464,35 @@ router.post('/daily/submit', auth, allow('super_admin','admin','office','teacher
         INSERT INTO attendance(student_id, room_id, attendance_date, status, remarks, marked_by)
         VALUES($1, $2, $3, $4, $5, $6)
         ON CONFLICT(student_id, attendance_date)
-        DO UPDATE SET room_id=EXCLUDED.room_id, status=EXCLUDED.status,
-                      remarks=EXCLUDED.remarks, marked_by=EXCLUDED.marked_by, updated_at=NOW()
+        DO UPDATE SET room_id=COALESCE(EXCLUDED.room_id, attendance.room_id),
+                      status=EXCLUDED.status,
+                      remarks=COALESCE(EXCLUDED.remarks, attendance.remarks),
+                      marked_by=EXCLUDED.marked_by,
+                      updated_at=NOW()
       `, [studentId, roomId, attendanceDate, status, remarks, req.user.userId]);
     }
 
-    for (const roomId of affectedRooms) {
-      await client.query(`
-        INSERT INTO attendance_submissions(room_id, attendance_date, submitted_by, last_updated_by)
-        VALUES($1, $2, $3, $3)
-        ON CONFLICT(room_id, attendance_date)
-        DO UPDATE SET last_updated_by=EXCLUDED.last_updated_by, updated_at=NOW()
-      `, [roomId, attendanceDate, req.user.userId]);
-    }
+    const presentCount = entries.filter((e) => e.status === 'present').length;
+    const absentCount = entries.filter((e) => e.status === 'absent').length;
+
+    const dailySubRes = await client.query(`
+      INSERT INTO daily_attendance_submissions(attendance_date, submitted_by, total_students, present_count, absent_count, updated_at)
+      VALUES($1, $2, $3, $4, $5, NOW())
+      ON CONFLICT(attendance_date)
+      DO UPDATE SET submitted_by=EXCLUDED.submitted_by,
+                    total_students=EXCLUDED.total_students,
+                    present_count=EXCLUDED.present_count,
+                    absent_count=EXCLUDED.absent_count,
+                    updated_at=NOW()
+      RETURNING *
+    `, [attendanceDate, req.user.userId, entries.length, presentCount, absentCount]);
 
     const firstSub = await client.query('SELECT id FROM attendance_submissions WHERE attendance_date=$1::date LIMIT 1', [attendanceDate]);
-    if (firstSub.rowCount) {
-      await client.query(`
-        INSERT INTO attendance_change_logs(submission_id, changed_by, action, snapshot)
-        VALUES($1, $2, 'updated', $3::jsonb)
-      `, [firstSub.rows[0].id, req.user.userId, JSON.stringify({ count: entries.length, date: attendanceDate, mode: 'daily_attendance' })]);
-    }
+    const subId = firstSub.rowCount ? firstSub.rows[0].id : (dailySubRes.rows[0]?.id || 1);
+    await client.query(`
+      INSERT INTO attendance_change_logs(submission_id, changed_by, action, snapshot)
+      VALUES($1, $2, 'updated', $3::jsonb)
+    `, [subId, req.user.userId, JSON.stringify({ count: entries.length, date: attendanceDate, mode: 'daily_attendance' })]);
 
     await client.query('COMMIT');
 

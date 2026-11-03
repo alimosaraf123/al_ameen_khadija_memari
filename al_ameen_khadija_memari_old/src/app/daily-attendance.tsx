@@ -535,6 +535,7 @@ export default function DailyAttendance() {
                   <Text style={[styles.th, styles.colName]}>Student Name</Text>
                   <Text style={[styles.th, styles.colClass]}>Class</Text>
                   <Text style={[styles.th, styles.colRoom]}>Room</Text>
+                  <Text style={[styles.th, styles.colRoomAttendance]}>Room Attendance</Text>
                   <Text style={[styles.th, styles.colGatePass]}>Gate Pass</Text>
                   <Text style={[styles.th, styles.colAttendance]}>Attendance</Text>
                   <Text style={[styles.th, styles.colActions]}>Actions</Text>
@@ -589,6 +590,21 @@ export default function DailyAttendance() {
                         <Text style={[styles.td, styles.colRoom, styles.roomText]}>
                           {student.room_name || '-'}
                         </Text>
+
+                        {/* Room Attendance Badge */}
+                        <View style={styles.colRoomAttendance}>
+                          {student.room_attendance_status === 'present' ? (
+                            <View style={styles.presentBadge}>
+                              <Text style={styles.presentBadgeText}>✓ Present</Text>
+                            </View>
+                          ) : student.room_attendance_status === 'absent' ? (
+                            <View style={styles.absentBadge}>
+                              <Text style={styles.absentBadgeText}>✕ Absent</Text>
+                            </View>
+                          ) : (
+                            <Text style={styles.noPassText}>-</Text>
+                          )}
+                        </View>
 
                         {/* Gate Pass Badge */}
                         <View style={styles.colGatePass}>
@@ -1143,6 +1159,7 @@ const styles = StyleSheet.create({
   colName: { width: 220, paddingLeft: 6 },
   colClass: { width: 120 },
   colRoom: { width: 100 },
+  colRoomAttendance: { width: 135, alignItems: 'center' },
   colGatePass: { width: 130, alignItems: 'center' },
   colAttendance: { width: 120, alignItems: 'center' },
   colActions: { width: 140, alignItems: 'center' },
