@@ -9,7 +9,11 @@ const timeValue=(d:Date)=>`${pad(d.getHours())}:${pad(d.getMinutes())}`;
 function parsed(value:string){const d=value?new Date(value.length===10?value+'T00:00:00':value):new Date();return Number.isNaN(d.getTime())?new Date():d}
 export default function DatePickerField({label,value,onChange,kind='date',disabled=false,style,optional=false,minimum}:Props){
  const [picker,setPicker]=useState<'date'|'time'|null>(null),[draft,setDraft]=useState<Date|null>(null);
-if(Platform.OS==='web')return <View style={[s.wrap,style]}>{label?<Text style={s.label}>{label}</Text>:null}{React.createElement('input',{type:kind==='datetime'?'datetime-local':kind,value:value||'',disabled,min:minimum||undefined,onChange:(e:any)=>onChange(e.target.value),style:webStyle})}</View>;
+if(Platform.OS==='web'){
+ const h=style?.height;
+ const currentWebStyle={...webStyle,...(h?{height:h,minHeight:h,padding:'0 8px',fontSize:13,borderRadius:5,border:'1px solid #cbd5e1'}:{})};
+ return <View style={[s.wrap,style]}>{label?<Text style={s.label}>{label}</Text>:null}{React.createElement('input',{type:kind==='datetime'?'datetime-local':kind,value:value||'',disabled,min:minimum||undefined,onChange:(e:any)=>onChange(e.target.value),style:currentWebStyle})}</View>;
+}
  const open=()=>{if(!disabled)setPicker('date')};
  const changed=(_:any,next?:Date)=>{if(!next){setPicker(null);return}if(kind==='datetime'&&picker==='date'){setDraft(next);setPicker('time');return}setPicker(null);if(kind==='month')onChange(`${next.getFullYear()}-${pad(next.getMonth()+1)}`);else if(kind==='datetime'){const base=draft||next;base.setHours(next.getHours(),next.getMinutes(),0,0);onChange(`${dateValue(base)}T${timeValue(base)}`);setDraft(null)}else onChange(dateValue(next))};
  const display=value?(kind==='date'?value.split('-').reverse().join('/'):value.replace('T',' ')):(optional?'Select if needed':'Select date');
