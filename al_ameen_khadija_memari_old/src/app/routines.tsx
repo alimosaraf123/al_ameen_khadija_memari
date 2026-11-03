@@ -122,8 +122,71 @@ export default function Routines(){
  const teacherNameForCell=(cell:Cell)=>{const teacher=teachers.find(t=>String(t.id)===String(cell.teacher_id));return teacher&&isTeachingTeacher(teacher)?String(teacher.name||cell.teacher_name||''):'';};
  const teacherOnlyCells=(source:Record<string,Cell>)=>Object.fromEntries(Object.entries(source).filter(([,cell])=>isTeachingTeacher(teachers.find(t=>String(t.id)===String(cell.teacher_id)))));
  const update=(key:string,value:Partial<Cell>)=>setCells(old=>({...old,[key]:{...old[key],...value}}));
- const chooseSubject=(key:string,subject:string)=>{const teacher=teachers.find(t=>String(t.id)===String(cells[key]?.teacher_id)),keepsTeacher=teacher&&isTeachingTeacher(teacher)&&mapped(teacher).some((value:string)=>subjectMatches(value,subject));update(key,keepsTeacher?{subject}:{subject,teacher_id:'',teacher_name:''})};
- const chooseTeacher=(key:string,id:string)=>{const t=teachers.find(x=>String(x.id)===id),allowed=(section?.subjects||[]).filter(s=>mapped(t).some((v:string)=>subjectMatches(v,s))),current=String(cells[key]?.subject||''),subject=allowed.length===1?allowed[0]:(allowed.some(s=>subjectMatches(s,current))?current:'');update(key,{teacher_id:id,teacher_name:t?.name||'',...(academic?{subject}:{})})};
+ const chooseSubject=(key:string,subject:string)=>{
+  if(!subject){
+    update(key,{subject:'',teacher_id:'',teacher_name:''});
+    return;
+  }
+  const currentTeacher=teachers.find(t=>String(t.id)===String(cells[key]?.teacher_id));
+  const keepsTeacher=currentTeacher&&isTeachingTeacher(currentTeacher)&&mapped(currentTeacher).some((value:string)=>subjectMatches(value,subject));
+  if(keepsTeacher){
+    update(key,{subject});
+    return;
+  }
+  const pool=teachers.filter(isTeachingTeacher);
+  const matching=pool.filter(t=>mapped(t).some((v:string)=>subjectMatches(v,subject)));
+  if(matching.length===0){
+    update(key,{subject,teacher_id:'',teacher_name:''});
+    return;
+  }
+  if(matching.length===1){
+    update(key,{subject,teacher_id:String(matching[0].id),teacher_name:matching[0].name||''});
+    return;
+  }
+  const [className,periodStr]=key.split('|');
+  const busyTeacherIds=new Set<string>();
+  Object.entries(cells).forEach(([k,c])=>{
+    if(k!==key&&k.split('|')[1]===periodStr&&c.teacher_id&&c.teacher_id!=='0'){
+      busyTeacherIds.add(String(c.teacher_id));
+    }
+  });
+  const existingInClass=matching.find(t=>{
+    return Object.entries(cells).some(([k,c])=>{
+      const [cls,per]=k.split('|');
+      return cls===className&&per!==periodStr&&String(c.teacher_id)===String(t.id)&&subjectMatches(c.subject,subject);
+    });
+  });
+  if(existingInClass&&!busyTeacherIds.has(String(existingInClass.id))&&availability[String(existingInClass.id)]!=='Absent'){
+    update(key,{subject,teacher_id:String(existingInClass.id),teacher_name:existingInClass.name||''});
+    return;
+  }
+  const freePresent=matching.filter(t=>!busyTeacherIds.has(String(t.id))&&availability[String(t.id)]!=='Absent');
+  if(freePresent.length>0){
+    update(key,{subject,teacher_id:String(freePresent[0].id),teacher_name:freePresent[0].name||''});
+    return;
+  }
+  const freeAny=matching.filter(t=>!busyTeacherIds.has(String(t.id)));
+  if(freeAny.length>0){
+    update(key,{subject,teacher_id:String(freeAny[0].id),teacher_name:freeAny[0].name||''});
+    return;
+  }
+  const fallback=existingInClass||matching[0];
+  update(key,{subject,teacher_id:String(fallback.id),teacher_name:fallback.name||''});
+ };
+ const chooseTeacher=(key:string,id:string)=>{
+  if(!id){
+    update(key,{teacher_id:'',teacher_name:''});
+    return;
+  }
+  const t=teachers.find(x=>String(x.id)===id);
+  if(!t)return;
+  const teacherSubs=mapped(t);
+  const allowed=(section?.subjects||[]).filter(s=>teacherSubs.some((v:string)=>subjectMatches(v,s)));
+  const current=String(cells[key]?.subject||'');
+  const primarySubject=teacherSubs.find(ts=>allowed.some(a=>subjectMatches(a,ts)))||allowed[0]||'';
+  const subject=allowed.some(s=>subjectMatches(s,current))?current:primarySubject;
+  update(key,{teacher_id:id,teacher_name:t.name||'',...(academic?{subject}:{})});
+ };
  const duplicateGroups=useMemo(()=>{
   const slots:Record<string,string[]>={};
   Object.entries(cells).forEach(([key,v])=>{
@@ -366,9 +429,8 @@ async function save(mode:'master'|'draft'|'final'){
   const selected=teachers.find(t=>String(t.id)===String(x.teacher_id));
   const pool=teachers.filter(isTeachingTeacher);
   const baseSubjects=section?.subjects||ALL_SUBJECTS;
-  const teacherSubjects=selected&&isTeachingTeacher(selected)?baseSubjects.filter(s=>mapped(selected).some((v:string)=>subjectMatches(v,s))):baseSubjects;
-  const subjectOptions=[{value:'',label:'Subject'},...teacherSubjects.map(v=>({value:v,label:v}))];
-  if(!selected&&x.subject&&!subjectOptions.some(o=>o.value===x.subject))subjectOptions.push({value:x.subject,label:x.subject});
+  const subjectOptions=[{value:'',label:'Subject'},...baseSubjects.map(v=>({value:v,label:v}))];
+  if(x.subject&&!subjectOptions.some(o=>o.value===x.subject))subjectOptions.push({value:x.subject,label:x.subject});
   const matching=x.subject?pool.filter(t=>mapped(t).some((v:string)=>subjectMatches(v,x.subject))):pool;
   const teacherList=(subject&&matching.length>0)?matching:pool;
   const teacherOptions=[{value:'',label:'Teacher',shortLabel:'Teacher'},...teacherList.map(t=>{
