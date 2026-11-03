@@ -26,6 +26,7 @@ import DatePickerField from '../components/DatePickerField';
 import { Select } from '../components/StudentDirectory';
 import { Button, Card, Field } from '../components/ui';
 import { api, API_BASE } from '../lib/api';
+import { getToken } from '../lib/auth';
 import { SUBJECTS, SUBJECT_OPTIONS } from '../lib/subjects';
 
 const emptyEducation = { qualification: '', board_university: '', institution: '', marks_grade: '', passing_year: '' };
@@ -87,6 +88,52 @@ export default function Teachers() {
   const [selectedTeacherIds, setSelectedTeacherIds] = useState<number[]>([]);
   const [searchText, setSearchText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [exporting, setExporting] = useState(false);
+
+  const downloadStaffExcel = async () => {
+    try {
+      setExporting(true);
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/teachers/export`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Could not download staff Excel');
+
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Staff_List_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        const blob = await res.blob();
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = async () => {
+          const base64 = (reader.result as string)?.split(',')[1];
+          const filename = `Staff_List_${new Date().toISOString().slice(0, 10)}.xlsx`;
+          const uri = `${FileSystem.documentDirectory}${filename}`;
+          await FileSystem.writeAsStringAsync(uri, base64, { encoding: (FileSystem as any).EncodingType?.Base64 || 'base64' });
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(uri, {
+              mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              dialogTitle: 'Save Staff List Excel',
+            });
+          } else {
+            Alert.alert('Excel Downloaded', `Saved to ${filename}`);
+          }
+        };
+      }
+    } catch (e: any) {
+      Alert.alert('Download Error', e.message || 'Failed to download Excel file');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const teacherPositions = useRef<Record<number, number>>({});
   const formRef = useRef(form);
@@ -855,14 +902,26 @@ export default function Teachers() {
               <Text style={s.sectionTitle}>
                 Staff List ({list.filter(t => !searchQuery || [t.name, t.staff_id, t.mobile, t.login_id].some(v => String(v || '').toLowerCase().includes(searchQuery))).length})
               </Text>
-              {mode === 'icard' && (
-                <View style={s.printTools}>
-                  <Text style={s.selectedCount}>{selectedTeacherIds.length} selected</Text>
-                  <TouchableOpacity onPress={printSelectedTeacherCards} style={s.printAllButton}>
-                    <Text style={s.white}>Print Selected I-Cards (6 per A4)</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+              <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                <TouchableOpacity
+                  onPress={downloadStaffExcel}
+                  disabled={exporting}
+                  style={s.downloadExcelBtn}
+                  activeOpacity={0.8}
+                >
+                  <Text style={s.white}>
+                    {exporting ? '⏳ Downloading...' : '📥 Download Staff Excel (.xlsx)'}
+                  </Text>
+                </TouchableOpacity>
+                {mode === 'icard' && (
+                  <View style={s.printTools}>
+                    <Text style={s.selectedCount}>{selectedTeacherIds.length} selected</Text>
+                    <TouchableOpacity onPress={printSelectedTeacherCards} style={s.printAllButton}>
+                      <Text style={s.white}>Print Selected I-Cards (6 per A4)</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
             </View>
             {loading ? (
               <ActivityIndicator size="large" color="#1565c0" />
@@ -1089,6 +1148,7 @@ const s = StyleSheet.create({
   teacherCheckboxSelected: { backgroundColor: '#17613c' },
   checkboxMark: { color: '#fff', fontWeight: '900', fontSize: 17 },
   printAllButton: { backgroundColor: '#198754', paddingVertical: 9, paddingHorizontal: 12, borderRadius: 6 },
+  downloadExcelBtn: { backgroundColor: '#198754', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6, flexDirection: 'row', alignItems: 'center' },
   comboBox: { flex: 2, minWidth: 180, position: 'relative', zIndex: 30, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, backgroundColor: '#fff', overflow: 'visible' },
   comboInput: { height: 48, paddingHorizontal: 12, fontSize: 16 },
   comboOptions: { position: 'absolute', top: 48, left: 0, right: 0, zIndex: 20, maxHeight: 180, backgroundColor: '#fff', borderWidth: 1, borderColor: '#b8c4d1', borderRadius: 6 },

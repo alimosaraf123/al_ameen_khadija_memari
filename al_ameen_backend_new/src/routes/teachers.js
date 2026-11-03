@@ -1,4 +1,5 @@
 const express = require('express');
+const ExcelJS = require('exceljs');
 const multer=require('multer');const sharp=require('sharp');const path=require('path');const {uploadBuffer,deleteCloudinaryUrl}=require('../utils/cloudStorage');
 const bcrypt = require('bcryptjs');
 const pool = require('../db');
@@ -50,6 +51,132 @@ router.patch('/me', auth, allow('teacher'), asyncHandler(async(req,res)=>{
     await client.query('COMMIT');
     res.json({success:true,teacher:result.rows[0],profile_edit_count:result.rows[0].profile_edit_count,profile_edits_remaining:Math.max(0,2-result.rows[0].profile_edit_count)});
   }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+}));
+
+router.get('/export', auth, allow('super_admin','admin'), asyncHandler(async (req, res) => {
+  await teacherDetailsSchemaReady;
+  const result = await pool.query(`
+    SELECT t.*, COALESCE(t.residential_type, t.profile_details->>'residential_type', '') AS residential_type,
+      u.login_id, u.full_name, u.role AS user_role, u.is_active AS user_active
+    FROM teachers t
+    LEFT JOIN users u ON u.id=t.user_id
+    ORDER BY CASE WHEN t.staff_id ~ '^\\d+$' THEN 0 ELSE 1 END,
+      NULLIF(regexp_replace(COALESCE(t.staff_id,''), '\\D', '', 'g'), '')::int ASC NULLS LAST,
+      t.name, t.id
+  `);
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Staff List', {
+    pageSetup: { orientation: 'landscape', paperSize: 9 }
+  });
+
+  sheet.columns = [
+    { header: 'SL', key: 'sl', width: 6 },
+    { header: 'Staff ID', key: 'staff_id', width: 14 },
+    { header: 'Name', key: 'name', width: 26 },
+    { header: 'Designation', key: 'designation', width: 18 },
+    { header: 'Staff Role', key: 'staff_role', width: 18 },
+    { header: 'Staff Type', key: 'staff_type', width: 16 },
+    { header: 'Residential Type', key: 'residential_type', width: 18 },
+    { header: 'Subject', key: 'subject', width: 22 },
+    { header: 'Qualification', key: 'qualification', width: 20 },
+    { header: 'Mobile', key: 'mobile', width: 15 },
+    { header: 'WhatsApp', key: 'whatsapp', width: 15 },
+    { header: 'Email', key: 'email', width: 26 },
+    { header: 'Gender', key: 'gender', width: 10 },
+    { header: 'DOB', key: 'date_of_birth', width: 13 },
+    { header: 'Joining Date', key: 'joining_date', width: 13 },
+    { header: 'Status', key: 'status', width: 10 },
+    { header: 'Salary', key: 'salary', width: 12 },
+    { header: 'Present Address', key: 'present_address', width: 35 },
+    { header: 'Permanent Address', key: 'permanent_address', width: 35 },
+    { header: 'Bank Name', key: 'bank_name', width: 18 },
+    { header: 'Account No', key: 'account_no', width: 20 },
+    { header: 'IFSC Code', key: 'ifsc_code', width: 14 },
+    { header: 'Aadhaar No', key: 'aadhaar_no', width: 16 },
+    { header: 'PAN No', key: 'pan_no', width: 14 },
+    { header: 'Voter No', key: 'voter_no', width: 14 },
+    { header: 'Login ID', key: 'login_id', width: 15 }
+  ];
+
+  const headerRow = sheet.getRow(1);
+  headerRow.height = 28;
+  headerRow.eachCell((cell) => {
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1F4E78' }
+    };
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+    };
+  });
+
+  result.rows.forEach((t, index) => {
+    const d = t.profile_details || {};
+    const presentAddr = [d.present_village, d.present_post_office, d.present_police_station, d.present_district, d.present_state, d.present_pin_code].filter(Boolean).join(', ') || t.address || '';
+    const permAddr = [d.permanent_village, d.permanent_post_office, d.permanent_police_station, d.permanent_district, d.permanent_state, d.permanent_pin_code].filter(Boolean).join(', ') || '';
+
+    const row = sheet.addRow({
+      sl: index + 1,
+      staff_id: t.staff_id || '',
+      name: t.name || '',
+      designation: t.designation || '',
+      staff_role: d.staff_role || '',
+      staff_type: d.staff_type || '',
+      residential_type: t.residential_type || d.residential_type || '',
+      subject: t.subject || '',
+      qualification: t.qualification || '',
+      mobile: t.mobile || '',
+      whatsapp: t.whatsapp || '',
+      email: t.email || '',
+      gender: t.gender || '',
+      date_of_birth: t.date_of_birth ? String(t.date_of_birth).slice(0, 10) : '',
+      joining_date: t.joining_date ? String(t.joining_date).slice(0, 10) : '',
+      status: t.is_active ? 'Active' : 'Inactive',
+      salary: d.salary || '',
+      present_address: presentAddr,
+      permanent_address: permAddr,
+      bank_name: d.bank_name || '',
+      account_no: d.account_no || '',
+      ifsc_code: d.ifsc_code || '',
+      aadhaar_no: d.aadhaar_no || '',
+      pan_no: d.pan_no || '',
+      voter_no: d.voter_no || '',
+      login_id: t.login_id || ''
+    });
+
+    row.height = 22;
+    row.eachCell((cell, colNum) => {
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: [1, 2, 10, 11, 13, 14, 15, 16, 22, 23, 24].includes(colNum) ? 'center' : 'left'
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+      };
+      if (index % 2 === 1) {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFF8FAFC' }
+        };
+      }
+    });
+  });
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="Staff_List_${new Date().toISOString().slice(0,10)}.xlsx"`);
+  await workbook.xlsx.write(res);
+  res.end();
 }));
 
 router.get('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res)=>{
