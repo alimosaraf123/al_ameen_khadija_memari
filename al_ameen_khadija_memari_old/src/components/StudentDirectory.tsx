@@ -277,7 +277,7 @@ export function Select({ label, value, options, onChange, searchable=false, styl
       </Text>
     </TouchableOpacity>
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-      <View style={[s.overlay,Platform.OS==='web'&&s.webSelectOverlay]}><Pressable accessibilityRole="button" accessibilityLabel="Close dropdown" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} onPress={() => setOpen(false)} /><View style={[s.selectPanel,Platform.OS!=='web'&&panelWidth ? {maxWidth:panelWidth} : false,Platform.OS!=='web'&&panelMaxHeight ? {maxHeight:panelMaxHeight} : false,Platform.OS==='web'&&{position:'absolute',left:anchor.x,top:anchor.y,width:anchor.width,maxWidth:anchor.width,maxHeight:anchor.maxHeight,borderWidth:1,borderColor:'#cbd5e1'}] }>
+      <View style={[s.overlay,Platform.OS==='web'&&s.webSelectOverlay]}><Pressable accessibilityRole="button" accessibilityLabel="Close dropdown" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} onPress={() => setOpen(false)} /><View style={[s.selectPanel,Platform.OS!=='web'&&panelWidth ? {maxWidth:panelWidth} : false,Platform.OS!=='web'&&panelMaxHeight ? {maxHeight:panelMaxHeight} : false,Platform.OS==='web'&&{position:'absolute',left:anchor.x,top:anchor.y,width:anchor.width,maxWidth:anchor.width,maxHeight:anchor.maxHeight,borderWidth:1,borderColor:'#cbd5e1',zIndex:1000,boxShadow:'0 4px 12px rgba(0,0,0,0.15)' as any}] }>
         <Text style={s.panelTitle}>{label}</Text>
         {searchable && (
           <TextInput

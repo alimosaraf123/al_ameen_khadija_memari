@@ -1,94 +1,1138 @@
-import React,{useEffect,useRef,useState} from 'react';
-import {ActivityIndicator,Alert,Animated,Image,Linking,Modal,Platform,Pressable,ScrollView,StyleSheet,Text,TextInput,TouchableOpacity,View} from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Image,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import {GestureHandlerRootView,PinchGestureHandler,State} from 'react-native-gesture-handler';
-import {router,useLocalSearchParams} from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { GestureHandlerRootView, PinchGestureHandler, State } from 'react-native-gesture-handler';
+import { router, useLocalSearchParams } from 'expo-router';
 import AcademyHeader from '../components/AcademyHeader';
 import DatePickerField from '../components/DatePickerField';
-import {Select} from '../components/StudentDirectory';
-import {Button,Card,Field} from '../components/ui';
-import {api,API_BASE} from '../lib/api';
-import {SUBJECTS, SUBJECT_OPTIONS} from '../lib/subjects';
+import { Select } from '../components/StudentDirectory';
+import { Button, Card, Field } from '../components/ui';
+import { api, API_BASE } from '../lib/api';
+import { SUBJECTS, SUBJECT_OPTIONS } from '../lib/subjects';
 
-const emptyEducation={qualification:'',board_university:'',institution:'',marks_grade:'',passing_year:''};
-const ACADEMY_LOGO_URI='/al-ameen-logo.jpg';
-const QUALIFICATION_OPTIONS=['Primary','Upper Primary','HS','Graduation','Post Graduation','B.Ed','D.El.Ed','Diploma','Hafiz','Maulana','Other'];
-const STAFF_TYPE_OPTIONS=['Teachers','Medical','Academy','Kitchen','Electric','Construction','Sweeper','Driver','Security Guard','Office','Shopkeeper','Imam','Marketing','Management Staff'];
-const STAFF_ROLE_OPTIONS=['Senior','Junior','Provisional','Contractual'];
-const RESIDENTIAL_OPTIONS=['Residential','Non-residential','Guest'];
-const BLOOD_GROUP_OPTIONS=['A+','A-','B+','B-','AB+','AB-','O+','O-','UK'];
-const BOARD_UNIVERSITY_OPTIONS=['West Bengal Board of Primary Education (WBBPE)','West Bengal Board of Secondary Education (WBBSE)','West Bengal Council of Higher Secondary Education (WBCHSE)','West Bengal Board of Madrasah Education (WBBME)','West Bengal State Council of Technical & Vocational Education and Skill Development (WBSCTVESD)','University of Calcutta','Jadavpur University','The University of Burdwan','University of Kalyani','University of North Bengal','Vidyasagar University','Rabindra Bharati University','West Bengal State University','Netaji Subhas Open University','Presidency University','Aliah University','Maulana Abul Kalam Azad University of Technology (MAKAUT)','Bankura University','University of Gour Banga','Raiganj University','Cooch Behar Panchanan Barma University','Sidho-Kanho-Birsha University','Diamond Harbour Women’s University','The Sanskrit College and University','Visva-Bharati University','Other'];
-const emptyForm={staff_id:'',name:'',designation:'',qualification:'',mobile:'',whatsapp:'',email:'',gender:'',date_of_birth:'',joining_date:'',subject:'',address:'',login_id:'',password:'',confirm_password:'',profile_details:{salary:'',residential_type:'',staff_type:'',room_name:'',blood_group:'',aadhaar_no:'',voter_no:'',pan_no:'',type_of_staff:'',staff_role:'',caste_name:'',previous_branch_name:'',previous_branch_join_date:'',father_name:'',mother_name:'',father_occupation:'',mother_occupation:'',father_mobile:'',mother_mobile:'',present_village:'',present_police_station:'',present_pin_code:'',present_post_office:'',present_block:'',present_district:'',present_state:'',permanent_village:'',permanent_police_station:'',permanent_pin_code:'',permanent_post_office:'',permanent_block:'',permanent_district:'',permanent_state:'',account_no:'',ifsc_code:'',bank_name:'',branch_name:'',branch_address:''},education_details:[{...emptyEducation}]};
-const STAFF_DOCUMENT_SLOTS=[['father','Father'],['mother','Mother'],['date_of_birth','Date Of Birth'],['aadhaar','Aadhaar'],['voter_id','Voter ID'],['pan_card','PAN Card'],['mp_admit','MP Admit'],['mp_marksheet','MP Marksheet'],['hs_marksheet','HS Marksheet'],['graduation_marksheet','Graduation Marksheet'],['post_graduation_marksheet','P. Graduate Marksheet'],['bed_marksheet','B.Ed Marksheet'],['passbook','Passbook'],['other_1','Others 1'],['other_2','Others 2'],['other_3','Others 3'],['other_4','Others 4']] as const;
-function EditableSelect({placeholder,value,onChange,options}:{placeholder:string;value:string;onChange:(v:string)=>void;options:string[]}){const[open,setOpen]=useState(false);const filtered=options.filter(x=>!value||x.toLowerCase().includes(value.toLowerCase()));return <View style={s.comboBox}><TextInput placeholder={placeholder} value={value} onChangeText={onChange} style={s.comboInput} onFocus={()=>setOpen(true)} onBlur={()=>setTimeout(()=>setOpen(false),180)}/>{open&&<View style={s.comboOptions}><ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={{maxHeight:190}}>{filtered.map(x=><TouchableOpacity key={x} onPress={()=>{onChange(x);setOpen(false)}} style={s.comboOption}><Text>{x}</Text></TouchableOpacity>)}</ScrollView><TouchableOpacity onPress={()=>setOpen(false)}><Text style={{color:'#1764a5',padding:6}}>Close</Text></TouchableOpacity></View>}</View>}
-export default function Teachers(){
- const {mode,teacherId}=useLocalSearchParams<{mode?:string;teacherId?:string}>();
- const scrollRef=useRef<any>(null);
- const [list,setList]=useState<any[]>([]),[form,setForm]=useState<any>(emptyForm),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[editingId,setEditingId]=useState<number|null>(null),[documentTeacher,setDocumentTeacher]=useState<any>(null),[documents,setDocuments]=useState<any[]>([]),[documentsLoading,setDocumentsLoading]=useState(false),[pendingDocuments,setPendingDocuments]=useState<Record<string,any>>({}),[pendingPhoto,setPendingPhoto]=useState<any>(null),[documentsSaving,setDocumentsSaving]=useState(false),[previewDocument,setPreviewDocument]=useState<any>(null),[docZoom,setDocZoom]=useState(1),[docPinch]=useState(()=>new Animated.Value(1)),[selectedTeacherIds,setSelectedTeacherIds]=useState<number[]>([]),[searchText,setSearchText]=useState(''),[searchQuery,setSearchQuery]=useState('');
- const load=async()=>{setLoading(true);try{const data=await api(mode==='documents'?'/api/teachers/me':'/api/teachers');const teachers=data.teachers||[];setList(mode==='documents'?(teacherId?teachers.filter((t:any)=>String(t.id)===String(teacherId)):(data.teacher?[data.teacher]:[])):teachers)}catch(e:any){Alert.alert('Error',e.message)}finally{setLoading(false)}};
- useEffect(()=>{load()},[mode,teacherId]);const set=(key:string,value:any)=>setForm((x:any)=>({...x,[key]:value}));
- const toggleTeacherSelection=(id:number)=>setSelectedTeacherIds(ids=>ids.includes(id)?ids.filter(x=>x!==id):[...ids,id]);
- const printSelectedTeacherCards=()=>{const selected=list.filter(t=>selectedTeacherIds.includes(Number(t.id)));if(!selected.length)return Alert.alert('Select teachers','Select at least one teacher to print.');printTeacherCards(selected)};
- const setDetail=(key:string,value:string)=>setForm((x:any)=>({...x,profile_details:{...(x.profile_details||{}),[key]:value}}));
- const setEducation=(index:number,key:string,value:string)=>setForm((x:any)=>({...x,education_details:(x.education_details||[]).map((row:any,i:number)=>i===index?{...row,[key]:value}:row)}));
- const addEducation=()=>setForm((x:any)=>({...x,education_details:[...(x.education_details||[]),{...emptyEducation}]}));
- const removeEducation=(index:number)=>setForm((x:any)=>({...x,education_details:(x.education_details||[]).filter((_:any,i:number)=>i!==index)}));
- const copyPresentAddress=()=>setForm((x:any)=>{const d=x.profile_details||{};return{...x,profile_details:{...d,...Object.fromEntries(['village','police_station','pin_code','post_office','block','district','state'].map(k=>['permanent_'+k,d['present_'+k]]))}}});
- const saveTeacher=async()=>{if(!form.staff_id.trim()||!form.name.trim())return Alert.alert('Required','Staff ID and name are required.');if(form.password&&form.password!==form.confirm_password)return Alert.alert('Password mismatch','Password and Re-enter Password must match.');setSaving(true);try{if(editingId){await api('/api/teachers/'+editingId,{method:'PUT',body:JSON.stringify(form)});Alert.alert('Updated','Teacher data updated successfully.')}else{const data=await api('/api/teachers',{method:'POST',body:JSON.stringify(form)});Alert.alert('Teacher Added','User ID: '+data.credentials.login_id+'\\nPassword: '+data.credentials.initial_password)}setForm(emptyForm);setEditingId(null);await load()}catch(e:any){Alert.alert('Error',e.message)}finally{setSaving(false)}};
- const startEdit=(t:any)=>{setEditingId(Number(t.id));setForm({...emptyForm,...t,date_of_birth:String(t.date_of_birth||'').slice(0,10),joining_date:String(t.joining_date||'').slice(0,10),login_id:t.login_id||'',password:'',confirm_password:'',profile_details:{...emptyForm.profile_details,...(t.profile_details||{})},education_details:Array.isArray(t.education_details)&&t.education_details.length?t.education_details:[{...emptyEducation}]});setTimeout(()=>{if(scrollRef.current){if(Platform.OS==='web'&&typeof scrollRef.current.scrollTo==='function'){scrollRef.current.scrollTo({y:0,animated:true})}else if(scrollRef.current.scrollTo){scrollRef.current.scrollTo({y:0,animated:true})}}},80)};
-  const resetPassword=async(t:any)=>{const run=async()=>{try{const d=await api('/api/teachers/'+t.id+'/password-reset',{method:'PATCH'});(Platform.OS==='web'&&typeof window!=='undefined'?window.alert:Alert.alert)('Password Reset Successful','Password reset successful.\\n\\nUser ID: '+d.login_id+'\\nTemporary password: '+(d.temporary_password||d.password||t.staff_id||'Not returned by server'))}catch(e:any){Alert.alert('Password Reset Failed',e.message)}};if(Platform.OS==='web'&&typeof window!=='undefined'){if(window.confirm('Reset password for '+(t.name||t.login_id)+'?'))await run()}else Alert.alert('Confirm Password Reset','?? teacher-?? password reset ??????', [{text:'Cancel',style:'cancel'},{text:'Reset',style:'destructive',onPress:run}])};
-const toggleStatus=async(t:any)=>{try{await api('/api/teachers/'+t.id+'/status',{method:'PATCH',body:JSON.stringify({is_active:t.user_active===false})});await load()}catch(e:any){Alert.alert('Status',e.message)}};const resetProfileEdits=async(t:any)=>{try{await api('/api/teachers/'+t.id+'/profile-edit-reset',{method:'PATCH'});setList(list=>list.map(x=>Number(x.id)===Number(t.id)?{...x,profile_edit_count:0}:x));Alert.alert('Profile Edit Reset','This teacher can edit the profile two more times.')}catch(e:any){Alert.alert('Profile Edit Reset',e.message)}};
- useEffect(()=>{if(mode==='documents'&&list[0]&&!documentTeacher)void loadDocuments(list[0])},[mode,list.length]);
- const loadDocuments=async(t:any)=>{setDocumentTeacher(t);setPendingDocuments({});setPendingPhoto(null);setDocumentsLoading(true);try{const data=await api('/api/teachers/'+t.id+'/documents');setDocuments(data.documents||[])}catch(e:any){Alert.alert('Documents',e.message)}finally{setDocumentsLoading(false)}};
- const pickStaffFile=async(type:string)=>{const picked=await DocumentPicker.getDocumentAsync({type:['image/*','application/pdf'],copyToCacheDirectory:true});if(!picked.canceled)setPendingDocuments(x=>({...x,[type]:picked.assets[0]}))};
- const pickStaffPhoto=async()=>{const picked=await DocumentPicker.getDocumentAsync({type:'image/*',copyToCacheDirectory:true});if(!picked.canceled)setPendingPhoto(picked.assets[0])};
- const appendFile=(body:FormData,key:string,f:any,fallback:string)=>{if(f.file)body.append(key,f.file);else body.append(key,{uri:f.uri,name:f.name||fallback,type:f.mimeType||'application/octet-stream'} as any)};
- const uploadSelectedDocuments=async()=>{if(!documentTeacher||(!pendingPhoto&&!Object.keys(pendingDocuments).length))return Alert.alert('Select files','Choose at least one photo or document.');setDocumentsSaving(true);try{let updated=documentTeacher;if(pendingPhoto){const body=new FormData();appendFile(body,'photo',pendingPhoto,'teacher.jpg');const result=await api('/api/teachers/'+documentTeacher.id+'/photo',{method:'POST',body});updated={...updated,...result.teacher}}for(const [type,f] of Object.entries(pendingDocuments)){const slot=STAFF_DOCUMENT_SLOTS.find(x=>x[0]===type),body=new FormData();appendFile(body,'file',f,'document');body.append('document_type',type);body.append('document_title',slot?.[1]||f.name||'Document');await api('/api/teachers/'+documentTeacher.id+'/documents',{method:'POST',body})}await load();await loadDocuments(updated);Alert.alert('Uploaded','Selected staff documents were compressed and uploaded.')}catch(e:any){Alert.alert('Upload failed',e.message)}finally{setDocumentsSaving(false)}};
- const documentFor=(type:string)=>documents.find(d=>d.document_type===type);
- const isImage=(f:any)=>!!f&&(String(f.mimeType||'').startsWith('image/')||/\.(jpe?g|png|webp|gif)(\?|$)/i.test(String(f.file_url||f.uri||'')));
- const openDocumentPreview=(d:any)=>{if(!d?.file_url)return;setPreviewDocument(d)};
- const printDocument=(d:any)=>{if(!d?.file_url)return;if(Platform.OS==='web'){const w=window.open(d.file_url,'_blank');if(w)setTimeout(()=>w.print(),900)}else Linking.openURL(d.file_url)};
- const printTeacherCards=(teachers:any[])=>{if(Platform.OS!=='web')return Alert.alert('Print','Teacher card print is available on web.');const esc=(v:any)=>String(v??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]||c));const card=(t:any)=>{const p=t.profile_details||{};return `<div class="card"><div class="banner"><img src="${ACADEMY_LOGO_URI}"/><div class="mission">Al-Ameen Mission Academy Memari</div><div class="sub">A socio-academic institution with a difference</div><div class="sub">Memari, Purba Bardhaman-713146</div><div class="contact">&#9742; 7479020073 / 74 / 75 / 91 / 92</div></div><div class="body"><div class="name">${esc(t.name)}</div><div>Teacher</div><div>ID-${esc(t.staff_id)}</div>${t.photo_url?`<img src="${esc(t.photo_url)}"/>`:''}<div>Contact- ${esc(t.mobile||'')}</div><div>Blood gr- ${esc(p.blood_group||'')}</div><div>Joining date- ${esc(String(t.joining_date||'').slice(0,10))}</div></div><div class="footer">Regd. Office: Khalatpur, Udaynarayanpur, Howrah, Pin-712408<br/>Central Office: D/4 9 New Town, Kolkata 700 156<br/>Central Office: 53B Elliot Road, Kolkata 700 016</div></div>`};const pages:string[]=[];for(let i=0;i<teachers.length;i+=6)pages.push(`<section class="page">${teachers.slice(i,i+6).map(card).join('')}</section>`);const html=`<html><body><style>@page{size:A4 portrait;margin:8mm}*{box-sizing:border-box}body{font-family:Arial;margin:0;background:#fff}.page{width:194mm;height:281mm;display:grid;grid-template-columns:repeat(3,55mm);grid-template-rows:repeat(2,85mm);gap:8mm 7mm;justify-content:center;page-break-after:always;align-content:start}.card{width:55mm;height:85mm;border:1px solid #9aaeca;text-align:center;overflow:hidden;background:#fff;display:flex;flex-direction:column}.banner{height:22mm;background:linear-gradient(145deg,#fff 0%,#fff 72%,#173f83 73%,#2b5fa5 100%);padding:3px 4px 5px;color:#174b8a;font-size:9px;font-weight:bold;line-height:1.05}.banner img{width:14mm;height:14mm;object-fit:contain;float:left;margin-right:1.5mm}.sub{font-size:5px;color:#111;margin-top:2px}.contact{font-size:5px;color:#111;margin-top:1px;white-space:nowrap}.body{clear:both;padding:3px 5px;font-size:9px;line-height:1.25;flex:1}.body img{max-width:25mm;max-height:31mm;width:auto;height:auto;object-fit:contain;object-position:center top;background:#eef5ff;border:1px solid #222;margin:2px}.name{font-size:11px;font-weight:700;margin-bottom:2px}.footer{background:#eef3fa;border-top:1px solid #ccd5df;font-size:6px;padding:3px;line-height:1.2;margin-top:auto}.mission{font-family:Georgia,'Times New Roman',serif;font-size:8.5px;line-height:1.1;font-weight:700;color:#174b8a;text-transform:none}</style>${pages.join('')}</body></html>`;const frame=document.createElement('iframe');frame.style.cssText='position:fixed;width:1px;height:1px;opacity:0';document.body.appendChild(frame);const doc=frame.contentDocument||frame.contentWindow?.document;if(!doc)return;doc.open();doc.write(html);doc.close();setTimeout(()=>{frame.contentWindow?.focus();frame.contentWindow?.print();setTimeout(()=>frame.remove(),1000)},1200)};
- const printTeacherCard=(t:any)=>printTeacherCards([t]);
- const downloadDocument=async(d:any)=>{if(!d?.file_url)return;if(Platform.OS==='web'){const a=document.createElement('a');a.href=d.file_url;a.target='_blank';a.download=d.document_title||'teacher-document';a.click();return}try{const uri=String(d.file_url).startsWith('http')?String(d.file_url):API_BASE+String(d.file_url);const name=String(d.document_title||'teacher-document').replace(/[^a-z0-9._-]+/gi,'_');const target=`${(FileSystem as any).cacheDirectory||''}teacher-${Date.now()}-${name}`;const result=await FileSystem.downloadAsync(uri,target);const saf=(FileSystem as any).StorageAccessFramework;if(saf?.requestDirectoryPermissionsAsync){const picked=await saf.requestDirectoryPermissionsAsync();if(picked.granted){const out=await saf.createFileAsync(picked.directoryUri,name,d.mime_type||'application/octet-stream');const base64=await FileSystem.readAsStringAsync(result.uri,{encoding:(FileSystem as any).EncodingType?.Base64||'base64'});await FileSystem.writeAsStringAsync(out,base64,{encoding:(FileSystem as any).EncodingType?.Base64||'base64'});Alert.alert('Download complete','File saved to the selected mobile folder.');return}}if(await Sharing.isAvailableAsync())await Sharing.shareAsync(result.uri,{dialogTitle:'Save or share document',mimeType:d.mime_type||'application/octet-stream'});else throw new Error('Mobile storage save is unavailable.');}catch(e:any){Alert.alert('Download',e.message||'Unable to download document')}};
- return <SafeAreaView style={s.page}><ScrollView ref={scrollRef} contentContainerStyle={s.content}><AcademyHeader fixed/><Button title="← Back" onPress={()=>router.canGoBack()?router.back():router.replace('/superadmin')}/><Text style={s.title}>Staff Management</Text><Text style={s.help}>Default User ID is the first part of the name. Default password is the Staff ID.</Text>
- 
- {((mode!=='view'&&mode!=='icard'&&mode!=='documents')||editingId)&&<View style={s.formCard}><Text style={s.sectionTitle}>{editingId?'Update Staff':'Add Staff'}</Text>
- <Text style={s.groupTitle}>Staff Necessary Details</Text><View style={s.formGrid}>
- {[['staff_id','Staff ID *'],['name','Staff Name *'],['qualification','Qualification'],['mobile','Mobile Number'],['whatsapp','WhatsApp Number'],['email','Email ID']].map(([k,l])=><Field key={k} label={l} value={form[k]} onChangeText={(v:string)=>set(k,v)} style={s.field}/>)}
- <View style={s.selectField}><Select label="Gender" value={form.gender} onChange={v=>set('gender',v)} options={[{value:'',label:'Select gender'},{value:'Male',label:'Male'},{value:'Female',label:'Female'},{value:'Other',label:'Other'}]}/></View>
- <DatePickerField label="Date of Joining" value={form.joining_date} onChange={v=>set('joining_date',v)} style={s.field}/><View style={s.selectField}><Select searchable label="Subject" value={form.subject} onChange={v=>set('subject',v)} options={[{value:'',label:'Select subject'},...SUBJECT_OPTIONS]}/></View>
- <View style={s.selectField}><Select label="Residential Type" value={form.profile_details.residential_type} onChange={v=>setDetail('residential_type',v)} options={[{value:'',label:'Select residential type'},...RESIDENTIAL_OPTIONS.map(v=>({value:v,label:v}))]}/></View><View style={s.selectField}><Select label="Staff Type" value={form.profile_details.staff_type} onChange={v=>setDetail('staff_type',v)} options={[{value:'',label:'Select staff type'},...STAFF_TYPE_OPTIONS.map(v=>({value:v,label:v}))]}/></View><Field label="Room" value={form.profile_details.room_name} onChangeText={(v:string)=>setDetail('room_name',v)} style={s.field}/></View>
- <Text style={s.groupTitle}>Staff Information</Text><View style={s.formGrid}><DatePickerField label="Date of Birth" value={form.date_of_birth} onChange={v=>set('date_of_birth',v)} style={s.field}/>
- <View style={s.selectField}><Select label="Blood Group" value={form.profile_details.blood_group} onChange={v=>setDetail('blood_group',v)} options={[{value:'',label:'Select blood group'},...BLOOD_GROUP_OPTIONS.map(v=>({value:v,label:v}))]}/></View>{([['aadhaar_no','Aadhaar No.'],['voter_no','Voter No.'],['pan_no','PAN No.']] as string[][]).map(([k,l])=><Field key={k} label={l} value={form.profile_details[k]} onChangeText={(v:string)=>setDetail(k,v)} style={s.field}/>)}<View style={s.selectField}><Select label="Type of Staff" value={form.profile_details.type_of_staff} onChange={v=>setDetail('type_of_staff',v)} options={[{value:'',label:'Select type'},...STAFF_TYPE_OPTIONS.map(v=>({value:v,label:v}))]}/></View><View style={s.selectField}><Select label="Staff Role" value={form.profile_details.staff_role} onChange={v=>setDetail('staff_role',v)} options={[{value:'',label:'Select Type of Role'},...STAFF_ROLE_OPTIONS.map(v=>({value:v,label:v}))]}/></View>{([['caste_name','Caste Name'],['previous_branch_name','Previous Branch Name']] as string[][]).map(([k,l])=><Field key={k} label={l} value={form.profile_details[k]} onChangeText={(v:string)=>setDetail(k,v)} style={s.field}/>)}
- <DatePickerField label="Previous Branch Join Date" value={form.profile_details.previous_branch_join_date} onChange={v=>setDetail('previous_branch_join_date',v)} style={s.field}/></View>
- <Text style={s.groupTitle}>Parents Information</Text><View style={s.formGrid}>{([['father_name',"Father's Name"],['mother_name',"Mother's Name"],['father_occupation',"Father's Occupation"],['mother_occupation',"Mother's Occupation"],['father_mobile',"Father's Mobile"],['mother_mobile',"Mother's Mobile"]] as string[][]).map(([k,l])=><Field key={k} label={l} value={form.profile_details[k]} onChangeText={(v:string)=>setDetail(k,v)} style={s.field}/>)}</View>
- <View style={s.groupHeader}><Text style={s.groupTitle}>Address Details</Text><TouchableOpacity onPress={copyPresentAddress} style={s.copyButton}><Text style={s.copyText}>Same as Present Address</Text></TouchableOpacity></View><View style={s.addressColumns}>{['present','permanent'].map(prefix=><View key={prefix} style={s.addressColumn}><Text style={s.addressTitle}>{prefix==='present'?'Present Address':'Permanent Address'}</Text>{['village','police_station','pin_code','post_office','block','district','state'].map(k=><Field key={k} label={k.replaceAll('_',' ')} value={form.profile_details[prefix+'_'+k]} onChangeText={(v:string)=>setDetail(prefix+'_'+k,v)} style={s.addressField}/>)}</View>)}</View>
- <Text style={s.groupTitle}>Account Details</Text><View style={s.formGrid}>{([['account_no','Account No.'],['branch_name','Branch Name'],['ifsc_code','IFSC Code'],['branch_address','Branch Address'],['bank_name','Bank Name']] as string[][]).map(([k,l])=><Field key={k} label={l} value={form.profile_details[k]} onChangeText={(v:string)=>setDetail(k,v)} style={s.field}/>)}</View>
- <Text style={s.groupTitle}>Educational Information</Text>
- {(form.education_details||[]).map((row:any,index:number)=><View key={index} style={s.educationRow}>
-   <Text style={s.educationSl}>{index+1}</Text>
-   <EditableSelect placeholder="Qualification" value={row.qualification||''} onChange={v=>setEducation(index,'qualification',v)} options={QUALIFICATION_OPTIONS}/>
-   <EditableSelect placeholder="Board / University" value={row.board_university||''} onChange={v=>setEducation(index,'board_university',v)} options={BOARD_UNIVERSITY_OPTIONS}/>
-   {([['institution','Institution'],['marks_grade','Marks / Grade'],['passing_year','Passing Year']] as string[][]).map(([k,l])=><Field key={k} placeholder={l} value={row[k]||''} onChangeText={(v:string)=>setEducation(index,k,v)} style={s.educationField}/>)}
-   <TouchableOpacity onPress={()=>removeEducation(index)} style={s.removeButton}><Text style={s.white}>Remove</Text></TouchableOpacity>
- </View>)}
- <TouchableOpacity onPress={addEducation} style={s.addButton}><Text style={s.white}>Add Qualification</Text></TouchableOpacity>
- <Text style={s.groupTitle}>Login Details</Text><View style={s.formGrid}>{[['login_id','User ID'],['password','Password'],['confirm_password','Re-enter Password']].map(([k,l])=><Field key={k} label={l} value={form[k]} onChangeText={(v:string)=>set(k,v)} secureTextEntry={k!=='login_id'} style={s.field}/>)}</View>
- <Button title={saving?'Saving...':editingId?'Update Staff':'Add Staff'} onPress={saveTeacher}/>{editingId&&<TouchableOpacity onPress={()=>{setEditingId(null);setForm(emptyForm)}} style={s.cancelButton}><Text style={s.cancelText}>Cancel Edit</Text></TouchableOpacity>}</View>}
- {mode!=='add'&&mode!=='documents'&&<><View style={s.searchBar}><TextInput value={searchText} onChangeText={setSearchText} placeholder="Search staff name / ID / mobile" style={s.searchInput}/><TouchableOpacity onPress={()=>setSearchQuery(searchText.trim().toLowerCase())} style={s.searchButton}><Text style={s.white}>Search</Text></TouchableOpacity><TouchableOpacity onPress={()=>{setSearchText('');setSearchQuery('')}} style={s.clearSearch}><Text style={s.clearText}>Clear</Text></TouchableOpacity></View><View style={s.listHeader}><Text style={s.sectionTitle}>Staff List ({list.filter(t=>!searchQuery||[t.name,t.staff_id,t.mobile,t.login_id].some(v=>String(v||'').toLowerCase().includes(searchQuery))).length})</Text>{mode==='icard'&&<View style={s.printTools}><Text style={s.selectedCount}>{selectedTeacherIds.length} selected</Text><TouchableOpacity onPress={printSelectedTeacherCards} style={s.printAllButton}><Text style={s.white}>Print Selected I-Cards (6 per A4)</Text></TouchableOpacity></View>}</View>{loading?<ActivityIndicator size="large" color="#1565c0"/>:list.filter(t=>!searchQuery||[t.name,t.staff_id,t.mobile,t.login_id].some(v=>String(v||'').toLowerCase().includes(searchQuery))).map(t=><Card key={t.id}><View style={s.teacherRow}>{mode==='icard'&&<TouchableOpacity accessibilityRole="checkbox" accessibilityState={{checked:selectedTeacherIds.includes(Number(t.id))}} onPress={()=>toggleTeacherSelection(Number(t.id))} style={[s.teacherCheckbox,selectedTeacherIds.includes(Number(t.id))&&s.teacherCheckboxSelected]}><Text style={s.checkboxMark}>{selectedTeacherIds.includes(Number(t.id))?'[x]':''}</Text></TouchableOpacity>}{t.photo_url?<Image source={{uri:/^https?:/.test(t.photo_url)?t.photo_url:API_BASE+t.photo_url}} style={s.avatar}/>:<View style={s.avatar}><Text style={s.avatarText}>{String(t.name||'?').charAt(0)}</Text></View>}<View style={s.teacherInfo}><Text style={s.teacherName}>{t.name}</Text><Text style={s.meta}>Staff ID: {t.staff_id} | User ID: {t.login_id||'Not created'}</Text><Text style={s.meta}>{t.gender||'-'} | {t.mobile||'-'} | WhatsApp {t.whatsapp||'-'}</Text><Text style={s.meta}>Profile edits remaining: {Math.max(0,2-Number(t.profile_edit_count||0))}</Text></View>{mode==='icard'?<TouchableOpacity onPress={()=>printTeacherCard(t)} style={s.printButton}><Text style={s.white}>I-Card</Text></TouchableOpacity>:mode==='documents'?<TouchableOpacity onPress={()=>loadDocuments(t)} style={s.documentButton}><Text style={s.white}>Documents</Text></TouchableOpacity>:<View style={s.teacherActions}><TouchableOpacity onPress={()=>startEdit(t)} style={s.editButton}><Text style={s.white}>Edit</Text></TouchableOpacity><TouchableOpacity onPress={()=>printTeacherCard(t)} style={s.printButton}><Text style={s.white}>I-Card</Text></TouchableOpacity><TouchableOpacity onPress={()=>loadDocuments(t)} style={s.documentButton}><Text style={s.white}>Documents</Text></TouchableOpacity><TouchableOpacity onPress={()=>resetProfileEdits(t)} style={s.resetButton}><Text style={s.white}>Reset 2 Edits</Text></TouchableOpacity><TouchableOpacity onPress={()=>resetPassword(t)} style={s.resetButton}><Text style={s.white}>Reset Password</Text></TouchableOpacity><TouchableOpacity onPress={()=>toggleStatus(t)} style={[s.status,t.user_active===false&&s.inactive]}><Text style={s.white}>{t.user_active===false?'Inactive':'Active'}</Text></TouchableOpacity></View>}</View></Card>)}</>}
- </ScrollView>
- <Modal visible={!!documentTeacher} animationType="slide" onRequestClose={()=>router.canGoBack()?router.back():router.replace('/superadmin')}><View style={s.modalBackdrop}><View style={s.modalCard}><View style={s.documentTopbar}><TouchableOpacity onPress={()=>router.canGoBack()?router.back():router.replace('/superadmin')} style={s.closeButton}><Text style={s.white}>Close</Text></TouchableOpacity><View><Text style={s.lastUpdated}>Last Updated</Text><Text style={s.lastUpdated}>{documents[0]?.uploaded_at?new Date(documents[0].uploaded_at).toLocaleString():'—'}</Text></View></View><Text style={s.staffId}>Staff ID. {documentTeacher?.staff_id}</Text><ScrollView contentContainerStyle={s.documentGrid}>{documentsLoading?<ActivityIndicator style={{margin:30}}/>:<><View style={s.documentCard}><Text style={s.slotTitle}>Photo</Text><View style={s.preview}>{pendingPhoto?<Image source={{uri:pendingPhoto.uri}} style={s.previewImage}/>:documentTeacher?.photo_url?<Image source={{uri:/^https?:/.test(documentTeacher.photo_url)?documentTeacher.photo_url:API_BASE+documentTeacher.photo_url}} style={s.previewImage}/>:<Text style={s.noPreview}>No photo</Text>}</View><TouchableOpacity onPress={pickStaffPhoto} style={[s.chooseButton,mode==='documents'&&{display:'none'}]}><Text numberOfLines={1} style={s.chooseText}>{pendingPhoto?.name||'Choose File'}</Text></TouchableOpacity><View style={s.docActions}>{documentTeacher?.photo_url&&<><TouchableOpacity onPress={()=>openDocumentPreview({file_url:documentTeacher.photo_url,document_title:'Photo'})} style={s.viewButton}><Text style={s.white}>View</Text></TouchableOpacity><TouchableOpacity onPress={()=>printDocument({file_url:documentTeacher.photo_url})} style={s.printButton}><Text style={s.white}>Print</Text></TouchableOpacity><TouchableOpacity onPress={()=>downloadDocument({file_url:documentTeacher.photo_url,document_title:'Photo'})} style={s.downloadButton}><Text style={s.white}>Down</Text></TouchableOpacity></>}</View></View>{STAFF_DOCUMENT_SLOTS.map(([type,title])=>{const d=documentFor(type),f=pendingDocuments[type],preview=f||d;return <View key={type} style={s.documentCard}><Text style={s.slotTitle}>{title}</Text><View style={s.preview}>{isImage(preview)?<Image source={{uri:f?.uri||d?.file_url}} style={s.previewImage}/>:<Text style={s.noPreview}>{preview?'PDF / Document':'No document'}</Text>}</View><TouchableOpacity onPress={()=>pickStaffFile(type)} style={[s.chooseButton,mode==='documents'&&{display:'none'}]}><Text numberOfLines={1} style={s.chooseText}>{f?.name||'Choose File'}</Text></TouchableOpacity><View style={s.docActions}>{d&&<><TouchableOpacity onPress={()=>openDocumentPreview(d)} style={s.viewButton}><Text style={s.white}>View</Text></TouchableOpacity><TouchableOpacity onPress={()=>printDocument(d)} style={s.printButton}><Text style={s.white}>Print</Text></TouchableOpacity><TouchableOpacity onPress={()=>downloadDocument(d)} style={s.downloadButton}><Text style={s.white}>Down</Text></TouchableOpacity></>}</View></View>})}</>}</ScrollView><TouchableOpacity disabled={documentsSaving} onPress={uploadSelectedDocuments} style={[s.uploadButton,documentsSaving&&{opacity:.55},mode==='documents'&&{display:'none'}]}><Text style={s.white}>{documentsSaving?'Uploading...':'Upload Selected Documents'}</Text></TouchableOpacity></View></View></Modal><Modal visible={!!previewDocument} transparent animationType="fade" onRequestClose={()=>setPreviewDocument(null)}><GestureHandlerRootView style={{flex:1}}><Pressable style={s.previewBackdrop} onPress={()=>setPreviewDocument(null)}><Pressable style={s.previewModal} onPress={()=>{}}><View style={s.previewHeader}><Text numberOfLines={1} style={s.previewTitle}>{previewDocument?.document_title||"Document"}</Text><TouchableOpacity onPress={()=>setPreviewDocument(null)}><Text style={s.previewClose}>X</Text></TouchableOpacity></View>{previewDocument?.file_url&&(previewDocument?.document_title==='Photo'||isImage(previewDocument))?<PinchGestureHandler onGestureEvent={Animated.event([{nativeEvent:{scale:docPinch}}],{useNativeDriver:true})} onHandlerStateChange={(e:any)=>{if(e.nativeEvent.oldState===State.ACTIVE){setDocZoom(Math.min(4,Math.max(1,docZoom*Number(e.nativeEvent.scale||1))));docPinch.setValue(1)}}}><Animated.View style={{flex:1,overflow:"hidden"}}><Animated.Image source={{uri:/^https?:/.test(previewDocument.file_url)?previewDocument.file_url:API_BASE+previewDocument.file_url}} style={[s.previewLargeImage,{transform:[{scale:Animated.multiply(docPinch,docZoom)}]}]} resizeMode="contain"/></Animated.View></PinchGestureHandler>:<Text style={s.previewDocumentText}>{previewDocument?.file_url?'PDF / Document':'Document unavailable'}</Text>}</Pressable></Pressable></GestureHandlerRootView></Modal></SafeAreaView>;
+const emptyEducation = { qualification: '', board_university: '', institution: '', marks_grade: '', passing_year: '' };
+const ACADEMY_LOGO_URI = '/al-ameen-logo.jpg';
+const QUALIFICATION_OPTIONS = ['Primary', 'Upper Primary', 'HS', 'Graduation', 'Post Graduation', 'B.Ed', 'D.El.Ed', 'Diploma', 'Hafiz', 'Maulana', 'Other'];
+const STAFF_TYPE_OPTIONS = ['Teachers', 'Medical', 'Academy', 'Kitchen', 'Electric', 'Construction', 'Sweeper', 'Driver', 'Security Guard', 'Office', 'Shopkeeper', 'Imam', 'Marketing', 'Management Staff'];
+const STAFF_ROLE_OPTIONS = ['Senior', 'Junior', 'Provisional', 'Contractual'];
+const RESIDENTIAL_OPTIONS = ['Residential', 'Non-residential', 'Guest'];
+const BLOOD_GROUP_OPTIONS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'UK'];
+const BOARD_UNIVERSITY_OPTIONS = ['West Bengal Board of Primary Education (WBBPE)', 'West Bengal Board of Secondary Education (WBBSE)', 'West Bengal Council of Higher Secondary Education (WBCHSE)', 'West Bengal Board of Madrasah Education (WBBME)', 'West Bengal State Council of Technical & Vocational Education and Skill Development (WBSCTVESD)', 'University of Calcutta', 'Jadavpur University', 'The University of Burdwan', 'University of Kalyani', 'University of North Bengal', 'Vidyasagar University', 'Rabindra Bharati University', 'West Bengal State University', 'Netaji Subhas Open University', 'Presidency University', 'Aliah University', 'Maulana Abul Kalam Azad University of Technology (MAKAUT)', 'Bankura University', 'University of Gour Banga', 'Raiganj University', 'Cooch Behar Panchanan Barma University', 'Sidho-Kanho-Birsha University', 'Diamond Harbour Women’s University', 'The Sanskrit College and University', 'Visva-Bharati University', 'Other'];
+const emptyForm = { staff_id: '', name: '', designation: '', qualification: '', mobile: '', whatsapp: '', email: '', gender: '', date_of_birth: '', joining_date: '', subject: '', address: '', login_id: '', password: '', confirm_password: '', residential_type: '', profile_details: { salary: '', residential_type: '', staff_type: '', room_name: '', blood_group: '', aadhaar_no: '', voter_no: '', pan_no: '', type_of_staff: '', staff_role: '', caste_name: '', previous_branch_name: '', previous_branch_join_date: '', father_name: '', mother_name: '', father_occupation: '', mother_occupation: '', father_mobile: '', mother_mobile: '', present_village: '', present_police_station: '', present_pin_code: '', present_post_office: '', present_block: '', present_district: '', present_state: '', permanent_village: '', permanent_police_station: '', permanent_pin_code: '', permanent_post_office: '', permanent_block: '', permanent_district: '', permanent_state: '', account_no: '', ifsc_code: '', bank_name: '', branch_name: '', branch_address: '' }, education_details: [{ ...emptyEducation }] };
+const STAFF_DOCUMENT_SLOTS = [['father', 'Father'], ['mother', 'Mother'], ['date_of_birth', 'Date Of Birth'], ['aadhaar', 'Aadhaar'], ['voter_id', 'Voter ID'], ['pan_card', 'PAN Card'], ['mp_admit', 'MP Admit'], ['mp_marksheet', 'MP Marksheet'], ['hs_marksheet', 'HS Marksheet'], ['graduation_marksheet', 'Graduation Marksheet'], ['post_graduation_marksheet', 'P. Graduate Marksheet'], ['bed_marksheet', 'B.Ed Marksheet'], ['passbook', 'Passbook'], ['other_1', 'Others 1'], ['other_2', 'Others 2'], ['other_3', 'Others 3'], ['other_4', 'Others 4']] as const;
+
+function EditableSelect({ placeholder, value, onChange, options, onSubmitEditing }: { placeholder: string; value: string; onChange: (v: string) => void; options: string[]; onSubmitEditing?: () => void }) {
+  const [open, setOpen] = useState(false);
+  const filtered = options.filter(x => !value || x.toLowerCase().includes(value.toLowerCase()));
+  return (
+    <View style={s.comboBox}>
+      <TextInput placeholder={placeholder} value={value} onChangeText={onChange} onSubmitEditing={onSubmitEditing} returnKeyType="done" style={s.comboInput} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 180)} />
+      {open && (
+        <View style={s.comboOptions}>
+          <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={{ maxHeight: 190 }}>
+            {filtered.map(x => (
+              <TouchableOpacity key={x} onPress={() => { onChange(x); setOpen(false); }} style={s.comboOption}>
+                <Text>{x}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <TouchableOpacity onPress={() => setOpen(false)}>
+            <Text style={{ color: '#1764a5', padding: 6 }}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
 }
-const s=StyleSheet.create({previewBackdrop:{flex:1,backgroundColor:'rgba(0,0,0,.82)',justifyContent:'center',alignItems:'center',padding:12},previewModal:{width:'96%',height:'90%',backgroundColor:'#fff',borderRadius:12,overflow:'hidden'},previewHeader:{minHeight:54,flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingHorizontal:16,borderBottomWidth:1,borderBottomColor:'#dbe2ea'},previewTitle:{fontSize:17,fontWeight:'900',color:'#173b67',flex:1},previewClose:{fontSize:28,color:'#173b67',paddingHorizontal:10},previewLargeImage:{flex:1,width:'100%',backgroundColor:'#f4f6f8'},previewDocumentText:{flex:1,textAlign:'center',textAlignVertical:'center',color:'#64748b',fontSize:18},searchBar:{flexDirection:'row',alignItems:'center',gap:8,marginBottom:12},searchInput:{flex:1,minHeight:42,borderWidth:1,borderColor:'#cbd5e1',borderRadius:8,paddingHorizontal:12,backgroundColor:'#fff'},searchButton:{backgroundColor:'#1768c5',paddingHorizontal:18,paddingVertical:12,borderRadius:7},clearSearch:{borderWidth:1,borderColor:'#1768c5',paddingHorizontal:14,paddingVertical:11,borderRadius:7},clearText:{color:'#1768c5',fontWeight:'800'},listHeader:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10},printTools:{flexDirection:'row',alignItems:'center',flexWrap:'wrap',gap:8},selectedCount:{color:'#17613c',fontWeight:'800'},teacherCheckbox:{width:24,height:24,borderWidth:2,borderColor:'#17613c',borderRadius:4,alignItems:'center',justifyContent:'center',backgroundColor:'#fff'},teacherCheckboxSelected:{backgroundColor:'#17613c'},checkboxMark:{color:'#fff',fontWeight:'900',fontSize:17},printAllButton:{backgroundColor:'#198754',paddingVertical:9,paddingHorizontal:12,borderRadius:6},comboBox:{flex:2,minWidth:180,position:'relative',zIndex:30,borderWidth:1,borderColor:'#cbd5e1',borderRadius:8,backgroundColor:'#fff',overflow:'visible'},comboInput:{height:48,paddingHorizontal:12,fontSize:16},comboOptions:{position:'absolute',top:48,left:0,right:0,zIndex:20,maxHeight:180,backgroundColor:'#fff',borderWidth:1,borderColor:'#b8c4d1',borderRadius:6},comboOption:{padding:9,borderBottomWidth:1,borderBottomColor:'#e5e7eb'},page:{flex:1,backgroundColor:'#f3f7f5'},content:{width:'100%',maxWidth:980,alignSelf:'center',padding:16,paddingTop:100,paddingBottom:50},title:{fontSize:27,fontWeight:'900',color:'#193b2c',marginTop:6},help:{color:'#63736b',marginTop:4,marginBottom:16},formCard:{backgroundColor:'#fff',borderRadius:16,padding:16,marginBottom:24,borderWidth:1,borderColor:'#d9e5dd'},sectionTitle:{fontSize:18,fontWeight:'900',color:'#214333',marginBottom:12},formGrid:{flexDirection:'row',flexWrap:'wrap',gap:10},field:{flexGrow:1,width:'31%',minWidth:220},selectField:{flexGrow:1,width:'31%',minWidth:220,marginBottom:10},groupTitle:{fontSize:17,fontWeight:'900',color:'#1f3b31',marginTop:18,marginBottom:10,paddingBottom:7,borderBottomWidth:1,borderBottomColor:'#d8e2dc'},groupHeader:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap'},copyButton:{backgroundColor:'#e8f2ff',padding:9,borderRadius:7},copyText:{color:'#145b9f',fontWeight:'800'},addressColumns:{flexDirection:'row',flexWrap:'wrap',gap:14},addressColumn:{flex:1,minWidth:280},addressTitle:{fontSize:15,fontWeight:'900',marginBottom:8},addressField:{marginBottom:9},educationRow:{flexDirection:'row',alignItems:'center',flexWrap:'nowrap',gap:5,marginBottom:8,padding:8,backgroundColor:'#f5f7f8',borderRadius:8},educationSl:{width:28,textAlign:'center',fontWeight:'900'},educationField:{flex:1,minWidth:120,marginBottom:0},removeButton:{backgroundColor:'#dc3545',padding:10,borderRadius:6},addButton:{alignSelf:'flex-start',backgroundColor:'#198754',padding:10,borderRadius:6,marginBottom:15},teacherRow:{flexDirection:'row',alignItems:'center',flexWrap:'wrap',gap:12},avatar:{width:46,height:46,borderRadius:23,backgroundColor:'#dceee3',alignItems:'center',justifyContent:'center'},avatarText:{color:'#17613c',fontSize:18,fontWeight:'900'},teacherInfo:{flex:1},teacherName:{fontSize:16,fontWeight:'900',color:'#233a2e'},meta:{color:'#687970',marginTop:3,fontSize:12},teacherActions:{width:'100%',flexDirection:'row',flexWrap:'wrap',gap:5,flexShrink:0,marginTop:6},editButton:{backgroundColor:'#d68a00',padding:7,borderRadius:6},documentButton:{backgroundColor:'#6741d9',padding:7,borderRadius:6},resetButton:{backgroundColor:"#6741d9",borderRadius:6,padding:7},status:{backgroundColor:'#21834f',borderRadius:20,padding:7},inactive:{backgroundColor:'#b23442'},white:{color:'#fff',fontSize:11,fontWeight:'800'},cancelButton:{borderWidth:1,borderColor:'#64748b',padding:11,borderRadius:8,marginTop:7},cancelText:{textAlign:'center',fontWeight:'800'},modalBackdrop:{flex:1,backgroundColor:'rgba(15,23,42,.62)',alignItems:'center',justifyContent:'center',padding:10},modalCard:{width:'98%',maxWidth:1500,height:'94%',backgroundColor:'#fff',borderRadius:8,padding:10},documentTopbar:{backgroundColor:'#eef7ff',borderWidth:1,borderColor:'#94a3b8',padding:8,flexDirection:'row',justifyContent:'space-between',alignItems:'center'},closeButton:{backgroundColor:'#dc3545',paddingVertical:9,paddingHorizontal:14,borderRadius:5},lastUpdated:{fontSize:10,color:'#475569',textAlign:'right'},staffId:{fontSize:17,color:'#475569',marginVertical:10},documentGrid:{flexDirection:'row',flexWrap:'wrap',gap:18,padding:2,paddingBottom:18},documentCard:{width:195,minHeight:272,borderWidth:1,borderColor:'#aab1b8',borderRadius:9,backgroundColor:'#eee',overflow:'hidden'},slotTitle:{fontSize:16,textAlign:'center',paddingVertical:5,color:'#111827'},preview:{height:155,marginHorizontal:18,backgroundColor:'#fff',alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:'#c6c6c6'},previewImage:{width:'100%',height:'100%',resizeMode:'contain'},noPreview:{color:'#94a3b8',fontSize:12,textAlign:'center'},chooseButton:{height:30,backgroundColor:'#60a5fa',justifyContent:'center',paddingHorizontal:6,marginTop:8},chooseText:{fontSize:11,color:'#0f172a'},docActions:{minHeight:42,flexDirection:'row',justifyContent:'center',alignItems:'center',gap:7,padding:5},uploadButton:{alignSelf:'center',backgroundColor:'#0d6efd',paddingVertical:11,paddingHorizontal:22,borderRadius:7,marginTop:8},viewButton:{backgroundColor:'#0d6efd',padding:7,borderRadius:5},printButton:{backgroundColor:'#198754',padding:7,borderRadius:5},downloadButton:{backgroundColor:'#06b6d4',padding:7,borderRadius:5},deleteButton:{backgroundColor:'#b23442',padding:8,borderRadius:6}});
 
+export default function Teachers() {
+  const { mode, teacherId } = useLocalSearchParams<{ mode?: string; teacherId?: string }>();
+  const scrollRef = useRef<any>(null);
 
+  const [list, setList] = useState<any[]>([]);
+  const [form, setForm] = useState<any>(emptyForm);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [lastEditedId, setLastEditedId] = useState<number | null>(null);
+  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
 
+  const [documentTeacher, setDocumentTeacher] = useState<any>(null);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [pendingDocuments, setPendingDocuments] = useState<Record<string, any>>({});
+  const [pendingPhoto, setPendingPhoto] = useState<any>(null);
+  const [documentsSaving, setDocumentsSaving] = useState(false);
+  const [previewDocument, setPreviewDocument] = useState<any>(null);
+  const [docZoom, setDocZoom] = useState(1);
+  const [docPinch] = useState(() => new Animated.Value(1));
+  const [selectedTeacherIds, setSelectedTeacherIds] = useState<number[]>([]);
+  const [searchText, setSearchText] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
+  const teacherPositions = useRef<Record<number, number>>({});
+  const formRef = useRef(form);
+  formRef.current = form;
+  const editingIdRef = useRef(editingId);
+  editingIdRef.current = editingId;
+  const saveTeacherRef = useRef<any>(null);
 
+  const scrollToTeacher = (targetId: number) => {
+    const doScroll = () => {
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const el =
+          document.getElementById('teacher-card-' + targetId) ||
+          document.querySelector('[data-teacher-id="' + targetId + '"]') ||
+          document.querySelector('#teacher-card-' + targetId);
 
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
+          let p = el.parentElement;
+          while (p && p !== document.body) {
+            const style = window.getComputedStyle(p);
+            if (/(auto|scroll)/.test(style.overflow + style.overflowY)) {
+              const elRect = el.getBoundingClientRect();
+              const pRect = p.getBoundingClientRect();
+              const offset = elRect.top - pRect.top + p.scrollTop - 90;
+              p.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
+              break;
+            }
+            p = p.parentElement;
+          }
+          return;
+        }
+      }
 
+      const y = teacherPositions.current[targetId];
+      if (y !== undefined && scrollRef.current) {
+        if (typeof scrollRef.current.scrollTo === 'function') {
+          scrollRef.current.scrollTo({ y: Math.max(0, y - 90), animated: true });
+        }
+      }
+    };
+
+    doScroll();
+    setTimeout(doScroll, 80);
+    setTimeout(doScroll, 200);
+    setTimeout(doScroll, 450);
+    setTimeout(doScroll, 800);
+    setTimeout(doScroll, 1200);
+  };
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await api(mode === 'documents' ? '/api/teachers/me' : '/api/teachers');
+      const teachers = data.teachers || [];
+      setList(mode === 'documents' ? (teacherId ? teachers.filter((t: any) => String(t.id) === String(teacherId)) : (data.teacher ? [data.teacher] : [])) : teachers);
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, [mode, teacherId]);
+
+  const set = (key: string, value: any) => {
+    setForm((x: any) => {
+      const next = { ...x, [key]: value };
+      formRef.current = next;
+      return next;
+    });
+  };
+
+  const toggleTeacherSelection = (id: number) =>
+    setSelectedTeacherIds(ids => ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]);
+
+  const printSelectedTeacherCards = () => {
+    const selected = list.filter(t => selectedTeacherIds.includes(Number(t.id)));
+    if (!selected.length) return Alert.alert('Select teachers', 'Select at least one teacher to print.');
+    printTeacherCards(selected);
+  };
+
+  const setDetail = (key: string, value: string) => {
+    setForm((x: any) => {
+      const next = {
+        ...x,
+        [key]: value,
+        profile_details: { ...(x.profile_details || {}), [key]: value },
+      };
+      formRef.current = next;
+      return next;
+    });
+  };
+
+  const setEducation = (index: number, key: string, value: string) => {
+    setForm((x: any) => {
+      const next = {
+        ...x,
+        education_details: (x.education_details || []).map((row: any, i: number) => i === index ? { ...row, [key]: value } : row),
+      };
+      formRef.current = next;
+      return next;
+    });
+  };
+
+  const addEducation = () => {
+    setForm((x: any) => {
+      const next = { ...x, education_details: [...(x.education_details || []), { ...emptyEducation }] };
+      formRef.current = next;
+      return next;
+    });
+  };
+
+  const removeEducation = (index: number) => {
+    setForm((x: any) => {
+      const next = { ...x, education_details: (x.education_details || []).filter((_: any, i: number) => i !== index) };
+      formRef.current = next;
+      return next;
+    });
+  };
+
+  const copyPresentAddress = () => {
+    setForm((x: any) => {
+      const d = x.profile_details || {};
+      const next = {
+        ...x,
+        profile_details: {
+          ...d,
+          ...Object.fromEntries(['village', 'police_station', 'pin_code', 'post_office', 'block', 'district', 'state'].map(k => ['permanent_' + k, d['present_' + k]])),
+        },
+      };
+      formRef.current = next;
+      return next;
+    });
+  };
+
+  const saveTeacher = async () => {
+    const currentForm = formRef.current || form;
+    const targetId = editingIdRef.current ?? editingId;
+    if (!currentForm.staff_id?.trim() || !currentForm.name?.trim()) {
+      setNotice({ text: 'Staff ID and name are required.', error: true });
+      Alert.alert('Required', 'Staff ID and name are required.');
+      return;
+    }
+    if (currentForm.password && currentForm.password !== currentForm.confirm_password) {
+      setNotice({ text: 'Password and Re-enter Password must match.', error: true });
+      Alert.alert('Password mismatch', 'Password and Re-enter Password must match.');
+      return;
+    }
+    if (saving) return;
+    setSaving(true);
+    try {
+      if (targetId) {
+        await api('/api/teachers/' + targetId, { method: 'PUT', body: JSON.stringify(currentForm) });
+        setForm(emptyForm);
+        formRef.current = emptyForm;
+        setEditingId(null);
+        editingIdRef.current = null;
+        setLastEditedId(targetId);
+        setNotice({ text: '✓ Staff "' + (currentForm.name || 'Member') + '" updated successfully.' });
+        setTimeout(() => setNotice(null), 5000);
+        await load();
+        scrollToTeacher(targetId);
+        setTimeout(() => setLastEditedId(null), 4000);
+      } else {
+        const data = await api('/api/teachers', { method: 'POST', body: JSON.stringify(currentForm) });
+        setForm(emptyForm);
+        formRef.current = emptyForm;
+        setEditingId(null);
+        editingIdRef.current = null;
+        const newId = data.teacher?.id ? Number(data.teacher.id) : null;
+        if (newId) {
+          setLastEditedId(newId);
+          setTimeout(() => setLastEditedId(null), 4000);
+        }
+        setNotice({ text: '✓ Teacher added successfully! ID: ' + (data.credentials?.login_id || '') });
+        setTimeout(() => setNotice(null), 6000);
+        await load();
+        if (newId) scrollToTeacher(newId);
+        if (Platform.OS !== 'web') {
+          Alert.alert('Teacher Added', 'User ID: ' + data.credentials.login_id + '\nPassword: ' + data.credentials.initial_password);
+        }
+      }
+    } catch (e: any) {
+      setNotice({ text: e.message || 'Error updating staff', error: true });
+      Alert.alert('Error', e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  saveTeacherRef.current = saveTeacher;
+
+  // Global keydown listener on web: Enter key inside ANY input in edit form immediately updates
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.keyCode === 13) {
+        if (!editingIdRef.current && mode !== 'add') return;
+        const target = e.target as HTMLElement | null;
+        if (!target) return;
+        const tag = (target.tagName || '').toLowerCase();
+        if (target.getAttribute('placeholder')?.toLowerCase().includes('search')) return;
+        if (tag === 'textarea' || tag === 'button') return;
+
+        e.preventDefault();
+        e.stopPropagation();
+        target.blur?.();
+        setTimeout(() => {
+          if (saveTeacherRef.current) {
+            void saveTeacherRef.current();
+          }
+        }, 40);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [mode]);
+
+  const startEdit = (t: any) => {
+    const resType = t.residential_type || t.profile_details?.residential_type || '';
+    const id = Number(t.id);
+    setEditingId(id);
+    editingIdRef.current = id;
+    const initial = {
+      ...emptyForm,
+      ...t,
+      residential_type: resType,
+      date_of_birth: String(t.date_of_birth || '').slice(0, 10),
+      joining_date: String(t.joining_date || '').slice(0, 10),
+      login_id: t.login_id || '',
+      password: '',
+      confirm_password: '',
+      profile_details: {
+        ...emptyForm.profile_details,
+        ...(t.profile_details || {}),
+        residential_type: resType,
+      },
+      education_details: Array.isArray(t.education_details) && t.education_details.length ? t.education_details : [{ ...emptyEducation }],
+    };
+    setForm(initial);
+    formRef.current = initial;
+    setTimeout(() => {
+      if (scrollRef.current) {
+        if (Platform.OS === 'web' && typeof scrollRef.current.scrollTo === 'function') {
+          scrollRef.current.scrollTo({ y: 0, animated: true });
+        } else if (scrollRef.current.scrollTo) {
+          scrollRef.current.scrollTo({ y: 0, animated: true });
+        }
+      }
+    }, 80);
+  };
+
+  const resetPassword = async (t: any) => {
+    const run = async () => {
+      try {
+        const d = await api('/api/teachers/' + t.id + '/password-reset', { method: 'PATCH' });
+        (Platform.OS === 'web' && typeof window !== 'undefined' ? window.alert : Alert.alert)(
+          'Password Reset Successful',
+          'Password reset successful.\n\nUser ID: ' + d.login_id + '\nTemporary password: ' + (d.temporary_password || d.password || t.staff_id || 'Not returned by server')
+        );
+      } catch (e: any) {
+        Alert.alert('Password Reset Failed', e.message);
+      }
+    };
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm('Reset password for ' + (t.name || t.login_id) + '?')) await run();
+    } else {
+      Alert.alert('Confirm Password Reset', 'Teacher password reset?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Reset', style: 'destructive', onPress: run }]);
+    }
+  };
+
+  const toggleStatus = async (t: any) => {
+    try {
+      await api('/api/teachers/' + t.id + '/status', { method: 'PATCH', body: JSON.stringify({ is_active: t.user_active === false }) });
+      await load();
+    } catch (e: any) {
+      Alert.alert('Status', e.message);
+    }
+  };
+
+  const resetProfileEdits = async (t: any) => {
+    try {
+      await api('/api/teachers/' + t.id + '/profile-edit-reset', { method: 'PATCH' });
+      setList(list => list.map(x => Number(x.id) === Number(t.id) ? { ...x, profile_edit_count: 0 } : x));
+      Alert.alert('Profile Edit Reset', 'This teacher can edit the profile two more times.');
+    } catch (e: any) {
+      Alert.alert('Profile Edit Reset', e.message);
+    }
+  };
+
+  useEffect(() => {
+    if (mode === 'documents' && list[0] && !documentTeacher) void loadDocuments(list[0]);
+  }, [mode, list.length]);
+
+  const loadDocuments = async (t: any) => {
+    setDocumentTeacher(t);
+    setPendingDocuments({});
+    setPendingPhoto(null);
+    setDocumentsLoading(true);
+    try {
+      const data = await api('/api/teachers/' + t.id + '/documents');
+      setDocuments(data.documents || []);
+    } catch (e: any) {
+      Alert.alert('Documents', e.message);
+    } finally {
+      setDocumentsLoading(false);
+    }
+  };
+
+  const pickStaffFile = async (type: string) => {
+    const picked = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'], copyToCacheDirectory: true });
+    if (!picked.canceled) setPendingDocuments(x => ({ ...x, [type]: picked.assets[0] }));
+  };
+
+  const pickStaffPhoto = async () => {
+    const picked = await DocumentPicker.getDocumentAsync({ type: 'image/*', copyToCacheDirectory: true });
+    if (!picked.canceled) setPendingPhoto(picked.assets[0]);
+  };
+
+  const appendFile = (body: FormData, key: string, f: any, fallback: string) => {
+    if (f.file) body.append(key, f.file);
+    else body.append(key, { uri: f.uri, name: f.name || fallback, type: f.mimeType || 'application/octet-stream' } as any);
+  };
+
+  const uploadSelectedDocuments = async () => {
+    if (!documentTeacher || (!pendingPhoto && !Object.keys(pendingDocuments).length)) {
+      return Alert.alert('Select files', 'Choose at least one photo or document.');
+    }
+    setDocumentsSaving(true);
+    try {
+      let updated = documentTeacher;
+      if (pendingPhoto) {
+        const body = new FormData();
+        appendFile(body, 'photo', pendingPhoto, 'teacher.jpg');
+        const result = await api('/api/teachers/' + documentTeacher.id + '/photo', { method: 'POST', body });
+        updated = { ...updated, ...result.teacher };
+      }
+      for (const [type, f] of Object.entries(pendingDocuments)) {
+        const slot = STAFF_DOCUMENT_SLOTS.find(x => x[0] === type), body = new FormData();
+        appendFile(body, 'file', f, 'document');
+        body.append('document_type', type);
+        body.append('document_title', slot?.[1] || f.name || 'Document');
+        await api('/api/teachers/' + documentTeacher.id + '/documents', { method: 'POST', body });
+      }
+      await load();
+      await loadDocuments(updated);
+      Alert.alert('Uploaded', 'Selected staff documents were compressed and uploaded.');
+    } catch (e: any) {
+      Alert.alert('Upload failed', e.message);
+    } finally {
+      setDocumentsSaving(false);
+    }
+  };
+
+  const documentFor = (type: string) => documents.find(d => d.document_type === type);
+  const isImage = (f: any) => !!f && (String(f.mimeType || '').startsWith('image/') || /\.(jpe?g|png|webp|gif)(\?|$)/i.test(String(f.file_url || f.uri || '')));
+  const openDocumentPreview = (d: any) => { if (!d?.file_url) return; setPreviewDocument(d); };
+  const printDocument = (d: any) => {
+    if (!d?.file_url) return;
+    if (Platform.OS === 'web') {
+      const w = window.open(d.file_url, '_blank');
+      if (w) setTimeout(() => w.print(), 900);
+    } else Linking.openURL(d.file_url);
+  };
+
+  const printTeacherCards = (teachers: any[]) => {
+    if (Platform.OS !== 'web') return Alert.alert('Print', 'Teacher card print is available on web.');
+    const esc = (v: any) => String(v ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] || c));
+    const card = (t: any) => {
+      const p = t.profile_details || {};
+      const photoHtml = t.photo_url ? '<img src="' + esc(t.photo_url) + '"/>' : '';
+      return (
+        '<div class="card"><div class="banner"><img src="' + ACADEMY_LOGO_URI + '"/><div class="mission">Al-Ameen Mission Academy Memari</div><div class="sub">A socio-academic institution with a difference</div><div class="sub">Memari, Purba Bardhaman-713146</div><div class="contact">&#9742; 7479020073 / 74 / 75 / 91 / 92</div></div><div class="body"><div class="name">' +
+        esc(t.name) +
+        '</div><div>Teacher</div><div>ID-' +
+        esc(t.staff_id) +
+        '</div>' +
+        photoHtml +
+        '<div>Contact- ' +
+        esc(t.mobile || '') +
+        '</div><div>Blood gr- ' +
+        esc(p.blood_group || '') +
+        '</div><div>Joining date- ' +
+        esc(String(t.joining_date || '').slice(0, 10)) +
+        '</div></div><div class="footer">Regd. Office: Khalatpur, Udaynarayanpur, Howrah, Pin-712408<br/>Central Office: D/4 9 New Town, Kolkata 700 156<br/>Central Office: 53B Elliot Road, Kolkata 700 016</div></div>'
+      );
+    };
+    const pages: string[] = [];
+    for (let i = 0; i < teachers.length; i += 6) {
+      pages.push('<section class="page">' + teachers.slice(i, i + 6).map(card).join('') + '</section>');
+    }
+    const html =
+      '<html><body><style>@page{size:A4 portrait;margin:8mm}*{box-sizing:border-box}body{font-family:Arial;margin:0;background:#fff}.page{width:194mm;height:281mm;display:grid;grid-template-columns:repeat(3,55mm);grid-template-rows:repeat(2,85mm);gap:8mm 7mm;justify-content:center;page-break-after:always;align-content:start}.card{width:55mm;height:85mm;border:1px solid #9aaeca;text-align:center;overflow:hidden;background:#fff;display:flex;flex-direction:column}.banner{height:22mm;background:linear-gradient(145deg,#fff 0%,#fff 72%,#173f83 73%,#2b5fa5 100%);padding:3px 4px 5px;color:#174b8a;font-size:9px;font-weight:bold;line-height:1.05}.banner img{width:14mm;height:14mm;object-fit:contain;float:left;margin-right:1.5mm}.sub{font-size:5px;color:#111;margin-top:2px}.contact{font-size:5px;color:#111;margin-top:1px;white-space:nowrap}.body{clear:both;padding:3px 5px;font-size:9px;line-height:1.25;flex:1}.body img{max-width:25mm;max-height:31mm;width:auto;height:auto;object-fit:contain;object-position:center top;background:#eef5ff;border:1px solid #222;margin:2px}.name{font-size:11px;font-weight:700;margin-bottom:2px}.footer{background:#eef3fa;border-top:1px solid #ccd5df;font-size:6px;padding:3px;line-height:1.2;margin-top:auto}.mission{font-family:Georgia,\'Times New Roman\',serif;font-size:8.5px;line-height:1.1;font-weight:700;color:#174b8a;text-transform:none}</style>' +
+      pages.join('') +
+      '</body></html>';
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0';
+    document.body.appendChild(frame);
+    const doc = frame.contentDocument || frame.contentWindow?.document;
+    if (!doc) return;
+    doc.open();
+    doc.write(html);
+    doc.close();
+    setTimeout(() => {
+      frame.contentWindow?.focus();
+      frame.contentWindow?.print();
+      setTimeout(() => frame.remove(), 1000);
+    }, 1200);
+  };
+
+  const printTeacherCard = (t: any) => printTeacherCards([t]);
+
+  const downloadDocument = async (d: any) => {
+    if (!d?.file_url) return;
+    if (Platform.OS === 'web') {
+      const a = document.createElement('a');
+      a.href = d.file_url;
+      a.target = '_blank';
+      a.download = d.document_title || 'teacher-document';
+      a.click();
+      return;
+    }
+    try {
+      const uri = String(d.file_url).startsWith('http') ? String(d.file_url) : API_BASE + String(d.file_url);
+      const name = String(d.document_title || 'teacher-document').replace(/[^a-z0-9._-]+/gi, '_');
+      const target = (FileSystem as any).cacheDirectory + 'teacher-' + Date.now() + '-' + name;
+      const result = await FileSystem.downloadAsync(uri, target);
+      const saf = (FileSystem as any).StorageAccessFramework;
+      if (saf?.requestDirectoryPermissionsAsync) {
+        const picked = await saf.requestDirectoryPermissionsAsync();
+        if (picked.granted) {
+          const out = await saf.createFileAsync(picked.directoryUri, name, d.mime_type || 'application/octet-stream');
+          const base64 = await FileSystem.readAsStringAsync(result.uri, { encoding: (FileSystem as any).EncodingType?.Base64 || 'base64' });
+          await FileSystem.writeAsStringAsync(out, base64, { encoding: (FileSystem as any).EncodingType?.Base64 || 'base64' });
+          Alert.alert('Download complete', 'File saved to the selected mobile folder.');
+          return;
+        }
+      }
+      if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(result.uri, { dialogTitle: 'Save or share document', mimeType: d.mime_type || 'application/octet-stream' });
+      else throw new Error('Mobile storage save is unavailable.');
+    } catch (e: any) {
+      Alert.alert('Download', e.message || 'Unable to download document');
+    }
+  };
+
+  return (
+    <SafeAreaView style={s.page}>
+      <ScrollView ref={scrollRef} contentContainerStyle={s.content}>
+        <AcademyHeader fixed />
+        <Button title="← Back" onPress={() => router.canGoBack() ? router.back() : router.replace('/superadmin')} />
+        <Text style={s.title}>Staff Management</Text>
+        <Text style={s.help}>Default User ID is the first part of the name. Default password is the Staff ID.</Text>
+
+        {notice && (
+          <View style={[s.noticeBanner, notice.error && s.noticeBannerError]}>
+            <Text style={[s.noticeText, notice.error && s.noticeTextError]}>{notice.text}</Text>
+          </View>
+        )}
+
+        {((mode !== 'view' && mode !== 'icard' && mode !== 'documents') || editingId) && (
+          <View
+            style={s.formCard}
+            {...(Platform.OS === 'web'
+              ? ({
+                  onKeyDown: (e: any) => {
+                    if (e.key === 'Enter' || e.keyCode === 13) {
+                      const tag = (e.target?.tagName || '').toLowerCase();
+                      if (tag !== 'textarea' && tag !== 'button') {
+                        e.preventDefault?.();
+                        void saveTeacher();
+                      }
+                    }
+                  },
+                } as any)
+              : {})}
+          >
+            <Text style={s.sectionTitle}>{editingId ? 'Update Staff' : 'Add Staff'}</Text>
+            <Text style={s.groupTitle}>Staff Necessary Details</Text>
+            <View style={s.formGrid}>
+              {[
+                ['staff_id', 'Staff ID *'],
+                ['name', 'Staff Name *'],
+                ['qualification', 'Qualification'],
+                ['mobile', 'Mobile Number'],
+                ['whatsapp', 'WhatsApp Number'],
+                ['email', 'Email ID'],
+              ].map(([k, l]) => (
+                <Field
+                  key={k}
+                  label={l}
+                  value={form[k]}
+                  onChangeText={(v: string) => set(k, v)}
+                  onSubmitEditing={saveTeacher}
+                  returnKeyType="done"
+                  style={s.field}
+                />
+              ))}
+              <View style={s.selectField}>
+                <Select
+                  label="Gender"
+                  value={form.gender}
+                  onChange={v => set('gender', v)}
+                  options={[
+                    { value: '', label: 'Select gender' },
+                    { value: 'Male', label: 'Male' },
+                    { value: 'Female', label: 'Female' },
+                    { value: 'Other', label: 'Other' },
+                  ]}
+                />
+              </View>
+              <DatePickerField label="Date of Joining" value={form.joining_date} onChange={v => set('joining_date', v)} style={s.field} />
+              <View style={s.selectField}>
+                <Select searchable label="Subject" value={form.subject} onChange={v => set('subject', v)} options={[{ value: '', label: 'Select subject' }, ...SUBJECT_OPTIONS]} />
+              </View>
+              <View style={s.selectField}>
+                <Select
+                  label="Residential Type"
+                  value={form.profile_details?.residential_type || form.residential_type || ''}
+                  onChange={v => {
+                    setDetail('residential_type', v);
+                    set('residential_type', v);
+                  }}
+                  options={[{ value: '', label: 'Select residential type' }, ...RESIDENTIAL_OPTIONS.map(v => ({ value: v, label: v }))]}
+                />
+              </View>
+              <View style={s.selectField}>
+                <Select
+                  label="Staff Type"
+                  value={form.profile_details.staff_type}
+                  onChange={v => setDetail('staff_type', v)}
+                  options={[{ value: '', label: 'Select staff type' }, ...STAFF_TYPE_OPTIONS.map(v => ({ value: v, label: v }))]}
+                />
+              </View>
+              <Field
+                label="Room"
+                value={form.profile_details.room_name}
+                onChangeText={(v: string) => setDetail('room_name', v)}
+                onSubmitEditing={saveTeacher}
+                returnKeyType="done"
+                style={s.field}
+              />
+            </View>
+
+            <Text style={s.groupTitle}>Staff Information</Text>
+            <View style={s.formGrid}>
+              <DatePickerField label="Date of Birth" value={form.date_of_birth} onChange={v => set('date_of_birth', v)} style={s.field} />
+              <View style={s.selectField}>
+                <Select
+                  label="Blood Group"
+                  value={form.profile_details.blood_group}
+                  onChange={v => setDetail('blood_group', v)}
+                  options={[{ value: '', label: 'Select blood group' }, ...BLOOD_GROUP_OPTIONS.map(v => ({ value: v, label: v }))]}
+                />
+              </View>
+              {([['aadhaar_no', 'Aadhaar No.'], ['voter_no', 'Voter No.'], ['pan_no', 'PAN No.']] as string[][]).map(([k, l]) => (
+                <Field
+                  key={k}
+                  label={l}
+                  value={form.profile_details[k]}
+                  onChangeText={(v: string) => setDetail(k, v)}
+                  onSubmitEditing={saveTeacher}
+                  returnKeyType="done"
+                  style={s.field}
+                />
+              ))}
+              <View style={s.selectField}>
+                <Select
+                  label="Type of Staff"
+                  value={form.profile_details.type_of_staff}
+                  onChange={v => setDetail('type_of_staff', v)}
+                  options={[{ value: '', label: 'Select type' }, ...STAFF_TYPE_OPTIONS.map(v => ({ value: v, label: v }))]}
+                />
+              </View>
+              <View style={s.selectField}>
+                <Select
+                  label="Staff Role"
+                  value={form.profile_details.staff_role}
+                  onChange={v => setDetail('staff_role', v)}
+                  options={[{ value: '', label: 'Select Type of Role' }, ...STAFF_ROLE_OPTIONS.map(v => ({ value: v, label: v }))]}
+                />
+              </View>
+              {([['caste_name', 'Caste Name'], ['previous_branch_name', 'Previous Branch Name']] as string[][]).map(([k, l]) => (
+                <Field
+                  key={k}
+                  label={l}
+                  value={form.profile_details[k]}
+                  onChangeText={(v: string) => setDetail(k, v)}
+                  onSubmitEditing={saveTeacher}
+                  returnKeyType="done"
+                  style={s.field}
+                />
+              ))}
+              <DatePickerField label="Previous Branch Join Date" value={form.profile_details.previous_branch_join_date} onChange={v => setDetail('previous_branch_join_date', v)} style={s.field} />
+            </View>
+
+            <Text style={s.groupTitle}>Parents Information</Text>
+            <View style={s.formGrid}>
+              {[
+                ['father_name', "Father's Name"],
+                ['mother_name', "Mother's Name"],
+                ['father_occupation', "Father's Occupation"],
+                ['mother_occupation', "Mother's Occupation"],
+                ['father_mobile', "Father's Mobile"],
+                ['mother_mobile', "Mother's Mobile"],
+              ].map(([k, l]) => (
+                <Field
+                  key={k}
+                  label={l}
+                  value={form.profile_details[k]}
+                  onChangeText={(v: string) => setDetail(k, v)}
+                  onSubmitEditing={saveTeacher}
+                  returnKeyType="done"
+                  style={s.field}
+                />
+              ))}
+            </View>
+
+            <View style={s.groupHeader}>
+              <Text style={s.groupTitle}>Address Details</Text>
+              <TouchableOpacity onPress={copyPresentAddress} style={s.copyButton}>
+                <Text style={s.copyText}>Same as Present Address</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={s.addressColumns}>
+              {['present', 'permanent'].map(prefix => (
+                <View key={prefix} style={s.addressColumn}>
+                  <Text style={s.addressTitle}>{prefix === 'present' ? 'Present Address' : 'Permanent Address'}</Text>
+                  {['village', 'police_station', 'pin_code', 'post_office', 'block', 'district', 'state'].map(k => (
+                    <Field
+                      key={k}
+                      label={k.replaceAll('_', ' ')}
+                      value={form.profile_details[prefix + '_' + k]}
+                      onChangeText={(v: string) => setDetail(prefix + '_' + k, v)}
+                      onSubmitEditing={saveTeacher}
+                      returnKeyType="done"
+                      style={s.addressField}
+                    />
+                  ))}
+                </View>
+              ))}
+            </View>
+
+            <Text style={s.groupTitle}>Account Details</Text>
+            <View style={s.formGrid}>
+              {[
+                ['account_no', 'Account No.'],
+                ['branch_name', 'Branch Name'],
+                ['ifsc_code', 'IFSC Code'],
+                ['branch_address', 'Branch Address'],
+                ['bank_name', 'Bank Name'],
+              ].map(([k, l]) => (
+                <Field
+                  key={k}
+                  label={l}
+                  value={form.profile_details[k]}
+                  onChangeText={(v: string) => setDetail(k, v)}
+                  onSubmitEditing={saveTeacher}
+                  returnKeyType="done"
+                  style={s.field}
+                />
+              ))}
+            </View>
+
+            <Text style={s.groupTitle}>Educational Information</Text>
+            {(form.education_details || []).map((row: any, index: number) => (
+              <View key={index} style={s.educationRow}>
+                <Text style={s.educationSl}>{index + 1}</Text>
+                <EditableSelect placeholder="Qualification" value={row.qualification || ''} onChange={v => setEducation(index, 'qualification', v)} options={QUALIFICATION_OPTIONS} onSubmitEditing={saveTeacher} />
+                <EditableSelect placeholder="Board / University" value={row.board_university || ''} onChange={v => setEducation(index, 'board_university', v)} options={BOARD_UNIVERSITY_OPTIONS} onSubmitEditing={saveTeacher} />
+                {([['institution', 'Institution'], ['marks_grade', 'Marks / Grade'], ['passing_year', 'Passing Year']] as string[][]).map(([k, l]) => (
+                  <Field
+                    key={k}
+                    placeholder={l}
+                    value={row[k] || ''}
+                    onChangeText={(v: string) => setEducation(index, k, v)}
+                    onSubmitEditing={saveTeacher}
+                    returnKeyType="done"
+                    style={s.educationField}
+                  />
+                ))}
+                <TouchableOpacity onPress={() => removeEducation(index)} style={s.removeButton}>
+                  <Text style={s.white}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+            <TouchableOpacity onPress={addEducation} style={s.addButton}>
+              <Text style={s.white}>Add Qualification</Text>
+            </TouchableOpacity>
+
+            <Text style={s.groupTitle}>Login Details</Text>
+            <View style={s.formGrid}>
+              {[['login_id', 'User ID'], ['password', 'Password'], ['confirm_password', 'Re-enter Password']].map(([k, l]) => (
+                <Field
+                  key={k}
+                  label={l}
+                  value={form[k]}
+                  onChangeText={(v: string) => set(k, v)}
+                  secureTextEntry={k !== 'login_id'}
+                  onSubmitEditing={saveTeacher}
+                  returnKeyType="done"
+                  style={s.field}
+                />
+              ))}
+            </View>
+
+            <Button title={saving ? 'Saving...' : editingId ? 'Update Staff' : 'Add Staff'} onPress={saveTeacher} />
+            {editingId && (
+              <TouchableOpacity
+                onPress={() => {
+                  const id = editingId;
+                  setEditingId(null);
+                  editingIdRef.current = null;
+                  setForm(emptyForm);
+                  formRef.current = emptyForm;
+                  if (id) scrollToTeacher(id);
+                }}
+                style={s.cancelButton}
+              >
+                <Text style={s.cancelText}>Cancel Edit</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {mode !== 'add' && mode !== 'documents' && (
+          <>
+            <View style={s.searchBar}>
+              <TextInput value={searchText} onChangeText={setSearchText} placeholder="Search staff name / ID / mobile" style={s.searchInput} />
+              <TouchableOpacity onPress={() => setSearchQuery(searchText.trim().toLowerCase())} style={s.searchButton}>
+                <Text style={s.white}>Search</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setSearchText('');
+                  setSearchQuery('');
+                }}
+                style={s.clearSearch}
+              >
+                <Text style={s.clearText}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={s.listHeader}>
+              <Text style={s.sectionTitle}>
+                Staff List ({list.filter(t => !searchQuery || [t.name, t.staff_id, t.mobile, t.login_id].some(v => String(v || '').toLowerCase().includes(searchQuery))).length})
+              </Text>
+              {mode === 'icard' && (
+                <View style={s.printTools}>
+                  <Text style={s.selectedCount}>{selectedTeacherIds.length} selected</Text>
+                  <TouchableOpacity onPress={printSelectedTeacherCards} style={s.printAllButton}>
+                    <Text style={s.white}>Print Selected I-Cards (6 per A4)</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+            {loading ? (
+              <ActivityIndicator size="large" color="#1565c0" />
+            ) : (
+              list
+                .filter(t => !searchQuery || [t.name, t.staff_id, t.mobile, t.login_id].some(v => String(v || '').toLowerCase().includes(searchQuery)))
+                .map(t => (
+                  <View
+                    key={t.id}
+                    nativeID={'teacher-card-' + t.id}
+                    {...(Platform.OS === 'web' ? ({ id: 'teacher-card-' + t.id, 'data-teacher-id': String(t.id) } as any) : {})}
+                    onLayout={e => {
+                      teacherPositions.current[Number(t.id)] = e.nativeEvent.layout.y;
+                    }}
+                    style={[lastEditedId === Number(t.id) && s.highlightedCardWrapper]}
+                  >
+                    <Card>
+                      <View style={s.teacherRow}>
+                        {mode === 'icard' && (
+                          <TouchableOpacity
+                            accessibilityRole="checkbox"
+                            accessibilityState={{ checked: selectedTeacherIds.includes(Number(t.id)) }}
+                            onPress={() => toggleTeacherSelection(Number(t.id))}
+                            style={[s.teacherCheckbox, selectedTeacherIds.includes(Number(t.id)) && s.teacherCheckboxSelected]}
+                          >
+                            <Text style={s.checkboxMark}>{selectedTeacherIds.includes(Number(t.id)) ? '[x]' : ''}</Text>
+                          </TouchableOpacity>
+                        )}
+                        {t.photo_url ? (
+                          <Image source={{ uri: /^https?:/.test(t.photo_url) ? t.photo_url : API_BASE + t.photo_url }} style={s.avatar} />
+                        ) : (
+                          <View style={s.avatar}>
+                            <Text style={s.avatarText}>{String(t.name || '?').charAt(0)}</Text>
+                          </View>
+                        )}
+                        <View style={s.teacherInfo}>
+                          <Text style={s.teacherName}>{t.name}</Text>
+                          <Text style={s.meta}>Staff ID: {t.staff_id} | User ID: {t.login_id || 'Not created'}</Text>
+                          <Text style={s.meta}>{t.gender || '-'} | {t.mobile || '-'} | WhatsApp {t.whatsapp || '-'}</Text>
+                          <Text style={s.meta}>Profile edits remaining: {Math.max(0, 2 - Number(t.profile_edit_count || 0))}</Text>
+                        </View>
+                        {mode === 'icard' ? (
+                          <TouchableOpacity onPress={() => printTeacherCard(t)} style={s.printButton}>
+                            <Text style={s.white}>I-Card</Text>
+                          </TouchableOpacity>
+                        ) : mode === 'documents' ? (
+                          <TouchableOpacity onPress={() => loadDocuments(t)} style={s.documentButton}>
+                            <Text style={s.white}>Documents</Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <View style={s.teacherActions}>
+                            <TouchableOpacity onPress={() => startEdit(t)} style={s.editButton}>
+                              <Text style={s.white}>Edit</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => printTeacherCard(t)} style={s.printButton}>
+                              <Text style={s.white}>I-Card</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => loadDocuments(t)} style={s.documentButton}>
+                              <Text style={s.white}>Documents</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => resetProfileEdits(t)} style={s.resetButton}>
+                              <Text style={s.white}>Reset 2 Edits</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => resetPassword(t)} style={s.resetButton}>
+                              <Text style={s.white}>Reset Password</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => toggleStatus(t)} style={[s.status, t.user_active === false && s.inactive]}>
+                              <Text style={s.white}>{t.user_active === false ? 'Inactive' : 'Active'}</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </View>
+                    </Card>
+                  </View>
+                ))
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      <Modal visible={!!documentTeacher} animationType="slide" onRequestClose={() => router.canGoBack() ? router.back() : router.replace('/superadmin')}>
+        <View style={s.modalBackdrop}>
+          <View style={s.modalCard}>
+            <View style={s.documentTopbar}>
+              <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/superadmin')} style={s.closeButton}>
+                <Text style={s.white}>Close</Text>
+              </TouchableOpacity>
+              <View>
+                <Text style={s.lastUpdated}>Last Updated</Text>
+                <Text style={s.lastUpdated}>{documents[0]?.uploaded_at ? new Date(documents[0].uploaded_at).toLocaleString() : '—'}</Text>
+              </View>
+            </View>
+            <Text style={s.staffId}>Staff ID. {documentTeacher?.staff_id}</Text>
+            <ScrollView contentContainerStyle={s.documentGrid}>
+              {documentsLoading ? (
+                <ActivityIndicator style={{ margin: 30 }} />
+              ) : (
+                <>
+                  <View style={s.documentCard}>
+                    <Text style={s.slotTitle}>Photo</Text>
+                    <View style={s.preview}>
+                      {pendingPhoto ? (
+                        <Image source={{ uri: pendingPhoto.uri }} style={s.previewImage} />
+                      ) : documentTeacher?.photo_url ? (
+                        <Image source={{ uri: /^https?:/.test(documentTeacher.photo_url) ? documentTeacher.photo_url : API_BASE + documentTeacher.photo_url }} style={s.previewImage} />
+                      ) : (
+                        <Text style={s.noPreview}>No photo</Text>
+                      )}
+                    </View>
+                    <TouchableOpacity onPress={pickStaffPhoto} style={[s.chooseButton, mode === 'documents' && { display: 'none' }]}>
+                      <Text numberOfLines={1} style={s.chooseText}>{pendingPhoto?.name || 'Choose File'}</Text>
+                    </TouchableOpacity>
+                    <View style={s.docActions}>
+                      {documentTeacher?.photo_url && (
+                        <>
+                          <TouchableOpacity onPress={() => openDocumentPreview({ file_url: documentTeacher.photo_url, document_title: 'Photo' })} style={s.viewButton}>
+                            <Text style={s.white}>View</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => printDocument({ file_url: documentTeacher.photo_url })} style={s.printButton}>
+                            <Text style={s.white}>Print</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => downloadDocument({ file_url: documentTeacher.photo_url, document_title: 'Photo' })} style={s.downloadButton}>
+                            <Text style={s.white}>Down</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                    </View>
+                  </View>
+                  {STAFF_DOCUMENT_SLOTS.map(([type, title]) => {
+                    const d = documentFor(type), f = pendingDocuments[type], preview = f || d;
+                    return (
+                      <View key={type} style={s.documentCard}>
+                        <Text style={s.slotTitle}>{title}</Text>
+                        <View style={s.preview}>
+                          {isImage(preview) ? (
+                            <Image source={{ uri: f?.uri || d?.file_url }} style={s.previewImage} />
+                          ) : (
+                            <Text style={s.noPreview}>{preview ? 'PDF / Document' : 'No document'}</Text>
+                          )}
+                        </View>
+                        <TouchableOpacity onPress={() => pickStaffFile(type)} style={[s.chooseButton, mode === 'documents' && { display: 'none' }]}>
+                          <Text numberOfLines={1} style={s.chooseText}>{f?.name || 'Choose File'}</Text>
+                        </TouchableOpacity>
+                        <View style={s.docActions}>
+                          {d && (
+                            <>
+                              <TouchableOpacity onPress={() => openDocumentPreview(d)} style={s.viewButton}>
+                                <Text style={s.white}>View</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity onPress={() => printDocument(d)} style={s.printButton}>
+                                <Text style={s.white}>Print</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity onPress={() => downloadDocument(d)} style={s.downloadButton}>
+                                <Text style={s.white}>Down</Text>
+                              </TouchableOpacity>
+                            </>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </>
+              )}
+            </ScrollView>
+            <TouchableOpacity disabled={documentsSaving} onPress={uploadSelectedDocuments} style={[s.uploadButton, documentsSaving && { opacity: 0.55 }, mode === 'documents' && { display: 'none' }]}>
+              <Text style={s.white}>{documentsSaving ? 'Uploading...' : 'Upload Selected Documents'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={!!previewDocument} transparent animationType="fade" onRequestClose={() => setPreviewDocument(null)}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <Pressable style={s.previewBackdrop} onPress={() => setPreviewDocument(null)}>
+            <Pressable style={s.previewModal} onPress={() => {}}>
+              <View style={s.previewHeader}>
+                <Text numberOfLines={1} style={s.previewTitle}>{previewDocument?.document_title || 'Document'}</Text>
+                <TouchableOpacity onPress={() => setPreviewDocument(null)}>
+                  <Text style={s.previewClose}>X</Text>
+                </TouchableOpacity>
+              </View>
+              {previewDocument?.file_url && (previewDocument?.document_title === 'Photo' || isImage(previewDocument)) ? (
+                <PinchGestureHandler
+                  onGestureEvent={Animated.event([{ nativeEvent: { scale: docPinch } }], { useNativeDriver: true })}
+                  onHandlerStateChange={(e: any) => {
+                    if (e.nativeEvent.oldState === State.ACTIVE) {
+                      setDocZoom(Math.min(4, Math.max(1, docZoom * Number(e.nativeEvent.scale || 1))));
+                      docPinch.setValue(1);
+                    }
+                  }}
+                >
+                  <Animated.View style={{ flex: 1, overflow: 'hidden' }}>
+                    <Animated.Image source={{ uri: /^https?:/.test(previewDocument.file_url) ? previewDocument.file_url : API_BASE + previewDocument.file_url }} style={[s.previewLargeImage, { transform: [{ scale: Animated.multiply(docPinch, docZoom) }] }]} resizeMode="contain" />
+                  </Animated.View>
+                </PinchGestureHandler>
+              ) : (
+                <Text style={s.previewDocumentText}>{previewDocument?.file_url ? 'PDF / Document' : 'Document unavailable'}</Text>
+              )}
+            </Pressable>
+          </Pressable>
+        </GestureHandlerRootView>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+const s = StyleSheet.create({
+  previewBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,.82)', justifyContent: 'center', alignItems: 'center', padding: 12 },
+  previewModal: { width: '96%', height: '90%', backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden' },
+  previewHeader: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#dbe2ea' },
+  previewTitle: { fontSize: 17, fontWeight: '900', color: '#173b67', flex: 1 },
+  previewClose: { fontSize: 28, color: '#173b67', paddingHorizontal: 10 },
+  previewLargeImage: { flex: 1, width: '100%', backgroundColor: '#f4f6f8' },
+  previewDocumentText: { flex: 1, textAlign: 'center', textAlignVertical: 'center', color: '#64748b', fontSize: 18 },
+  searchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  searchInput: { flex: 1, minHeight: 42, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingHorizontal: 12, backgroundColor: '#fff' },
+  searchButton: { backgroundColor: '#1768c5', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 7 },
+  clearSearch: { borderWidth: 1, borderColor: '#1768c5', paddingHorizontal: 14, paddingVertical: 11, borderRadius: 7 },
+  clearText: { color: '#1768c5', fontWeight: '800' },
+  listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
+  printTools: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
+  selectedCount: { color: '#17613c', fontWeight: '800' },
+  teacherCheckbox: { width: 24, height: 24, borderWidth: 2, borderColor: '#17613c', borderRadius: 4, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+  teacherCheckboxSelected: { backgroundColor: '#17613c' },
+  checkboxMark: { color: '#fff', fontWeight: '900', fontSize: 17 },
+  printAllButton: { backgroundColor: '#198754', paddingVertical: 9, paddingHorizontal: 12, borderRadius: 6 },
+  comboBox: { flex: 2, minWidth: 180, position: 'relative', zIndex: 30, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, backgroundColor: '#fff', overflow: 'visible' },
+  comboInput: { height: 48, paddingHorizontal: 12, fontSize: 16 },
+  comboOptions: { position: 'absolute', top: 48, left: 0, right: 0, zIndex: 20, maxHeight: 180, backgroundColor: '#fff', borderWidth: 1, borderColor: '#b8c4d1', borderRadius: 6 },
+  comboOption: { padding: 9, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  page: { flex: 1, backgroundColor: '#f3f7f5' },
+  content: { width: '100%', maxWidth: 980, alignSelf: 'center', padding: 16, paddingTop: 100, paddingBottom: 50 },
+  title: { fontSize: 27, fontWeight: '900', color: '#193b2c', marginTop: 6 },
+  help: { color: '#63736b', marginTop: 4, marginBottom: 16 },
+  noticeBanner: { backgroundColor: '#dcfce7', borderWidth: 1.5, borderColor: '#22c55e', borderRadius: 8, paddingVertical: 12, paddingHorizontal: 16, marginBottom: 14, alignItems: 'center' },
+  noticeBannerError: { backgroundColor: '#fee2e2', borderColor: '#ef4444' },
+  noticeText: { color: '#15803d', fontSize: 15, fontWeight: '800' },
+  noticeTextError: { color: '#b91c1c' },
+  formCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: '#d9e5dd' },
+  sectionTitle: { fontSize: 18, fontWeight: '900', color: '#214333', marginBottom: 12 },
+  formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  field: { flexGrow: 1, width: '31%', minWidth: 220 },
+  selectField: { flexGrow: 1, width: '31%', minWidth: 220, marginBottom: 10 },
+  groupTitle: { fontSize: 17, fontWeight: '900', color: '#1f3b31', marginTop: 18, marginBottom: 10, paddingBottom: 7, borderBottomWidth: 1, borderBottomColor: '#d8e2dc' },
+  groupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' },
+  copyButton: { backgroundColor: '#e8f2ff', padding: 9, borderRadius: 7 },
+  copyText: { color: '#145b9f', fontWeight: '800' },
+  addressColumns: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
+  addressColumn: { flex: 1, minWidth: 280 },
+  addressTitle: { fontSize: 15, fontWeight: '900', marginBottom: 8 },
+  addressField: { marginBottom: 9 },
+  educationRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'nowrap', gap: 5, marginBottom: 8, padding: 8, backgroundColor: '#f5f7f8', borderRadius: 8 },
+  educationSl: { width: 28, textAlign: 'center', fontWeight: '900' },
+  educationField: { flex: 1, minWidth: 120, marginBottom: 0 },
+  removeButton: { backgroundColor: '#dc3545', padding: 10, borderRadius: 6 },
+  addButton: { alignSelf: 'flex-start', backgroundColor: '#198754', padding: 10, borderRadius: 6, marginBottom: 15 },
+  teacherRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12 },
+  avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#dceee3', alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#17613c', fontSize: 18, fontWeight: '900' },
+  teacherInfo: { flex: 1 },
+  teacherName: { fontSize: 16, fontWeight: '900', color: '#233a2e' },
+  meta: { color: '#687970', marginTop: 3, fontSize: 12 },
+  teacherActions: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 5, flexShrink: 0, marginTop: 6 },
+  editButton: { backgroundColor: '#d68a00', padding: 7, borderRadius: 6 },
+  documentButton: { backgroundColor: '#6741d9', padding: 7, borderRadius: 6 },
+  resetButton: { backgroundColor: '#6741d9', borderRadius: 6, padding: 7 },
+  status: { backgroundColor: '#21834f', borderRadius: 20, padding: 7 },
+  inactive: { backgroundColor: '#b23442' },
+  white: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  cancelButton: { borderWidth: 1, borderColor: '#64748b', padding: 11, borderRadius: 8, marginTop: 7 },
+  cancelText: { textAlign: 'center', fontWeight: '800' },
+  highlightedCardWrapper: { borderWidth: 2.5, borderColor: '#0d6efd', borderRadius: 16, backgroundColor: '#eff6ff', marginBottom: 12, padding: 2 },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,.62)', alignItems: 'center', justifyContent: 'center', padding: 10 },
+  modalCard: { width: '98%', maxWidth: 1500, height: '94%', backgroundColor: '#fff', borderRadius: 8, padding: 10 },
+  documentTopbar: { backgroundColor: '#eef7ff', borderWidth: 1, borderColor: '#94a3b8', padding: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  closeButton: { backgroundColor: '#dc3545', paddingVertical: 9, paddingHorizontal: 14, borderRadius: 5 },
+  lastUpdated: { fontSize: 10, color: '#475569', textAlign: 'right' },
+  staffId: { fontSize: 17, color: '#475569', marginVertical: 10 },
+  documentGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 18, padding: 2, paddingBottom: 18 },
+  documentCard: { width: 195, minHeight: 272, borderWidth: 1, borderColor: '#aab1b8', borderRadius: 9, backgroundColor: '#eee', overflow: 'hidden' },
+  slotTitle: { fontSize: 16, textAlign: 'center', paddingVertical: 5, color: '#111827' },
+  preview: { height: 155, marginHorizontal: 18, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#c6c6c6' },
+  previewImage: { width: '100%', height: '100%', resizeMode: 'contain' },
+  noPreview: { color: '#94a3b8', fontSize: 12, textAlign: 'center' },
+  chooseButton: { height: 30, backgroundColor: '#60a5fa', justifyContent: 'center', paddingHorizontal: 6, marginTop: 8 },
+  chooseText: { fontSize: 11, color: '#0f172a' },
+  docActions: { minHeight: 42, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 7, padding: 5 },
+  uploadButton: { alignSelf: 'center', backgroundColor: '#0d6efd', paddingVertical: 11, paddingHorizontal: 22, borderRadius: 7, marginTop: 8 },
+  viewButton: { backgroundColor: '#0d6efd', padding: 7, borderRadius: 5 },
+  printButton: { backgroundColor: '#198754', padding: 7, borderRadius: 5 },
+  downloadButton: { backgroundColor: '#06b6d4', padding: 7, borderRadius: 5 },
+  deleteButton: { backgroundColor: '#b23442', padding: 8, borderRadius: 6 },
+});

@@ -11,7 +11,8 @@ async function teacherCanAccess(req,id){if(['admin','super_admin'].includes(req.
 const teacherDetailsSchemaReady = pool.query([
   "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS profile_details JSONB NOT NULL DEFAULT '{}'::jsonb",
   "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS education_details JSONB NOT NULL DEFAULT '[]'::jsonb",
-  "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS profile_edit_count INTEGER NOT NULL DEFAULT 0"
+  "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS profile_edit_count INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS residential_type VARCHAR(50)"
 ].join(';'));
 
 function firstNameLogin(name) {
@@ -30,7 +31,7 @@ router.get('/availability',auth,allow('super_admin','admin'),asyncHandler(async(
 router.patch('/me', auth, allow('teacher'), asyncHandler(async(req,res)=>{
   await teacherDetailsSchemaReady;
   const b=req.body||{};
-  const allowed=['staff_id','name','designation','qualification','mobile','whatsapp','email','address','gender','date_of_birth','joining_date','subject','profile_details','education_details'];
+  const allowed=['staff_id','name','designation','qualification','mobile','whatsapp','email','address','gender','date_of_birth','joining_date','subject','profile_details','education_details','residential_type'];
   const set=[],values=[];
   for(const f of allowed){
     if(b[f]===undefined)continue;
@@ -54,7 +55,7 @@ router.patch('/me', auth, allow('teacher'), asyncHandler(async(req,res)=>{
 router.get('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res)=>{
   await teacherDetailsSchemaReady;
   const result = await pool.query(`
-    SELECT t.*, u.login_id, u.full_name, u.role AS user_role, u.is_active AS user_active,
+    SELECT t.*, COALESCE(t.residential_type, t.profile_details->>'residential_type', '') AS residential_type, u.login_id, u.full_name, u.role AS user_role, u.is_active AS user_active,
       COALESCE((
         SELECT json_agg(DISTINCT subject_name)
         FROM (
@@ -105,18 +106,24 @@ router.post('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res
       INSERT INTO users(login_id,password_hash,full_name,role)
       VALUES($1,$2,$3,'teacher') RETURNING id
     `, [loginId, hash, name]);
+    const residentialType = String(body.residential_type || body.profile_details?.residential_type || '').trim() || null;
+    const profileDetails = {
+      ...(body.profile_details || {}),
+      residential_type: residentialType || ''
+    };
     const teacher = await client.query(`
       INSERT INTO teachers(
         user_id,staff_id,name,designation,subject,mobile,whatsapp,gender,email,address,
-        date_of_birth,joining_date,qualification,photo_url,profile_details,education_details
-      ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        date_of_birth,joining_date,qualification,photo_url,profile_details,education_details,residential_type
+      ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
       RETURNING *
     `, [
       user.rows[0].id, staffId, name, body.designation || null, body.subject || null,
       body.mobile || null, body.whatsapp || null, body.gender || null, body.email || null,
-      body.address || null, body.date_of_birth || null, body.joining_date || null,
+      body.address || null, String(body.date_of_birth || '').trim() || null, String(body.joining_date || '').trim() || null,
       body.qualification || null, body.photo_url || null,
-      JSON.stringify(body.profile_details || {}), JSON.stringify(Array.isArray(body.education_details) ? body.education_details : []),
+      JSON.stringify(profileDetails), JSON.stringify(Array.isArray(body.education_details) ? body.education_details : []),
+      residentialType
     ]);
     await client.query('COMMIT');
     res.status(201).json({
@@ -147,14 +154,32 @@ router.put('/:id', auth, allow('super_admin','admin'), asyncHandler(async (req,r
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
+    const residentialType = body.residential_type !== undefined
+      ? (String(body.residential_type || '').trim() || null)
+      : (body.profile_details?.residential_type !== undefined
+          ? (String(body.profile_details.residential_type || '').trim() || null)
+          : (old.residential_type || old.profile_details?.residential_type || null));
+    const profileDetails = {
+      ...(old.profile_details || {}),
+      ...(body.profile_details || {}),
+      residential_type: residentialType || ''
+    };
+    const cleanDate = (val, fallback) => {
+      if (val === undefined) return (fallback && String(fallback).trim()) ? String(fallback).trim() : null;
+      const s = String(val || '').trim();
+      return s ? s : null;
+    };
+    const dob = cleanDate(body.date_of_birth, old.date_of_birth);
+    const joiningDate = cleanDate(body.joining_date, old.joining_date);
+
     const teacher=await client.query(
-      'UPDATE teachers SET staff_id=$1,name=$2,designation=$3,subject=$4,mobile=$5,whatsapp=$6,gender=$7,email=$8,address=$9,date_of_birth=$10,joining_date=$11,qualification=$12,profile_details=$13,education_details=$14,is_active=$15 WHERE id=$16 RETURNING *',
+      'UPDATE teachers SET staff_id=$1,name=$2,designation=$3,subject=$4,mobile=$5,whatsapp=$6,gender=$7,email=$8,address=$9,date_of_birth=$10,joining_date=$11,qualification=$12,profile_details=$13,education_details=$14,is_active=$15,residential_type=$16 WHERE id=$17 RETURNING *',
       [staffId,name,body.designation??old.designation,body.subject??old.subject,body.mobile??old.mobile,
        body.whatsapp??old.whatsapp,body.gender??old.gender,body.email??old.email,body.address??old.address,
-       body.date_of_birth??old.date_of_birth,body.joining_date??old.joining_date,body.qualification??old.qualification,
-       JSON.stringify(body.profile_details??old.profile_details??{}),
+       dob,joiningDate,body.qualification??old.qualification,
+       JSON.stringify(profileDetails),
        JSON.stringify(Array.isArray(body.education_details)?body.education_details:(old.education_details||[])),
-       active,req.params.id]
+       active,residentialType,req.params.id]
     );
     if(old.login_user_id){
       const loginId=String(body.login_id??old.login_id).trim().toLowerCase();

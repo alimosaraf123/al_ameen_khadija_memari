@@ -1,66 +1,944 @@
-import React, {useEffect, useState} from 'react';
-import {Image, ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import {router} from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import AcademyHeader from '../components/AcademyHeader';
-import {Field} from '../components/ui';
-import {api,API_BASE} from '../lib/api';
+import { api, API_BASE } from '../lib/api';
 
-type Staff = {id:number; staff_id:string; name:string; photo_url?:string; designation?:string; status?:string; attendance?:Record<string,string>; present?:number; absent?:number; late?:number; leave?:number; recorded?:number};
-const statuses = ['Present','Absent','Late','Leave'];
-const today = () => {const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
+type DayCol = {
+  date: string;
+  day: string;
+  number: number;
+};
+
+type StaffMember = {
+  id: number;
+  staff_id: string;
+  name: string;
+  photo_url?: string;
+  designation?: string;
+  attendance: Record<string, string>;
+};
+
+const MONTHS = [
+  { value: '01', label: 'January' },
+  { value: '02', label: 'February' },
+  { value: '03', label: 'March' },
+  { value: '04', label: 'April' },
+  { value: '05', label: 'May' },
+  { value: '06', label: 'June' },
+  { value: '07', label: 'July' },
+  { value: '08', label: 'August' },
+  { value: '09', label: 'September' },
+  { value: '10', label: 'October' },
+  { value: '11', label: 'November' },
+  { value: '12', label: 'December' },
+];
+
+const YEARS = ['2024', '2025', '2026', '2027', '2028', '2029', '2030'];
+
+const STATUS_CYCLE = ['Present', 'Absent', 'Late', 'Leave', ''];
+
+const getTodayDateStr = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 export default function TeacherAttendance() {
-  const [date,setDate]=useState(today);
-  const [month,setMonth]=useState(today().slice(0,7));
-  const [staff,setStaff]=useState<Staff[]>([]);
-  const [report,setReport]=useState<Staff[]>([]);
-  const [days,setDays]=useState<any[]>([]);
-  const [loadedDate,setLoadedDate]=useState('');
-  const [reportMonth,setReportMonth]=useState('');
-  const [gridDirty,setGridDirty]=useState(false);
-  const [busy,setBusy]=useState(false);
-  const [message,setMessage]=useState('');
-  const [error,setError]=useState('');
-  const load = async (monthly=false) => {
-    setBusy(true); setError(''); setMessage('');
+  const todayStr = useMemo(() => getTodayDateStr(), []);
+  const todayObj = useMemo(() => new Date(), []);
+
+  const [selectedMonth, setSelectedMonth] = useState(() =>
+    String(todayObj.getMonth() + 1).padStart(2, '0')
+  );
+  const [selectedYear, setSelectedYear] = useState(() =>
+    String(todayObj.getFullYear())
+  );
+
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
+  const [yearPickerOpen, setYearPickerOpen] = useState(false);
+
+  const [days, setDays] = useState<DayCol[]>([]);
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [savingCell, setSavingCell] = useState<string | null>(null);
+
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
+
+  const monthParam = `${selectedYear}-${selectedMonth}`;
+
+  const loadGrid = async (targetMonth: string) => {
+    setLoading(true);
+    setError('');
     try {
-      const data=await api(monthly ? `/api/teachers/attendance/monthly-grid?month=${encodeURIComponent(month)}` : `/api/teachers/attendance?date=${encodeURIComponent(date)}`);
-      if(monthly){setReport(data.staff);setDays(data.days||[]);setReportMonth(month);}else{setStaff(data.staff);setLoadedDate(date);}
-    }catch(e:any){setError(e.message);}finally{setBusy(false);}
+      const data = await api(
+        `/api/teachers/attendance/monthly-grid?month=${encodeURIComponent(targetMonth)}`
+      );
+      if (data.success) {
+        setDays(data.days || []);
+        setStaffList(data.staff || []);
+        setPage(1);
+      } else {
+        setError(data.message || 'Failed to load attendance');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load attendance');
+    } finally {
+      setLoading(false);
+    }
   };
-  useEffect(()=>{void load(true);},[]);
-  const save=async()=>{
-    if(staff.some(p=>!p.status)){setError('Select a status for every staff member.');return;}
-    setBusy(true);setError('');setMessage('');
-    try {await api('/api/teachers/attendance',{method:'POST',body:JSON.stringify({date:loadedDate,entries:staff.map(p=>({id:p.id,status:p.status}))})});setMessage(`Attendance saved for ${loadedDate}.`);setReportMonth('');}
-    catch(e:any){setError(e.message);}finally{setBusy(false);}
+
+  useEffect(() => {
+    void loadGrid(monthParam);
+  }, []);
+
+  const handleGo = () => {
+    void loadGrid(monthParam);
   };
-  const cycleGridStatus=(id:number,dateKey:string)=>{const order=['Present','Absent','Late','Leave',''];setReport(rows=>rows.map(row=>row.id===id?{...row,attendance:{...(row.attendance||{}),[dateKey]:order[(order.indexOf(row.attendance?.[dateKey]||'')+1)%order.length]}}:row));setGridDirty(true);};
-  const saveGrid=async()=>{setBusy(true);setError('');setMessage('');try{for(const day of days){const entries=report.map(row=>({id:row.id,status:row.attendance?.[String(day.date).slice(0,10)]})).filter(x=>x.status);if(entries.length)await api('/api/teachers/attendance',{method:'POST',body:JSON.stringify({date:String(day.date).slice(0,10),entries})});}setGridDirty(false);setMessage(`Monthly attendance saved for ${reportMonth}.`);}catch(e:any){setError(e.message);}finally{setBusy(false);}};
-  return <SafeAreaView style={s.page}><ScrollView contentContainerStyle={s.content}>
-    <AcademyHeader/><TouchableOpacity onPress={()=>router.push('/teachers' as any)}><Text style={s.link}>Back to Teachers</Text></TouchableOpacity>
-    <Text style={s.title}>Teacher & Staff Attendance</Text>
-    <Text>Daily attendance for all staff registered in Teachers & Staff.</Text>
-    {!!error && <Text accessibilityRole="alert" style={s.error}>{error}</Text>}
-    {!!message && <Text style={s.success}>{message}</Text>}
-    <View style={s.card}><Text style={s.heading}>Monthly Attendance</Text><Text>Month (YYYY-MM)</Text><Field value={month} editable={!busy} onChangeText={(v:string)=>{setMonth(v);setReportMonth('');}} placeholder="YYYY-MM"/><TouchableOpacity disabled={busy} style={s.button} onPress={()=>load(true)}><Text style={s.white}>{busy?'Please wait...':'Go'}</Text></TouchableOpacity>{!!reportMonth&&<><ScrollView style={s.gridScroll} horizontal showsHorizontalScrollIndicator persistentScrollbar><View><View style={s.row}><Text style={[s.fixedCell,s.head]}>#</Text><Text style={[s.photoCell,s.head]}>Photo</Text><Text style={[s.idCell,s.head]}>ID</Text><Text style={[s.nameCell,s.head]}>Staff Name</Text>{days.map(day=><Text key={day.date} style={[s.dayCell,s.head]}>{day.day}{'\n'}{day.number}</Text>)}</View>{report.map((p,i)=><View key={p.id} style={s.row}><Text style={s.fixedCell}>{i+1}</Text><View style={s.photoCell}>{p.photo_url?<Image source={{uri:/^https?:/.test(p.photo_url)?p.photo_url:API_BASE+p.photo_url}} style={s.photo}/>:<Text style={s.photoPlaceholder}>-</Text>}</View><Text style={s.idCell}>{p.staff_id}</Text><View style={s.nameCell}><Text>{p.name}</Text><Text style={s.role}>{p.designation||'Staff'}</Text></View>{days.map(day=>{const key=String(day.date).slice(0,10);const v=p.attendance?.[key];return <TouchableOpacity key={key} onPress={()=>cycleGridStatus(p.id,key)} style={s.dayCell}><Text style={[v==='Present'&&s.present,v==='Absent'&&s.absent,v==='Late'&&s.late,v==='Leave'&&s.leave]}>{v==='Present'?'P':v==='Absent'?'A':v==='Late'?'L':v==='Leave'?'LV':''}</Text></TouchableOpacity>})}</View>)}</View></ScrollView>{gridDirty&&<TouchableOpacity disabled={busy} style={s.button} onPress={saveGrid}><Text style={s.white}>Save Monthly Attendance</Text></TouchableOpacity>}</>}</View>
-    <View style={s.card}><Text style={s.heading}>Daily Entry</Text><Text>Date (YYYY-MM-DD)</Text>
-      <Field value={date} editable={!busy} onChangeText={(v:string)=>{setDate(v);setLoadedDate('');setStaff([]);}} placeholder="YYYY-MM-DD"/>
-      <TouchableOpacity disabled={busy} style={s.button} onPress={()=>load()}><Text style={s.white}>{busy?'Please wait...':'Load Attendance'}</Text></TouchableOpacity>
-      {!!loadedDate && <><Text style={s.heading}>{loadedDate} | {staff.length} staff</Text>
-        {staff.map(person=><View key={person.id} style={s.person}><Text style={s.heading}>{person.name}</Text><Text>Staff ID: {person.staff_id}</Text>
-          <View style={s.options}>{statuses.map(status=><TouchableOpacity key={status} disabled={busy} accessibilityRole="radio" accessibilityState={{checked:person.status===status}} style={[s.option,person.status===status&&s.selected]} onPress={()=>setStaff(rows=>rows.map(row=>row.id===person.id?{...row,status}:row))}><Text style={person.status===status?s.white:undefined}>{status}</Text></TouchableOpacity>)}</View>
-        </View>)}
-        {staff.length>0 && <TouchableOpacity disabled={busy} style={s.button} onPress={save}><Text style={s.white}>Save Attendance</Text></TouchableOpacity>}
-      </>}
-    </View>
-    <View style={s.card}><Text style={s.heading}>Monthly Report</Text><Text>Month (YYYY-MM)</Text>
-      <Field value={month} editable={!busy} onChangeText={(v:string)=>{setMonth(v);setReportMonth('');}} placeholder="YYYY-MM"/>
-      <TouchableOpacity disabled={busy} style={s.button} onPress={()=>load(true)}><Text style={s.white}>View Monthly Report</Text></TouchableOpacity>
-      {!!reportMonth && <><Text style={s.heading}>Report: {reportMonth}</Text><ScrollView horizontal><View><View style={s.row}><Text style={[s.fixedCell,s.head]}>#</Text><Text style={[s.photoCell,s.head]}>Photo</Text><Text style={[s.idCell,s.head]}>ID</Text><Text style={[s.nameCell,s.head]}>Staff Name</Text>{days.map(day=><Text key={day.date} style={[s.dayCell,s.head]}>{day.day}{'\n'}{day.number}</Text>)}</View>
-        {report.map((p,index)=><View key={p.id} style={s.row}><Text style={s.fixedCell}>{index+1}</Text><View style={s.photoCell}><Text style={s.photoPlaceholder}>{p.photo_url?'●':'○'}</Text></View><Text style={s.idCell}>{p.staff_id}</Text><View style={s.nameCell}><Text>{p.name}</Text><Text style={s.role}>{p.designation||'Staff'}</Text></View>{days.map(day=>{const value=p.attendance?.[String(day.date).slice(0,10)];return <Text key={day.date} style={[s.dayCell,value==='Present'&&s.present,value==='Absent'&&s.absent,value==='Late'&&s.late,value==='Leave'&&s.leave]}>{value==='Present'?'P':value==='Absent'?'A':value==='Late'?'L':value==='Leave'?'LV':''}</Text>})}</View>)}
-      </View></ScrollView></>}
-    </View>
-  </ScrollView></SafeAreaView>;
+
+  const totalPages = Math.max(1, Math.ceil(staffList.length / PAGE_SIZE));
+  const paginatedStaff = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return staffList.slice(start, start + PAGE_SIZE);
+  }, [staffList, page]);
+
+  const cycleStatus = async (staffId: number, dateStr: string) => {
+    if (dateStr > todayStr) return; // Future days are disabled
+
+    const currentStaff = staffList.find(s => s.id === staffId);
+    const currentVal = currentStaff?.attendance?.[dateStr] || '';
+    const currentIndex = STATUS_CYCLE.indexOf(currentVal);
+    const nextVal = STATUS_CYCLE[(currentIndex + 1) % STATUS_CYCLE.length];
+
+    // Optimistic UI update
+    setStaffList(prev =>
+      prev.map(item =>
+        item.id === staffId
+          ? {
+              ...item,
+              attendance: {
+                ...(item.attendance || {}),
+                [dateStr]: nextVal,
+              },
+            }
+          : item
+      )
+    );
+
+    const cellKey = `${staffId}_${dateStr}`;
+    setSavingCell(cellKey);
+    try {
+      await api('/api/teachers/attendance', {
+        method: 'POST',
+        body: JSON.stringify({
+          date: dateStr,
+          teacher_id: staffId,
+          status: nextVal,
+        }),
+      });
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to save attendance');
+      // Revert on error
+      setStaffList(prev =>
+        prev.map(item =>
+          item.id === staffId
+            ? {
+                ...item,
+                attendance: {
+                  ...(item.attendance || {}),
+                  [dateStr]: currentVal,
+                },
+              }
+            : item
+        )
+      );
+    } finally {
+      setSavingCell(null);
+    }
+  };
+
+  const getStatusSymbol = (status?: string) => {
+    if (!status) return '';
+    switch (status) {
+      case 'Present':
+        return 'P';
+      case 'Absent':
+        return 'A';
+      case 'Late':
+        return 'L';
+      case 'Leave':
+        return 'LV';
+      default:
+        return '';
+    }
+  };
+
+  const selectedMonthLabel =
+    MONTHS.find(m => m.value === selectedMonth)?.label || 'November';
+
+  return (
+    <SafeAreaView style={s.page}>
+      <ScrollView contentContainerStyle={s.content}>
+        <AcademyHeader />
+
+        <View style={s.topNav}>
+          <TouchableOpacity
+            style={s.backBtn}
+            onPress={() => router.push('/teachers' as any)}
+          >
+            <Text style={s.backBtnText}>← Back to Teachers</Text>
+          </TouchableOpacity>
+          <Text style={s.pageTitle}>Staff Attendance</Text>
+        </View>
+
+        {!!error && (
+          <View style={s.errorBox}>
+            <Text style={s.errorText}>{error}</Text>
+          </View>
+        )}
+
+        {/* Toolbar matching Image 1 */}
+        <View style={s.toolbar}>
+          <View style={s.filterGroup}>
+            {/* Month Dropdown */}
+            <TouchableOpacity
+              style={s.dropdownBtn}
+              onPress={() => setMonthPickerOpen(true)}
+            >
+              <Text style={s.dropdownBtnText}>{selectedMonthLabel}</Text>
+              <Text style={s.dropdownArrow}>⌵</Text>
+            </TouchableOpacity>
+
+            {/* Year Dropdown */}
+            <TouchableOpacity
+              style={s.dropdownBtn}
+              onPress={() => setYearPickerOpen(true)}
+            >
+              <Text style={s.dropdownBtnText}>{selectedYear}</Text>
+              <Text style={s.dropdownArrow}>⌵</Text>
+            </TouchableOpacity>
+
+            {/* Go Button */}
+            <TouchableOpacity
+              style={s.goBtn}
+              onPress={handleGo}
+              disabled={loading}
+            >
+              <Text style={s.goBtnText}>{loading ? '...' : 'Go'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Pagination matching Image 1 */}
+          <View style={s.paginationGroup}>
+            <TouchableOpacity
+              disabled={page <= 1}
+              onPress={() => setPage(p => Math.max(1, p - 1))}
+              style={[s.pageArrowBtn, page <= 1 && s.disabledBtn]}
+            >
+              <Text style={s.pageArrowText}>←</Text>
+            </TouchableOpacity>
+            <Text style={s.pageStatusText}>
+              Page {page} of {totalPages}
+            </Text>
+            <TouchableOpacity
+              disabled={page >= totalPages}
+              onPress={() => setPage(p => Math.min(totalPages, p + 1))}
+              style={[s.pageArrowBtn, page >= totalPages && s.disabledBtn]}
+            >
+              <Text style={s.pageArrowText}>→</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Attendance Grid Card */}
+        <View style={s.card}>
+          {loading && !staffList.length ? (
+            <View style={s.centerLoading}>
+              <ActivityIndicator size="large" color="#0d6efd" />
+              <Text style={s.loadingText}>Loading attendance sheet...</Text>
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator
+              style={s.horizontalScroll}
+            >
+              <View>
+                {/* Header Row */}
+                <View style={s.row}>
+                  <View style={[s.colHash, s.thCell]}>
+                    <Text style={s.thText}>#</Text>
+                  </View>
+                  <View style={[s.colPhoto, s.thCell]}>
+                    <Text style={s.thText}>Photo</Text>
+                  </View>
+                  <View style={[s.colId, s.thCell]}>
+                    <Text style={s.thText}>ID</Text>
+                  </View>
+                  <View style={[s.colName, s.thCell]}>
+                    <Text style={[s.thText, { textAlign: 'left', paddingLeft: 4 }]}>
+                      Staff Name
+                    </Text>
+                  </View>
+
+                  {/* Day Header Columns */}
+                  {days.map(day => {
+                    const isToday = day.date === todayStr;
+                    return (
+                      <View
+                        key={day.date}
+                        style={[
+                          s.colDay,
+                          s.thCell,
+                          isToday && s.todayHeaderCell,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            s.thDayName,
+                            isToday && s.todayHeaderText,
+                          ]}
+                        >
+                          {day.day}
+                        </Text>
+                        <Text
+                          style={[
+                            s.thDayNumber,
+                            isToday && s.todayHeaderText,
+                          ]}
+                        >
+                          {day.number}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+
+                {/* Body Rows */}
+                {paginatedStaff.map((person, idx) => {
+                  const rowNumber = (page - 1) * PAGE_SIZE + idx + 1;
+                  return (
+                    <View key={person.id} style={s.row}>
+                      {/* # Col */}
+                      <View style={[s.colHash, s.fixedTdCell]}>
+                        <Text style={s.hashText}>{rowNumber}</Text>
+                      </View>
+
+                      {/* Photo Col */}
+                      <View style={[s.colPhoto, s.fixedTdCell]}>
+                        {person.photo_url ? (
+                          <Image
+                            source={{
+                              uri: /^https?:/.test(person.photo_url)
+                                ? person.photo_url
+                                : API_BASE + person.photo_url,
+                            }}
+                            style={s.avatarImg}
+                          />
+                        ) : (
+                          <View style={s.avatarPlaceholder}>
+                            <Text style={s.avatarLetter}>
+                              {person.name.trim().charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {/* ID Col */}
+                      <View style={[s.colId, s.fixedTdCell]}>
+                        <Text style={s.idText}>{person.staff_id}</Text>
+                      </View>
+
+                      {/* Name Col */}
+                      <View style={[s.colName, s.fixedTdCell, s.nameCellContent]}>
+                        <Text style={s.nameText} numberOfLines={1}>
+                          {person.name}
+                        </Text>
+                        <Text style={s.designationText} numberOfLines={1}>
+                          {person.designation || 'Staff'}
+                        </Text>
+                      </View>
+
+                      {/* Day Cells */}
+                      {days.map(day => {
+                        const dateKey = day.date;
+                        const isFuture = dateKey > todayStr;
+                        const isToday = dateKey === todayStr;
+                        const val = person.attendance?.[dateKey];
+                        const symbol = getStatusSymbol(val);
+                        const isSavingThis = savingCell === `${person.id}_${dateKey}`;
+
+                        if (isFuture) {
+                          return (
+                            <View
+                              key={dateKey}
+                              style={[s.colDay, s.tdCell, s.futureDayCell]}
+                            />
+                          );
+                        }
+
+                        return (
+                          <TouchableOpacity
+                            key={dateKey}
+                            activeOpacity={0.65}
+                            onPress={() => cycleStatus(person.id, dateKey)}
+                            style={[
+                              s.colDay,
+                              s.tdCell,
+                              s.activeDayCell,
+                              isToday && s.todayBodyCell,
+                            ]}
+                          >
+                            {isSavingThis ? (
+                              <ActivityIndicator size="small" color="#0d6efd" />
+                            ) : (
+                              <Text
+                                style={[
+                                  s.statusSymbolText,
+                                  symbol === 'A' && s.absentColor,
+                                  symbol === 'P' && s.presentColor,
+                                  (symbol === 'L' || symbol === 'LV') && s.lateColor,
+                                ]}
+                              >
+                                {symbol}
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          )}
+
+          {/* Quick legend footer */}
+          <View style={s.footerLegend}>
+            <Text style={s.legendTitle}>Legend / Click to change:</Text>
+            <View style={s.legendItem}>
+              <Text style={[s.legendBadge, s.presentColor]}>P</Text>
+              <Text style={s.legendLabel}>Present</Text>
+            </View>
+            <View style={s.legendItem}>
+              <Text style={[s.legendBadge, s.absentColor]}>A</Text>
+              <Text style={s.legendLabel}>Absent</Text>
+            </View>
+            <View style={s.legendItem}>
+              <Text style={[s.legendBadge, s.lateColor]}>L</Text>
+              <Text style={s.legendLabel}>Late</Text>
+            </View>
+            <View style={s.legendItem}>
+              <Text style={[s.legendBadge, s.lateColor]}>LV</Text>
+              <Text style={s.legendLabel}>Leave</Text>
+            </View>
+            <Text style={s.autoSaveHint}>
+              • Tap any cell to cycle status (Auto-saves instantly)
+            </Text>
+          </View>
+        </View>
+
+        {/* Month Selection Modal */}
+        <Modal
+          visible={monthPickerOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setMonthPickerOpen(false)}
+        >
+          <Pressable
+            style={s.modalBackdrop}
+            onPress={() => setMonthPickerOpen(false)}
+          >
+            <View style={s.modalBox}>
+              <Text style={s.modalTitle}>Select Month</Text>
+              {MONTHS.map(m => (
+                <TouchableOpacity
+                  key={m.value}
+                  style={[
+                    s.modalOption,
+                    selectedMonth === m.value && s.modalOptionSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedMonth(m.value);
+                    setMonthPickerOpen(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      s.modalOptionText,
+                      selectedMonth === m.value && s.modalOptionTextSelected,
+                    ]}
+                  >
+                    {m.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Pressable>
+        </Modal>
+
+        {/* Year Selection Modal */}
+        <Modal
+          visible={yearPickerOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setYearPickerOpen(false)}
+        >
+          <Pressable
+            style={s.modalBackdrop}
+            onPress={() => setYearPickerOpen(false)}
+          >
+            <View style={s.modalBox}>
+              <Text style={s.modalTitle}>Select Year</Text>
+              {YEARS.map(yr => (
+                <TouchableOpacity
+                  key={yr}
+                  style={[
+                    s.modalOption,
+                    selectedYear === yr && s.modalOptionSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedYear(yr);
+                    setYearPickerOpen(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      s.modalOptionText,
+                      selectedYear === yr && s.modalOptionTextSelected,
+                    ]}
+                  >
+                    {yr}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Pressable>
+        </Modal>
+      </ScrollView>
+    </SafeAreaView>
+  );
 }
-const s=StyleSheet.create({page:{flex:1,backgroundColor:'#f3f6fa'},content:{padding:16,width:'100%',maxWidth:1500,alignSelf:'center'},title:{fontSize:24,fontWeight:'800',marginVertical:14},heading:{fontWeight:'700',fontSize:16,marginVertical:10},link:{color:'#1764a5',paddingVertical:12},card:{backgroundColor:'#fff',padding:16,borderRadius:10,marginTop:16},gridScroll:{maxHeight:650,borderWidth:1,borderColor:'#8c98a5'},button:{backgroundColor:'#1665bb',padding:14,borderRadius:7,alignItems:'center',marginVertical:8},white:{color:'#fff',fontWeight:'700'},error:{color:'#b42318',padding:12},success:{color:'#167044',padding:12},person:{borderBottomWidth:1,borderColor:'#dce2eb',paddingBottom:12},options:{flexDirection:'row',flexWrap:'wrap',gap:8,marginTop:10},option:{padding:10,borderWidth:1,borderColor:'#1665bb',borderRadius:6},selected:{backgroundColor:'#1665bb'},row:{flexDirection:'row'},head:{fontWeight:'800',backgroundColor:'#d3b9a0'},fixedCell:{width:45,padding:10,borderWidth:.5,borderColor:'#8c98a5',textAlign:'center'},photoCell:{width:68,padding:8,borderWidth:.5,borderColor:'#8c98a5',textAlign:'center'},photo:{width:42,height:42,borderRadius:21,alignSelf:'center'},photoPlaceholder:{fontSize:24,color:'#64748b'},idCell:{width:90,padding:10,borderWidth:.5,borderColor:'#8c98a5',textAlign:'center'},nameCell:{width:210,padding:10,borderWidth:.5,borderColor:'#8c98a5'},dayCell:{width:68,minHeight:58,padding:9,borderWidth:.5,borderColor:'#8c98a5',textAlign:'center'},role:{fontSize:12,color:'#526273',marginTop:4},present:{color:'#111',fontWeight:'800'},absent:{color:'#b42318',fontWeight:'800'},late:{color:'#b46a00',fontWeight:'800'},leave:{color:'#1764a5',fontWeight:'800'}});
+
+const s = StyleSheet.create({
+  page: {
+    flex: 1,
+    backgroundColor: '#f3f6fa',
+  },
+  content: {
+    padding: 12,
+    width: '100%',
+    maxWidth: 1600,
+    alignSelf: 'center',
+    paddingBottom: 60,
+  },
+  topNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginVertical: 10,
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  backBtn: {
+    backgroundColor: '#0d6efd',
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 6,
+  },
+  backBtnText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  pageTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#1e293b',
+  },
+  errorBox: {
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    padding: 10,
+    borderRadius: 6,
+    marginBottom: 10,
+  },
+  errorText: {
+    color: '#b91c1c',
+    fontWeight: '700',
+  },
+
+  // Toolbar
+  toolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    marginBottom: 10,
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  filterGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#94a3b8',
+    borderRadius: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minWidth: 110,
+    height: 36,
+  },
+  dropdownBtnText: {
+    fontSize: 14,
+    color: '#0f172a',
+    fontWeight: '600',
+  },
+  dropdownArrow: {
+    fontSize: 13,
+    color: '#475569',
+    marginLeft: 6,
+  },
+  goBtn: {
+    backgroundColor: '#0d6efd',
+    paddingHorizontal: 18,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 4,
+  },
+  goBtnText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+
+  // Pagination
+  paginationGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#94a3b8',
+    borderRadius: 4,
+    backgroundColor: '#ffffff',
+    overflow: 'hidden',
+    height: 34,
+  },
+  pageArrowBtn: {
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100%',
+    backgroundColor: '#f8fafc',
+  },
+  pageArrowText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1e293b',
+  },
+  pageStatusText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+    paddingHorizontal: 10,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  disabledBtn: {
+    opacity: 0.35,
+  },
+
+  // Card & Table
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#94a3b8',
+    overflow: 'hidden',
+  },
+  centerLoading: {
+    padding: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  horizontalScroll: {
+    width: '100%',
+  },
+  row: {
+    flexDirection: 'row',
+  },
+
+  // Column widths
+  colHash: {
+    width: 44,
+  },
+  colPhoto: {
+    width: 60,
+  },
+  colId: {
+    width: 72,
+  },
+  colName: {
+    width: 200,
+  },
+  colDay: {
+    width: 46,
+  },
+
+  // TH Header
+  thCell: {
+    backgroundColor: '#caa98a', // Tan/brown from Image 1
+    borderWidth: 0.5,
+    borderColor: '#71717a',
+    minHeight: 46,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  thText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#000000',
+    textAlign: 'center',
+  },
+  thDayName: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#000000',
+    lineHeight: 14,
+    textAlign: 'center',
+  },
+  thDayNumber: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#000000',
+    lineHeight: 15,
+    textAlign: 'center',
+  },
+
+  // Today Header Highlight
+  todayHeaderCell: {
+    backgroundColor: '#38bdf8', // Bright sky blue / cyan from Image 1
+  },
+  todayHeaderText: {
+    color: '#000000',
+    fontWeight: '900',
+  },
+
+  // Fixed Left TD Cells (Pastel blue background #b9d5f5 from Image 1)
+  fixedTdCell: {
+    backgroundColor: '#b9d5f5',
+    borderWidth: 0.5,
+    borderColor: '#8c98a5',
+    minHeight: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  hashText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#000000',
+    textAlign: 'center',
+  },
+  avatarImg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#475569',
+  },
+  avatarPlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#64748b',
+  },
+  avatarLetter: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1e293b',
+  },
+  idText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#000000',
+    textAlign: 'center',
+  },
+  nameCellContent: {
+    alignItems: 'flex-start',
+    paddingHorizontal: 8,
+    justifyContent: 'center',
+  },
+  nameText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  designationText: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '500',
+    marginTop: 2,
+  },
+
+  // Day TD Cells
+  tdCell: {
+    borderWidth: 0.5,
+    borderColor: '#8c98a5',
+    minHeight: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  activeDayCell: {
+    backgroundColor: '#ffffff',
+  },
+  todayBodyCell: {
+    backgroundColor: '#ffffff',
+  },
+  futureDayCell: {
+    backgroundColor: '#cbd5e1', // Solid grey for future days from Image 1
+  },
+  statusSymbolText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#000000',
+    textAlign: 'center',
+  },
+  presentColor: {
+    color: '#000000',
+  },
+  absentColor: {
+    color: '#000000',
+  },
+  lateColor: {
+    color: '#000000',
+  },
+
+  // Footer Legend
+  footerLegend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#f8fafc',
+    borderTopWidth: 1,
+    borderColor: '#cbd5e1',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  legendTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  legendBadge: {
+    fontSize: 13,
+    fontWeight: '900',
+    borderWidth: 1,
+    borderColor: '#94a3b8',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 3,
+    backgroundColor: '#fff',
+  },
+  legendLabel: {
+    fontSize: 12,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  autoSaveHint: {
+    fontSize: 12,
+    color: '#059669',
+    fontWeight: '700',
+    marginLeft: 'auto',
+  },
+
+  // Modal
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalBox: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    width: '100%',
+    maxWidth: 280,
+    maxHeight: '80%',
+    padding: 12,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingBottom: 6,
+  },
+  modalOption: {
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 4,
+  },
+  modalOptionSelected: {
+    backgroundColor: '#e0f2fe',
+  },
+  modalOptionText: {
+    fontSize: 14,
+    color: '#334155',
+    fontWeight: '500',
+  },
+  modalOptionTextSelected: {
+    color: '#0284c7',
+    fontWeight: '800',
+  },
+});

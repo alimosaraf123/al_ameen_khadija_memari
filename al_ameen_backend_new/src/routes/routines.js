@@ -13,13 +13,14 @@ const xml=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>
 const short=(v,n=24)=>{const s=String(v||'-');return s.length>n?s.slice(0,n-1)+'…':s};
 async function teacherOnlyGridData(data){
  const rows=await pool.query(`SELECT t.id FROM teachers t LEFT JOIN users u ON u.id=t.user_id
-  WHERE t.is_active=TRUE AND COALESCE(u.is_active,TRUE)=TRUE AND CASE
-   WHEN NULLIF(LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))),'') IS NOT NULL
-     OR NULLIF(LOWER(TRIM(COALESCE(t.profile_details->>'type_of_staff',''))),'') IS NOT NULL
-   THEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) IN ('teacher','teachers')
-     OR LOWER(TRIM(COALESCE(t.profile_details->>'type_of_staff',''))) IN ('teacher','teachers')
-   ELSE LOWER(COALESCE(u.role,''))='teacher' OR LOWER(COALESCE(t.designation,'')) LIKE '%teacher%'
-  END`);
+  WHERE t.is_active=TRUE AND COALESCE(u.is_active,TRUE)=TRUE AND (
+    LOWER(COALESCE(t.profile_details->>'staff_category','')) LIKE '%teach%'
+    OR LOWER(COALESCE(t.designation,'')) LIKE '%teach%'
+    OR LOWER(COALESCE(t.profile_details->>'staff_type','')) LIKE '%teach%'
+    OR LOWER(COALESCE(t.profile_details->>'type_of_staff','')) LIKE '%teach%'
+    OR LOWER(COALESCE(u.role,'')) = 'teacher'
+  ) AND LOWER(COALESCE(t.designation,'')) NOT LIKE '%nonteach%'
+  AND LOWER(COALESCE(t.profile_details->>'staff_category','')) NOT LIKE '%nonteach%'`);
  const ids=new Set(rows.rows.map(row=>String(row.id)));
  const source=data&&typeof data==='object'?data:{};
  const cells=Object.fromEntries(Object.entries(source.cells||{}).filter(([,cell])=>ids.has(String(cell?.teacher_id||''))));
@@ -190,13 +191,14 @@ async function generateMonthlyReportData(month){
  const sessionName=`${y}-${Number(String(y).slice(2))+1}`;
  const teachersRes=await pool.query(`SELECT t.id, t.name, COALESCE(NULLIF(t.subject,''),'General') as subject
   FROM teachers t LEFT JOIN users u ON u.id=t.user_id
-  WHERE t.is_active=TRUE AND COALESCE(u.is_active,TRUE)=TRUE AND CASE
-   WHEN NULLIF(LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))),'') IS NOT NULL
-     OR NULLIF(LOWER(TRIM(COALESCE(t.profile_details->>'type_of_staff',''))),'') IS NOT NULL
-   THEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) IN ('teacher','teachers')
-     OR LOWER(TRIM(COALESCE(t.profile_details->>'type_of_staff',''))) IN ('teacher','teachers')
-   ELSE LOWER(COALESCE(u.role,''))='teacher' OR LOWER(COALESCE(t.designation,'')) LIKE '%teacher%'
-  END ORDER BY t.subject, t.name`);
+  WHERE t.is_active=TRUE AND COALESCE(u.is_active,TRUE)=TRUE AND (
+    LOWER(COALESCE(t.profile_details->>'staff_category','')) LIKE '%teach%'
+    OR LOWER(COALESCE(t.designation,'')) LIKE '%teach%'
+    OR LOWER(COALESCE(t.profile_details->>'staff_type','')) LIKE '%teach%'
+    OR LOWER(COALESCE(t.profile_details->>'type_of_staff','')) LIKE '%teach%'
+    OR LOWER(COALESCE(u.role,'')) = 'teacher'
+  ) AND LOWER(COALESCE(t.designation,'')) NOT LIKE '%nonteach%'
+  AND LOWER(COALESCE(t.profile_details->>'staff_category','')) NOT LIKE '%nonteach%' ORDER BY t.subject, t.name`);
  const teacherMap=new Map();
  teachersRes.rows.forEach(t=>{
   teacherMap.set(String(t.id),{

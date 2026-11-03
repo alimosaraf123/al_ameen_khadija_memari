@@ -87,7 +87,7 @@ export default function Routines(){
       .map((v:string)=>String(v).trim())
       .filter((v:string)=>Boolean(v)))];
   };
- const isTeachingTeacher=(t:any)=>{if(!t)return false;const d=t.profile_details||{},staffTypes=[d.staff_type,d.type_of_staff,t.staff_type,t.type_of_staff].map((v:any)=>String(v||'').trim().toLowerCase()).filter(Boolean);if(staffTypes.length)return staffTypes.some((v:string)=>v==='teachers'||v==='teacher'||v.includes('teacher'));const role=String(t.user_role||t.role||'').trim().toLowerCase();if(role)return role==='teacher';return String(t.designation||'').trim().toLowerCase().includes('teacher');};
+ const isTeachingTeacher=(t:any)=>{if(!t)return false;const d=t.profile_details||{};const des=String(t.designation||'').toLowerCase();const cat=String(d.staff_category||'').toLowerCase();if(des.includes('nonteach')||cat.includes('nonteach'))return false;if(cat.includes('teach')||des.includes('teach'))return true;const staffTypes=[d.staff_type,d.type_of_staff,t.staff_type,t.type_of_staff].map((v:any)=>String(v||'').trim().toLowerCase()).filter(Boolean);if(staffTypes.some((v:string)=>v.includes('teach')))return true;const role=String(t.user_role||t.role||'').trim().toLowerCase();return role==='teacher';};
  const teacherNameForCell=(cell:Cell)=>{const teacher=teachers.find(t=>String(t.id)===String(cell.teacher_id));return teacher&&isTeachingTeacher(teacher)?String(teacher.name||cell.teacher_name||''):'';};
  const teacherOnlyCells=(source:Record<string,Cell>)=>Object.fromEntries(Object.entries(source).filter(([,cell])=>isTeachingTeacher(teachers.find(t=>String(t.id)===String(cell.teacher_id)))));
  const update=(key:string,value:Partial<Cell>)=>setCells(old=>({...old,[key]:{...old[key],...value}}));
