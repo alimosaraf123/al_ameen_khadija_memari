@@ -31,7 +31,12 @@ const canon=(v:any)=>{const k=String(v||'').toLowerCase().replace(/[^a-z]/g,'');
 function getShortTeacherName(name: string, teacher?: any): string {
   if (!name) return '';
   const clean = name.trim();
-  const first = clean.split(/\s+/)[0];
+  const normalized = clean.replace(/^(sk|kazi|md|dr|sekh|sheikh)\.\s*/i, '$1 ');
+  const parts = normalized.split(/\s+/).filter(Boolean);
+  let first = parts[0] || '';
+  if (/^(sk|kazi|md|sekh|sheikh)$/i.test(first) && parts[1]) {
+    first = parts[1];
+  }
   if (/^ayesha/i.test(first)) {
     const isSiddiki = /siddiki/i.test(clean) || (teacher && /siddiki/i.test(String(teacher.name || '')));
     return isSiddiki ? 'Ayesha (Hist)' : 'Ayesha (Geo)';
