@@ -43,6 +43,15 @@ function subjectMatches(tSub:any,rSub:any):boolean{
 const dayName=(d:string)=>/^\d{4}-\d{2}-\d{2}$/.test(d)?new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'long'}):'-';
 const dateLabel=(d:string)=>d.split('-').reverse().join('-');
 const isTiffin=(period:any)=>String(period?.[0]||'').trim().toLowerCase()==='tiffin';
+function shiftDate(dateStr: string, days: number): string {
+  try {
+    const d = new Date(dateStr + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+  } catch {
+    return dateStr;
+  }
+}
 
 export default function Routines(){
  const router=useRouter(),today=new Date().toISOString().slice(0,10);
@@ -58,7 +67,7 @@ export default function Routines(){
  const[showCombinedHighlight,setShowCombinedHighlight]=useState(true);
  const[clearedDuplicates,setClearedDuplicates]=useState<string[]>([]);
  const[history,setHistory]=useState<any[]>([]),[historyOpen,setHistoryOpen]=useState(false);
- const[reportOpen,setReportOpen]=useState(false),[month,setMonth]=useState(today.slice(0,7)),[report,setReport]=useState<any>(null),[downloadingReport,setDownloadingReport]=useState(false),[expandReport,setExpandReport]=useState(false),[reportFilter,setReportFilter]=useState('');
+ const[reportOpen,setReportOpen]=useState(false),[month,setMonth]=useState(today.slice(0,7)),[dailyReportDate,setDailyReportDate]=useState(today),[report,setReport]=useState<any>(null),[downloadingReport,setDownloadingReport]=useState(false),[expandReport,setExpandReport]=useState(false),[reportFilter,setReportFilter]=useState('');
  const[teacherSheetModal,setTeacherSheetModal]=useState<{teacher:any;kind:'coaching'|'xi_xii'|'v_x'|'all'}|null>(null),[downloadingTeacherExcel,setDownloadingTeacherExcel]=useState(false);
  const[countWidth,setCountWidth]=useState(190),countWidthRef=useRef(190);
  const pageScrollRef=useRef<ScrollView>(null),pageScrollYRef=useRef(0),pendingPageScrollYRef=useRef<number|null>(null);
@@ -260,18 +269,19 @@ async function save(mode:'master'|'draft'|'final'){
   }
  }
  async function loadReport(){try{const d=await api(`/api/routines/manager/report?month=${month}`);setReport({...d,kind:'monthly'});setReportOpen(true)}catch(e:any){Alert.alert('Monthly Report Error',e.message)}}
- async function loadDailyReport(){try{const d=await api(`/api/routines/manager/daily-report?date=${date}`);setReport({...d,kind:'daily'});setReportOpen(true)}catch(e:any){Alert.alert('Daily Report Error',e.message)}}
+ async function loadDailyReport(targetDate?:string){try{const target=targetDate||dailyReportDate||date;const d=await api(`/api/routines/manager/daily-report?date=${target}`);setReport({...d,kind:'daily',date:target});setDailyReportDate(target);setReportOpen(true)}catch(e:any){Alert.alert('Daily Report Error',e.message)}}
  async function downloadReportExcel(){
   if(downloadingReport)return;
   setDownloadingReport(true);
   try{
    const token=await getToken();
    const isDaily=report?.kind==='daily';
+   const reportDate=report?.date||dailyReportDate||date;
    const endpoint=isDaily
-     ? `/api/routines/manager/daily-report/excel?date=${report?.date||date}`
+     ? `/api/routines/manager/daily-report/excel?date=${reportDate}`
      : `/api/routines/manager/report/excel?month=${month}`;
    const fileName=isDaily
-     ? `Daily-Report-${report?.date||date}.xlsx`
+     ? `Daily-Report-${reportDate}.xlsx`
      : `Monthly-Report-${month}.xlsx`;
    const res=await fetch(`${API_BASE}${endpoint}`,{headers:{Authorization:`Bearer ${token}`}});
    if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.message||'Excel download failed');}
@@ -297,7 +307,7 @@ async function save(mode:'master'|'draft'|'final'){
  async function printMonthlyReport(){
   if(!report)return;
   const isDaily=report?.kind==='daily';
-  const reportTitle=isDaily ? `Daily Class Report — ${report.dateLabel||date}` : (report.monthLabel||month);
+  const reportTitle=isDaily ? `Daily Class Report — ${report.dateLabel||report.date||dailyReportDate||date}` : (report.monthLabel||month);
   const teachers=report.teachers||[];
   const totals=report.totals||{xi_xii:0,ix_x:0,coaching:0,grand_total:0};
   const xmlHelper=(v:any)=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -406,14 +416,49 @@ async function save(mode:'master'|'draft'|'final'){
    <View style={s.toolTabs}><TouchableOpacity style={s.toolButton} onPress={()=>setConfigOpen(x=>!x)}><Text style={s.bold}>Class / Time / Tiffin</Text></TouchableOpacity><TouchableOpacity style={s.toolButton} onPress={()=>setAssignOpen(x=>!x)}><Text style={s.bold}>Teacher Subjects</Text></TouchableOpacity></View>
    {configOpen&&<View style={s.panel}><Text style={s.panelTitle}>Class, Room & Time Setup</Text>{academic?<><Text style={s.label}>Classes (comma separated)</Text><TextInput value={rowDraft} onChangeText={setRowDraft} style={s.configInput}/><Text style={s.label}>One per line: Period|Time. Add Tiffin|12:40-1:40 where needed.</Text><TextInput value={periodDraft} onChangeText={setPeriodDraft} multiline style={[s.configInput,s.multiline]}/><TouchableOpacity disabled={saving} onPress={applyAcademicPeriodsToAllMasters} style={[s.masterButton,s.compactControlButton,saving&&{opacity:.6}]}><Text style={s.white}>Apply periods to all 7 masters</Text></TouchableOpacity></>:<><Text style={s.label}>Rooms (comma separated)</Text><TextInput value={roomDraft} onChangeText={setRoomDraft} style={s.configInput}/><Text style={s.label}>Coaching times (one per line)</Text><TextInput value={timeDraft} onChangeText={setTimeDraft} multiline style={[s.configInput,s.multiline]}/><TouchableOpacity disabled={saving} onPress={applyCoachingTimesToAllMasters} style={[s.masterButton,s.compactControlButton,saving&&{opacity:.6}]}><Text style={s.white}>Apply times to all 7 masters</Text></TouchableOpacity></>}<TouchableOpacity onPress={applyConfig} style={s.save}><Text style={s.white}>Apply Changes</Text></TouchableOpacity></View>}
    {assignOpen&&<View style={s.panel}><View style={s.assignHeader}><View style={s.formField}><Select searchable panelWidth={500} panelMaxHeight={560} label="Teacher filter" value={assignTeacher} onChange={setAssignTeacher} options={[{value:'',label:'All teaching teachers'},...teachers.filter(isTeachingTeacher).map(t=>({value:String(t.id),label:t.name}))]}/></View><TouchableOpacity onPress={()=>router.push('/teachers')} style={s.save}><Text style={s.white}>+ Manage Teachers</Text></TouchableOpacity></View><Text style={s.assignHelp}>Tick a subject beside a teacher. Every change saves immediately.</Text><ScrollView style={s.assignList} nestedScrollEnabled>{teachers.filter(isTeachingTeacher).filter(t=>!assignTeacher||String(t.id)===assignTeacher).map(t=><View key={t.id} style={s.teacherSubjectRow}><Text style={s.teacherSubjectName}>{t.name}</Text><View style={s.subjectChecks}>{ALL_SUBJECTS.map(v=>{const on=mapped(t).some((x:string)=>canon(x)===canon(v)),busy=subjectBusy===String(t.id)+'|'+v;return <TouchableOpacity disabled={!!subjectBusy} key={v} onPress={()=>toggleTeacherSubject(t,v)} style={[s.subjectCheck,on&&s.subjectChecked,busy&&s.subjectSaving]}><Text style={[s.subjectCheckText,on&&s.subjectCheckedText]}>{on?'[x] ':''}{v}</Text></TouchableOpacity>})}</View></View>)}</ScrollView></View>}
-  </View>}{admin&&<View style={s.bottom}><View style={s.bottomButtons}><TouchableOpacity style={s.button} onPress={openHistory}><Text style={s.bold}>{historyOpen?'Refresh':'Draft & Final History'}</Text></TouchableOpacity><DatePickerField label="Report Month" kind="month" value={month} onChange={setMonth} style={s.month}/><TouchableOpacity style={s.button} onPress={loadReport}><Text style={s.bold}>Monthly Report</Text></TouchableOpacity><TouchableOpacity style={[s.button,{backgroundColor:'#e0f2fe',borderColor:'#38bdf8',borderWidth:1}]} onPress={loadDailyReport}><Text style={[s.bold,{color:'#0369a1'}]}>Day Report</Text></TouchableOpacity><TouchableOpacity style={s.button} onPress={downloadBackup}><Text style={s.bold}>Download Routine Backup</Text></TouchableOpacity><TouchableOpacity style={s.button} onPress={uploadBackup}><Text style={s.bold}>Upload Routine Backup</Text></TouchableOpacity></View>
+  </View>}{admin&&<View style={s.bottom}><View style={s.bottomButtons}><TouchableOpacity style={s.button} onPress={openHistory}><Text style={s.bold}>{historyOpen?'Refresh':'Draft & Final History'}</Text></TouchableOpacity><DatePickerField label="Report Month" kind="month" value={month} onChange={setMonth} style={s.month}/><TouchableOpacity style={s.button} onPress={loadReport}><Text style={s.bold}>Monthly Report</Text></TouchableOpacity><DatePickerField label="Report Date" kind="date" value={dailyReportDate} onChange={(v:string)=>{setDailyReportDate(v);if(reportOpen&&report?.kind==='daily')void loadDailyReport(v);}} style={{borderWidth:1,borderColor:'#b8c9db',borderRadius:6,padding:10,width:145}}/><TouchableOpacity style={[s.button,{backgroundColor:'#e0f2fe',borderColor:'#38bdf8',borderWidth:1}]} onPress={()=>loadDailyReport(dailyReportDate)}><Text style={[s.bold,{color:'#0369a1'}]}>Day Report</Text></TouchableOpacity><TouchableOpacity style={s.button} onPress={downloadBackup}><Text style={s.bold}>Download Routine Backup</Text></TouchableOpacity><TouchableOpacity style={s.button} onPress={uploadBackup}><Text style={s.bold}>Upload Routine Backup</Text></TouchableOpacity></View>
    {historyOpen&&history.filter(x=>!x.is_master&&x.routine_kind!=='master').map(x=><View key={x.id} style={s.historyRow}><TouchableOpacity style={{flex:1}} onPress={()=>setDate(String(x.routine_date).slice(0,10))}><Text style={s.bold}>{String(x.routine_date).slice(0,10)} - {historyLabel(x)}</Text><Text>{x.updated_by_name||''}</Text></TouchableOpacity><TouchableOpacity onPress={()=>remove(x.id)} style={s.delete}><Text style={s.white}>Delete</Text></TouchableOpacity></View>)}
    {reportOpen&&report&&(
     <View style={s.reportContainer}>
      <View style={s.reportHeaderBar}>
       <View style={{alignItems:'center',flex:1}}>
        <Text style={s.reportSchoolTitle}>Al - Ameen Mission Academy Memari</Text>
-       <Text style={s.reportMonthTitle}>{report.kind==='daily'?`Daily Class Report — ${report.dateLabel||date}`:(report.monthLabel||month)}</Text>
+       {report.kind==='daily'?(
+        <View style={{flexDirection:'row',alignItems:'center',justifyContent:'center',gap:8,marginTop:6,flexWrap:'wrap'}}>
+         <TouchableOpacity
+          style={{backgroundColor:'#f1f5f9',borderWidth:1,borderColor:'#cbd5e1',paddingVertical:6,paddingHorizontal:12,borderRadius:6}}
+          onPress={()=>{
+           const prev=shiftDate(report.date||dailyReportDate,-1);
+           void loadDailyReport(prev);
+          }}
+         >
+          <Text style={{fontSize:12,fontWeight:'700',color:'#1e293b'}}>◀ Prev Day</Text>
+         </TouchableOpacity>
+         <DatePickerField
+          label=""
+          kind="date"
+          value={report.date||dailyReportDate}
+          onChange={(v:string)=>{
+           void loadDailyReport(v);
+          }}
+          style={{width:145,height:34,borderWidth:1,borderColor:'#cbd5e1',borderRadius:6,backgroundColor:'#ffffff',justifyContent:'center'}}
+         />
+         <TouchableOpacity
+          style={{backgroundColor:'#f1f5f9',borderWidth:1,borderColor:'#cbd5e1',paddingVertical:6,paddingHorizontal:12,borderRadius:6}}
+          onPress={()=>{
+           const next=shiftDate(report.date||dailyReportDate,1);
+           void loadDailyReport(next);
+          }}
+         >
+          <Text style={{fontSize:12,fontWeight:'700',color:'#1e293b'}}>Next Day ▶</Text>
+         </TouchableOpacity>
+         <Text style={{fontSize:15,fontWeight:'800',color:'#1f4e78',marginLeft:6}}>
+          Daily Class Report — {report.dateLabel||report.date||dailyReportDate}
+         </Text>
+        </View>
+       ):(
+        <Text style={s.reportMonthTitle}>{report.monthLabel||month}</Text>
+       )}
       </View>
       <View style={s.reportActionButtons}>
        <TouchableOpacity disabled={downloadingReport} onPress={downloadMonthlyRecord} style={s.reportDownloadBtn}>
