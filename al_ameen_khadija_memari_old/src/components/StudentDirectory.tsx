@@ -10,7 +10,7 @@ import { STUDENT_CLASSES, isVisibleStudentClass } from '../lib/studentClasses';
 import { filterStudents, studentSession, normalizeStudentClass } from '../lib/studentDirectory';
 
 type Option = { value: string; label: string; shortLabel?: string; keywords?: string[] };
-export function Select({ label, value, options, onChange, searchable=false, style, textStyle, chevron, panelWidth, panelMaxHeight }: { label: string; value: string; options: Option[]; onChange: (value: string) => void; searchable?: boolean; style?: any; textStyle?: any; chevron?: string; panelWidth?: number; panelMaxHeight?: number }) {
+export function Select({ label, value, options, onChange, searchable=false, style, textStyle, placeholderTextStyle, chevron, panelWidth, panelMaxHeight }: { label: string; value: string; options: Option[]; onChange: (value: string) => void; searchable?: boolean; style?: any; textStyle?: any; placeholderTextStyle?: any; chevron?: string; panelWidth?: number; panelMaxHeight?: number }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [previewLabel, setPreviewLabel] = useState('');
@@ -272,7 +272,7 @@ export function Select({ label, value, options, onChange, searchable=false, styl
       onPress={handleOpen}
       style={[s.select, style]}
     >
-      <Text style={[s.selectText, !value && s.selectPlaceholder, textStyle]} numberOfLines={1} ellipsizeMode="tail">
+      <Text style={[s.selectText, !value && s.selectPlaceholder, textStyle, !value && placeholderTextStyle]} numberOfLines={1} ellipsizeMode="tail">
         {buttonDisplay}{chevronChar ? `  ${chevronChar}` : ''}
       </Text>
     </TouchableOpacity>
