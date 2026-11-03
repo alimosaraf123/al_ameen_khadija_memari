@@ -368,6 +368,203 @@ router.get('/manager/report/excel',auth,allow('super_admin','admin'),asyncHandle
  res.end();
 }));
 
+async function generateDailyReportData(dateStr){
+ if(!validDate(dateStr))throw new Error('Valid date (YYYY-MM-DD) is required');
+ const dObj=new Date(dateStr+'T00:00:00Z');
+ const dayName=dObj.toLocaleDateString('en-US',{weekday:'long',timeZone:'UTC'});
+ const dayFormatted=dObj.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'});
+ const dateLabel=`${dayName}, ${dayFormatted}`;
+ const y=dateStr.slice(0,4);
+ const sessionName=`${y}-${Number(String(y).slice(2))+1}`;
+ const teachersRes=await pool.query(`SELECT t.id, t.name, COALESCE(NULLIF(t.subject,''),'General') as subject
+  FROM teachers t LEFT JOIN users u ON u.id=t.user_id
+  WHERE t.is_active=TRUE AND COALESCE(u.is_active,TRUE)=TRUE AND (
+    LOWER(COALESCE(t.profile_details->>'staff_category','')) LIKE '%teach%'
+    OR LOWER(COALESCE(t.designation,'')) LIKE '%teach%'
+    OR LOWER(COALESCE(t.profile_details->>'staff_type','')) LIKE '%teach%'
+    OR LOWER(COALESCE(t.profile_details->>'type_of_staff','')) LIKE '%teach%'
+    OR LOWER(COALESCE(u.role,'')) = 'teacher'
+  ) AND LOWER(COALESCE(t.designation,'')) NOT LIKE '%nonteach%'
+  AND LOWER(COALESCE(t.profile_details->>'staff_category','')) NOT LIKE '%nonteach%' ORDER BY t.subject, t.name`);
+ const teacherMap=new Map();
+ teachersRes.rows.forEach(t=>{
+  teacherMap.set(String(t.id),{
+   id:String(t.id),
+   name:t.name,
+   subject:t.subject,
+   xi_xii:0,
+   ix_x:0,
+   coaching:0,
+   total:0,
+   coaching_classes:[],
+   xi_xii_classes:[],
+   v_x_classes:[]
+  });
+ });
+
+ for(const group of ['v_x','xi_xii','coaching']){
+  const q=await pool.query(`SELECT g.*,
+    CASE WHEN g.routine_date=$2::date AND g.routine_kind='daily' AND g.is_published=TRUE THEN 3
+         WHEN g.routine_date=$2::date AND g.routine_kind='draft' THEN 2
+         WHEN g.routine_date=$2::date AND g.routine_kind='daily' THEN 2
+         ELSE 1 END as priority
+    FROM routine_manager_grids g
+    WHERE g.group_name=$1 AND (
+      (g.routine_date=$2::date AND g.routine_kind IN ('draft','daily')) OR
+      (g.is_master=TRUE AND EXTRACT(DOW FROM g.routine_date)=EXTRACT(DOW FROM $2::date))
+    )
+    ORDER BY priority DESC, g.updated_at DESC LIMIT 1`,[group,dateStr]);
+  if(!q.rows.length)continue;
+  const row=q.rows[0];
+  const data=await teacherOnlyGridData(row.grid_data||{});
+  if(data.no_class)continue;
+
+  const cells=data.cells||{},seenTeacherSlots=new Set();
+  for(const[pos,cell]of Object.entries(cells)){
+   if(!cell||!cell.teacher_id)continue;
+   const tId=String(cell.teacher_id);
+   if(!teacherMap.has(tId))continue;
+   const p=pos.split('|'),slot=group==='coaching'?p[0]:p[1];
+   const countKey=data.combined_class_counting?`${tId}|${slot}`:`${tId}|${pos}`;
+   if(seenTeacherSlots.has(countKey))continue;
+   seenTeacherSlots.add(countKey);
+   const rec=teacherMap.get(tId);
+   if(group==='coaching'){
+    rec.coaching++;
+    const dur=getSlotDuration(p[0]);
+    rec.coaching_classes.push({
+     date:dateStr,
+     day:dayName,
+     class_name:p[1]||'Coaching',
+     time_slot:p[0],
+     start_time:dur.start,
+     end_time:dur.end,
+     duration:dur.duration,
+     duration_minutes:dur.minutes,
+     subject:cell.subject||rec.subject||'Coaching'
+    });
+   }else if(group==='xi_xii'){
+    rec.xi_xii++;
+    const periods=Array.isArray(data.periods)&&data.periods.length?data.periods:DEFAULT_XI_XII_PERIODS;
+    const periodIdx=parseInt(p[1],10);
+    const periodInfo=periods[periodIdx]||['Period '+(periodIdx+1),''];
+    const dur=getSlotDuration(periodInfo[1]);
+    rec.xi_xii_classes.push({
+     date:dateStr,
+     day:dayName,
+     class_name:p[0]||'XI-XII',
+     period:periodInfo[0],
+     time_slot:periodInfo[1],
+     start_time:dur.start,
+     end_time:dur.end,
+     duration:dur.duration,
+     duration_minutes:dur.minutes,
+     subject:cell.subject||rec.subject||'General'
+    });
+   }else if(group==='v_x'){
+    rec.ix_x++;
+    const periods=Array.isArray(data.periods)&&data.periods.length?data.periods:DEFAULT_V_X_PERIODS;
+    const periodIdx=parseInt(p[1],10);
+    const periodInfo=periods[periodIdx]||['Period '+(periodIdx+1),''];
+    const dur=getSlotDuration(periodInfo[1]);
+    rec.v_x_classes.push({
+     date:dateStr,
+     day:dayName,
+     class_name:p[0]||'V-X',
+     period:periodInfo[0],
+     time_slot:periodInfo[1],
+     start_time:dur.start,
+     end_time:dur.end,
+     duration:dur.duration,
+     duration_minutes:dur.minutes,
+     subject:cell.subject||rec.subject||'General'
+    });
+   }
+   rec.total++;
+  }
+ }
+
+ const teachers=[...teacherMap.values()].map((t,idx)=>({sl:idx+1,...t}));
+ const totals={xi_xii:teachers.reduce((s,t)=>s+t.xi_xii,0),ix_x:teachers.reduce((s,t)=>s+t.ix_x,0),coaching:teachers.reduce((s,t)=>s+t.coaching,0),grand_total:teachers.reduce((s,t)=>s+t.total,0)};
+ return {date:dateStr,dayName,dateLabel,monthLabel:dateLabel,sessionName,schoolName:'Al - Ameen Mission Academy Memari',teachers,totals};
+}
+
+async function buildDailyReportWorkbook({date,dayName,dateLabel,schoolName,teachers,totals}){
+ const wb=new ExcelJS.Workbook();
+ wb.creator='Al-Ameen Mission Academy Memari';
+ const ws=wb.addWorksheet('Daily Report');
+ ws.mergeCells('A1:G1');
+ const t1=ws.getCell('A1');
+ t1.value=schoolName;
+ t1.font={name:'Calibri',size:16,bold:true,color:{argb:'FF1F4E78'}};
+ t1.alignment={horizontal:'center',vertical:'middle'};
+ ws.getRow(1).height=28;
+
+ ws.mergeCells('A2:G2');
+ const t2=ws.getCell('A2');
+ t2.value=`Daily Class Report - ${dateLabel}`;
+ t2.font={name:'Calibri',size:14,bold:true,color:{argb:'FF1F4E78'}};
+ t2.alignment={horizontal:'center',vertical:'middle'};
+ ws.getRow(2).height=24;
+ ws.getRow(3).height=10;
+
+ const headerRow=ws.getRow(4);
+ headerRow.height=26;
+ headerRow.values=['SL','Subject',"Teacher's Name",'XI-XII','IX-X','Coaching','Total'];
+ const thinBorder={top:{style:'thin',color:{argb:'FF000000'}},left:{style:'thin',color:{argb:'FF000000'}},bottom:{style:'thin',color:{argb:'FF000000'}},right:{style:'thin',color:{argb:'FF000000'}}};
+ headerRow.eachCell((cell,colNumber)=>{
+  cell.font={name:'Calibri',size:12,bold:true,underline:true,color:{argb:'FFCC0000'}};
+  cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFFFF'}};
+  cell.alignment={horizontal:colNumber===1||colNumber>=4?'center':'left',vertical:'middle'};
+  cell.border=thinBorder;
+ });
+
+ teachers.forEach((t,i)=>{
+  const rIdx=5+i,r=ws.getRow(rIdx);
+  r.height=22;
+  const isEven=i%2===1;
+  const rowFill={type:'pattern',pattern:'solid',fgColor:{argb:isEven?'FFEAF2FA':'FFFFFFFF'}};
+  r.values=[t.sl,t.subject,t.name,t.xi_xii||'',t.ix_x||'',t.coaching||'',t.total||''];
+  r.eachCell({includeEmpty:true},(cell,colNumber)=>{
+   cell.font={name:'Calibri',size:11,bold:colNumber===7};
+   cell.fill=rowFill;
+   cell.border=thinBorder;
+   cell.alignment={horizontal:colNumber===1||colNumber>=4?'center':'left',vertical:'middle'};
+  });
+ });
+
+ const totalRowIdx=5+teachers.length,totalRow=ws.getRow(totalRowIdx);
+ totalRow.height=25;
+ totalRow.values=['','','Total Classes',totals.xi_xii,totals.ix_x,totals.coaching,totals.grand_total];
+ totalRow.eachCell({includeEmpty:true},(cell,colNumber)=>{
+  cell.font={name:'Calibri',size:11,bold:true,color:{argb:'FF1F4E78'}};
+  cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFD9E1F2'}};
+  cell.border={top:{style:'medium',color:{argb:'FF000000'}},bottom:{style:'double',color:{argb:'FF000000'}},left:{style:'thin',color:{argb:'FF000000'}},right:{style:'thin',color:{argb:'FF000000'}}};
+  cell.alignment={horizontal:colNumber>=4?'center':'right',vertical:'middle'};
+ });
+
+ ws.columns=[{width:8},{width:18},{width:30},{width:14},{width:14},{width:16},{width:14}];
+ return wb;
+}
+
+router.get('/manager/daily-report',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ const date=String(req.query.date||new Date().toISOString().slice(0,10));
+ if(!validDate(date))return res.status(400).json({success:false,message:'Valid date (YYYY-MM-DD) is required'});
+ const reportData=await generateDailyReportData(date);
+ res.json({success:true,...reportData});
+}));
+
+router.get('/manager/daily-report/excel',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ const date=String(req.query.date||new Date().toISOString().slice(0,10));
+ if(!validDate(date))return res.status(400).json({success:false,message:'Valid date (YYYY-MM-DD) is required'});
+ const reportData=await generateDailyReportData(date);
+ const wb=await buildDailyReportWorkbook(reportData);
+ res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+ res.setHeader('Content-Disposition',`attachment; filename="Daily-Report-${date}.xlsx"`);
+ await wb.xlsx.write(res);
+ res.end();
+}));
+
 async function buildTeacherCoachingWorkbook({teacher,month,monthLabel,schoolName,classes,sessionName,sheetKind}){
  const wb=new ExcelJS.Workbook();
  wb.creator='Al-Ameen Mission Academy Memari';
@@ -535,15 +732,16 @@ async function buildTeacherCoachingWorkbook({teacher,month,monthLabel,schoolName
 }
 
 router.get('/manager/report/teacher-excel',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ const date=String(req.query.date||'');
  const month=String(req.query.month||new Date().toISOString().slice(0,7));
  const teacherId=String(req.query.teacher_id||'');
  const kind=String(req.query.kind||'coaching');
- if(!/^\d{4}-\d{2}$/.test(month)||!teacherId){
-  return res.status(400).json({success:false,message:'Valid month (YYYY-MM) and teacher_id are required'});
+ if(!teacherId||(!date&&!/^\d{4}-\d{2}$/.test(month))){
+  return res.status(400).json({success:false,message:'Valid month or date and teacher_id are required'});
  }
- const reportData=await generateMonthlyReportData(month);
+ const reportData=date ? await generateDailyReportData(date) : await generateMonthlyReportData(month);
  const teacher=(reportData.teachers||[]).find(t=>String(t.id)===teacherId);
- if(!teacher)return res.status(404).json({success:false,message:'Teacher not found in monthly report'});
+ if(!teacher)return res.status(404).json({success:false,message:'Teacher not found in report'});
 
  let classes=[];
  if(kind==='xi_xii')classes=teacher.xi_xii_classes||[];
@@ -553,7 +751,7 @@ router.get('/manager/report/teacher-excel',auth,allow('super_admin','admin'),asy
 
  const wb=await buildTeacherCoachingWorkbook({
   teacher,
-  month,
+  month:date||month,
   monthLabel:reportData.monthLabel,
   schoolName:reportData.schoolName,
   classes,
@@ -562,8 +760,9 @@ router.get('/manager/report/teacher-excel',auth,allow('super_admin','admin'),asy
  });
 
  const safeName=(teacher.name||'Teacher').replace(/[^a-zA-Z0-9_-]/g,'_');
+ const periodTag=date||month;
  res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
- res.setHeader('Content-Disposition',`attachment; filename="${safeName}_${kind.toUpperCase()}_Record_${month}.xlsx"`);
+ res.setHeader('Content-Disposition',`attachment; filename="${safeName}_${kind.toUpperCase()}_Record_${periodTag}.xlsx"`);
  await wb.xlsx.write(res);
  res.end();
 }));

@@ -228,7 +228,8 @@ async function save(mode:'master'|'draft'|'final'){
   try{
    const token=await getToken();
    const {teacher,kind}=teacherSheetModal;
-   const url=`${API_BASE}/api/routines/manager/report/teacher-excel?month=${month}&teacher_id=${teacher.id}&kind=${kind}`;
+   const periodParam=report?.kind==='daily'?`date=${report?.date||date}`:`month=${month}`;
+   const url=`${API_BASE}/api/routines/manager/report/teacher-excel?${periodParam}&teacher_id=${teacher.id}&kind=${kind}`;
    if(Platform.OS==='web'&&typeof window!=='undefined'){
     const resp=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});
     if(!resp.ok){
@@ -258,15 +259,23 @@ async function save(mode:'master'|'draft'|'final'){
    Alert.alert('Print','Printing is supported on web browser.');
   }
  }
- async function loadReport(){try{const d=await api(`/api/routines/manager/report?month=${month}`);setReport(d);setReportOpen(true)}catch(e:any){Alert.alert('Monthly Report Error',e.message)}}
- async function downloadMonthlyRecord(){
+ async function loadReport(){try{const d=await api(`/api/routines/manager/report?month=${month}`);setReport({...d,kind:'monthly'});setReportOpen(true)}catch(e:any){Alert.alert('Monthly Report Error',e.message)}}
+ async function loadDailyReport(){try{const d=await api(`/api/routines/manager/daily-report?date=${date}`);setReport({...d,kind:'daily'});setReportOpen(true)}catch(e:any){Alert.alert('Daily Report Error',e.message)}}
+ async function downloadReportExcel(){
   if(downloadingReport)return;
   setDownloadingReport(true);
   try{
    const token=await getToken();
-   const res=await fetch(`${API_BASE}/api/routines/manager/report/excel?month=${month}`,{headers:{Authorization:`Bearer ${token}`}});
+   const isDaily=report?.kind==='daily';
+   const endpoint=isDaily
+     ? `/api/routines/manager/daily-report/excel?date=${report?.date||date}`
+     : `/api/routines/manager/report/excel?month=${month}`;
+   const fileName=isDaily
+     ? `Daily-Report-${report?.date||date}.xlsx`
+     : `Monthly-Report-${month}.xlsx`;
+   const res=await fetch(`${API_BASE}${endpoint}`,{headers:{Authorization:`Bearer ${token}`}});
    if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.message||'Excel download failed');}
-   const blob=await res.blob(),fileName=`Monthly-Report-${month}.xlsx`;
+   const blob=await res.blob();
    if(Platform.OS==='web'&&typeof window!=='undefined'){
     const url=URL.createObjectURL(blob),a=document.createElement('a');
     a.href=url;a.download=fileName;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
@@ -276,21 +285,24 @@ async function save(mode:'master'|'draft'|'final'){
      const base64=(reader.result as string).split(',')[1];
      const fileUri=`${(FileSystem as any).documentDirectory||(FileSystem as any).cacheDirectory||''}${fileName}`;
      await FileSystem.writeAsStringAsync(fileUri,base64,{encoding:(FileSystem as any).EncodingType?.Base64||'base64'});
-     if(await Sharing.isAvailableAsync()){await Sharing.shareAsync(fileUri,{mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',dialogTitle:'Download Monthly Report Excel'});}
+     if(await Sharing.isAvailableAsync()){await Sharing.shareAsync(fileUri,{mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',dialogTitle:'Download Routine Report Excel'});}
      else{Alert.alert('Excel Downloaded',`File saved to ${fileUri}`);}
     };
     reader.readAsDataURL(blob);
    }
-  }catch(e:any){Alert.alert('Download Error',e.message||'Monthly report download failed');}
+  }catch(e:any){Alert.alert('Download Error',e.message||'Report download failed');}
   finally{setDownloadingReport(false);}
  }
+ const downloadMonthlyRecord = downloadReportExcel;
  async function printMonthlyReport(){
   if(!report)return;
-  const monthLabel=report.monthLabel||month,teachers=report.teachers||[];
+  const isDaily=report?.kind==='daily';
+  const reportTitle=isDaily ? `Daily Class Report — ${report.dateLabel||date}` : (report.monthLabel||month);
+  const teachers=report.teachers||[];
   const totals=report.totals||{xi_xii:0,ix_x:0,coaching:0,grand_total:0};
   const xmlHelper=(v:any)=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const rowsHtml=teachers.map((t:any,i:number)=>`<tr class="${i%2===1?'alt':''}"><td>${t.sl}</td><td class="subj">${xmlHelper(t.subject)}</td><td class="name">${xmlHelper(t.name)}</td><td>${t.xi_xii||''}</td><td>${t.ix_x||''}</td><td>${t.coaching||''}</td><td class="bold">${t.total||''}</td></tr>`).join('');
-  const html=`<style>@page{size:A4 portrait;margin:10mm}body{font-family:Calibri,Arial,sans-serif;text-align:center;color:#1e293b}h1{color:#1f4e78;font-size:20px;margin:0 0 4px;font-weight:800}h2{color:#1f4e78;font-size:16px;margin:0 0 14px;font-weight:700}table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px}th,td{border:1px solid #000;padding:6px 8px;text-align:center}th{color:#cc0000;font-weight:bold;text-decoration:underline;background:#fff;font-size:13px}.name{text-align:left;font-weight:600}.subj{text-align:left}.bold{font-weight:bold}.alt td{background:#eaf2fa}.tot-row{background:#d9e1f2!important;font-weight:bold;color:#1f4e78}.tot-row td{border-top:2px solid #000;border-bottom:3px double #000}</style><h1>Al - Ameen Mission Academy Memari</h1><h2>${monthLabel}</h2><table><thead><tr><th style="width:7%">SL</th><th style="width:20%">Subject</th><th style="width:33%">Teacher's Name</th><th style="width:10%">XI-XII</th><th style="width:10%">IX-X</th><th style="width:10%">Coaching</th><th style="width:10%">Total</th></tr></thead><tbody>${rowsHtml}<tr class="tot-row"><td colspan="3" style="text-align:right;font-weight:bold;">Total Classes</td><td>${totals.xi_xii}</td><td>${totals.ix_x}</td><td>${totals.coaching}</td><td style="font-weight:900;">${totals.grand_total}</td></tr></tbody></table>`;
+  const html=`<style>@page{size:A4 portrait;margin:10mm}body{font-family:Calibri,Arial,sans-serif;text-align:center;color:#1e293b}h1{color:#1f4e78;font-size:20px;margin:0 0 4px;font-weight:800}h2{color:#1f4e78;font-size:16px;margin:0 0 14px;font-weight:700}table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px}th,td{border:1px solid #000;padding:6px 8px;text-align:center}th{color:#cc0000;font-weight:bold;text-decoration:underline;background:#fff;font-size:13px}.name{text-align:left;font-weight:600}.subj{text-align:left}.bold{font-weight:bold}.alt td{background:#eaf2fa}.tot-row{background:#d9e1f2!important;font-weight:bold;color:#1f4e78}.tot-row td{border-top:2px solid #000;border-bottom:3px double #000}</style><h1>Al - Ameen Mission Academy Memari</h1><h2>${reportTitle}</h2><table><thead><tr><th style="width:7%">SL</th><th style="width:20%">Subject</th><th style="width:33%">Teacher's Name</th><th style="width:10%">XI-XII</th><th style="width:10%">IX-X</th><th style="width:10%">Coaching</th><th style="width:10%">Total</th></tr></thead><tbody>${rowsHtml}<tr class="tot-row"><td colspan="3" style="text-align:right;font-weight:bold;">Total Classes</td><td>${totals.xi_xii}</td><td>${totals.ix_x}</td><td>${totals.coaching}</td><td style="font-weight:900;">${totals.grand_total}</td></tr></tbody></table>`;
   await Print.printAsync({html});
  }
  async function downloadBackup(){if(Platform.OS!=='web')return Alert.alert('Web only','Routine backup download is available in the web version.');try{const data=await api(`/api/routines/manager/backup?group=${group}`),url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download=`routine-backup-${group}-${today}.json`;a.click();URL.revokeObjectURL(url)}catch(e:any){Alert.alert('Routine Backup',e.message)}}
@@ -394,14 +406,14 @@ async function save(mode:'master'|'draft'|'final'){
    <View style={s.toolTabs}><TouchableOpacity style={s.toolButton} onPress={()=>setConfigOpen(x=>!x)}><Text style={s.bold}>Class / Time / Tiffin</Text></TouchableOpacity><TouchableOpacity style={s.toolButton} onPress={()=>setAssignOpen(x=>!x)}><Text style={s.bold}>Teacher Subjects</Text></TouchableOpacity></View>
    {configOpen&&<View style={s.panel}><Text style={s.panelTitle}>Class, Room & Time Setup</Text>{academic?<><Text style={s.label}>Classes (comma separated)</Text><TextInput value={rowDraft} onChangeText={setRowDraft} style={s.configInput}/><Text style={s.label}>One per line: Period|Time. Add Tiffin|12:40-1:40 where needed.</Text><TextInput value={periodDraft} onChangeText={setPeriodDraft} multiline style={[s.configInput,s.multiline]}/><TouchableOpacity disabled={saving} onPress={applyAcademicPeriodsToAllMasters} style={[s.masterButton,s.compactControlButton,saving&&{opacity:.6}]}><Text style={s.white}>Apply periods to all 7 masters</Text></TouchableOpacity></>:<><Text style={s.label}>Rooms (comma separated)</Text><TextInput value={roomDraft} onChangeText={setRoomDraft} style={s.configInput}/><Text style={s.label}>Coaching times (one per line)</Text><TextInput value={timeDraft} onChangeText={setTimeDraft} multiline style={[s.configInput,s.multiline]}/><TouchableOpacity disabled={saving} onPress={applyCoachingTimesToAllMasters} style={[s.masterButton,s.compactControlButton,saving&&{opacity:.6}]}><Text style={s.white}>Apply times to all 7 masters</Text></TouchableOpacity></>}<TouchableOpacity onPress={applyConfig} style={s.save}><Text style={s.white}>Apply Changes</Text></TouchableOpacity></View>}
    {assignOpen&&<View style={s.panel}><View style={s.assignHeader}><View style={s.formField}><Select searchable panelWidth={500} panelMaxHeight={560} label="Teacher filter" value={assignTeacher} onChange={setAssignTeacher} options={[{value:'',label:'All teaching teachers'},...teachers.filter(isTeachingTeacher).map(t=>({value:String(t.id),label:t.name}))]}/></View><TouchableOpacity onPress={()=>router.push('/teachers')} style={s.save}><Text style={s.white}>+ Manage Teachers</Text></TouchableOpacity></View><Text style={s.assignHelp}>Tick a subject beside a teacher. Every change saves immediately.</Text><ScrollView style={s.assignList} nestedScrollEnabled>{teachers.filter(isTeachingTeacher).filter(t=>!assignTeacher||String(t.id)===assignTeacher).map(t=><View key={t.id} style={s.teacherSubjectRow}><Text style={s.teacherSubjectName}>{t.name}</Text><View style={s.subjectChecks}>{ALL_SUBJECTS.map(v=>{const on=mapped(t).some((x:string)=>canon(x)===canon(v)),busy=subjectBusy===String(t.id)+'|'+v;return <TouchableOpacity disabled={!!subjectBusy} key={v} onPress={()=>toggleTeacherSubject(t,v)} style={[s.subjectCheck,on&&s.subjectChecked,busy&&s.subjectSaving]}><Text style={[s.subjectCheckText,on&&s.subjectCheckedText]}>{on?'[x] ':''}{v}</Text></TouchableOpacity>})}</View></View>)}</ScrollView></View>}
-  </View>}{admin&&<View style={s.bottom}><View style={s.bottomButtons}><TouchableOpacity style={s.button} onPress={openHistory}><Text style={s.bold}>{historyOpen?'Refresh':'Draft & Final History'}</Text></TouchableOpacity><DatePickerField label="Report Month" kind="month" value={month} onChange={setMonth} style={s.month}/><TouchableOpacity style={s.button} onPress={loadReport}><Text style={s.bold}>Monthly Report</Text></TouchableOpacity><TouchableOpacity style={s.button} onPress={downloadBackup}><Text style={s.bold}>Download Routine Backup</Text></TouchableOpacity><TouchableOpacity style={s.button} onPress={uploadBackup}><Text style={s.bold}>Upload Routine Backup</Text></TouchableOpacity></View>
+  </View>}{admin&&<View style={s.bottom}><View style={s.bottomButtons}><TouchableOpacity style={s.button} onPress={openHistory}><Text style={s.bold}>{historyOpen?'Refresh':'Draft & Final History'}</Text></TouchableOpacity><DatePickerField label="Report Month" kind="month" value={month} onChange={setMonth} style={s.month}/><TouchableOpacity style={s.button} onPress={loadReport}><Text style={s.bold}>Monthly Report</Text></TouchableOpacity><TouchableOpacity style={[s.button,{backgroundColor:'#e0f2fe',borderColor:'#38bdf8',borderWidth:1}]} onPress={loadDailyReport}><Text style={[s.bold,{color:'#0369a1'}]}>Day Report</Text></TouchableOpacity><TouchableOpacity style={s.button} onPress={downloadBackup}><Text style={s.bold}>Download Routine Backup</Text></TouchableOpacity><TouchableOpacity style={s.button} onPress={uploadBackup}><Text style={s.bold}>Upload Routine Backup</Text></TouchableOpacity></View>
    {historyOpen&&history.filter(x=>!x.is_master&&x.routine_kind!=='master').map(x=><View key={x.id} style={s.historyRow}><TouchableOpacity style={{flex:1}} onPress={()=>setDate(String(x.routine_date).slice(0,10))}><Text style={s.bold}>{String(x.routine_date).slice(0,10)} - {historyLabel(x)}</Text><Text>{x.updated_by_name||''}</Text></TouchableOpacity><TouchableOpacity onPress={()=>remove(x.id)} style={s.delete}><Text style={s.white}>Delete</Text></TouchableOpacity></View>)}
    {reportOpen&&report&&(
     <View style={s.reportContainer}>
      <View style={s.reportHeaderBar}>
       <View style={{alignItems:'center',flex:1}}>
        <Text style={s.reportSchoolTitle}>Al - Ameen Mission Academy Memari</Text>
-       <Text style={s.reportMonthTitle}>{report.monthLabel||month}</Text>
+       <Text style={s.reportMonthTitle}>{report.kind==='daily'?`Daily Class Report — ${report.dateLabel||date}`:(report.monthLabel||month)}</Text>
       </View>
       <View style={s.reportActionButtons}>
        <TouchableOpacity disabled={downloadingReport} onPress={downloadMonthlyRecord} style={s.reportDownloadBtn}>
