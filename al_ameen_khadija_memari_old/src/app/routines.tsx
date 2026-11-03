@@ -41,9 +41,13 @@ function getShortTeacherName(name: string, teacher?: any): string {
     const isSiddiki = /siddiki/i.test(clean) || (teacher && /siddiki/i.test(String(teacher.name || '')));
     return isSiddiki ? 'Ayesha (Hist)' : 'Ayesha (Geo)';
   }
-  if (/^firdousi/i.test(first) && teacher?.subject) {
-    const sub = String(teacher.subject).trim();
-    if (sub) return `Firdousi (${sub})`;
+  if (/^firdousi/i.test(first)) {
+    const rawSub = teacher?.subject || (Array.isArray(teacher?.assigned_subjects) ? teacher.assigned_subjects[0] : '');
+    const firstSub = String(rawSub || '').split(/[,/\n]+/)[0]?.trim() || '';
+    if (firstSub) return `Firdousi (${firstSub})`;
+    const m = clean.match(/\(([^,/)]+)/);
+    if (m && m[1]?.trim()) return `Firdousi (${m[1].trim()})`;
+    return 'Firdousi';
   }
   if (/^jayanta/i.test(first)) {
     if (/das/i.test(clean) || teacher?.subject === 'Math') return 'Jayanta (Math)';
