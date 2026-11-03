@@ -277,7 +277,7 @@ router.put('/:id', auth, allow('super_admin','admin'), asyncHandler(async (req,r
   const staffId=String(body.staff_id??old.staff_id).trim();
   const name=String(body.name??old.name).trim();
   if(!staffId||!name)return res.status(400).json({success:false,message:'Staff ID and name are required'});
-  const active=body.is_active===undefined ? old.user_active!==false : body.is_active!==false;
+  const active=body.is_active===undefined ? (old.user_active!==false && old.is_active!==false) : body.is_active!==false;
   const client=await pool.connect();
   try{
     await client.query('BEGIN');

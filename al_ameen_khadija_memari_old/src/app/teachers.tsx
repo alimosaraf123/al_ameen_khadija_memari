@@ -37,7 +37,7 @@ const STAFF_ROLE_OPTIONS = ['Senior', 'Junior', 'Provisional', 'Contractual'];
 const RESIDENTIAL_OPTIONS = ['Residential', 'Non-residential', 'Guest'];
 const BLOOD_GROUP_OPTIONS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'UK'];
 const BOARD_UNIVERSITY_OPTIONS = ['West Bengal Board of Primary Education (WBBPE)', 'West Bengal Board of Secondary Education (WBBSE)', 'West Bengal Council of Higher Secondary Education (WBCHSE)', 'West Bengal Board of Madrasah Education (WBBME)', 'West Bengal State Council of Technical & Vocational Education and Skill Development (WBSCTVESD)', 'University of Calcutta', 'Jadavpur University', 'The University of Burdwan', 'University of Kalyani', 'University of North Bengal', 'Vidyasagar University', 'Rabindra Bharati University', 'West Bengal State University', 'Netaji Subhas Open University', 'Presidency University', 'Aliah University', 'Maulana Abul Kalam Azad University of Technology (MAKAUT)', 'Bankura University', 'University of Gour Banga', 'Raiganj University', 'Cooch Behar Panchanan Barma University', 'Sidho-Kanho-Birsha University', 'Diamond Harbour Women’s University', 'The Sanskrit College and University', 'Visva-Bharati University', 'Other'];
-const emptyForm = { staff_id: '', name: '', designation: '', qualification: '', mobile: '', whatsapp: '', email: '', gender: '', date_of_birth: '', joining_date: '', subject: '', address: '', login_id: '', password: '', confirm_password: '', residential_type: '', profile_details: { salary: '', residential_type: '', staff_type: '', room_name: '', blood_group: '', aadhaar_no: '', voter_no: '', pan_no: '', type_of_staff: '', staff_role: '', caste_name: '', previous_branch_name: '', previous_branch_join_date: '', father_name: '', mother_name: '', father_occupation: '', mother_occupation: '', father_mobile: '', mother_mobile: '', present_village: '', present_police_station: '', present_pin_code: '', present_post_office: '', present_block: '', present_district: '', present_state: '', permanent_village: '', permanent_police_station: '', permanent_pin_code: '', permanent_post_office: '', permanent_block: '', permanent_district: '', permanent_state: '', account_no: '', ifsc_code: '', bank_name: '', branch_name: '', branch_address: '' }, education_details: [{ ...emptyEducation }] };
+const emptyForm = { staff_id: '', name: '', designation: '', qualification: '', mobile: '', whatsapp: '', email: '', gender: '', date_of_birth: '', joining_date: '', subject: '', address: '', login_id: '', password: '', confirm_password: '', residential_type: '', is_active: true, profile_details: { salary: '', residential_type: '', staff_type: '', room_name: '', blood_group: '', aadhaar_no: '', voter_no: '', pan_no: '', type_of_staff: '', staff_role: '', caste_name: '', previous_branch_name: '', previous_branch_join_date: '', father_name: '', mother_name: '', father_occupation: '', mother_occupation: '', father_mobile: '', mother_mobile: '', present_village: '', present_police_station: '', present_pin_code: '', present_post_office: '', present_block: '', present_district: '', present_state: '', permanent_village: '', permanent_police_station: '', permanent_pin_code: '', permanent_post_office: '', permanent_block: '', permanent_district: '', permanent_state: '', account_no: '', ifsc_code: '', bank_name: '', branch_name: '', branch_address: '' }, education_details: [{ ...emptyEducation }] };
 const STAFF_DOCUMENT_SLOTS = [['father', 'Father'], ['mother', 'Mother'], ['date_of_birth', 'Date Of Birth'], ['aadhaar', 'Aadhaar'], ['voter_id', 'Voter ID'], ['pan_card', 'PAN Card'], ['mp_admit', 'MP Admit'], ['mp_marksheet', 'MP Marksheet'], ['hs_marksheet', 'HS Marksheet'], ['graduation_marksheet', 'Graduation Marksheet'], ['post_graduation_marksheet', 'P. Graduate Marksheet'], ['bed_marksheet', 'B.Ed Marksheet'], ['passbook', 'Passbook'], ['other_1', 'Others 1'], ['other_2', 'Others 2'], ['other_3', 'Others 3'], ['other_4', 'Others 4']] as const;
 
 function EditableSelect({ placeholder, value, onChange, options, onSubmitEditing }: { placeholder: string; value: string; onChange: (v: string) => void; options: string[]; onSubmitEditing?: () => void }) {
@@ -378,6 +378,7 @@ export default function Teachers() {
     const initial = {
       ...emptyForm,
       ...t,
+      is_active: t.is_active !== false && t.user_active !== false,
       residential_type: resType,
       date_of_birth: String(t.date_of_birth || '').slice(0, 10),
       joining_date: String(t.joining_date || '').slice(0, 10),
@@ -430,8 +431,9 @@ export default function Teachers() {
 
   const toggleStatus = async (t: any) => {
     try {
-      await api('/api/teachers/' + t.id + '/status', { method: 'PATCH', body: JSON.stringify({ is_active: t.user_active === false }) });
-      await load();
+      const isStaffActive = t.is_active !== false && t.user_active !== false;
+      await api('/api/teachers/' + t.id + '/status', { method: 'PATCH', body: JSON.stringify({ is_active: !isStaffActive }) });
+      await load(true);
     } catch (e: any) {
       Alert.alert('Status', e.message);
     }
@@ -846,7 +848,7 @@ export default function Teachers() {
               <Text style={s.white}>Add Qualification</Text>
             </TouchableOpacity>
 
-            <Text style={s.groupTitle}>Login Details</Text>
+            <Text style={s.groupTitle}>Login & Account Status</Text>
             <View style={s.formGrid}>
               {[['login_id', 'User ID'], ['password', 'Password'], ['confirm_password', 'Re-enter Password']].map(([k, l]) => (
                 <Field
@@ -860,6 +862,17 @@ export default function Teachers() {
                   style={s.field}
                 />
               ))}
+            </View>
+            <View style={{ marginBottom: 14 }}>
+              <Select
+                label="Account Status"
+                value={form.is_active !== false ? 'Active' : 'Inactive'}
+                onChange={v => set('is_active', v === 'Active')}
+                options={[
+                  { value: 'Active', label: 'Active (Show in Attendance)' },
+                  { value: 'Inactive', label: 'Inactive (Off / Hidden from Attendance)' },
+                ]}
+              />
             </View>
 
             <Button title={saving ? 'Saving...' : editingId ? 'Update Staff' : 'Add Staff'} onPress={saveTeacher} />
@@ -988,8 +1001,8 @@ export default function Teachers() {
                             <TouchableOpacity onPress={() => resetPassword(t)} style={s.resetButton}>
                               <Text style={s.white}>Reset Password</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => toggleStatus(t)} style={[s.status, t.user_active === false && s.inactive]}>
-                              <Text style={s.white}>{t.user_active === false ? 'Inactive' : 'Active'}</Text>
+                            <TouchableOpacity onPress={() => toggleStatus(t)} style={[s.status, (t.is_active === false || t.user_active === false) && s.inactive]}>
+                              <Text style={s.white}>{(t.is_active === false || t.user_active === false) ? 'Inactive' : 'Active'}</Text>
                             </TouchableOpacity>
                           </View>
                         )}
