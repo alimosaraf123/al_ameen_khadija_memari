@@ -9,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -58,6 +59,15 @@ const PAGE_SIZE_OPTIONS = [
   { value: 0, label: 'All' },
 ];
 
+const STATUS_FILTER_OPTIONS = [
+  { value: 'All', label: 'All Statuses' },
+  { value: 'Present', label: '✓ Present (P)' },
+  { value: 'Absent', label: '✗ Absent (A)' },
+  { value: 'Late', label: '⏱ Late (L)' },
+  { value: 'Leave', label: '🏖 Leave (LV)' },
+  { value: 'Unmarked', label: '⚪ Not Marked' },
+];
+
 const STATUS_CYCLE = ['Present', 'Absent', 'Late', 'Leave', ''];
 
 const getTodayDateStr = () => {
@@ -94,6 +104,15 @@ export default function TeacherAttendance() {
   const [pageSize, setPageSize] = useState<number>(50);
   const [pageSizePickerOpen, setPageSizePickerOpen] = useState(false);
 
+  // Filter & Search states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedRole, setSelectedRole] = useState('All');
+  const [rolePickerOpen, setRolePickerOpen] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState('All');
+  const [statusPickerOpen, setStatusPickerOpen] = useState(false);
+  const [sortField, setSortField] = useState<'id' | 'name' | 'default'>('default');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
   const monthParam = `${selectedYear}-${selectedMonth}`;
 
   const loadGrid = async (targetMonth: string) => {
@@ -125,13 +144,118 @@ export default function TeacherAttendance() {
     void loadGrid(monthParam);
   };
 
-  const effectivePageSize = pageSize === 0 ? Math.max(1, staffList.length) : pageSize;
-  const totalPages = Math.max(1, Math.ceil(staffList.length / effectivePageSize));
+  // Compute distinct roles with counts
+  const roleOptions = useMemo(() => {
+    const map = new Map<string, number>();
+    staffList.forEach(s => {
+      let d = String(s.designation || 'Staff').trim();
+      if (!d) d = 'Staff';
+      if (d.toLowerCase() === 'teacher' || d.toLowerCase() === 'teachers') {
+        d = 'Teachers';
+      }
+      map.set(d, (map.get(d) || 0) + 1);
+    });
+
+    const sortedRoles = Array.from(map.keys()).sort((a, b) => {
+      if (a === 'Teachers') return -1;
+      if (b === 'Teachers') return 1;
+      return (map.get(b) || 0) - (map.get(a) || 0);
+    });
+
+    return [
+      { value: 'All', label: `All Roles (${staffList.length})` },
+      ...sortedRoles.map(r => ({
+        value: r,
+        label: `${r} (${map.get(r)})`,
+      })),
+    ];
+  }, [staffList]);
+
+  // Filtered & Sorted Staff List
+  const filteredStaff = useMemo(() => {
+    let list = [...staffList];
+
+    // 1. Search Query
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter(s => {
+        const name = String(s.name || '').toLowerCase();
+        const staffId = String(s.staff_id || '').toLowerCase();
+        const desig = String(s.designation || '').toLowerCase();
+        return name.includes(q) || staffId.includes(q) || desig.includes(q);
+      });
+    }
+
+    // 2. Role / Designation Filter
+    if (selectedRole !== 'All') {
+      const target = selectedRole.toLowerCase();
+      list = list.filter(s => {
+        let d = String(s.designation || 'Staff').trim().toLowerCase();
+        if (target === 'teachers' || target === 'teacher') {
+          return d === 'teacher' || d === 'teachers';
+        }
+        return d === target;
+      });
+    }
+
+    // 3. Today's Status Filter
+    if (selectedStatus !== 'All') {
+      list = list.filter(s => {
+        const st = s.attendance?.[todayStr] || '';
+        if (selectedStatus === 'Unmarked') {
+          return !st;
+        }
+        return st.toLowerCase() === selectedStatus.toLowerCase();
+      });
+    }
+
+    // 4. Sorting
+    if (sortField === 'name') {
+      list.sort((a, b) => {
+        const cmp = String(a.name || '').localeCompare(String(b.name || ''));
+        return sortDirection === 'asc' ? cmp : -cmp;
+      });
+    } else if (sortField === 'id') {
+      list.sort((a, b) => {
+        const aId = String(a.staff_id || '');
+        const bId = String(b.staff_id || '');
+        const aNum = parseInt(aId.replace(/\D/g, ''), 10);
+        const bNum = parseInt(bId.replace(/\D/g, ''), 10);
+        let cmp = 0;
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+          cmp = aNum - bNum;
+        } else {
+          cmp = aId.localeCompare(bId);
+        }
+        return sortDirection === 'asc' ? cmp : -cmp;
+      });
+    }
+
+    return list;
+  }, [staffList, searchQuery, selectedRole, selectedStatus, sortField, sortDirection, todayStr]);
+
+  const effectivePageSize = pageSize === 0 ? Math.max(1, filteredStaff.length) : pageSize;
+  const totalPages = Math.max(1, Math.ceil(filteredStaff.length / effectivePageSize));
   const paginatedStaff = useMemo(() => {
-    if (pageSize === 0) return staffList;
+    if (pageSize === 0) return filteredStaff;
     const start = (page - 1) * pageSize;
-    return staffList.slice(start, start + pageSize);
-  }, [staffList, page, pageSize]);
+    return filteredStaff.slice(start, start + pageSize);
+  }, [filteredStaff, page, pageSize]);
+
+  const handleSort = (field: 'id' | 'name') => {
+    if (sortField === field) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        setSortField('default');
+        setSortDirection('asc');
+      }
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+    setPage(1);
+  };
 
   const markAllPresent = async (targetDate: string = todayStr) => {
     if (targetDate > todayStr) {
@@ -203,12 +327,12 @@ export default function TeacherAttendance() {
       prev.map(item =>
         item.id === staffId
           ? {
-              ...item,
-              attendance: {
-                ...(item.attendance || {}),
-                [dateStr]: nextVal,
-              },
-            }
+            ...item,
+            attendance: {
+              ...(item.attendance || {}),
+              [dateStr]: nextVal,
+            },
+          }
           : item
       )
     );
@@ -231,12 +355,12 @@ export default function TeacherAttendance() {
         prev.map(item =>
           item.id === staffId
             ? {
-                ...item,
-                attendance: {
-                  ...(item.attendance || {}),
-                  [dateStr]: currentVal,
-                },
-              }
+              ...item,
+              attendance: {
+                ...(item.attendance || {}),
+                [dateStr]: currentVal,
+              },
+            }
             : item
         )
       );
@@ -384,6 +508,93 @@ export default function TeacherAttendance() {
           </View>
         </View>
 
+        {/* Filter Bar (Search, Role, Status, Reset, Count) */}
+        <View style={s.filterBar}>
+          {/* Search Box */}
+          <View style={s.searchBox}>
+            <Text style={s.searchIcon}>🔍</Text>
+            <TextInput
+              style={s.searchInput}
+              placeholder="Search by name, ID or role..."
+              placeholderTextColor="#94a3b8"
+              value={searchQuery}
+              onChangeText={text => {
+                setSearchQuery(text);
+                setPage(1);
+              }}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => {
+                  setSearchQuery('');
+                  setPage(1);
+                }}
+                style={s.clearSearchBtn}
+                accessibilityLabel="Clear search"
+              >
+                <Text style={s.clearSearchText}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Role / Designation Filter */}
+          <View style={s.filterItem}>
+            <Text style={s.filterLabel}>Role:</Text>
+            <TouchableOpacity
+              style={s.filterSelectBtn}
+              onPress={() => setRolePickerOpen(true)}
+              activeOpacity={0.7}
+              accessibilityLabel="Filter by role"
+            >
+              <Text style={s.filterSelectBtnText} numberOfLines={1}>
+                {selectedRole === 'All' ? 'All Roles' : selectedRole}
+              </Text>
+              <Text style={s.dropdownArrow}>⌵</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Today's Status Filter */}
+          <View style={s.filterItem}>
+            <Text style={s.filterLabel}>Today Status:</Text>
+            <TouchableOpacity
+              style={s.filterSelectBtn}
+              onPress={() => setStatusPickerOpen(true)}
+              activeOpacity={0.7}
+              accessibilityLabel="Filter by today's attendance status"
+            >
+              <Text style={s.filterSelectBtnText} numberOfLines={1}>
+                {STATUS_FILTER_OPTIONS.find(o => o.value === selectedStatus)?.label || selectedStatus}
+              </Text>
+              <Text style={s.dropdownArrow}>⌵</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Reset Filters button */}
+          {(searchQuery.trim() !== '' || selectedRole !== 'All' || selectedStatus !== 'All' || sortField !== 'default') && (
+            <TouchableOpacity
+              style={s.resetBtn}
+              onPress={() => {
+                setSearchQuery('');
+                setSelectedRole('All');
+                setSelectedStatus('All');
+                setSortField('default');
+                setSortDirection('asc');
+                setPage(1);
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={s.resetBtnText}>↺ Reset</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Count Badge */}
+          <View style={s.countBadge}>
+            <Text style={s.countBadgeText}>
+              {filteredStaff.length} of {staffList.length} Staff
+            </Text>
+          </View>
+        </View>
+
         {/* Attendance Grid Card */}
         <View style={s.card}>
           {loading && !staffList.length ? (
@@ -399,21 +610,39 @@ export default function TeacherAttendance() {
             >
               <View>
                 {/* Header Row */}
-                <View style={s.row}>
+                <View style={[s.row, s.stickyHeaderRow]}>
                   <View style={[s.colHash, s.thCell]}>
                     <Text style={s.thText}>#</Text>
                   </View>
                   <View style={[s.colPhoto, s.thCell]}>
                     <Text style={s.thText}>Photo</Text>
                   </View>
-                  <View style={[s.colId, s.thCell]}>
-                    <Text style={s.thText}>ID</Text>
-                  </View>
-                  <View style={[s.colName, s.thCell]}>
-                    <Text style={[s.thText, { textAlign: 'left', paddingLeft: 4 }]}>
-                      Staff Name
-                    </Text>
-                  </View>
+                  <TouchableOpacity
+                    style={[s.colId, s.thCell, s.thInteractiveCell]}
+                    onPress={() => handleSort('id')}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Sort by Staff ID"
+                  >
+                    <View style={s.thSortInner}>
+                      <Text style={s.thText}>ID</Text>
+                      <Text style={s.thSortArrow}>
+                        {sortField === 'id' ? (sortDirection === 'asc' ? '▲' : '▼') : '⇅'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[s.colName, s.thCell, s.thInteractiveCell, { paddingLeft: 6 }]}
+                    onPress={() => handleSort('name')}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Sort by Staff Name"
+                  >
+                    <View style={s.thSortInnerName}>
+                      <Text style={[s.thText, { textAlign: 'left' }]}>Staff Name</Text>
+                      <Text style={s.thSortArrow}>
+                        {sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : '⇅'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
 
                   {/* Day Header Columns */}
                   {days.map(day => {
@@ -466,11 +695,18 @@ export default function TeacherAttendance() {
                 </View>
 
                 {/* Body Rows */}
-                {paginatedStaff.map((person, idx) => {
-                  const rowNumber =
-                    pageSize === 0 ? idx + 1 : (page - 1) * pageSize + idx + 1;
-                  return (
-                    <View key={person.id} style={s.row}>
+                {paginatedStaff.length === 0 ? (
+                  <View style={s.noStaffRow}>
+                    <Text style={s.noStaffText}>
+                      No staff members match the current filter or search.
+                    </Text>
+                  </View>
+                ) : (
+                  paginatedStaff.map((person, idx) => {
+                    const rowNumber =
+                      pageSize === 0 ? idx + 1 : (page - 1) * pageSize + idx + 1;
+                    return (
+                      <View key={person.id} style={s.row}>
                       {/* # Col */}
                       <View style={[s.colHash, s.fixedTdCell]}>
                         <Text style={s.hashText}>{rowNumber}</Text>
@@ -582,7 +818,7 @@ export default function TeacherAttendance() {
                       })}
                     </View>
                   );
-                })}
+                }))}
               </View>
             </ScrollView>
           )}
@@ -723,6 +959,88 @@ export default function TeacherAttendance() {
                     ]}
                   >
                     {opt.label === 'All' ? 'All (Show All Staff)' : `${opt.label} per page`}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Pressable>
+        </Modal>
+
+        {/* Role Selection Modal */}
+        <Modal
+          visible={rolePickerOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setRolePickerOpen(false)}
+        >
+          <Pressable
+            style={s.modalBackdrop}
+            onPress={() => setRolePickerOpen(false)}
+          >
+            <View style={s.modalBox}>
+              <Text style={s.modalTitle}>Filter by Role / Designation</Text>
+              <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator>
+                {roleOptions.map(opt => (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[
+                      s.modalOption,
+                      selectedRole === opt.value && s.modalOptionSelected,
+                    ]}
+                    onPress={() => {
+                      setSelectedRole(opt.value);
+                      setPage(1);
+                      setRolePickerOpen(false);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        s.modalOptionText,
+                        selectedRole === opt.value && s.modalOptionTextSelected,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </Pressable>
+        </Modal>
+
+        {/* Status Selection Modal */}
+        <Modal
+          visible={statusPickerOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setStatusPickerOpen(false)}
+        >
+          <Pressable
+            style={s.modalBackdrop}
+            onPress={() => setStatusPickerOpen(false)}
+          >
+            <View style={s.modalBox}>
+              <Text style={s.modalTitle}>Filter by Today's Status</Text>
+              {STATUS_FILTER_OPTIONS.map(opt => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[
+                    s.modalOption,
+                    selectedStatus === opt.value && s.modalOptionSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedStatus(opt.value);
+                    setPage(1);
+                    setStatusPickerOpen(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      s.modalOptionText,
+                      selectedStatus === opt.value && s.modalOptionTextSelected,
+                    ]}
+                  >
+                    {opt.label}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -962,6 +1280,153 @@ const s = StyleSheet.create({
   },
   disabledBtn: {
     opacity: 0.35,
+  },
+
+  // Filter Bar Styles
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    marginBottom: 10,
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    height: 34,
+    flex: 1,
+    minWidth: 200,
+    maxWidth: 320,
+  },
+  searchIcon: {
+    fontSize: 13,
+    marginRight: 6,
+    color: '#64748b',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0f172a',
+    paddingVertical: 2,
+    height: 32,
+    outlineStyle: 'none' as any,
+  },
+  clearSearchBtn: {
+    padding: 4,
+  },
+  clearSearchText: {
+    fontSize: 12,
+    color: '#94a3b8',
+    fontWeight: '800',
+  },
+  filterItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  filterLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  filterSelectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#94a3b8',
+    borderRadius: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    minWidth: 120,
+    height: 34,
+  },
+  filterSelectBtnText: {
+    fontSize: 13,
+    color: '#0f172a',
+    fontWeight: '600',
+    maxWidth: 130,
+  },
+  resetBtn: {
+    height: 34,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    borderRadius: 4,
+  },
+  resetBtnText: {
+    color: '#b91c1c',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  countBadge: {
+    height: 34,
+    paddingHorizontal: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    marginLeft: 'auto',
+  },
+  countBadgeText: {
+    color: '#475569',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  noStaffRow: {
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  noStaffText: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  stickyHeaderRow: {
+    position: 'sticky' as any,
+    top: 0,
+    zIndex: 10,
+    backgroundColor: '#caa98a',
+  },
+  thInteractiveCell: {
+    cursor: 'pointer' as any,
+  },
+  thSortInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  thSortInnerName: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 4,
+    width: '100%',
+  },
+  thSortArrow: {
+    fontSize: 11,
+    color: '#1e293b',
+    fontWeight: '900',
   },
 
   // Card & Table
