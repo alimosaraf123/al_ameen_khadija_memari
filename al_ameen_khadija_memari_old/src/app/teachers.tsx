@@ -40,6 +40,59 @@ const BOARD_UNIVERSITY_OPTIONS = ['West Bengal Board of Primary Education (WBBPE
 const emptyForm = { staff_id: '', name: '', designation: '', qualification: '', mobile: '', whatsapp: '', email: '', gender: '', date_of_birth: '', joining_date: '', subject: '', address: '', login_id: '', password: '', confirm_password: '', residential_type: '', is_active: true, profile_details: { salary: '', residential_type: '', staff_type: '', room_name: '', blood_group: '', aadhaar_no: '', voter_no: '', pan_no: '', type_of_staff: '', staff_role: '', caste_name: '', previous_branch_name: '', previous_branch_join_date: '', father_name: '', mother_name: '', father_occupation: '', mother_occupation: '', father_mobile: '', mother_mobile: '', present_village: '', present_police_station: '', present_pin_code: '', present_post_office: '', present_block: '', present_district: '', present_state: '', permanent_village: '', permanent_police_station: '', permanent_pin_code: '', permanent_post_office: '', permanent_block: '', permanent_district: '', permanent_state: '', account_no: '', ifsc_code: '', bank_name: '', branch_name: '', branch_address: '' }, education_details: [{ ...emptyEducation }] };
 const STAFF_DOCUMENT_SLOTS = [['father', 'Father'], ['mother', 'Mother'], ['date_of_birth', 'Date Of Birth'], ['aadhaar', 'Aadhaar'], ['voter_id', 'Voter ID'], ['pan_card', 'PAN Card'], ['mp_admit', 'MP Admit'], ['mp_marksheet', 'MP Marksheet'], ['hs_marksheet', 'HS Marksheet'], ['graduation_marksheet', 'Graduation Marksheet'], ['post_graduation_marksheet', 'P. Graduate Marksheet'], ['bed_marksheet', 'B.Ed Marksheet'], ['passbook', 'Passbook'], ['other_1', 'Others 1'], ['other_2', 'Others 2'], ['other_3', 'Others 3'], ['other_4', 'Others 4']] as const;
 
+function StaffField({
+  label,
+  value,
+  onChangeText,
+  onSubmitEditing,
+  required = false,
+  placeholder,
+  secureTextEntry = false,
+  style,
+  keyboardType = 'default',
+  autoCapitalize = 'none',
+  maxLength,
+  multiline = false,
+  returnKeyType = 'done',
+}: {
+  label: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  onSubmitEditing?: () => void;
+  required?: boolean;
+  placeholder?: string;
+  secureTextEntry?: boolean;
+  style?: any;
+  keyboardType?: any;
+  autoCapitalize?: any;
+  maxLength?: number;
+  multiline?: boolean;
+  returnKeyType?: any;
+}) {
+  return (
+    <View style={[s.fieldWrap, style]}>
+      <Text style={s.fieldLabel}>
+        {label}
+        {required ? <Text style={s.redStar}> *</Text> : null}
+      </Text>
+      <TextInput
+        placeholder={placeholder || label}
+        placeholderTextColor="#94a3b8"
+        value={value ?? ''}
+        onChangeText={onChangeText}
+        onSubmitEditing={onSubmitEditing}
+        secureTextEntry={secureTextEntry}
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+        maxLength={maxLength}
+        multiline={multiline}
+        returnKeyType={returnKeyType}
+        style={[s.fieldInput, multiline && { height: 80, textAlignVertical: 'top', paddingTop: 8 }]}
+      />
+    </View>
+  );
+}
+
 function EditableSelect({ placeholder, value, onChange, options, onSubmitEditing }: { placeholder: string; value: string; onChange: (v: string) => void; options: string[]; onSubmitEditing?: () => void }) {
   const [open, setOpen] = useState(false);
   const filtered = options.filter(x => !value || x.toLowerCase().includes(value.toLowerCase()));
@@ -654,29 +707,58 @@ export default function Teachers() {
               : {})}
           >
             <Text style={s.sectionTitle}>{editingId ? 'Update Staff' : 'Add Staff'}</Text>
+            <View style={s.mandatoryBanner}>
+              <Text style={s.mandatoryBannerText}>
+                📌 Fields marked with <Text style={s.redStar}>*</Text> are mandatory (<Text style={{ fontWeight: '800' }}>Staff ID</Text> & <Text style={{ fontWeight: '800' }}>Staff Name</Text>).
+              </Text>
+            </View>
             <Text style={s.groupTitle}>Staff Necessary Details</Text>
             <View style={s.formGrid}>
-              {[
-                ['staff_id', 'Staff ID *'],
-                ['name', 'Staff Name *'],
-                ['qualification', 'Qualification'],
-                ['mobile', 'Mobile Number'],
-                ['whatsapp', 'WhatsApp Number'],
-                ['email', 'Email ID'],
-              ].map(([k, l]) => (
-                <Field
-                  key={k}
-                  label={l}
-                  value={form[k]}
-                  onChangeText={(v: string) => set(k, v)}
-                  onSubmitEditing={saveTeacher}
-                  returnKeyType="done"
-                  style={s.field}
-                />
-              ))}
-              <View style={s.selectField}>
+              <StaffField
+                label="Staff ID"
+                required
+                value={form.staff_id}
+                onChangeText={(v: string) => set('staff_id', v)}
+                onSubmitEditing={saveTeacher}
+              />
+              <StaffField
+                label="Staff Name"
+                required
+                value={form.name}
+                onChangeText={(v: string) => set('name', v)}
+                onSubmitEditing={saveTeacher}
+              />
+              <StaffField
+                label="Qualification"
+                value={form.qualification}
+                onChangeText={(v: string) => set('qualification', v)}
+                onSubmitEditing={saveTeacher}
+              />
+              <StaffField
+                label="Mobile Number"
+                value={form.mobile}
+                onChangeText={(v: string) => set('mobile', v)}
+                onSubmitEditing={saveTeacher}
+                keyboardType="phone-pad"
+              />
+              <StaffField
+                label="WhatsApp Number"
+                value={form.whatsapp}
+                onChangeText={(v: string) => set('whatsapp', v)}
+                onSubmitEditing={saveTeacher}
+                keyboardType="phone-pad"
+              />
+              <StaffField
+                label="Email ID"
+                value={form.email}
+                onChangeText={(v: string) => set('email', v)}
+                onSubmitEditing={saveTeacher}
+                keyboardType="email-address"
+              />
+              <View style={s.fieldWrap}>
+                <Text style={s.fieldLabel}>Gender</Text>
                 <Select
-                  label="Gender"
+                  label="Select gender"
                   value={form.gender}
                   onChange={v => set('gender', v)}
                   options={[
@@ -687,13 +769,15 @@ export default function Teachers() {
                   ]}
                 />
               </View>
-              <DatePickerField label="Date of Joining" value={form.joining_date} onChange={v => set('joining_date', v)} style={s.field} />
-              <View style={s.selectField}>
-                <Select searchable label="Subject" value={form.subject} onChange={v => set('subject', v)} options={[{ value: '', label: 'Select subject' }, ...SUBJECT_OPTIONS]} />
+              <DatePickerField label="Date of Joining" value={form.joining_date} onChange={v => set('joining_date', v)} style={s.fieldWrap} />
+              <View style={s.fieldWrap}>
+                <Text style={s.fieldLabel}>Subject</Text>
+                <Select searchable label="Select subject" value={form.subject} onChange={v => set('subject', v)} options={[{ value: '', label: 'Select subject' }, ...SUBJECT_OPTIONS]} />
               </View>
-              <View style={s.selectField}>
+              <View style={s.fieldWrap}>
+                <Text style={s.fieldLabel}>Residential Type</Text>
                 <Select
-                  label="Residential Type"
+                  label="Select residential type"
                   value={form.profile_details?.residential_type || form.residential_type || ''}
                   onChange={v => {
                     setDetail('residential_type', v);
@@ -702,74 +786,87 @@ export default function Teachers() {
                   options={[{ value: '', label: 'Select residential type' }, ...RESIDENTIAL_OPTIONS.map(v => ({ value: v, label: v }))]}
                 />
               </View>
-              <View style={s.selectField}>
+              <View style={s.fieldWrap}>
+                <Text style={s.fieldLabel}>Staff Type</Text>
                 <Select
-                  label="Staff Type"
+                  label="Select staff type"
                   value={form.profile_details.staff_type}
                   onChange={v => setDetail('staff_type', v)}
                   options={[{ value: '', label: 'Select staff type' }, ...STAFF_TYPE_OPTIONS.map(v => ({ value: v, label: v }))]}
                 />
               </View>
-              <Field
+              <StaffField
                 label="Room"
                 value={form.profile_details.room_name}
                 onChangeText={(v: string) => setDetail('room_name', v)}
                 onSubmitEditing={saveTeacher}
-                returnKeyType="done"
-                style={s.field}
               />
             </View>
 
             <Text style={s.groupTitle}>Staff Information</Text>
             <View style={s.formGrid}>
-              <DatePickerField label="Date of Birth" value={form.date_of_birth} onChange={v => set('date_of_birth', v)} style={s.field} />
-              <View style={s.selectField}>
+              <DatePickerField label="Date of Birth" value={form.date_of_birth} onChange={v => set('date_of_birth', v)} style={s.fieldWrap} />
+              <View style={s.fieldWrap}>
+                <Text style={s.fieldLabel}>Blood Group</Text>
                 <Select
-                  label="Blood Group"
+                  label="Select blood group"
                   value={form.profile_details.blood_group}
                   onChange={v => setDetail('blood_group', v)}
                   options={[{ value: '', label: 'Select blood group' }, ...BLOOD_GROUP_OPTIONS.map(v => ({ value: v, label: v }))]}
                 />
               </View>
-              {([['aadhaar_no', 'Aadhaar No.'], ['voter_no', 'Voter No.'], ['pan_no', 'PAN No.']] as string[][]).map(([k, l]) => (
-                <Field
-                  key={k}
-                  label={l}
-                  value={form.profile_details[k]}
-                  onChangeText={(v: string) => setDetail(k, v)}
-                  onSubmitEditing={saveTeacher}
-                  returnKeyType="done"
-                  style={s.field}
-                />
-              ))}
-              <View style={s.selectField}>
+              <StaffField
+                label="Aadhaar No."
+                value={form.profile_details.aadhaar_no}
+                onChangeText={(v: string) => setDetail('aadhaar_no', v)}
+                onSubmitEditing={saveTeacher}
+                keyboardType="numeric"
+                maxLength={12}
+              />
+              <StaffField
+                label="Voter No."
+                value={form.profile_details.voter_no}
+                onChangeText={(v: string) => setDetail('voter_no', v)}
+                onSubmitEditing={saveTeacher}
+              />
+              <StaffField
+                label="PAN No."
+                value={form.profile_details.pan_no}
+                onChangeText={(v: string) => setDetail('pan_no', v)}
+                onSubmitEditing={saveTeacher}
+                autoCapitalize="characters"
+              />
+              <View style={s.fieldWrap}>
+                <Text style={s.fieldLabel}>Type of Staff</Text>
                 <Select
-                  label="Type of Staff"
+                  label="Select type"
                   value={form.profile_details.type_of_staff}
                   onChange={v => setDetail('type_of_staff', v)}
                   options={[{ value: '', label: 'Select type' }, ...STAFF_TYPE_OPTIONS.map(v => ({ value: v, label: v }))]}
                 />
               </View>
-              <View style={s.selectField}>
+              <View style={s.fieldWrap}>
+                <Text style={s.fieldLabel}>Staff Role</Text>
                 <Select
-                  label="Staff Role"
+                  label="Select Type of Role"
                   value={form.profile_details.staff_role}
                   onChange={v => setDetail('staff_role', v)}
                   options={[{ value: '', label: 'Select Type of Role' }, ...STAFF_ROLE_OPTIONS.map(v => ({ value: v, label: v }))]}
                 />
               </View>
-              {([['caste_name', 'Caste Name'], ['previous_branch_name', 'Previous Branch Name']] as string[][]).map(([k, l]) => (
-                <Field
-                  key={k}
-                  label={l}
-                  value={form.profile_details[k]}
-                  onChangeText={(v: string) => setDetail(k, v)}
-                  onSubmitEditing={saveTeacher}
-                  returnKeyType="done"
-                  style={s.field}
-                />
-              ))}
-              <DatePickerField label="Previous Branch Join Date" value={form.profile_details.previous_branch_join_date} onChange={v => setDetail('previous_branch_join_date', v)} style={s.field} />
+              <StaffField
+                label="Caste Name"
+                value={form.profile_details.caste_name}
+                onChangeText={(v: string) => setDetail('caste_name', v)}
+                onSubmitEditing={saveTeacher}
+              />
+              <StaffField
+                label="Previous Branch Name"
+                value={form.profile_details.previous_branch_name}
+                onChangeText={(v: string) => setDetail('previous_branch_name', v)}
+                onSubmitEditing={saveTeacher}
+              />
+              <DatePickerField label="Previous Branch Join Date" value={form.profile_details.previous_branch_join_date} onChange={v => setDetail('previous_branch_join_date', v)} style={s.fieldWrap} />
             </View>
 
             <Text style={s.groupTitle}>Parents Information</Text>
@@ -782,14 +879,13 @@ export default function Teachers() {
                 ['father_mobile', "Father's Mobile"],
                 ['mother_mobile', "Mother's Mobile"],
               ].map(([k, l]) => (
-                <Field
+                <StaffField
                   key={k}
                   label={l}
                   value={form.profile_details[k]}
                   onChangeText={(v: string) => setDetail(k, v)}
                   onSubmitEditing={saveTeacher}
-                  returnKeyType="done"
-                  style={s.field}
+                  keyboardType={k.includes('mobile') ? 'phone-pad' : 'default'}
                 />
               ))}
             </View>
@@ -805,14 +901,13 @@ export default function Teachers() {
                 <View key={prefix} style={s.addressColumn}>
                   <Text style={s.addressTitle}>{prefix === 'present' ? 'Present Address' : 'Permanent Address'}</Text>
                   {['village', 'police_station', 'pin_code', 'post_office', 'block', 'district', 'state'].map(k => (
-                    <Field
+                    <StaffField
                       key={k}
-                      label={k.replaceAll('_', ' ')}
+                      label={k.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
                       value={form.profile_details[prefix + '_' + k]}
                       onChangeText={(v: string) => setDetail(prefix + '_' + k, v)}
                       onSubmitEditing={saveTeacher}
-                      returnKeyType="done"
-                      style={s.addressField}
+                      style={{ width: '100%' }}
                     />
                   ))}
                 </View>
@@ -828,14 +923,12 @@ export default function Teachers() {
                 ['branch_address', 'Branch Address'],
                 ['bank_name', 'Bank Name'],
               ].map(([k, l]) => (
-                <Field
+                <StaffField
                   key={k}
                   label={l}
                   value={form.profile_details[k]}
                   onChangeText={(v: string) => setDetail(k, v)}
                   onSubmitEditing={saveTeacher}
-                  returnKeyType="done"
-                  style={s.field}
                 />
               ))}
             </View>
@@ -867,21 +960,36 @@ export default function Teachers() {
             </TouchableOpacity>
 
             <Text style={s.groupTitle}>Login & Account Status</Text>
+            <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+              Default User ID is the first part of name. Default password is the Staff ID. Custom password is optional.
+            </Text>
             <View style={s.formGrid}>
-              {[['login_id', 'User ID'], ['password', 'Password'], ['confirm_password', 'Re-enter Password']].map(([k, l]) => (
-                <Field
-                  key={k}
-                  label={l}
-                  value={form[k]}
-                  onChangeText={(v: string) => set(k, v)}
-                  secureTextEntry={k !== 'login_id'}
-                  onSubmitEditing={saveTeacher}
-                  returnKeyType="done"
-                  style={s.field}
-                />
-              ))}
+              <StaffField
+                label="User ID"
+                placeholder="Leave empty for auto"
+                value={form.login_id}
+                onChangeText={(v: string) => set('login_id', v)}
+                onSubmitEditing={saveTeacher}
+              />
+              <StaffField
+                label="Password"
+                placeholder="Default: Staff ID"
+                value={form.password}
+                onChangeText={(v: string) => set('password', v)}
+                secureTextEntry
+                onSubmitEditing={saveTeacher}
+              />
+              <StaffField
+                label="Re-enter Password"
+                placeholder="Match password if set"
+                value={form.confirm_password}
+                onChangeText={(v: string) => set('confirm_password', v)}
+                secureTextEntry
+                onSubmitEditing={saveTeacher}
+              />
             </View>
-            <View style={{ marginBottom: 14 }}>
+            <View style={{ marginBottom: 14, width: '31%', minWidth: 220 }}>
+              <Text style={s.fieldLabel}>Account Status</Text>
               <Select
                 label="Account Status"
                 value={form.is_active !== false ? 'Active' : 'Inactive'}
@@ -1196,6 +1304,33 @@ const s = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: '900', color: '#214333', marginBottom: 12 },
   formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   field: { flexGrow: 1, width: '31%', minWidth: 220 },
+  fieldWrap: { flexGrow: 1, width: '31%', minWidth: 220, marginBottom: 10 },
+  fieldLabel: { fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 5 },
+  redStar: { color: '#dc2626', fontWeight: '900', fontSize: 13 },
+  fieldInput: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingHorizontal: 11,
+    height: 44,
+    fontSize: 14,
+    color: '#172033',
+  },
+  mandatoryBanner: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  mandatoryBannerText: {
+    color: '#991b1b',
+    fontSize: 13,
+    fontWeight: '600',
+  },
   selectField: { flexGrow: 1, width: '31%', minWidth: 220, marginBottom: 10 },
   groupTitle: { fontSize: 17, fontWeight: '900', color: '#1f3b31', marginTop: 18, marginBottom: 10, paddingBottom: 7, borderBottomWidth: 1, borderBottomColor: '#d8e2dc' },
   groupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' },
