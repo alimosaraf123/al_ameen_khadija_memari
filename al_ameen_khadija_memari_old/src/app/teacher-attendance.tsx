@@ -127,9 +127,9 @@ export default function TeacherAttendance() {
       return;
     }
 
-    if (targetDate < todayStr && Platform.OS === 'web' && typeof window !== 'undefined') {
-      const confirmPast = window.confirm(`Mark all active staff as Present for ${targetDate}?`);
-      if (!confirmPast) return;
+    if (targetDate < todayStr) {
+      Alert.alert('Attendance Locked', 'Back-dated attendance is turned off. Attendance can only be marked for today.');
+      return;
     }
 
     const [tYear, tMonth] = targetDate.split('-');
@@ -176,6 +176,10 @@ export default function TeacherAttendance() {
 
   const cycleStatus = async (staffId: number, dateStr: string) => {
     if (dateStr > todayStr) return; // Future days are disabled
+    if (dateStr < todayStr) {
+      Alert.alert('Attendance Locked', 'Back-dated attendance is turned off. Only today’s attendance can be marked.');
+      return;
+    }
 
     const currentStaff = staffList.find(s => s.id === staffId);
     const currentVal = currentStaff?.attendance?.[dateStr] || '';
@@ -385,31 +389,33 @@ export default function TeacherAttendance() {
                   {/* Day Header Columns */}
                   {days.map(day => {
                     const isToday = day.date === todayStr;
-                    const isFuture = day.date > todayStr;
-                    return isFuture ? (
-                      <View
-                        key={day.date}
-                        style={[s.colDay, s.thCell]}
-                      >
-                        <Text style={s.thDayName}>{day.day}</Text>
-                        <Text style={s.thDayNumber}>{day.number}</Text>
-                      </View>
-                    ) : (
+                    if (!isToday) {
+                      return (
+                        <View
+                          key={day.date}
+                          style={[s.colDay, s.thCell]}
+                        >
+                          <Text style={s.thDayName}>{day.day}</Text>
+                          <Text style={s.thDayNumber}>{day.number}</Text>
+                        </View>
+                      );
+                    }
+                    return (
                       <TouchableOpacity
                         key={day.date}
                         activeOpacity={0.7}
                         onPress={() => markAllPresent(day.date)}
-                        accessibilityLabel={`Mark all present for ${day.date}`}
+                        accessibilityLabel={`Mark all present for today (${day.date})`}
                         style={[
                           s.colDay,
                           s.thCell,
-                          isToday && s.todayHeaderCell,
+                          s.todayHeaderCell,
                         ]}
                       >
                         <Text
                           style={[
                             s.thDayName,
-                            isToday && s.todayHeaderText,
+                            s.todayHeaderText,
                           ]}
                         >
                           {day.day}
@@ -417,16 +423,14 @@ export default function TeacherAttendance() {
                         <Text
                           style={[
                             s.thDayNumber,
-                            isToday && s.todayHeaderText,
+                            s.todayHeaderText,
                           ]}
                         >
                           {day.number}
                         </Text>
-                        {isToday && (
-                          <View style={s.thQuickAllBadge}>
-                            <Text style={s.thQuickAllBadgeText}>✓ All</Text>
-                          </View>
-                        )}
+                        <View style={s.thQuickAllBadge}>
+                          <Text style={s.thQuickAllBadgeText}>✓ All</Text>
+                        </View>
                       </TouchableOpacity>
                     );
                   })}
@@ -482,6 +486,7 @@ export default function TeacherAttendance() {
                         const dateKey = day.date;
                         const isFuture = dateKey > todayStr;
                         const isToday = dateKey === todayStr;
+                        const isPast = dateKey < todayStr;
                         const val = person.attendance?.[dateKey];
                         const symbol = getStatusSymbol(val);
                         const isSavingThis = savingCell === `${person.id}_${dateKey}`;
@@ -495,6 +500,27 @@ export default function TeacherAttendance() {
                           );
                         }
 
+                        if (isPast) {
+                          return (
+                            <View
+                              key={dateKey}
+                              style={[s.colDay, s.tdCell, s.pastDayCell]}
+                            >
+                              <Text
+                                style={[
+                                  s.statusSymbolText,
+                                  s.pastSymbolText,
+                                  symbol === 'A' && s.absentColor,
+                                  symbol === 'P' && s.presentColor,
+                                  (symbol === 'L' || symbol === 'LV') && s.lateColor,
+                                ]}
+                              >
+                                {symbol}
+                              </Text>
+                            </View>
+                          );
+                        }
+
                         return (
                           <TouchableOpacity
                             key={dateKey}
@@ -504,7 +530,7 @@ export default function TeacherAttendance() {
                               s.colDay,
                               s.tdCell,
                               s.activeDayCell,
-                              isToday && s.todayBodyCell,
+                              s.todayBodyCell,
                             ]}
                           >
                             {isSavingThis ? (
@@ -533,7 +559,7 @@ export default function TeacherAttendance() {
 
           {/* Quick legend footer */}
           <View style={s.footerLegend}>
-            <Text style={s.legendTitle}>Legend / Click to change:</Text>
+            <Text style={s.legendTitle}>Legend (Today):</Text>
             <View style={s.legendItem}>
               <Text style={[s.legendBadge, s.presentColor]}>P</Text>
               <Text style={s.legendLabel}>Present</Text>
@@ -551,7 +577,7 @@ export default function TeacherAttendance() {
               <Text style={s.legendLabel}>Leave</Text>
             </View>
             <Text style={s.autoSaveHint}>
-              • Tap any cell to cycle status (Auto-saves instantly)
+              • Only today's attendance can be edited • Back dates and future dates are locked
             </Text>
           </View>
         </View>
@@ -1002,7 +1028,14 @@ const s = StyleSheet.create({
     backgroundColor: '#ffffff',
   },
   todayBodyCell: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#f0f9ff',
+  },
+  pastDayCell: {
+    backgroundColor: '#f8fafc',
+  },
+  pastSymbolText: {
+    color: '#1e293b',
+    fontWeight: '800',
   },
   futureDayCell: {
     backgroundColor: '#cbd5e1', // Solid grey for future days from Image 1

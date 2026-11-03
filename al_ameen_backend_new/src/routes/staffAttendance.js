@@ -20,6 +20,10 @@ function validDate(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
     Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0,10) === value;
 }
+function getTodayDateStr() {
+  const d = new Date(Date.now() + 5.5 * 3600 * 1000);
+  return d.toISOString().slice(0, 10);
+}
 router.use(auth, allow('super_admin','admin'));
 
 router.get('/', asyncHandler(async(req,res) => {
@@ -45,6 +49,9 @@ router.get('/', asyncHandler(async(req,res) => {
 router.post('/mark-all-present', asyncHandler(async(req, res) => {
   const { date } = req.body || {};
   if (!validDate(date)) return res.status(400).json({ message: 'Enter a valid date (YYYY-MM-DD).' });
+  const today = getTodayDateStr();
+  if (date < today) return res.status(400).json({ success: false, message: 'Back-dated attendance is turned off.' });
+  if (date > today) return res.status(400).json({ success: false, message: 'Future date attendance is not allowed.' });
   await schema();
   const result = await pool.query(`
     INSERT INTO staff_attendance(teacher_id, attendance_date, status, marked_by, updated_at)
@@ -69,6 +76,12 @@ router.post('/mark-all-present', asyncHandler(async(req, res) => {
 
 router.post('/', asyncHandler(async(req,res) => {
   const {date, entries, teacher_id, status, mark_all} = req.body || {};
+  if (date) {
+    if (!validDate(date)) return res.status(400).json({message:'Enter a valid date (YYYY-MM-DD).'});
+    const today = getTodayDateStr();
+    if (date < today) return res.status(400).json({ success: false, message: 'Back-dated attendance is turned off.' });
+    if (date > today) return res.status(400).json({ success: false, message: 'Future date attendance is not allowed.' });
+  }
   await schema();
 
   // Instant one-click present all: { date, mark_all: 'Present' }
