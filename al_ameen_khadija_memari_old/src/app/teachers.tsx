@@ -604,11 +604,29 @@ export default function Teachers() {
     }
   };
 
+  const handleBack = () => {
+    if (editingId) {
+      setEditingId(null);
+      editingIdRef.current = null;
+      setForm(emptyForm);
+      formRef.current = emptyForm;
+      return;
+    }
+    router.replace('/superadmin?menu=staff');
+  };
+
+  const closeDocuments = () => {
+    setDocumentTeacher(null);
+    if (mode === 'documents') {
+      router.replace('/superadmin?menu=staff');
+    }
+  };
+
   return (
     <SafeAreaView style={s.page}>
       <ScrollView ref={scrollRef} contentContainerStyle={s.content}>
         <AcademyHeader fixed />
-        <Button title="← Back" onPress={() => router.canGoBack() ? router.back() : router.replace('/superadmin')} />
+        <Button title={editingId ? "← Cancel Edit" : "← Back"} onPress={handleBack} />
         <Text style={s.title}>Staff Management</Text>
         <Text style={s.help}>Default User ID is the first part of the name. Default password is the Staff ID.</Text>
 
@@ -1015,11 +1033,11 @@ export default function Teachers() {
         )}
       </ScrollView>
 
-      <Modal visible={!!documentTeacher} animationType="slide" onRequestClose={() => router.canGoBack() ? router.back() : router.replace('/superadmin')}>
+      <Modal visible={!!documentTeacher} animationType="slide" onRequestClose={closeDocuments}>
         <View style={s.modalBackdrop}>
           <View style={s.modalCard}>
             <View style={s.documentTopbar}>
-              <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/superadmin')} style={s.closeButton}>
+              <TouchableOpacity onPress={closeDocuments} style={s.closeButton}>
                 <Text style={s.white}>Close</Text>
               </TouchableOpacity>
               <View>

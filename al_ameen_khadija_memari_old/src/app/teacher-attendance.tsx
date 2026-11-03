@@ -256,9 +256,9 @@ export default function TeacherAttendance() {
         <View style={s.topNav}>
           <TouchableOpacity
             style={s.backBtn}
-            onPress={() => router.push('/teachers' as any)}
+            onPress={() => router.replace('/superadmin?menu=staff')}
           >
-            <Text style={s.backBtnText}>← Back to Teachers</Text>
+            <Text style={s.backBtnText}>← Back to Staff</Text>
           </TouchableOpacity>
           <Text style={s.pageTitle}>Staff Attendance</Text>
         </View>

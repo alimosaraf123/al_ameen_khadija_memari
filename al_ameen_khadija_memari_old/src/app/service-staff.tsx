@@ -260,8 +260,8 @@ export default function ServiceStaff() {
 
         {/* HEADER */}
         <View style={s.top}>
-          <TouchableOpacity style={s.light} onPress={() => router.push('/superadmin' as any)}>
-            <Text style={s.bold}>← Super Admin</Text>
+          <TouchableOpacity style={s.light} onPress={() => router.replace('/superadmin?menu=staff')}>
+            <Text style={s.bold}>← Back to Staff</Text>
           </TouchableOpacity>
           <View>
             <Text style={s.title}>Service Staff Management</Text>
