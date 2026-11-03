@@ -42,9 +42,52 @@ router.get('/', asyncHandler(async(req,res) => {
   res.json({success:true,staff:result.rows});
 }));
 
-router.post('/', asyncHandler(async(req,res) => {
-  const {date, entries, teacher_id, status} = req.body || {};
+router.post('/mark-all-present', asyncHandler(async(req, res) => {
+  const { date } = req.body || {};
+  if (!validDate(date)) return res.status(400).json({ message: 'Enter a valid date (YYYY-MM-DD).' });
   await schema();
+  const result = await pool.query(`
+    INSERT INTO staff_attendance(teacher_id, attendance_date, status, marked_by, updated_at)
+    SELECT t.id, $1::date, 'Present', $2, NOW()
+    FROM teachers t
+    WHERE t.is_active = TRUE
+      AND LOWER(TRIM(COALESCE(t.residential_type, t.profile_details->>'residential_type', ''))) <> 'guest'
+      AND (
+        LOWER(TRIM(COALESCE(t.residential_type, t.profile_details->>'residential_type', ''))) IN ('residential', 'non-residential', 'non residential')
+        OR LOWER(TRIM(COALESCE(t.profile_details->>'staff_role', ''))) NOT LIKE '%guest%'
+      )
+    ON CONFLICT (teacher_id, attendance_date)
+    DO UPDATE SET status = 'Present', marked_by = EXCLUDED.marked_by, updated_at = NOW()
+  `, [date, req.user ? req.user.userId : null]);
+
+  res.json({
+    success: true,
+    message: `All staff marked present for ${date}.`,
+    count: result.rowCount,
+  });
+}));
+
+router.post('/', asyncHandler(async(req,res) => {
+  const {date, entries, teacher_id, status, mark_all} = req.body || {};
+  await schema();
+
+  // Instant one-click present all: { date, mark_all: 'Present' }
+  if (mark_all === 'Present' && validDate(date)) {
+    const result = await pool.query(`
+      INSERT INTO staff_attendance(teacher_id, attendance_date, status, marked_by, updated_at)
+      SELECT t.id, $1::date, 'Present', $2, NOW()
+      FROM teachers t
+      WHERE t.is_active = TRUE
+        AND LOWER(TRIM(COALESCE(t.residential_type, t.profile_details->>'residential_type', ''))) <> 'guest'
+        AND (
+          LOWER(TRIM(COALESCE(t.residential_type, t.profile_details->>'residential_type', ''))) IN ('residential', 'non-residential', 'non residential')
+          OR LOWER(TRIM(COALESCE(t.profile_details->>'staff_role', ''))) NOT LIKE '%guest%'
+        )
+      ON CONFLICT (teacher_id, attendance_date)
+      DO UPDATE SET status = 'Present', marked_by = EXCLUDED.marked_by, updated_at = NOW()
+    `, [date, req.user ? req.user.userId : null]);
+    return res.json({ success: true, message: 'All staff marked present.', count: result.rowCount });
+  }
 
   // Support single-cell instant save: { date, teacher_id, status }
   if (teacher_id && date && status !== undefined) {

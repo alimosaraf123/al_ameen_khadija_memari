@@ -77,7 +77,9 @@ export default function TeacherAttendance() {
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [savingCell, setSavingCell] = useState<string | null>(null);
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
@@ -118,6 +120,59 @@ export default function TeacherAttendance() {
     const start = (page - 1) * PAGE_SIZE;
     return staffList.slice(start, start + PAGE_SIZE);
   }, [staffList, page]);
+
+  const markAllPresent = async (targetDate: string = todayStr) => {
+    if (targetDate > todayStr) {
+      Alert.alert('Not allowed', 'Cannot mark attendance for future dates.');
+      return;
+    }
+
+    if (targetDate < todayStr && Platform.OS === 'web' && typeof window !== 'undefined') {
+      const confirmPast = window.confirm(`Mark all active staff as Present for ${targetDate}?`);
+      if (!confirmPast) return;
+    }
+
+    const [tYear, tMonth] = targetDate.split('-');
+    const isCurrentView = tYear === selectedYear && tMonth === selectedMonth;
+
+    // Optimistic UI update for all active staff
+    setStaffList(prev =>
+      prev.map(item => ({
+        ...item,
+        attendance: {
+          ...(item.attendance || {}),
+          [targetDate]: 'Present',
+        },
+      }))
+    );
+
+    setBulkSaving(true);
+    setSuccessMsg(`Marking all active staff as Present for ${targetDate}...`);
+
+    try {
+      const res = await api('/api/teachers/attendance/mark-all-present', {
+        method: 'POST',
+        body: JSON.stringify({ date: targetDate }),
+      });
+
+      if (res.success) {
+        setSuccessMsg(`✓ All ${res.count || staffList.length} staff marked Present for ${targetDate}`);
+        if (!isCurrentView) {
+          setSelectedYear(tYear);
+          setSelectedMonth(tMonth);
+          void loadGrid(`${tYear}-${tMonth}`);
+        }
+        setTimeout(() => setSuccessMsg(''), 4500);
+      } else {
+        throw new Error(res.message || 'Failed to mark all staff present');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to mark all staff present');
+      void loadGrid(monthParam);
+    } finally {
+      setBulkSaving(false);
+    }
+  };
 
   const cycleStatus = async (staffId: number, dateStr: string) => {
     if (dateStr > todayStr) return; // Future days are disabled
@@ -214,6 +269,15 @@ export default function TeacherAttendance() {
           </View>
         )}
 
+        {!!successMsg && (
+          <View style={s.successBox}>
+            <Text style={s.successText}>{successMsg}</Text>
+            <TouchableOpacity onPress={() => setSuccessMsg('')}>
+              <Text style={s.successDismiss}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Toolbar matching Image 1 */}
         <View style={s.toolbar}>
           <View style={s.filterGroup}>
@@ -242,6 +306,26 @@ export default function TeacherAttendance() {
               disabled={loading}
             >
               <Text style={s.goBtnText}>{loading ? '...' : 'Go'}</Text>
+            </TouchableOpacity>
+
+            {/* One-Click Present All Button */}
+            <TouchableOpacity
+              style={[s.presentAllBtn, bulkSaving && s.presentAllBtnDisabled]}
+              onPress={() => markAllPresent(todayStr)}
+              disabled={bulkSaving || loading}
+              activeOpacity={0.8}
+            >
+              {bulkSaving ? (
+                <View style={s.presentAllInner}>
+                  <ActivityIndicator size="small" color="#ffffff" />
+                  <Text style={s.presentAllBtnText}>Saving...</Text>
+                </View>
+              ) : (
+                <View style={s.presentAllInner}>
+                  <Text style={s.presentAllIcon}>✓</Text>
+                  <Text style={s.presentAllBtnText}>One-Click Present All</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -301,9 +385,21 @@ export default function TeacherAttendance() {
                   {/* Day Header Columns */}
                   {days.map(day => {
                     const isToday = day.date === todayStr;
-                    return (
+                    const isFuture = day.date > todayStr;
+                    return isFuture ? (
                       <View
                         key={day.date}
+                        style={[s.colDay, s.thCell]}
+                      >
+                        <Text style={s.thDayName}>{day.day}</Text>
+                        <Text style={s.thDayNumber}>{day.number}</Text>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        key={day.date}
+                        activeOpacity={0.7}
+                        onPress={() => markAllPresent(day.date)}
+                        accessibilityLabel={`Mark all present for ${day.date}`}
                         style={[
                           s.colDay,
                           s.thCell,
@@ -326,7 +422,12 @@ export default function TeacherAttendance() {
                         >
                           {day.number}
                         </Text>
-                      </View>
+                        {isToday && (
+                          <View style={s.thQuickAllBadge}>
+                            <Text style={s.thQuickAllBadgeText}>✓ All</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
                     );
                   })}
                 </View>
@@ -585,6 +686,29 @@ const s = StyleSheet.create({
     color: '#b91c1c',
     fontWeight: '700',
   },
+  successBox: {
+    backgroundColor: '#dcfce7',
+    borderWidth: 1,
+    borderColor: '#22c55e',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 6,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  successText: {
+    color: '#15803d',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  successDismiss: {
+    color: '#15803d',
+    fontWeight: '900',
+    fontSize: 16,
+    paddingHorizontal: 6,
+  },
 
   // Toolbar
   toolbar: {
@@ -641,6 +765,38 @@ const s = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '700',
     fontSize: 14,
+  },
+  presentAllBtn: {
+    backgroundColor: '#16a34a', // pleasant emerald green
+    paddingHorizontal: 14,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 4,
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  presentAllBtnDisabled: {
+    backgroundColor: '#86efac',
+    opacity: 0.8,
+  },
+  presentAllInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  presentAllIcon: {
+    color: '#ffffff',
+    fontWeight: '900',
+    fontSize: 14,
+  },
+  presentAllBtnText: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 13,
   },
 
   // Pagination
@@ -759,6 +915,19 @@ const s = StyleSheet.create({
   todayHeaderText: {
     color: '#000000',
     fontWeight: '900',
+  },
+  thQuickAllBadge: {
+    backgroundColor: '#0f172a',
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    marginTop: 2,
+  },
+  thQuickAllBadgeText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '900',
+    textAlign: 'center',
   },
 
   // Fixed Left TD Cells (Pastel blue background #b9d5f5 from Image 1)
