@@ -28,9 +28,22 @@ const BASE_ROOMS=['Library-I','Library-II','Corridor','XII-A','XII-B','XI-A','XI
 // This normalizes alternate spellings, but deliberately does not group related subjects
 // (for example, Physics is not Chemistry, P.Sc, or Science).
 const canon=(v:any)=>{const k=String(v||'').toLowerCase().replace(/[^a-z]/g,'');return({english:'eng',eng:'eng',englishi:'engi',engi:'engi',englishii:'engii',engii:'engii',bengali:'beng',beng:'beng',biology:'bio',bio:'bio',physics:'phy',phy:'phy',chemistry:'chem',chem:'chem',mathematics:'math',math:'math',maths:'math',lifescience:'lsc',lsc:'lsc',physicalscience:'psc',psc:'psc',science:'sci',sci:'sci',geography:'geo',geo:'geo',history:'hist',hist:'hist',histroy:'hist',computer:'comp',comp:'comp',arabic:'arabic',arab:'arabic'}as any)[k]||k};
-function getShortTeacherName(name: string): string {
+function getShortTeacherName(name: string, teacher?: any): string {
   if (!name) return '';
-  const first = name.trim().split(/\s+/)[0];
+  const clean = name.trim();
+  const first = clean.split(/\s+/)[0];
+  if (/^ayesha/i.test(first)) {
+    const isSiddiki = /siddiki/i.test(clean) || (teacher && /siddiki/i.test(String(teacher.name || '')));
+    return isSiddiki ? 'Ayesha (Hist)' : 'Ayesha (Geo)';
+  }
+  if (/^firdousi/i.test(first) && teacher?.subject) {
+    const sub = String(teacher.subject).trim();
+    if (sub) return `Firdousi (${sub})`;
+  }
+  if (/^jayanta/i.test(first)) {
+    if (/das/i.test(clean) || teacher?.subject === 'Math') return 'Jayanta (Math)';
+    if (/nath/i.test(clean) || teacher?.subject === 'Chem') return 'Jayanta (Chem)';
+  }
   if (/^kamrun/i.test(first)) return 'Kamrun';
   if (/^zinnat/i.test(first)) return 'Zinnat';
   if (/^monalisa/i.test(first)) return 'Monalisa';
@@ -351,19 +364,19 @@ async function save(mode:'master'|'draft'|'final'){
   const teacherOptions=[{value:'',label:'Teacher',shortLabel:'Teacher'},...teacherList.map(t=>{
     const isOut=availability[String(t.id)]==='Absent';
     const prefix=isOut?'OUT - ':'';
-    return {value:String(t.id),label:prefix+t.name,shortLabel:prefix+getShortTeacherName(t.short_name||t.name)};
+    return {value:String(t.id),label:prefix+t.name,shortLabel:prefix+getShortTeacherName(t.name, t)};
   })];
   if(selected&&isTeachingTeacher(selected)&&!teacherOptions.some(o=>o.value===String(selected.id))){
     const isOut=availability[String(selected.id)]==='Absent';
     const prefix=isOut?'OUT - ':'';
-    teacherOptions.push({value:String(selected.id),label:prefix+selected.name,shortLabel:prefix+getShortTeacherName(selected.short_name||selected.name)});
+    teacherOptions.push({value:String(selected.id),label:prefix+selected.name,shortLabel:prefix+getShortTeacherName(selected.name, selected)});
   }
   const hasTeacher=Boolean(x.teacher_id&&x.teacher_id!=='0'&&selected&&isTeachingTeacher(selected));
   const hasSubject=!academic||Boolean(String(x.subject||'').trim());
   const isConflict=!combinedClassCounting&&conflicts.has(key)&&hasTeacher&&hasSubject;
   const isCombined=combinedClassCounting&&showCombinedHighlight&&combinedKeys.has(key)&&hasTeacher&&hasSubject;
   const isAbsent=Boolean(selected&&availability[String(selected.id)]==='Absent');
-  return <View key={key} style={[subject?s.cell:s.coach,isConflict&&s.conflict,isCombined&&s.combinedCell,isAbsent&&!isConflict&&s.outTeacher]}>{admin?(subject?<><Select searchable panelWidth={500} panelMaxHeight={560} label="Subject" value={x.subject||''} options={subjectOptions} onChange={v=>chooseSubject(key,v)} style={s.cellSubjectSelect} textStyle={[s.cellSubjectSelectText,isCombined&&s.combinedSubjectText]} chevron="⌵"/><Select searchable panelWidth={500} panelMaxHeight={560} style={s.cellTeacherSelect} textStyle={[s.cellTeacherSelectText,isConflict&&s.conflictSelectText,isCombined&&s.combinedTeacherText]} label="Teacher" value={x.teacher_id||''} options={teacherOptions} onChange={v=>chooseTeacher(key,v)} chevron="⌵"/></>:<Select searchable panelWidth={500} panelMaxHeight={560} style={s.coachSelect} textStyle={[s.coachSelectText,isConflict&&s.conflictSelectText,isCombined&&s.combinedTeacherText]} label="Teacher" value={x.teacher_id||''} options={teacherOptions} onChange={v=>chooseTeacher(key,v)} chevron="⌵"/>):(subject?<View style={{flex:1,justifyContent:'space-evenly',alignItems:'center',width:'100%',height:'100%'}}><Text style={[s.subject,{fontSize:13,fontWeight:'600',color:'#17365d'}]}>{x.subject||'-'}</Text><View style={{height:1,backgroundColor:'#d4e2f0',width:'100%'}}/><Text style={[s.center,isConflict&&s.conflictText,isCombined&&s.combinedTeacherText,{fontSize:13,fontWeight:'800',color:isCombined?'#581c87':'#091e36'}]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{getShortTeacherName(teacherNameForCell(x))||'-'}</Text></View>:<Text style={[s.coachText,isConflict&&s.conflictText,isCombined&&s.combinedTeacherText]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{getShortTeacherName(teacherNameForCell(x))||'-'}</Text>)}</View>;
+  return <View key={key} style={[subject?s.cell:s.coach,isConflict&&s.conflict,isCombined&&s.combinedCell,isAbsent&&!isConflict&&s.outTeacher]}>{admin?(subject?<><Select searchable panelWidth={500} panelMaxHeight={560} label="Subject" value={x.subject||''} options={subjectOptions} onChange={v=>chooseSubject(key,v)} style={s.cellSubjectSelect} textStyle={[s.cellSubjectSelectText,isCombined&&s.combinedSubjectText]} chevron="⌵"/><Select searchable panelWidth={500} panelMaxHeight={560} style={s.cellTeacherSelect} textStyle={[s.cellTeacherSelectText,isConflict&&s.conflictSelectText,isCombined&&s.combinedTeacherText]} label="Teacher" value={x.teacher_id||''} options={teacherOptions} onChange={v=>chooseTeacher(key,v)} chevron="⌵"/></>:<Select searchable panelWidth={500} panelMaxHeight={560} style={s.coachSelect} textStyle={[s.coachSelectText,isConflict&&s.conflictSelectText,isCombined&&s.combinedTeacherText]} label="Teacher" value={x.teacher_id||''} options={teacherOptions} onChange={v=>chooseTeacher(key,v)} chevron="⌵"/>):(subject?<View style={{flex:1,justifyContent:'space-evenly',alignItems:'center',width:'100%',height:'100%'}}><Text style={[s.subject,{fontSize:13,fontWeight:'600',color:'#17365d'}]}>{x.subject||'-'}</Text><View style={{height:1,backgroundColor:'#d4e2f0',width:'100%'}}/><Text style={[s.center,isConflict&&s.conflictText,isCombined&&s.combinedTeacherText,{fontSize:13,fontWeight:'800',color:isCombined?'#581c87':'#091e36'}]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{getShortTeacherName(teacherNameForCell(x), selected)||'-'}</Text></View>:<Text style={[s.coachText,isConflict&&s.conflictText,isCombined&&s.combinedTeacherText]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{getShortTeacherName(teacherNameForCell(x), selected)||'-'}</Text>)}</View>;
  }
 
  const routineHeader=academic&&section?<View style={[s.row,s.tableHeaderRow]}><View style={[s.head,s.stickyTop,s.stickyLeft,{width:100,minHeight:44,backgroundColor:'#dce9f6'}]}><Text style={[s.bold,{fontSize:13,color:'#102a45'}]}>Class / Period</Text></View>{section.periods.map((p,i)=><View key={i} style={[s.head,s.stickyTop,{width:isTiffin(p)?82:138,minHeight:44,backgroundColor:isTiffin(p)?'#fff0be':'#d6e6f5'},isTiffin(p)&&s.tiffin]}><Text style={[s.bold,{fontSize:13,color:'#102a45'}]}>{p[0]}</Text><Text style={{fontSize:11,color:'#475569',marginTop:1}}>{p[1]}</Text></View>)}</View>:<View style={[s.row,s.tableHeaderRow]}><View style={[s.rowHead,s.stickyTop,s.stickyLeft,s.coachRowHead]}><Text style={[s.bold,s.headerText]}>Time / Room</Text></View>{rooms.map(r=><View key={r} style={[s.head,s.stickyTop,s.coachHead]}><Text style={[s.bold,s.headerText]}>{r}</Text></View>)}</View>;
