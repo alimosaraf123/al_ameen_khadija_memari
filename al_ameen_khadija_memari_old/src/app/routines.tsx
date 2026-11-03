@@ -22,7 +22,7 @@ const CFG={
  xi_xii:{rows:['XI-A','XI-B','XII-A','XII-B'],subjects:['Phy','Chem','Math','Bio','Beng','Eng'],periods:[['1st','6:30-7:30'],['2nd','7:30-8:30'],['3rd','8:30-9:30'],['4th','10:00-11:00'],['5th','11:00-12:00'],['6th','12:00-1:00']]}
 }as const;
 const ALL_SUBJECTS=['Arabic','Art','Beng','Bio','Chem','Comp','Eng','Eng-I','Eng-II','Geo','Hind','Hist','L.Sc','Math','P.Sc','Phy','Sci'];
-const TIMES=['6:30-7:30','7:30-8:30','8:30-9:30','3:30-4:30','4:30-5:30','6:45-8:00','8:00-9:15'];
+const TIMES=['6:30-7:30','7:30-8:30','8:30-9:30','3:30-4:30','6:15-7:15','7:15-8:15','8:15-9:15'];
 const BASE_ROOMS=['Library-I','Library-II','Corridor','XII-A','XII-B','XI-A','XI-B','Visitor','X','401','402','403','404'];
 // A teacher may be shown only for the exact subject assigned in Staff Management.
 // This normalizes alternate spellings, but deliberately does not group related subjects
@@ -260,9 +260,56 @@ async function save(mode:'master'|'draft'|'final'){
 }
  const weekDates=useMemo(()=>{const base=new Date(date+'T12:00:00'),day=(base.getDay()+6)%7,monday=new Date(base);monday.setDate(base.getDate()-day);return Array.from({length:7},(_,i)=>{const x=new Date(monday);x.setDate(monday.getDate()+i);return x.toISOString().slice(0,10)})},[date]);
  function chooseMasterDay(value:string){setMasterDay(value);const current=new Date(date+'T12:00:00'),target=new Date(current);target.setDate(current.getDate()+(Number(value)-current.getDay()));setDate(target.toISOString().slice(0,10))}
- function applyConfig(){if(academic){const rr=rowDraft.split(',').map(x=>x.trim()).filter(Boolean),pp=periodDraft.split(/\n+/).map(x=>x.split('|').map(y=>y.trim())).filter(x=>x[0]&&x[1]);if(!rr.length||!pp.length)return Alert.alert('Required','Enter classes and periods. Use Period|Time on each line.');setRows(rr);setPeriods(pp)}else{const rr=roomDraft.split(',').map(x=>x.trim()).filter(Boolean),tt=timeDraft.split(/\n+/).map(x=>x.trim()).filter(Boolean);if(!rr.length||!tt.length)return Alert.alert('Required','Enter rooms and times.');setRooms(rr);setCoachTimes(tt)}Alert.alert('Applied','Configuration applied. Save as Master or Final to keep it.')}
- async function applyCoachingRoomsToAllMasters(){const rooms=roomDraft.split(',').map(x=>x.trim()).filter(Boolean);if(!rooms.length)return Alert.alert('Required','Enter coaching rooms first.');try{setSaving(true);const result=await api('/api/routines/manager/coaching-rooms',{method:'POST',body:JSON.stringify({rooms})});setRooms(rooms);Alert.alert('Updated',result.message||'Coaching rooms updated in all weekly masters.');await load()}catch(e:any){Alert.alert('Error',e.message)}finally{setSaving(false)}}
- async function applyCoachingTimesToAllMasters(){const times=timeDraft.split(/\n+/).map(x=>x.trim()).filter(Boolean);if(!times.length)return Alert.alert('Required','Enter coaching times first.');try{setSaving(true);const result=await api('/api/routines/manager/coaching-times',{method:'POST',body:JSON.stringify({times})});setCoachTimes(times);Alert.alert('Updated',result.message||'Coaching times updated in all weekly masters.');await load()}catch(e:any){Alert.alert('Error',e.message)}finally{setSaving(false)}}
+ function applyConfig(){
+  if(academic){
+    const rr=rowDraft.split(',').map(x=>x.trim()).filter(Boolean),pp=periodDraft.split(/\n+/).map(x=>x.split('|').map(y=>y.trim())).filter(x=>x[0]&&x[1]);
+    if(!rr.length||!pp.length)return Alert.alert('Required','Enter classes and periods. Use Period|Time on each line.');
+    setRows(rr);setPeriods(pp);
+  }else{
+    const rr=roomDraft.split(',').map(x=>x.trim()).filter(Boolean),
+          tt=timeDraft.split(/\n+/).map(x=>x.replace(/[–—]/g,'-').trim()).filter(Boolean);
+    if(!rr.length||!tt.length)return Alert.alert('Required','Enter rooms and times.');
+    const oldTimes=coachTimes.map(x=>x.replace(/[–—]/g,'-').trim());
+    const newCells:Record<string,Cell>={};
+    for(const [key,val] of Object.entries(cells)){
+      const parts=key.split('|');
+      const oldNorm=parts[0].replace(/[–—]/g,'-').trim();
+      const idx=oldTimes.indexOf(oldNorm);
+      const newT=(idx>=0&&tt[idx])?tt[idx]:parts[0];
+      newCells[newT+'|'+parts.slice(1).join('|')]=val;
+    }
+    setCells(newCells);
+    setRooms(rr);
+    setCoachTimes(tt);
+  }
+  Alert.alert('Applied','Configuration applied. Click "Save Draft", "Save Master", or "Apply times to all 7 masters" to keep it.');
+ }
+ async function applyCoachingRoomsToAllMasters(){const rooms=roomDraft.split(',').map(x=>x.trim()).filter(Boolean);if(!rooms.length)return Alert.alert('Required','Enter coaching rooms first.');try{setSaving(true);const result=await api('/api/routines/manager/coaching-rooms',{method:'POST',body:JSON.stringify({rooms})});setRooms(rooms);Alert.alert('Updated',result.message||'Coaching rooms updated in all weekly masters and routines.');await load()}catch(e:any){Alert.alert('Error',e.message)}finally{setSaving(false)}}
+ async function applyCoachingTimesToAllMasters(){
+  const times=timeDraft.split(/\n+/).map(x=>x.replace(/[–—]/g,'-').trim()).filter(Boolean);
+  if(!times.length)return Alert.alert('Required','Enter coaching times first.');
+  try{
+    setSaving(true);
+    const result=await api('/api/routines/manager/coaching-times',{method:'POST',body:JSON.stringify({times})});
+    const oldTimes=coachTimes.map(x=>x.replace(/[–—]/g,'-').trim());
+    const newCells:Record<string,Cell>={};
+    for(const [key,val] of Object.entries(cells)){
+      const parts=key.split('|');
+      const oldNorm=parts[0].replace(/[–—]/g,'-').trim();
+      const idx=oldTimes.indexOf(oldNorm);
+      const newT=(idx>=0&&times[idx])?times[idx]:parts[0];
+      newCells[newT+'|'+parts.slice(1).join('|')]=val;
+    }
+    setCells(newCells);
+    setCoachTimes(times);
+    Alert.alert('Updated',result.message||'Coaching times updated in all weekly masters and routines.');
+    await load();
+  }catch(e:any){
+    Alert.alert('Error',e.message);
+  }finally{
+    setSaving(false);
+  }
+ }
  async function applyAcademicPeriodsToAllMasters(){const next=periodDraft.split(/\n+/).map(x=>x.split('|').map(y=>y.trim())).filter(x=>x[0]&&x[1]);if(!next.length)return Alert.alert('Required','Enter periods and times first.');try{setSaving(true);const result=await api('/api/routines/manager/academic-periods',{method:'POST',body:JSON.stringify({group_name:group,periods:next})});setPeriods(next);Alert.alert('Updated',result.message||'Academic periods updated in all weekly masters.');await load()}catch(e:any){Alert.alert('Error',e.message)}finally{setSaving(false)}}
  function addExam(){if(!exam.class_name||!exam.subject||!exam.time||!exam.teacher_id)return Alert.alert('Required','Select class, subject, time and duty teacher.');setExams(x=>[...x,{...exam,id:Date.now()}]);setExam({class_name:'',subject:'',time:'',room:'',teacher_id:'',teacher_name:''})}
  async function saveSubjects(){if(!assignTeacher)return Alert.alert('Required','Select a teacher.');try{await api('/api/teachers/'+assignTeacher+'/subjects',{method:'PATCH',body:JSON.stringify({subjects:assignSubjects})});setTeachers(list=>list.map(t=>String(t.id)===assignTeacher?{...t,subject:assignSubjects.join(', '),assigned_subjects:assignSubjects}:t));Alert.alert('Saved','Teacher subjects assigned.')}catch(e:any){Alert.alert('Error',e.message)}}

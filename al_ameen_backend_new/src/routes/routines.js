@@ -784,33 +784,35 @@ router.post('/manager',auth,allow('super_admin','admin'),asyncHandler(async(req,
  res.json({success:true,routine:r.rows[0],published_image_url:publishedImageUrl,message:isMaster?'Weekday Master routine saved':saveMode==='draft'?'Routine draft saved':'Final routine published as JPG'});
 }));
 
-// Update only the coaching time labels across every saved weekly master.
+// Update only the coaching time labels across coaching routines (masters, drafts, daily).
 // Existing room/teacher assignments are remapped by their time-slot index.
 router.post('/manager/coaching-times',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
- const times=Array.isArray(req.body?.times)?req.body.times.map((x)=>String(x||'').trim()).filter(Boolean):[];
+ const times=Array.isArray(req.body?.times)?req.body.times.map((x)=>String(x||'').replace(/[–—]/g,'-').trim()).filter(Boolean):[];
  if(!times.length)return res.status(400).json({success:false,message:'At least one coaching time is required'});
- const masters=(await pool.query(`SELECT id,grid_data FROM routine_manager_grids WHERE group_name='coaching' AND routine_kind='master'`)).rows;
- for(const row of masters){
-  const data=row.grid_data||{},oldTimes=Array.isArray(data.times)?data.times.map((x)=>String(x)):[];
+ const rows=(await pool.query(`SELECT id,grid_data FROM routine_manager_grids WHERE group_name='coaching'`)).rows;
+ for(const row of rows){
+  const data=row.grid_data||{},oldTimes=(Array.isArray(data.times)?data.times:[]).map((x)=>String(x).replace(/[–—]/g,'-').trim());
   const cells={};
   for(const [key,value] of Object.entries(data.cells||{})){
-   const parts=String(key).split('|'),index=oldTimes.indexOf(parts[0]);
+   const parts=String(key).split('|');
+   const oldNorm=parts[0].replace(/[–—]/g,'-').trim();
+   const index=oldTimes.indexOf(oldNorm);
    cells[(index>=0?(times[index]||parts[0]):parts[0])+'|'+parts.slice(1).join('|')]=value;
   }
   await pool.query('UPDATE routine_manager_grids SET grid_data=$1::jsonb,updated_at=NOW() WHERE id=$2',[JSON.stringify({...data,times,cells}),row.id]);
  }
- res.json({success:true,updated:masters.length,message:`Coaching times updated in ${masters.length} weekly masters`});
+ res.json({success:true,updated:rows.length,message:`Coaching times updated in ${rows.length} coaching routines`});
 }));
 
 router.post('/manager/coaching-rooms',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
  const rooms=Array.isArray(req.body?.rooms)?req.body.rooms.map((x)=>String(x||'').trim()).filter(Boolean):[];
  if(!rooms.length)return res.status(400).json({success:false,message:'At least one coaching room is required'});
- const masters=(await pool.query(`SELECT id,grid_data FROM routine_manager_grids WHERE group_name='coaching' AND routine_kind='master'`)).rows;
- for(const row of masters){
+ const rows=(await pool.query(`SELECT id,grid_data FROM routine_manager_grids WHERE group_name='coaching'`)).rows;
+ for(const row of rows){
   const data=row.grid_data||{};
   await pool.query('UPDATE routine_manager_grids SET grid_data=$1::jsonb,updated_at=NOW() WHERE id=$2',[JSON.stringify({...data,rooms}),row.id]);
  }
- res.json({success:true,updated:masters.length,message:`Coaching rooms updated in ${masters.length} weekly masters`});
+ res.json({success:true,updated:rows.length,message:`Coaching rooms updated in ${rows.length} coaching routines`});
 }));
 
 router.post('/manager/academic-periods',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
