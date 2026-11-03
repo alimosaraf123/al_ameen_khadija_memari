@@ -238,6 +238,16 @@ router.post('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res
       ...(body.profile_details || {}),
       residential_type: residentialType || ''
     };
+    const cleanDate = (val) => {
+      const s = String(val || '').trim();
+      if (!s || s.startsWith('0000') || s === 'Invalid Date') return null;
+      const d = new Date(s);
+      if (isNaN(d.getTime()) || d.getFullYear() < 1900 || d.getFullYear() > 2100) return null;
+      return s;
+    };
+    const dob = cleanDate(body.date_of_birth);
+    const joiningDate = cleanDate(body.joining_date);
+
     const teacher = await client.query(`
       INSERT INTO teachers(
         user_id,staff_id,name,designation,subject,mobile,whatsapp,gender,email,address,
@@ -247,7 +257,7 @@ router.post('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res
     `, [
       user.rows[0].id, staffId, name, body.designation || null, body.subject || null,
       body.mobile || null, body.whatsapp || null, body.gender || null, body.email || null,
-      body.address || null, String(body.date_of_birth || '').trim() || null, String(body.joining_date || '').trim() || null,
+      body.address || null, dob, joiningDate,
       body.qualification || null, body.photo_url || null,
       JSON.stringify(profileDetails), JSON.stringify(Array.isArray(body.education_details) ? body.education_details : []),
       residentialType
@@ -292,9 +302,13 @@ router.put('/:id', auth, allow('super_admin','admin'), asyncHandler(async (req,r
       residential_type: residentialType || ''
     };
     const cleanDate = (val, fallback) => {
-      if (val === undefined) return (fallback && String(fallback).trim()) ? String(fallback).trim() : null;
-      const s = String(val || '').trim();
-      return s ? s : null;
+      let raw = val;
+      if (raw === undefined) raw = fallback;
+      const s = String(raw || '').trim();
+      if (!s || s.startsWith('0000') || s === 'Invalid Date') return null;
+      const d = new Date(s);
+      if (isNaN(d.getTime()) || d.getFullYear() < 1900 || d.getFullYear() > 2100) return null;
+      return s;
     };
     const dob = cleanDate(body.date_of_birth, old.date_of_birth);
     const joiningDate = cleanDate(body.joining_date, old.joining_date);
