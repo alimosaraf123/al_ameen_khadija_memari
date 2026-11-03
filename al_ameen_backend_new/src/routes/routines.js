@@ -802,6 +802,17 @@ router.post('/manager/coaching-times',auth,allow('super_admin','admin'),asyncHan
  res.json({success:true,updated:masters.length,message:`Coaching times updated in ${masters.length} weekly masters`});
 }));
 
+router.post('/manager/coaching-rooms',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ const rooms=Array.isArray(req.body?.rooms)?req.body.rooms.map((x)=>String(x||'').trim()).filter(Boolean):[];
+ if(!rooms.length)return res.status(400).json({success:false,message:'At least one coaching room is required'});
+ const masters=(await pool.query(`SELECT id,grid_data FROM routine_manager_grids WHERE group_name='coaching' AND routine_kind='master'`)).rows;
+ for(const row of masters){
+  const data=row.grid_data||{};
+  await pool.query('UPDATE routine_manager_grids SET grid_data=$1::jsonb,updated_at=NOW() WHERE id=$2',[JSON.stringify({...data,rooms}),row.id]);
+ }
+ res.json({success:true,updated:masters.length,message:`Coaching rooms updated in ${masters.length} weekly masters`});
+}));
+
 router.post('/manager/academic-periods',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
  const group=String(req.body?.group_name||''),periods=Array.isArray(req.body?.periods)?req.body.periods.filter((x)=>Array.isArray(x)&&x.length>=2).map((x)=>[String(x[0]).trim(),String(x[1]).trim()]):[];
  if(!['v_x','xi_xii'].includes(group)||!periods.length)return res.status(400).json({success:false,message:'Valid academic group and periods are required'});
