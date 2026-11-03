@@ -104,19 +104,31 @@ export default function Teachers() {
           document.querySelector('#teacher-card-' + targetId);
 
         if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const elRect = el.getBoundingClientRect();
+          const currentWindowY = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+          const targetWindowY = currentWindowY + elRect.top - (window.innerHeight / 2) + (elRect.height / 2);
 
-          let p = el.parentElement;
-          while (p && p !== document.body) {
-            const style = window.getComputedStyle(p);
-            if (/(auto|scroll)/.test(style.overflow + style.overflowY)) {
-              const elRect = el.getBoundingClientRect();
+          // 1. Scroll window and document elements
+          window.scrollTo({ top: Math.max(0, targetWindowY), behavior: 'smooth' });
+          document.documentElement?.scrollTo?.({ top: Math.max(0, targetWindowY), behavior: 'smooth' });
+          document.body?.scrollTo?.({ top: Math.max(0, targetWindowY), behavior: 'smooth' });
+
+          // 2. Scroll any scrollable parent container
+          let p: HTMLElement | null = el.parentElement;
+          while (p) {
+            if (p.scrollHeight > p.clientHeight) {
               const pRect = p.getBoundingClientRect();
-              const offset = elRect.top - pRect.top + p.scrollTop - 90;
-              p.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
-              break;
+              const pTarget = p.scrollTop + (elRect.top - pRect.top) - (p.clientHeight / 2) + (elRect.height / 2);
+              p.scrollTo({ top: Math.max(0, pTarget), behavior: 'smooth' });
             }
             p = p.parentElement;
+          }
+
+          // 3. Native scrollIntoView
+          try {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          } catch {
+            // ignore
           }
           return;
         }
@@ -131,15 +143,15 @@ export default function Teachers() {
     };
 
     doScroll();
-    setTimeout(doScroll, 80);
-    setTimeout(doScroll, 200);
-    setTimeout(doScroll, 450);
-    setTimeout(doScroll, 800);
-    setTimeout(doScroll, 1200);
+    setTimeout(doScroll, 50);
+    setTimeout(doScroll, 150);
+    setTimeout(doScroll, 300);
+    setTimeout(doScroll, 600);
+    setTimeout(doScroll, 1000);
   };
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const data = await api(mode === 'documents' ? '/api/teachers/me' : '/api/teachers');
       const teachers = data.teachers || [];
@@ -147,7 +159,7 @@ export default function Teachers() {
     } catch (e: any) {
       Alert.alert('Error', e.message);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -244,6 +256,7 @@ export default function Teachers() {
     try {
       if (targetId) {
         await api('/api/teachers/' + targetId, { method: 'PUT', body: JSON.stringify(currentForm) });
+        setList((prev: any[]) => prev.map(t => Number(t.id) === targetId ? { ...t, ...currentForm, residential_type: currentForm.residential_type || t.residential_type } : t));
         setForm(emptyForm);
         formRef.current = emptyForm;
         setEditingId(null);
@@ -251,9 +264,11 @@ export default function Teachers() {
         setLastEditedId(targetId);
         setNotice({ text: '✓ Staff "' + (currentForm.name || 'Member') + '" updated successfully.' });
         setTimeout(() => setNotice(null), 5000);
-        await load();
         scrollToTeacher(targetId);
-        setTimeout(() => setLastEditedId(null), 4000);
+        void load(true).then(() => {
+          scrollToTeacher(targetId);
+        });
+        setTimeout(() => setLastEditedId(null), 5000);
       } else {
         const data = await api('/api/teachers', { method: 'POST', body: JSON.stringify(currentForm) });
         setForm(emptyForm);
@@ -332,14 +347,19 @@ export default function Teachers() {
     setForm(initial);
     formRef.current = initial;
     setTimeout(() => {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        document.documentElement?.scrollTo?.({ top: 0, behavior: 'smooth' });
+        document.body?.scrollTo?.({ top: 0, behavior: 'smooth' });
+      }
       if (scrollRef.current) {
-        if (Platform.OS === 'web' && typeof scrollRef.current.scrollTo === 'function') {
+        if (typeof scrollRef.current.scrollTo === 'function') {
           scrollRef.current.scrollTo({ y: 0, animated: true });
         } else if (scrollRef.current.scrollTo) {
           scrollRef.current.scrollTo({ y: 0, animated: true });
         }
       }
-    }, 80);
+    }, 40);
   };
 
   const resetPassword = async (t: any) => {
