@@ -22,7 +22,9 @@
       "package": "com.alameenmission.memari",
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
       ]
     },
     "web": {
@@ -48,6 +50,12 @@
         {
           "cameraPermission": "Allow Al-Ameen Mission Academy to scan student ID cards",
           "barcodeScannerEnabled": true
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Al-Ameen Mission Academy to check your location for attendance."
         }
       ]
     ],

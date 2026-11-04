@@ -25,9 +25,96 @@ function firstNameLogin(name) {
 }
 
 router.get('/me', auth, allow('teacher'), asyncHandler(async(req,res)=>{await teacherDetailsSchemaReady;const result=await pool.query(`SELECT t.*,u.full_name,u.login_id FROM teachers t JOIN users u ON u.id=t.user_id WHERE t.user_id=$1 LIMIT 1`,[req.user.userId]);if(!result.rowCount)return res.status(404).json({success:false,message:'Teacher profile not found'});res.json({success:true,teacher:result.rows[0],profile_edit_count:result.rows[0].profile_edit_count||0,profile_edits_remaining:Math.max(0,2-(result.rows[0].profile_edit_count||0))});}));
-async function ensureStaffAvailability(){await pool.query(`CREATE TABLE IF NOT EXISTS staff_attendance (teacher_id INTEGER REFERENCES teachers(id),attendance_date DATE NOT NULL,status TEXT NOT NULL CHECK(status IN ('Present','Absent','Late','Leave')),marked_by INTEGER REFERENCES users(id),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),PRIMARY KEY(teacher_id,attendance_date))`)}
-router.get('/me/availability',auth,allow('teacher'),asyncHandler(async(req,res)=>{const date=String(req.query.date||new Date().toISOString().slice(0,10));await ensureStaffAvailability();const r=await pool.query(`SELECT COALESCE(a.status,'Present') status FROM teachers t LEFT JOIN staff_attendance a ON a.teacher_id=t.id AND a.attendance_date=$1 WHERE t.user_id=$2 LIMIT 1`,[date,req.user.userId]);res.json({success:true,status:r.rows[0]?.status||'Present',date});}));
-router.post('/me/availability',auth,allow('teacher'),asyncHandler(async(req,res)=>{const date=String(req.body?.date||new Date().toISOString().slice(0,10)),status=String(req.body?.status||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!['Present','Absent'].includes(status))return res.status(400).json({message:'Choose Present or Absent.'});await ensureStaffAvailability();const t=await pool.query('SELECT id FROM teachers WHERE user_id=$1 LIMIT 1',[req.user.userId]);if(!t.rowCount)return res.status(404).json({message:'Teacher profile not found'});await pool.query(`INSERT INTO staff_attendance(teacher_id,attendance_date,status,marked_by) VALUES($1,$2,$3,$4) ON CONFLICT(teacher_id,attendance_date) DO UPDATE SET status=EXCLUDED.status,marked_by=EXCLUDED.marked_by,updated_at=NOW()`,[t.rows[0].id,date,status,req.user.userId]);res.json({success:true,status,date});}));
+const MISSION_LOCATION = {
+  latitude: 23.186813165763375,
+  longitude: 88.11163491185468,
+  maxDistanceMeters: 200,
+};
+const LOCATION_ERROR_MSG = 'please contact- 7479020091 for submit attednance';
+
+function getDistanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371e3;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function ensureStaffAvailability(){
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS staff_attendance (
+      teacher_id INTEGER REFERENCES teachers(id),
+      attendance_date DATE NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('Present','Absent','Late','Leave')),
+      marked_by INTEGER REFERENCES users(id),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY(teacher_id,attendance_date)
+    );
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS distance_meters DOUBLE PRECISION;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS punch_in TIMESTAMPTZ;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS punch_out TIMESTAMPTZ;
+  `);
+}
+
+router.get('/me/availability',auth,allow('teacher'),asyncHandler(async(req,res)=>{
+  const date=String(req.query.date||new Date().toISOString().slice(0,10));
+  await ensureStaffAvailability();
+  const r=await pool.query(`SELECT COALESCE(a.status,'Present') status, a.punch_in, a.punch_out, a.distance_meters FROM teachers t LEFT JOIN staff_attendance a ON a.teacher_id=t.id AND a.attendance_date=$1 WHERE t.user_id=$2 LIMIT 1`,[date,req.user.userId]);
+  res.json({success:true,status:r.rows[0]?.status||'Present',date,punch_in:r.rows[0]?.punch_in,punch_out:r.rows[0]?.punch_out,distance:r.rows[0]?.distance_meters});
+}));
+
+router.post('/me/availability',auth,allow('teacher'),asyncHandler(async(req,res)=>{
+  const date=String(req.body?.date||new Date().toISOString().slice(0,10));
+  const status=String(req.body?.status||'');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!['Present','Absent'].includes(status)){
+    return res.status(400).json({message:'Choose Present or Absent.'});
+  }
+
+  const lat = Number(req.body?.latitude);
+  const lng = Number(req.body?.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return res.status(403).json({ success: false, message: LOCATION_ERROR_MSG });
+  }
+
+  const distance = getDistanceMeters(lat, lng, MISSION_LOCATION.latitude, MISSION_LOCATION.longitude);
+  if (!Number.isFinite(distance) || distance > MISSION_LOCATION.maxDistanceMeters) {
+    return res.status(403).json({
+      success: false,
+      message: LOCATION_ERROR_MSG,
+      distance: Number.isFinite(distance) ? Math.round(distance) : null,
+    });
+  }
+
+  await ensureStaffAvailability();
+  const t=await pool.query('SELECT id FROM teachers WHERE user_id=$1 LIMIT 1',[req.user.userId]);
+  if(!t.rowCount)return res.status(404).json({message:'Teacher profile not found'});
+
+  await pool.query(`
+    INSERT INTO staff_attendance(
+      teacher_id, attendance_date, status, marked_by, latitude, longitude, distance_meters, punch_in, punch_out, updated_at
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7,
+      CASE WHEN $3 = 'Present' THEN NOW() ELSE NULL END,
+      CASE WHEN $3 = 'Absent' THEN NOW() ELSE NULL END,
+      NOW()
+    )
+    ON CONFLICT(teacher_id, attendance_date) DO UPDATE SET
+      status = EXCLUDED.status,
+      marked_by = EXCLUDED.marked_by,
+      latitude = EXCLUDED.latitude,
+      longitude = EXCLUDED.longitude,
+      distance_meters = EXCLUDED.distance_meters,
+      punch_in = CASE WHEN EXCLUDED.status = 'Present' AND staff_attendance.punch_in IS NULL THEN NOW() ELSE staff_attendance.punch_in END,
+      punch_out = CASE WHEN EXCLUDED.status = 'Absent' THEN NOW() ELSE staff_attendance.punch_out END,
+      updated_at = NOW()
+  `, [t.rows[0].id, date, status, req.user.userId, lat, lng, Math.round(distance)]);
+
+  res.json({ success: true, status, date, distance: Math.round(distance) });
+}));
 router.get('/availability',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{const date=String(req.query.date||new Date().toISOString().slice(0,10));await ensureStaffAvailability();const r=await pool.query(`SELECT t.id,t.name,COALESCE(a.status,'Present') status FROM teachers t LEFT JOIN staff_attendance a ON a.teacher_id=t.id AND a.attendance_date=$1 WHERE t.is_active=TRUE ORDER BY t.name,t.id`,[date]);res.json({success:true,date,staff:r.rows});}));
 router.patch('/me', auth, allow('teacher'), asyncHandler(async(req,res)=>{
   await teacherDetailsSchemaReady;
