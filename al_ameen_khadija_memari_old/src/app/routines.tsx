@@ -135,43 +135,11 @@ export default function Routines(){
   }
   const pool=teachers.filter(isTeachingTeacher);
   const matching=pool.filter(t=>mapped(t).some((v:string)=>subjectMatches(v,subject)));
-  if(matching.length===0){
-    update(key,{subject,teacher_id:'',teacher_name:''});
-    return;
-  }
   if(matching.length===1){
     update(key,{subject,teacher_id:String(matching[0].id),teacher_name:matching[0].name||''});
     return;
   }
-  const [className,periodStr]=key.split('|');
-  const busyTeacherIds=new Set<string>();
-  Object.entries(cells).forEach(([k,c])=>{
-    if(k!==key&&k.split('|')[1]===periodStr&&c.teacher_id&&c.teacher_id!=='0'){
-      busyTeacherIds.add(String(c.teacher_id));
-    }
-  });
-  const existingInClass=matching.find(t=>{
-    return Object.entries(cells).some(([k,c])=>{
-      const [cls,per]=k.split('|');
-      return cls===className&&per!==periodStr&&String(c.teacher_id)===String(t.id)&&subjectMatches(c.subject,subject);
-    });
-  });
-  if(existingInClass&&!busyTeacherIds.has(String(existingInClass.id))&&availability[String(existingInClass.id)]!=='Absent'){
-    update(key,{subject,teacher_id:String(existingInClass.id),teacher_name:existingInClass.name||''});
-    return;
-  }
-  const freePresent=matching.filter(t=>!busyTeacherIds.has(String(t.id))&&availability[String(t.id)]!=='Absent');
-  if(freePresent.length>0){
-    update(key,{subject,teacher_id:String(freePresent[0].id),teacher_name:freePresent[0].name||''});
-    return;
-  }
-  const freeAny=matching.filter(t=>!busyTeacherIds.has(String(t.id)));
-  if(freeAny.length>0){
-    update(key,{subject,teacher_id:String(freeAny[0].id),teacher_name:freeAny[0].name||''});
-    return;
-  }
-  const fallback=existingInClass||matching[0];
-  update(key,{subject,teacher_id:String(fallback.id),teacher_name:fallback.name||''});
+  update(key,{subject,teacher_id:'',teacher_name:''});
  };
  const chooseTeacher=(key:string,id:string)=>{
   if(!id){
