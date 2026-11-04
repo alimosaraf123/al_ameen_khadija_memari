@@ -1,4 +1,5 @@
 const express = require('express');
+const ExcelJS = require('exceljs');
 const pool = require('../db');
 const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
@@ -407,6 +408,627 @@ router.get('/daily', auth, allow('super_admin','admin','office','teacher'), asyn
     submission: dailySubResult.rows[0] || null,
     students,
   });
+}));
+
+router.get('/daily/excel', auth, allow('super_admin','admin','office','teacher'), asyncHandler(async (req, res) => {
+  const date = String(req.query.date || new Date().toISOString().slice(0, 10));
+  if (!isValidDate(date)) {
+    return res.status(400).json({ success: false, message: 'Invalid attendance date' });
+  }
+
+  const { class_name, room_name, status: filterStatus } = req.query;
+
+  // Check if daily attendance was submitted
+  const dailySubResult = await pool.query(`
+    SELECT * FROM daily_attendance_submissions WHERE attendance_date = $1::date
+  `, [date]);
+  const isDailySubmitted = dailySubResult.rows.length > 0;
+
+  const result = await pool.query(`
+    SELECT 
+      s.id,
+      s.registration_no,
+      s.student_name,
+      COALESCE(NULLIF(TRIM(s.class_name), ''), 'Unassigned') AS class_name,
+      s.room_id,
+      COALESCE(r.room_name, 'Unassigned') AS room_name,
+      EXISTS (
+        SELECT 1 FROM student_gate_passes gp
+        WHERE gp.student_id = s.id
+          AND gp.status = 'pending'
+          AND gp.departure_at::date <= $1::date
+          AND (gp.returned_at IS NULL OR gp.returned_at::date > $1::date)
+      ) AS has_active_gatepass,
+      (
+        SELECT gp.token_no FROM student_gate_passes gp
+        WHERE gp.student_id = s.id
+          AND gp.status = 'pending'
+          AND gp.departure_at::date <= $1::date
+          AND (gp.returned_at IS NULL OR gp.returned_at::date > $1::date)
+        ORDER BY gp.departure_at DESC LIMIT 1
+      ) AS active_gatepass_token,
+      (
+        SELECT gp.reason FROM student_gate_passes gp
+        WHERE gp.student_id = s.id
+          AND gp.status = 'pending'
+          AND gp.departure_at::date <= $1::date
+          AND (gp.returned_at IS NULL OR gp.returned_at::date > $1::date)
+        ORDER BY gp.departure_at DESC LIMIT 1
+      ) AS active_gatepass_reason,
+      EXISTS (
+        SELECT 1 FROM attendance_submissions sub
+        WHERE sub.room_id = s.room_id AND sub.attendance_date = $1::date
+      ) AS room_submitted,
+      CASE 
+        WHEN EXISTS (
+          SELECT 1 FROM attendance_submissions sub
+          WHERE sub.room_id = s.room_id AND sub.attendance_date = $1::date
+        ) THEN COALESCE(a.room_status, a.status)
+        ELSE NULL
+      END AS room_attendance_status,
+      a.status AS saved_status,
+      a.remarks AS attendance_remarks,
+      a.updated_at AS attendance_updated_at,
+      u.full_name AS marked_by_name
+    FROM students s
+    LEFT JOIN rooms r ON r.id = s.room_id
+    LEFT JOIN attendance a ON a.student_id = s.id AND a.attendance_date = $1::date
+    LEFT JOIN users u ON u.id = a.marked_by
+    WHERE s.is_active = TRUE
+    ORDER BY 
+      CASE 
+        WHEN s.class_name ILIKE 'Class V%' THEN 1
+        WHEN s.class_name ILIKE 'Class VI%' THEN 2
+        WHEN s.class_name ILIKE 'Class VII%' THEN 3
+        WHEN s.class_name ILIKE 'Class VIII%' THEN 4
+        WHEN s.class_name ILIKE 'Class IX%' THEN 5
+        WHEN s.class_name ILIKE 'Class X%' THEN 6
+        WHEN s.class_name ILIKE 'Class XI%' THEN 7
+        WHEN s.class_name ILIKE 'Class XII%' THEN 8
+        ELSE 9
+      END,
+      r.room_name ASC NULLS LAST,
+      s.registration_no ASC
+  `, [date]);
+
+  let students = result.rows.map(row => {
+    let computedStatus = 'present';
+    if (isDailySubmitted && row.saved_status) {
+      computedStatus = row.saved_status;
+    } else if (row.has_active_gatepass) {
+      computedStatus = 'absent';
+    } else if (row.room_attendance_status) {
+      computedStatus = row.room_attendance_status;
+    } else {
+      computedStatus = 'present';
+    }
+
+    return {
+      id: Number(row.id),
+      registration_no: row.registration_no,
+      student_name: row.student_name,
+      class_name: row.class_name,
+      room_id: row.room_id ? Number(row.room_id) : null,
+      room_name: row.room_name,
+      has_active_gatepass: Boolean(row.has_active_gatepass),
+      active_gatepass_token: row.active_gatepass_token || null,
+      active_gatepass_reason: row.active_gatepass_reason || null,
+      room_submitted: Boolean(row.room_submitted),
+      room_attendance_status: row.room_attendance_status || null,
+      saved_status: row.saved_status || null,
+      status: computedStatus,
+      remarks: row.attendance_remarks || (row.has_active_gatepass ? `Active Gate Pass (${row.active_gatepass_token || ''})` : null),
+      marked_by_name: row.marked_by_name || null,
+      updated_at: row.attendance_updated_at || null,
+    };
+  });
+
+  // Apply filters if provided
+  if (class_name && class_name !== 'all') {
+    students = students.filter(s => s.class_name.toLowerCase() === class_name.toLowerCase());
+  }
+  if (room_name && room_name !== 'all') {
+    students = students.filter(s => s.room_name.toLowerCase() === room_name.toLowerCase());
+  }
+  if (filterStatus && filterStatus !== 'all') {
+    students = students.filter(s => s.status.toLowerCase() === filterStatus.toLowerCase());
+  }
+
+  const total = students.length;
+  const present = students.filter(s => s.status === 'present').length;
+  const absent = students.filter(s => s.status === 'absent').length;
+  const gpCount = students.filter(s => s.has_active_gatepass).length;
+  const presentRate = total > 0 ? ((present / total) * 100).toFixed(1) : '0';
+
+  const [year, month, day] = date.split('-').map(Number);
+  const dateObj = new Date(Date.UTC(year, month - 1, day));
+  const dateFormatted = dateObj.toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC'
+  });
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Al-Ameen Mission Academy Memari';
+  wb.created = new Date();
+  const ws = wb.addWorksheet('Daily Attendance', {
+    pageSetup: { orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+
+  // Title
+  ws.mergeCells('A1:I1');
+  const titleCell = ws.getCell('A1');
+  titleCell.value = 'Al - Ameen Mission Academy Memari';
+  titleCell.font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FF1E3A8A' } };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(1).height = 28;
+
+  // Subtitle
+  ws.mergeCells('A2:I2');
+  const subCell = ws.getCell('A2');
+  subCell.value = `Daily Attendance Report — ${dateFormatted}`;
+  subCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FF334155' } };
+  subCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(2).height = 22;
+
+  // Filter info & Meta
+  ws.mergeCells('A3:I3');
+  const metaCell = ws.getCell('A3');
+  const filterDesc = [
+    class_name && class_name !== 'all' ? `Class: ${class_name}` : null,
+    room_name && room_name !== 'all' ? `Room: ${room_name}` : null,
+    filterStatus && filterStatus !== 'all' ? `Status: ${filterStatus.toUpperCase()}` : null
+  ].filter(Boolean).join(' | ') || 'All Students';
+  metaCell.value = `Filters: ${filterDesc}   |   Status: ${isDailySubmitted ? 'Master Attendance Submitted' : 'Live Preview / Draft'}`;
+  metaCell.font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF64748B' } };
+  metaCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(3).height = 18;
+
+  // Summary Row
+  ws.mergeCells('A4:I4');
+  const sumCell = ws.getCell('A4');
+  sumCell.value = `Total Students: ${total}   |   Present: ${present}   |   Absent: ${absent}   |   Gate Pass: ${gpCount}   |   Attendance Rate: ${presentRate}%`;
+  sumCell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF1E293B' } };
+  sumCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  sumCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+  sumCell.border = {
+    top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+  };
+  ws.getRow(4).height = 24;
+
+  // Table Headers (Row 6)
+  ws.getRow(5).height = 10;
+  const headers = ['#', 'Reg No', 'Student Name', 'Class', 'Room', 'Room Attendance', 'Gate Pass', 'Status', 'Remarks'];
+  const headerRow = ws.addRow(headers);
+  headerRow.height = 26;
+  headerRow.eachCell((cell) => {
+    cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+      bottom: { style: 'medium', color: { argb: 'FF1E293B' } },
+      left: { style: 'thin', color: { argb: 'FF94A3B8' } },
+      right: { style: 'thin', color: { argb: 'FF94A3B8' } }
+    };
+  });
+
+  // Data Rows
+  students.forEach((s, idx) => {
+    const isPresent = s.status === 'present';
+    const row = ws.addRow([
+      idx + 1,
+      s.registration_no,
+      s.student_name,
+      s.class_name,
+      s.room_name,
+      s.room_attendance_status ? (s.room_attendance_status.charAt(0).toUpperCase() + s.room_attendance_status.slice(1)) : '-',
+      s.active_gatepass_token ? `Token: ${s.active_gatepass_token}` : '-',
+      isPresent ? 'Present' : 'Absent',
+      s.remarks || ''
+    ]);
+    row.height = 20;
+
+    row.eachCell((cell, colNumber) => {
+      cell.font = { name: 'Calibri', size: 10 };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+      };
+
+      if ([1, 2, 4, 5, 6, 7, 8].includes(colNumber)) {
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      } else {
+        cell.alignment = { horizontal: 'left', vertical: 'middle' };
+      }
+
+      if (colNumber === 8) {
+        cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: isPresent ? 'FF166534' : 'FF991B1B' } };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: isPresent ? 'FFDCFCE7' : 'FFFEE2E2' }
+        };
+      }
+    });
+  });
+
+  ws.columns = [
+    { width: 6 },
+    { width: 14 },
+    { width: 28 },
+    { width: 14 },
+    { width: 12 },
+    { width: 16 },
+    { width: 18 },
+    { width: 14 },
+    { width: 25 },
+  ];
+
+  const out = await wb.xlsx.writeBuffer();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="Daily-Attendance-${date}.xlsx"`);
+  res.send(Buffer.from(out));
+}));
+
+router.get('/monthly/excel', auth, allow('super_admin','admin','office','teacher'), asyncHandler(async (req, res) => {
+  const month = String(req.query.month || new Date().toISOString().slice(0, 7));
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    return res.status(400).json({ success: false, message: 'Invalid month format (YYYY-MM required)' });
+  }
+
+  const { class_name } = req.query;
+  const [yearStr, monthStr] = month.split('-');
+  const year = Number(yearStr);
+  const monthNum = Number(monthStr);
+
+  const daysInMonth = new Date(year, monthNum, 0).getDate();
+  const startDate = `${month}-01`;
+  const endDate = `${month}-${String(daysInMonth).padStart(2, '0')}`;
+
+  const studentParams = [];
+  let studentClassFilter = '';
+  if (class_name && class_name !== 'all') {
+    studentParams.push(class_name);
+    studentClassFilter = `AND LOWER(TRIM(s.class_name)) = LOWER(TRIM($${studentParams.length}))`;
+  }
+
+  const studentsRes = await pool.query(`
+    SELECT s.id,
+           s.registration_no,
+           s.student_name,
+           COALESCE(NULLIF(TRIM(s.class_name), ''), 'Unassigned') AS class_name,
+           COALESCE(r.room_name, 'Unassigned') AS room_name
+    FROM students s
+    LEFT JOIN rooms r ON r.id = s.room_id
+    WHERE s.is_active = TRUE
+      ${studentClassFilter}
+    ORDER BY 
+      CASE 
+        WHEN s.class_name ILIKE 'Class V%' THEN 1
+        WHEN s.class_name ILIKE 'Class VI%' THEN 2
+        WHEN s.class_name ILIKE 'Class VII%' THEN 3
+        WHEN s.class_name ILIKE 'Class VIII%' THEN 4
+        WHEN s.class_name ILIKE 'Class IX%' THEN 5
+        WHEN s.class_name ILIKE 'Class X%' THEN 6
+        WHEN s.class_name ILIKE 'Class XI%' THEN 7
+        WHEN s.class_name ILIKE 'Class XII%' THEN 8
+        ELSE 9
+      END,
+      r.room_name ASC NULLS LAST,
+      s.registration_no ASC
+  `, studentParams);
+  const students = studentsRes.rows;
+
+  const attParams = [startDate, endDate];
+  let attClassFilter = '';
+  if (class_name && class_name !== 'all') {
+    attParams.push(class_name);
+    attClassFilter = `AND LOWER(TRIM(s.class_name)) = LOWER(TRIM($${attParams.length}))`;
+  }
+
+  const attRes = await pool.query(`
+    SELECT a.student_id,
+           to_char(a.attendance_date, 'YYYY-MM-DD') AS att_date,
+           EXTRACT(DAY FROM a.attendance_date)::int AS day_num,
+           LOWER(TRIM(a.status)) AS status
+    FROM attendance a
+    JOIN students s ON s.id = a.student_id
+    WHERE a.attendance_date >= $1::date AND a.attendance_date <= $2::date
+      AND s.is_active = TRUE
+      ${attClassFilter}
+  `, attParams);
+
+  const statusMap = new Map();
+  attRes.rows.forEach(r => {
+    statusMap.set(`${r.student_id}_${r.day_num}`, r.status);
+  });
+
+  const dailySubsRes = await pool.query(`
+    SELECT to_char(attendance_date, 'YYYY-MM-DD') AS att_date,
+           EXTRACT(DAY FROM attendance_date)::int AS day_num
+    FROM daily_attendance_submissions
+    WHERE attendance_date >= $1::date AND attendance_date <= $2::date
+  `, [startDate, endDate]);
+
+  const roomSubsRes = await pool.query(`
+    SELECT DISTINCT to_char(attendance_date, 'YYYY-MM-DD') AS att_date,
+           EXTRACT(DAY FROM attendance_date)::int AS day_num
+    FROM attendance_submissions
+    WHERE attendance_date >= $1::date AND attendance_date <= $2::date
+  `, [startDate, endDate]);
+
+  const activeDaysSet = new Set();
+  dailySubsRes.rows.forEach(r => activeDaysSet.add(r.day_num));
+  roomSubsRes.rows.forEach(r => activeDaysSet.add(r.day_num));
+  attRes.rows.forEach(r => activeDaysSet.add(r.day_num));
+
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayInfo = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dayDate = new Date(Date.UTC(year, monthNum - 1, d));
+    const dayOfWeek = dayDate.getUTCDay();
+    dayInfo.push({
+      day: d,
+      name: dayNames[dayOfWeek],
+      isSunday: dayOfWeek === 0,
+      hasRecords: activeDaysSet.has(d)
+    });
+  }
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Al-Ameen Mission Academy Memari';
+  wb.created = new Date();
+
+  const monthLabel = new Date(Date.UTC(year, monthNum - 1, 1)).toLocaleString('en-US', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC'
+  });
+
+  const ws = wb.addWorksheet('Monthly Register', {
+    pageSetup: {
+      orientation: 'landscape',
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      paperSize: 9
+    }
+  });
+
+  const totalCols = 5 + daysInMonth + 3;
+
+  // Title
+  ws.mergeCells(1, 1, 1, totalCols);
+  const titleCell = ws.getCell(1, 1);
+  titleCell.value = 'Al - Ameen Mission Academy Memari';
+  titleCell.font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FF1E3A8A' } };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(1).height = 28;
+
+  // Subtitle
+  ws.mergeCells(2, 1, 2, totalCols);
+  const subCell = ws.getCell(2, 1);
+  subCell.value = `Monthly Attendance Register — ${monthLabel}`;
+  subCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FF334155' } };
+  subCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(2).height = 22;
+
+  // Meta
+  ws.mergeCells(3, 1, 3, totalCols);
+  const metaCell = ws.getCell(3, 1);
+  metaCell.value = `Class: ${class_name && class_name !== 'all' ? class_name : 'All Classes'}   |   Total Students: ${students.length}   |   Recorded Days: ${activeDaysSet.size} of ${daysInMonth}`;
+  metaCell.font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF64748B' } };
+  metaCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(3).height = 18;
+
+  // Header Row 4
+  const headerVals = [
+    'Sl',
+    'Reg No',
+    'Student Name',
+    'Class',
+    'Room',
+    ...dayInfo.map(di => `${String(di.day).padStart(2, '0')}\n${di.name}`),
+    'Total\nP',
+    'Total\nA',
+    'Att\n%'
+  ];
+
+  const headerRow = ws.addRow(headerVals);
+  headerRow.height = 30;
+  headerRow.eachCell((cell, colNum) => {
+    const isDayCol = colNum > 5 && colNum <= 5 + daysInMonth;
+    const dayIdx = colNum - 6;
+    const di = isDayCol ? dayInfo[dayIdx] : null;
+
+    cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+      bottom: { style: 'medium', color: { argb: 'FF1E293B' } },
+      left: { style: 'thin', color: { argb: 'FF94A3B8' } },
+      right: { style: 'thin', color: { argb: 'FF94A3B8' } }
+    };
+
+    if (di && di.isSunday) {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } };
+    } else {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+    }
+  });
+
+  const dailyPresentCount = new Array(daysInMonth).fill(0);
+  const dailyAbsentCount = new Array(daysInMonth).fill(0);
+
+  students.forEach((s, idx) => {
+    let studentP = 0;
+    let studentA = 0;
+
+    const rowDays = dayInfo.map((di, dIdx) => {
+      const key = `${s.id}_${di.day}`;
+      const rec = statusMap.get(key);
+
+      if (rec === 'present') {
+        studentP++;
+        dailyPresentCount[dIdx]++;
+        return 'P';
+      } else if (rec === 'absent') {
+        studentA++;
+        dailyAbsentCount[dIdx]++;
+        return 'A';
+      } else if (di.hasRecords) {
+        studentP++;
+        dailyPresentCount[dIdx]++;
+        return 'P';
+      } else {
+        return '-';
+      }
+    });
+
+    const totalDaysRecorded = studentP + studentA;
+    const attPct = totalDaysRecorded > 0 ? `${((studentP / totalDaysRecorded) * 100).toFixed(0)}%` : '-';
+
+    const rowData = [
+      idx + 1,
+      s.registration_no,
+      s.student_name,
+      s.class_name,
+      s.room_name,
+      ...rowDays,
+      studentP,
+      studentA,
+      attPct
+    ];
+
+    const studentRow = ws.addRow(rowData);
+    studentRow.height = 19;
+
+    studentRow.eachCell((cell, colNum) => {
+      cell.font = { name: 'Calibri', size: 9 };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+      };
+
+      if (colNum === 3) {
+        cell.alignment = { horizontal: 'left', vertical: 'middle' };
+      } else {
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      }
+
+      if (colNum > 5 && colNum <= 5 + daysInMonth) {
+        const dIdx = colNum - 6;
+        const di = dayInfo[dIdx];
+        const val = cell.value;
+
+        if (val === 'P') {
+          cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF166534' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+        } else if (val === 'A') {
+          cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF991B1B' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+        } else if (di.isSunday) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+          cell.font = { name: 'Calibri', size: 9, color: { argb: 'FF94A3B8' } };
+        } else {
+          cell.font = { name: 'Calibri', size: 9, color: { argb: 'FFCBD5E1' } };
+        }
+      }
+
+      if (colNum === 5 + daysInMonth + 1) {
+        cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF166534' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
+      }
+      if (colNum === 5 + daysInMonth + 2) {
+        cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF991B1B' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF2F2' } };
+      }
+      if (colNum === 5 + daysInMonth + 3) {
+        cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF1E293B' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+      }
+    });
+  });
+
+  // Footer: Total Present
+  const totalPresentRowVals = [
+    '',
+    '',
+    'Total Present',
+    '',
+    '',
+    ...dailyPresentCount.map((p, dIdx) => (dayInfo[dIdx].hasRecords ? p : '-')),
+    dailyPresentCount.reduce((a, b) => a + b, 0),
+    '',
+    ''
+  ];
+  const footPresentRow = ws.addRow(totalPresentRowVals);
+  footPresentRow.height = 20;
+  ws.mergeCells(footPresentRow.number, 1, footPresentRow.number, 5);
+  footPresentRow.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+  footPresentRow.eachCell((cell) => {
+    cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF166534' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+    cell.border = {
+      top: { style: 'medium', color: { argb: 'FF1E293B' } },
+      bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+    };
+  });
+
+  // Footer: Total Absent
+  const totalAbsentRowVals = [
+    '',
+    '',
+    'Total Absent',
+    '',
+    '',
+    ...dailyAbsentCount.map((a, dIdx) => (dayInfo[dIdx].hasRecords ? a : '-')),
+    '',
+    dailyAbsentCount.reduce((a, b) => a + b, 0),
+    ''
+  ];
+  const footAbsentRow = ws.addRow(totalAbsentRowVals);
+  footAbsentRow.height = 20;
+  ws.mergeCells(footAbsentRow.number, 1, footAbsentRow.number, 5);
+  footAbsentRow.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+  footAbsentRow.eachCell((cell) => {
+    cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF991B1B' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      bottom: { style: 'medium', color: { argb: 'FF1E293B' } },
+      left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+    };
+  });
+
+  const colWidths = [
+    { width: 5 },
+    { width: 12 },
+    { width: 22 },
+    { width: 12 },
+    { width: 10 },
+    ...dayInfo.map(() => ({ width: 4.5 })),
+    { width: 7 },
+    { width: 7 },
+    { width: 8 },
+  ];
+  ws.columns = colWidths;
+
+  const out = await wb.xlsx.writeBuffer();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="Monthly-Attendance-${month}.xlsx"`);
+  res.send(Buffer.from(out));
 }));
 
 router.post('/daily/fetch-gatepasses', auth, allow('super_admin','admin','office','teacher'), asyncHandler(async (req, res) => {

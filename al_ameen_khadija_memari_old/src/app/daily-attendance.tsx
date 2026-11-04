@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -13,10 +14,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import AcademyHeader from '../components/AcademyHeader';
 import DatePickerField from '../components/DatePickerField';
-import { api } from '../lib/api';
-import { getUser } from '../lib/auth';
+import { api, API_BASE } from '../lib/api';
+import { getUser, getToken } from '../lib/auth';
 
 function getLocalDateString(d = new Date()) {
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -28,6 +31,13 @@ function formatDateDisplay(ymd: string) {
   const parts = ymd.split('-');
   if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
   return ymd;
+}
+
+function getMonthDisplay(ym: string) {
+  if (!ym) return '';
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1, 1));
+  return d.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 
 function addDays(ymd: string, days: number) {
@@ -60,6 +70,13 @@ export default function DailyAttendance() {
 
   // Selection for bulk actions
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+
+  // Excel Download States
+  const [downloadingDailyExcel, setDownloadingDailyExcel] = useState(false);
+  const [downloadingMonthlyExcel, setDownloadingMonthlyExcel] = useState(false);
+  const [monthlyModalOpen, setMonthlyModalOpen] = useState(false);
+  const [monthlySelectedMonth, setMonthlySelectedMonth] = useState(() => getLocalDateString().slice(0, 7));
+  const [monthlyClassFilter, setMonthlyClassFilter] = useState('all');
 
   // Load Daily Attendance data
   const loadDailyAttendance = async (targetDate = date, showSpinner = true) => {
@@ -172,6 +189,114 @@ export default function DailyAttendance() {
       Alert.alert('Fetch Error', err.message);
     } finally {
       setSyncingGatepasses(false);
+    }
+  };
+
+  // Month navigation for Monthly Excel Modal
+  const handlePrevMonth = () => {
+    const [y, m] = monthlySelectedMonth.split('-').map(Number);
+    const prevDate = new Date(Date.UTC(y, m - 2, 1));
+    const newY = prevDate.getUTCFullYear();
+    const newM = String(prevDate.getUTCMonth() + 1).padStart(2, '0');
+    setMonthlySelectedMonth(`${newY}-${newM}`);
+  };
+
+  const handleNextMonth = () => {
+    const [y, m] = monthlySelectedMonth.split('-').map(Number);
+    const nextDate = new Date(Date.UTC(y, m, 1));
+    const newY = nextDate.getUTCFullYear();
+    const newM = String(nextDate.getUTCMonth() + 1).padStart(2, '0');
+    setMonthlySelectedMonth(`${newY}-${newM}`);
+  };
+
+  // Save blob to web file or mobile storage with sharing
+  const saveAndShareBlob = async (blob: any, fileName: string, dialogTitle: string) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } else {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const base64 = (reader.result as string).split(',')[1];
+          const fileUri = `${(FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory || ''}${fileName}`;
+          await FileSystem.writeAsStringAsync(fileUri, base64, {
+            encoding: (FileSystem as any).EncodingType?.Base64 || 'base64',
+          });
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(fileUri, {
+              mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              dialogTitle,
+            });
+          } else {
+            Alert.alert('Excel Downloaded', `File saved to ${fileUri}`);
+          }
+        } catch (err: any) {
+          Alert.alert('Save Error', err.message || 'Could not save file to mobile storage');
+        }
+      };
+      reader.readAsDataURL(blob);
+    }
+  };
+
+  // Download Daily Attendance Excel
+  const handleDownloadDailyExcel = async () => {
+    setDownloadingDailyExcel(true);
+    try {
+      const token = await getToken();
+      const params = new URLSearchParams();
+      params.append('date', date);
+      if (selectedClass !== 'all') params.append('class_name', selectedClass);
+      if (selectedRoom !== 'all') params.append('room_name', selectedRoom);
+      if (selectedStatus !== 'all') params.append('status', selectedStatus);
+
+      const res = await fetch(`${API_BASE}/api/attendance/daily/excel?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to download Daily Attendance Excel');
+      }
+      const blob = await res.blob();
+      const fileName = `Daily-Attendance-${date}.xlsx`;
+      await saveAndShareBlob(blob, fileName, 'Daily Attendance Excel');
+    } catch (err: any) {
+      Alert.alert('Download Error', err.message || 'Could not download Daily Attendance Excel');
+    } finally {
+      setDownloadingDailyExcel(false);
+    }
+  };
+
+  // Download Monthly Attendance Excel
+  const handleDownloadMonthlyExcel = async () => {
+    setDownloadingMonthlyExcel(true);
+    try {
+      const token = await getToken();
+      const params = new URLSearchParams();
+      params.append('month', monthlySelectedMonth);
+      if (monthlyClassFilter !== 'all') params.append('class_name', monthlyClassFilter);
+
+      const res = await fetch(`${API_BASE}/api/attendance/monthly/excel?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to download Monthly Attendance Excel');
+      }
+      const blob = await res.blob();
+      const fileName = `Monthly-Attendance-${monthlySelectedMonth}.xlsx`;
+      await saveAndShareBlob(blob, fileName, 'Monthly Attendance Register Excel');
+      setMonthlyModalOpen(false);
+    } catch (err: any) {
+      Alert.alert('Download Error', err.message || 'Could not download Monthly Attendance Excel');
+    } finally {
+      setDownloadingMonthlyExcel(false);
     }
   };
 
@@ -396,6 +521,28 @@ export default function DailyAttendance() {
               style={styles.refreshBtn}
             >
               <Text style={styles.refreshBtnText}>🔄</Text>
+            </TouchableOpacity>
+
+            {/* Download Daily Attendance Excel */}
+            <TouchableOpacity
+              onPress={handleDownloadDailyExcel}
+              disabled={downloadingDailyExcel}
+              style={[styles.excelBtn, styles.dailyExcelBtn, downloadingDailyExcel && styles.btnDisabled]}
+            >
+              {downloadingDailyExcel ? (
+                <ActivityIndicator size="small" color="#fff" style={{ marginRight: 4 }} />
+              ) : null}
+              <Text style={styles.excelBtnText}>
+                {downloadingDailyExcel ? 'Daily Excel...' : '📊 Daily Excel'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Download Monthly Attendance Excel */}
+            <TouchableOpacity
+              onPress={() => setMonthlyModalOpen(true)}
+              style={[styles.excelBtn, styles.monthlyExcelBtn]}
+            >
+              <Text style={styles.excelBtnText}>📅 Monthly Excel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -743,6 +890,106 @@ export default function DailyAttendance() {
           </View>
         )}
       </ScrollView>
+
+      {/* Monthly Attendance Excel Modal */}
+      <Modal
+        visible={monthlyModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMonthlyModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTitleBox}>
+                <Text style={styles.modalHeaderIcon}>📅</Text>
+                <Text style={styles.modalTitle}>Monthly Attendance Report</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setMonthlyModalOpen(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.modalDesc}>
+                Download the complete day-wise (1–31) attendance register matrix with Present, Absent, Sunday indicators, and percentage totals.
+              </Text>
+
+              {/* Month Picker Row */}
+              <Text style={styles.modalFieldLabel}>Select Month:</Text>
+              <View style={styles.monthNavRow}>
+                <TouchableOpacity onPress={handlePrevMonth} style={styles.monthNavBtn}>
+                  <Text style={styles.monthNavBtnText}>◀ Prev</Text>
+                </TouchableOpacity>
+                <View style={styles.monthLabelBox}>
+                  <Text style={styles.monthLabelText}>{getMonthDisplay(monthlySelectedMonth)}</Text>
+                  <Text style={styles.monthSubText}>({monthlySelectedMonth})</Text>
+                </View>
+                <TouchableOpacity onPress={handleNextMonth} style={styles.monthNavBtn}>
+                  <Text style={styles.monthNavBtnText}>Next ▶</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Class Filter */}
+              <Text style={[styles.modalFieldLabel, { marginTop: 14 }]}>Filter by Class (Optional):</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.classChipsScroll}
+                contentContainerStyle={styles.classChipsContainer}
+              >
+                <TouchableOpacity
+                  onPress={() => setMonthlyClassFilter('all')}
+                  style={[styles.classChip, monthlyClassFilter === 'all' && styles.classChipActive]}
+                >
+                  <Text style={[styles.classChipText, monthlyClassFilter === 'all' && styles.classChipTextActive]}>
+                    All Classes ({students.length})
+                  </Text>
+                </TouchableOpacity>
+                {classList.map((c) => (
+                  <TouchableOpacity
+                    key={c}
+                    onPress={() => setMonthlyClassFilter(c)}
+                    style={[styles.classChip, monthlyClassFilter === c && styles.classChipActive]}
+                  >
+                    <Text style={[styles.classChipText, monthlyClassFilter === c && styles.classChipTextActive]}>
+                      {c}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                onPress={() => setMonthlyModalOpen(false)}
+                style={styles.modalCancelBtn}
+                disabled={downloadingMonthlyExcel}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleDownloadMonthlyExcel}
+                disabled={downloadingMonthlyExcel}
+                style={[styles.modalDownloadBtn, downloadingMonthlyExcel && styles.btnDisabled]}
+              >
+                {downloadingMonthlyExcel ? (
+                  <ActivityIndicator size="small" color="#fff" style={{ marginRight: 6 }} />
+                ) : (
+                  <Text style={styles.modalDownloadIcon}>📥</Text>
+                )}
+                <Text style={styles.modalDownloadText}>
+                  {downloadingMonthlyExcel ? 'Generating Excel...' : 'Download Register (.xlsx)'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -911,6 +1158,29 @@ const styles = StyleSheet.create({
   },
   refreshBtnText: {
     fontSize: 14,
+  },
+  excelBtn: {
+    borderRadius: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  dailyExcelBtn: {
+    backgroundColor: '#059669',
+  },
+  monthlyExcelBtn: {
+    backgroundColor: '#4f46e5',
+  },
+  excelBtnText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  btnDisabled: {
+    opacity: 0.65,
   },
 
   /* 4 STAT CARDS */
@@ -1414,5 +1684,172 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 13,
     fontStyle: 'italic',
+  },
+
+  /* MODAL STYLES */
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 500,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#1e3a8a',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  modalHeaderTitleBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalHeaderIcon: {
+    fontSize: 18,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalCloseText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#93c5fd',
+  },
+  modalBody: {
+    padding: 16,
+  },
+  modalDesc: {
+    fontSize: 13,
+    color: '#475569',
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  modalFieldLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 8,
+  },
+  monthNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    padding: 6,
+  },
+  monthNavBtn: {
+    backgroundColor: '#0284c7',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  monthNavBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  monthLabelBox: {
+    alignItems: 'center',
+  },
+  monthLabelText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  monthSubText: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  classChipsScroll: {
+    maxHeight: 48,
+  },
+  classChipsContainer: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingVertical: 4,
+  },
+  classChip: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  classChipActive: {
+    backgroundColor: '#4f46e5',
+    borderColor: '#4338ca',
+  },
+  classChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  classChipTextActive: {
+    color: '#fff',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 10,
+    backgroundColor: '#f8fafc',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    padding: 12,
+  },
+  modalCancelBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#fff',
+  },
+  modalCancelText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  modalDownloadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    backgroundColor: '#4f46e5',
+  },
+  modalDownloadIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  modalDownloadText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#fff',
   },
 });
