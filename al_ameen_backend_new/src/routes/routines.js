@@ -765,7 +765,13 @@ router.get('/manager/report/teacher-excel',auth,allow('super_admin','admin'),asy
 router.post('/manager',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
  const b=req.body||{},saveMode=['master','draft','final','record'].includes(b.save_mode)?b.save_mode:'final';
  if(!GROUPS.includes(b.group_name)||!validDate(b.routine_date))return res.status(400).json({success:false,message:'Valid group and date are required'});
- const kind=saveMode==='master'?'master':saveMode==='draft'?'draft':'daily',isMaster=saveMode==='master',published=saveMode==='final'||saveMode==='record',gridData=await teacherOnlyGridData(b.grid_data||{});
+ let rawGrid=b.grid_data||{};
+ if(b.group_name==='xi_xii'&&Array.isArray(rawGrid.classes)&&rawGrid.classes.some(c=>['V','VI','VII','VIII','IX','X'].includes(c))){
+  rawGrid.classes=['XI-A','XI-B','XII-A','XII-B'];
+ }else if(b.group_name==='v_x'&&Array.isArray(rawGrid.classes)&&rawGrid.classes.some(c=>['XI-A','XI-B','XII-A','XII-B'].includes(c))){
+  rawGrid.classes=['V','VI','VII','VIII','IX','X'];
+ }
+ const kind=saveMode==='master'?'master':saveMode==='draft'?'draft':'daily',isMaster=saveMode==='master',published=saveMode==='final'||saveMode==='record',gridData=await teacherOnlyGridData(rawGrid);
  const r=await pool.query(`INSERT INTO routine_manager_grids(group_name,routine_date,routine_kind,grid_data,is_master,is_published,created_by)
   VALUES($1,$2,$3,$4::jsonb,$5,$6,$7) ON CONFLICT(group_name,routine_date,routine_kind) DO UPDATE SET
   grid_data=EXCLUDED.grid_data,is_master=EXCLUDED.is_master,is_published=EXCLUDED.is_published,
