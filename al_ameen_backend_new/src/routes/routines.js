@@ -402,19 +402,14 @@ async function generateDailyReportData(dateStr){
   });
  });
 
+ let publishedCount=0;
  for(const group of ['v_x','xi_xii','coaching']){
-  const q=await pool.query(`SELECT g.*,
-    CASE WHEN g.routine_date=$2::date AND g.routine_kind='daily' AND g.is_published=TRUE THEN 3
-         WHEN g.routine_date=$2::date AND g.routine_kind='draft' THEN 2
-         WHEN g.routine_date=$2::date AND g.routine_kind='daily' THEN 2
-         ELSE 1 END as priority
+  const q=await pool.query(`SELECT g.*
     FROM routine_manager_grids g
-    WHERE g.group_name=$1 AND (
-      (g.routine_date=$2::date AND g.routine_kind IN ('draft','daily')) OR
-      (g.is_master=TRUE AND EXTRACT(DOW FROM g.routine_date)=EXTRACT(DOW FROM $2::date))
-    )
-    ORDER BY priority DESC, g.updated_at DESC LIMIT 1`,[group,dateStr]);
+    WHERE g.group_name=$1 AND g.routine_date=$2::date AND g.routine_kind='daily' AND g.is_published=TRUE
+    ORDER BY g.updated_at DESC LIMIT 1`,[group,dateStr]);
   if(!q.rows.length)continue;
+  publishedCount++;
   const row=q.rows[0];
   const data=await teacherOnlyGridData(row.grid_data||{});
   if(data.no_class)continue;
@@ -486,7 +481,7 @@ async function generateDailyReportData(dateStr){
 
  const teachers=[...teacherMap.values()].map((t,idx)=>({sl:idx+1,...t}));
  const totals={xi_xii:teachers.reduce((s,t)=>s+t.xi_xii,0),ix_x:teachers.reduce((s,t)=>s+t.ix_x,0),coaching:teachers.reduce((s,t)=>s+t.coaching,0),grand_total:teachers.reduce((s,t)=>s+t.total,0)};
- return {date:dateStr,dayName,dateLabel,monthLabel:dateLabel,sessionName,schoolName:'Al - Ameen Mission Academy Memari',teachers,totals};
+ return {date:dateStr,dayName,dateLabel,monthLabel:dateLabel,sessionName,schoolName:'Al - Ameen Mission Academy Memari',teachers,totals,is_published:publishedCount>0};
 }
 
 async function buildDailyReportWorkbook({date,dayName,dateLabel,schoolName,teachers,totals}){

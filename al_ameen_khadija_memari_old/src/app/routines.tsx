@@ -555,6 +555,7 @@ async function save(mode:'master'|'draft'|'final'){
          </TouchableOpacity>
          <Text style={{fontSize:15,fontWeight:'800',color:'#1f4e78',marginLeft:6}}>
           Daily Class Report — {report.dateLabel||report.date||dailyReportDate}
+          {report.is_published===false&&<Text style={{fontSize:12,fontWeight:'700',color:'#b91c1c',marginLeft:6}}> (Unpublished)</Text>}
          </Text>
         </View>
        ):(
@@ -573,6 +574,13 @@ async function save(mode:'master'|'draft'|'final'){
        </TouchableOpacity>
       </View>
      </View>
+     {report?.date&&report.is_published===false&&(
+      <View style={{backgroundColor:'#fef2f2',borderWidth:1,borderColor:'#fecaca',paddingVertical:6,paddingHorizontal:12,borderRadius:6,marginHorizontal:16,marginBottom:8}}>
+       <Text style={{fontSize:12,fontWeight:'700',color:'#991b1b'}}>
+        ℹ️ এই তারিখের রুটিন এখনো প্রকাশ (Publish) করা হয়নি, তাই কোনো ক্লাসের রেকর্ড নেই।
+       </Text>
+      </View>
+     )}
      <View style={s.reportFilterRow}>
       <TextInput
        placeholder="🔍 Search teacher or subject..."
