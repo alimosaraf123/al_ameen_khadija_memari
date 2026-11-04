@@ -11,7 +11,13 @@ async function sendExpoPushMessages(messages) {
 }
 
 async function sendPushForNotice(noticeId) {
-  const result = await pool.query(`SELECT DISTINCT pt.expo_push_token,u.role,n.title,n.notice_text,n.notice_type
+  const result = await pool.query(`SELECT DISTINCT pt.expo_push_token,u.role,n.title,n.notice_text,n.notice_type,
+    COALESCE((
+      SELECT COUNT(*)::int 
+      FROM notices un 
+      WHERE un.is_active=TRUE 
+        AND NOT EXISTS(SELECT 1 FROM notification_reads nr WHERE nr.notice_id=un.id AND nr.user_id=u.id)
+    ), 1) AS unread_count
     FROM notices n JOIN notice_targets nt ON nt.notice_id=n.id JOIN push_tokens pt ON pt.is_active=TRUE
     JOIN users u ON u.id=pt.user_id AND u.is_active=TRUE WHERE n.id=$1 AND (
       nt.target_type='all' OR (nt.target_type='role' AND nt.target_value=u.role) OR
@@ -23,7 +29,7 @@ async function sendPushForNotice(noticeId) {
     title: row.notice_type === 'result' ? 'Result Published' : row.title || 'New Notice',
     body: row.notice_text || row.title || 'You have a new update.',
     sound: 'default',
-    badge: 1,
+    badge: Math.max(1, Number(row.unread_count || 1)),
     priority: 'high',
     channelId: 'default',
     data: { type: row.notice_type === 'result' ? 'result' : 'notice', noticeId: String(noticeId), role: row.role },
