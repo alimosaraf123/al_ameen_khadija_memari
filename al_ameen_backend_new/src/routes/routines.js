@@ -763,9 +763,9 @@ router.get('/manager/report/teacher-excel',auth,allow('super_admin','admin'),asy
 }));
 
 router.post('/manager',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
- const b=req.body||{},saveMode=['master','draft','final'].includes(b.save_mode)?b.save_mode:'final';
+ const b=req.body||{},saveMode=['master','draft','final','record'].includes(b.save_mode)?b.save_mode:'final';
  if(!GROUPS.includes(b.group_name)||!validDate(b.routine_date))return res.status(400).json({success:false,message:'Valid group and date are required'});
- const kind=saveMode==='master'?'master':saveMode==='draft'?'draft':'daily',isMaster=saveMode==='master',published=saveMode==='final',gridData=await teacherOnlyGridData(b.grid_data||{});
+ const kind=saveMode==='master'?'master':saveMode==='draft'?'draft':'daily',isMaster=saveMode==='master',published=saveMode==='final'||saveMode==='record',gridData=await teacherOnlyGridData(b.grid_data||{});
  const r=await pool.query(`INSERT INTO routine_manager_grids(group_name,routine_date,routine_kind,grid_data,is_master,is_published,created_by)
   VALUES($1,$2,$3,$4::jsonb,$5,$6,$7) ON CONFLICT(group_name,routine_date,routine_kind) DO UPDATE SET
   grid_data=EXCLUDED.grid_data,is_master=EXCLUDED.is_master,is_published=EXCLUDED.is_published,
@@ -773,10 +773,10 @@ router.post('/manager',auth,allow('super_admin','admin'),asyncHandler(async(req,
  if(isMaster)await pool.query(`UPDATE routine_manager_grids SET is_master=FALSE WHERE group_name=$1
   AND routine_kind='master' AND id<>$2 AND EXTRACT(DOW FROM routine_date)=EXTRACT(DOW FROM $3::date)`,[b.group_name,r.rows[0].id,b.routine_date]);
  if(published)await pool.query(`DELETE FROM routine_manager_grids WHERE group_name=$1 AND routine_date=$2 AND routine_kind='draft'`,[b.group_name,b.routine_date]);
- const publishedImageUrl=published?await publishRoutineJpg({group:b.group_name,date:b.routine_date,data:gridData,userId:req.user.userId}):null;
+ const publishedImageUrl=saveMode==='final'?await publishRoutineJpg({group:b.group_name,date:b.routine_date,data:gridData,userId:req.user.userId}):null;
  // Routines remain available in the teacher dashboard, but routine publication
  // deliberately creates no notice or push notification.
- res.json({success:true,routine:r.rows[0],published_image_url:publishedImageUrl,message:isMaster?'Weekday Master routine saved':saveMode==='draft'?'Routine draft saved':'Final routine published as JPG'});
+ res.json({success:true,routine:r.rows[0],published_image_url:publishedImageUrl,message:isMaster?'Weekday Master routine saved':saveMode==='draft'?'Routine draft saved':saveMode==='record'?'Class record saved successfully':'Final routine published as JPG'});
 }));
 
 // Update only the coaching time labels across coaching routines (masters, drafts, daily).
