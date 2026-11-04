@@ -175,7 +175,7 @@ export default function Routines(){
  };
  const chooseTeacher=(key:string,id:string)=>{
   if(!id){
-    update(key,{teacher_id:'',teacher_name:''});
+    update(key,{teacher_id:'',teacher_name:'',...(academic?{subject:''}:{})});
     return;
   }
   const t=teachers.find(x=>String(x.id)===id);
