@@ -72,7 +72,6 @@ export default function DailyAttendance() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   // Excel Download States
-  const [downloadingDailyExcel, setDownloadingDailyExcel] = useState(false);
   const [downloadingMonthlyExcel, setDownloadingMonthlyExcel] = useState(false);
   const [monthlyModalOpen, setMonthlyModalOpen] = useState(false);
   const [monthlySelectedMonth, setMonthlySelectedMonth] = useState(() => getLocalDateString().slice(0, 7));
@@ -242,34 +241,6 @@ export default function DailyAttendance() {
         }
       };
       reader.readAsDataURL(blob);
-    }
-  };
-
-  // Download Daily Attendance Excel
-  const handleDownloadDailyExcel = async () => {
-    setDownloadingDailyExcel(true);
-    try {
-      const token = await getToken();
-      const params = new URLSearchParams();
-      params.append('date', date);
-      if (selectedClass !== 'all') params.append('class_name', selectedClass);
-      if (selectedRoom !== 'all') params.append('room_name', selectedRoom);
-      if (selectedStatus !== 'all') params.append('status', selectedStatus);
-
-      const res = await fetch(`${API_BASE}/api/attendance/daily/excel?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || 'Failed to download Daily Attendance Excel');
-      }
-      const blob = await res.blob();
-      const fileName = `Daily-Attendance-${date}.xlsx`;
-      await saveAndShareBlob(blob, fileName, 'Daily Attendance Excel');
-    } catch (err: any) {
-      Alert.alert('Download Error', err.message || 'Could not download Daily Attendance Excel');
-    } finally {
-      setDownloadingDailyExcel(false);
     }
   };
 
@@ -521,20 +492,6 @@ export default function DailyAttendance() {
               style={styles.refreshBtn}
             >
               <Text style={styles.refreshBtnText}>🔄</Text>
-            </TouchableOpacity>
-
-            {/* Download Daily Attendance Excel */}
-            <TouchableOpacity
-              onPress={handleDownloadDailyExcel}
-              disabled={downloadingDailyExcel}
-              style={[styles.excelBtn, styles.dailyExcelBtn, downloadingDailyExcel && styles.btnDisabled]}
-            >
-              {downloadingDailyExcel ? (
-                <ActivityIndicator size="small" color="#fff" style={{ marginRight: 4 }} />
-              ) : null}
-              <Text style={styles.excelBtnText}>
-                {downloadingDailyExcel ? 'Daily Excel...' : '📊 Daily Excel'}
-              </Text>
             </TouchableOpacity>
 
             {/* Download Monthly Attendance Excel */}
@@ -1167,9 +1124,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-  },
-  dailyExcelBtn: {
-    backgroundColor: '#059669',
   },
   monthlyExcelBtn: {
     backgroundColor: '#4f46e5',
