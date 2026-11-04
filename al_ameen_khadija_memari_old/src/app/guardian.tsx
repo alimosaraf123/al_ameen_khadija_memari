@@ -56,6 +56,11 @@ export default function Guardian() {
   const params = useLocalSearchParams<{tab?: string}>();
   const [tab, setTab] = useState<TabName>('home');
   useEffect(() => { if (params.tab === 'result' || params.tab === 'notifications') setTab(params.tab as TabName); }, [params.tab]);
+  useEffect(() => {
+    if (tab === 'notifications' || tab === 'result') {
+      void import('../lib/pushNotifications').then(m => m.clearNotificationBadge()).catch(() => {});
+    }
+  }, [tab]);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [noticeBlink, setNoticeBlink] = useState(true);
   const [viewedNoticeIds, setViewedNoticeIds] = useState<Record<string, boolean>>({});

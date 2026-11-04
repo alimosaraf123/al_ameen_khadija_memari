@@ -22,7 +22,34 @@ async function sendPushForNotice(noticeId) {
     to: row.expo_push_token,
     title: row.notice_type === 'result' ? 'Result Published' : row.title || 'New Notice',
     body: row.notice_text || row.title || 'You have a new update.',
-    sound: 'default', data: { type: row.notice_type === 'result' ? 'result' : 'notice', noticeId: String(noticeId), role: row.role },
+    sound: 'default',
+    badge: 1,
+    priority: 'high',
+    channelId: 'default',
+    data: { type: row.notice_type === 'result' ? 'result' : 'notice', noticeId: String(noticeId), role: row.role },
   })));
 }
-module.exports = { sendPushForNotice };
+
+async function sendPushForRoutine({ group, date }) {
+  const result = await pool.query(`
+    SELECT DISTINCT pt.expo_push_token, u.role
+    FROM push_tokens pt
+    JOIN users u ON u.id = pt.user_id AND u.is_active = TRUE
+    WHERE pt.is_active = TRUE AND u.role = 'teacher'
+  `);
+  if (!result.rows.length) return;
+  const groupLabel = group === 'xi_xii' ? 'Class XI-XII' : group === 'coaching' ? 'Coaching' : 'Class V-X';
+  const formattedDate = date ? String(date).slice(0, 10) : 'Upcoming';
+  await sendExpoPushMessages(result.rows.map(row => ({
+    to: row.expo_push_token,
+    title: `New Routine Published — ${groupLabel}`,
+    body: `Routine for ${formattedDate} has been published. Please check your schedule in the Teacher App.`,
+    sound: 'default',
+    badge: 1,
+    priority: 'high',
+    channelId: 'default',
+    data: { type: 'routine', role: 'teacher', date, group },
+  })));
+}
+
+module.exports = { sendPushForNotice, sendPushForRoutine, sendExpoPushMessages };

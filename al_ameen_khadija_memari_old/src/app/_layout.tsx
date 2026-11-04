@@ -51,9 +51,10 @@ export default function Layout() {
   if(!session.user)return;
   let disposed=false;
   let unsubscribe=()=>{};
-  void import('../lib/pushNotifications').then(({registerPushNotifications,subscribeToPushNavigation})=>{
+  void import('../lib/pushNotifications').then(({registerPushNotifications,subscribeToPushNavigation,clearNotificationBadge})=>{
    if(disposed)return;
    void registerPushNotifications().catch(()=>{});
+   void clearNotificationBadge().catch(()=>{});
    unsubscribe=subscribeToPushNavigation();
   }).catch(()=>{});
   return()=>{disposed=true;unsubscribe();};

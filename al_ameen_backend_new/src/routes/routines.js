@@ -6,6 +6,7 @@ const sharp=require('sharp');
 const pool=require('../db');
 const {auth,allow}=require('../middleware/auth');
 const asyncHandler=require('../utils/asyncHandler');
+const { sendPushForRoutine } = require('../utils/pushNotifications');
 const router=express.Router();
 const GROUPS=['v_x','xi_xii','coaching'];
 const validDate=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''));
@@ -782,6 +783,9 @@ router.post('/manager',auth,allow('super_admin','admin'),asyncHandler(async(req,
  const publishedImageUrl=saveMode==='final'?await publishRoutineJpg({group:b.group_name,date:b.routine_date,data:gridData,userId:req.user.userId}):null;
  // Routines remain available in the teacher dashboard, but routine publication
  // deliberately creates no notice or push notification.
+ if(saveMode==='final'){
+  sendPushForRoutine({group:b.group_name,date:b.routine_date}).catch(err=>console.error('Routine push notification failed:',err.message));
+ }
  res.json({success:true,routine:r.rows[0],published_image_url:publishedImageUrl,message:isMaster?'Weekday Master routine saved':saveMode==='draft'?'Routine draft saved':saveMode==='record'?'Class record saved successfully':'Final routine published as JPG'});
 }));
 

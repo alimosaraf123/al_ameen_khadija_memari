@@ -133,7 +133,7 @@ export default function Teacher(){
  useEffect(()=>{if(params.openMore==='1')setMoreMenu(true)},[params.openMore]);
  useEffect(()=>{if(Platform.OS==='web'&&routineViewedKey){try{const raw=localStorage.getItem(routineViewedKey);setViewedRoutineIds(raw?JSON.parse(raw)||{}:{})}catch{setViewedRoutineIds({})}}},[routineViewedKey]);
  useEffect(()=>{const loop=Animated.loop(Animated.sequence([Animated.timing(blinkOpacity,{toValue:.2,duration:550,useNativeDriver:true}),Animated.timing(blinkOpacity,{toValue:1,duration:550,useNativeDriver:true})]));loop.start();return()=>loop.stop()},[blinkOpacity]);
- const markRoutineGroupViewed=(items:any[])=>{const next={...viewedRoutineIds};items.forEach(item=>{next[String(item.id)]=routineVersion(item)});setViewedRoutineIds(next);if(Platform.OS==='web'&&routineViewedKey){try{localStorage.setItem(routineViewedKey,JSON.stringify(next))}catch{}}};
+ const markRoutineGroupViewed=(items:any[])=>{void import('../lib/pushNotifications').then(m=>m.clearNotificationBadge()).catch(()=>{});const next={...viewedRoutineIds};items.forEach(item=>{next[String(item.id)]=routineVersion(item)});setViewedRoutineIds(next);if(Platform.OS==='web'&&routineViewedKey){try{localStorage.setItem(routineViewedKey,JSON.stringify(next))}catch{}}};
  useEffect(()=>{
   let active=true;
   void Promise.allSettled([api('/api/teachers/me'),api('/api/routines'),api('/api/notices')]).then(([profile,routineData,noticeData])=>{
