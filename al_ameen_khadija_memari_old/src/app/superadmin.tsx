@@ -17,6 +17,7 @@ import {
 
 import {
   router,
+  useLocalSearchParams,
 } from 'expo-router';
 
 import {
@@ -49,7 +50,7 @@ const menus: any[] = [
 
   ['Student Deposit Fund', '/deposit-fund'],
 
-  ['Fees Collection Report', '/fees'],
+  ['Accounts', '/fees'],
   ['Asset Register', '/asset-register'],
 
   ['Activity Audit Log', '/audit-log'],
@@ -67,13 +68,60 @@ function AdminLink({ path, style, onPress, children }: { path: string; style: an
 
 
 export default function Dashboard() {
+  const { menu } = useLocalSearchParams<{ menu?: string }>();
   const [unread,setUnread]=useState(0);
   const [teacherMenu,setTeacherMenu]=useState(false);
   const [hostelMenu,setHostelMenu]=useState(false);
   const [academyMenu,setAcademyMenu]=useState(false);
   const [studentMenu,setStudentMenu]=useState(false);
+  const [accountsMenu,setAccountsMenu]=useState(false);
   const [genericMenu,setGenericMenu]=useState<{title:string;path:string}|null>(null);
   const [restricted,setRestricted]=useState(false),[permissions,setPermissions]=useState<string[]>([]),[userRole,setUserRole]=useState(''),[dashboardName,setDashboardName]=useState('');
+
+  useEffect(() => {
+    if (menu === 'staff' || menu === 'teachers') {
+      setTeacherMenu(true);
+    } else if (menu === 'students') {
+      setStudentMenu(true);
+    } else if (menu === 'hostel') {
+      setHostelMenu(true);
+    } else if (menu === 'academy') {
+      setAcademyMenu(true);
+    } else if (menu === 'accounts') {
+      setAccountsMenu(true);
+    }
+  }, [menu]);
+
+  const closeTeacherMenu = () => {
+    setTeacherMenu(false);
+    if (menu === 'staff' || menu === 'teachers') {
+      router.setParams({ menu: '' });
+    }
+  };
+  const closeStudentMenu = () => {
+    setStudentMenu(false);
+    if (menu === 'students') {
+      router.setParams({ menu: '' });
+    }
+  };
+  const closeHostelMenu = () => {
+    setHostelMenu(false);
+    if (menu === 'hostel') {
+      router.setParams({ menu: '' });
+    }
+  };
+  const closeAcademyMenu = () => {
+    setAcademyMenu(false);
+    if (menu === 'academy') {
+      router.setParams({ menu: '' });
+    }
+  };
+  const closeAccountsMenu = () => {
+    setAccountsMenu(false);
+    if (menu === 'accounts') {
+      router.setParams({ menu: '' });
+    }
+  };
   const loadCounter=async()=>{try{const d=await api('/api/notices/admin-counter');setUnread(d.unread||0);}catch{}};
   useEffect(()=>{void getUser<any>().then(u=>{if(u)setDashboardName(String(u.full_name||u.name||u.login_id||'').trim())});void api('/api/me').then(d=>{setRestricted(!!d.restricted);setPermissions(d.permissions||[]);setUserRole(d.user?.role||'');setDashboardName(String(d.user?.full_name||d.user?.name||d.user?.login_id||'').trim())}).catch(()=>{});void loadCounter();const timer=setInterval(loadCounter,30000);return()=>clearInterval(timer);},[]);
   const openNotifications=async()=>{try{await api('/api/notices/read-all',{method:'POST'});setUnread(0);}finally{router.push('/notices');}};
@@ -82,6 +130,7 @@ export default function Dashboard() {
     if(title==='Students'){setStudentMenu(true);return;}
     if(title==='Hostel'){setHostelMenu(true);return;}
     if(title==='Academy'){setAcademyMenu(true);return;}
+    if(title==='Accounts'){setAccountsMenu(true);return;}
     router.push(path as any);
   };
 
@@ -114,9 +163,6 @@ export default function Dashboard() {
             {restricted ? (dashboardName ? dashboardName+' Dashboard' : 'Dashboard') : 'Super Admin Dashboard'}
           </Text>
           <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
-            <TouchableOpacity onPress={()=>router.push('/daily-attendance' as any)} style={{flexDirection:'row',alignItems:'center',backgroundColor:'#ecfdf5',borderWidth:1,borderColor:'#a7f3d0',borderRadius:20,paddingVertical:7,paddingHorizontal:13,gap:6}}>
-              <Text style={{fontSize:13,fontWeight:'800',color:'#047857'}}>📋 Daily Attendance</Text>
-            </TouchableOpacity>
             <TouchableOpacity onPress={openNotifications} style={s.notification}>
               <Text style={s.notificationText}>🔔 Admin Notifications</Text>
               {unread>0&&<View style={s.badge}><Text style={s.badgeText}>{unread>99?'99+':unread}</Text></View>}
@@ -136,7 +182,7 @@ export default function Dashboard() {
 
                 key={title}
 
-                path={title==='Students' || title==='Staff' || title==='Hostel' || title==='Academy' ? '#' : path}
+                path={title==='Students' || title==='Staff' || title==='Hostel' || title==='Academy' || title==='Accounts' ? '#' : path}
 
                 style={s.card}
 
@@ -177,29 +223,35 @@ export default function Dashboard() {
 
       </ScrollView>
 
-      <Modal visible={teacherMenu} transparent animationType="fade" onRequestClose={()=>setTeacherMenu(false)}>
-        <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={()=>setTeacherMenu(false)} accessibilityRole="button" accessibilityLabel="Close teachers menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Staff</Text><TouchableOpacity onPress={()=>setTeacherMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
+      <Modal visible={teacherMenu} transparent animationType="fade" onRequestClose={closeTeacherMenu}>
+        <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={closeTeacherMenu} accessibilityRole="button" accessibilityLabel="Close teachers menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Staff</Text><TouchableOpacity onPress={closeTeacherMenu}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
           <View style={s.modalGrid}>
             {[["Add Staff","/teachers?mode=add"],["View Staff","/teachers?mode=view"],["I-Card & Form","/teachers?mode=icard"],["Staff Attendance","/teacher-attendance"],["Staff Summary","/staff-summary"],["Gateman & Service Staff","/service-staff"]].map(([label,path])=><AdminLink path={path} key={label} style={s.modalItem} onPress={()=>{setTeacherMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></AdminLink>)}
           </View>
         </View></View>
       </Modal>
 
-      <Modal visible={studentMenu} transparent animationType="fade" onRequestClose={()=>setStudentMenu(false)}>
-        <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={()=>setStudentMenu(false)} accessibilityRole="button" accessibilityLabel="Close students menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Students</Text><TouchableOpacity onPress={()=>setStudentMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
+      <Modal visible={studentMenu} transparent animationType="fade" onRequestClose={closeStudentMenu}>
+        <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={closeStudentMenu} accessibilityRole="button" accessibilityLabel="Close students menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Students</Text><TouchableOpacity onPress={closeStudentMenu}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
           <View style={s.modalGrid}>{[["Student Details","/students"],["Daily Student Attendance","/daily-attendance"],["Student Summary","/student-summary"]].map(([label,path])=><AdminLink path={path} key={label} style={s.modalItem} onPress={()=>{setStudentMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></AdminLink>)}</View>
         </View></View>
       </Modal>
 
-      <Modal visible={academyMenu} transparent animationType="fade" onRequestClose={()=>setAcademyMenu(false)}>
-        <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={()=>setAcademyMenu(false)} accessibilityRole="button" accessibilityLabel="Close academy menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Academy</Text><TouchableOpacity onPress={()=>setAcademyMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
+      <Modal visible={academyMenu} transparent animationType="fade" onRequestClose={closeAcademyMenu}>
+        <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={closeAcademyMenu} accessibilityRole="button" accessibilityLabel="Close academy menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Academy</Text><TouchableOpacity onPress={closeAcademyMenu}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
           <View style={s.modalGrid}>{[["Weekly Marks","/marks"],["OMR Exam & Evaluation","/omr-evaluation"],["Terminal Exam","/terminal-exams"],["Print Terminal Result","/class-results"],["Routine","/routines"],["Notice","/notices"],["Library","/library"]].map(([label,path])=><AdminLink path={path} key={label} style={s.modalItem} onPress={()=>{setAcademyMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></AdminLink>)}</View>
         </View></View>
       </Modal>
 
-      <Modal visible={hostelMenu} transparent animationType="fade" onRequestClose={()=>setHostelMenu(false)}>
-        <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={()=>setHostelMenu(false)} accessibilityRole="button" accessibilityLabel="Close hostel menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Hostel</Text><TouchableOpacity onPress={()=>setHostelMenu(false)}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
+      <Modal visible={hostelMenu} transparent animationType="fade" onRequestClose={closeHostelMenu}>
+        <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={closeHostelMenu} accessibilityRole="button" accessibilityLabel="Close hostel menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Hostel</Text><TouchableOpacity onPress={closeHostelMenu}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
           <View style={s.modalGrid}>{[["Rooms","/rooms"],["Teacher Room Assignment","/room-assignments"],["Daily Student Attendance","/daily-attendance"],["Evening Room Attendance","/attendance"],["Student Behaviour","/behavior"],["Student Illness","/illness"],["Room Problem","/problems"],["Stock","/dining-stock"]].map(([label,path])=><AdminLink path={path} key={label} style={s.modalItem} onPress={()=>{setHostelMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></AdminLink>)}</View>
+        </View></View>
+      </Modal>
+
+      <Modal visible={accountsMenu} transparent animationType="fade" onRequestClose={closeAccountsMenu}>
+        <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={closeAccountsMenu} accessibilityRole="button" accessibilityLabel="Close accounts menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Accounts</Text><TouchableOpacity onPress={closeAccountsMenu}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
+          <View style={s.modalGrid}>{[["Fees","/fees?tab=fees_collection"],["Receipt & Payment","/fees?tab=receipt_payment"]].map(([label,path])=><AdminLink path={path} key={label} style={s.modalItem} onPress={()=>{setAccountsMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></AdminLink>)}</View>
         </View></View>
       </Modal>
 

@@ -10,7 +10,7 @@ import { STUDENT_CLASSES, isVisibleStudentClass } from '../lib/studentClasses';
 import { filterStudents, studentSession, normalizeStudentClass } from '../lib/studentDirectory';
 
 type Option = { value: string; label: string; shortLabel?: string; keywords?: string[] };
-export function Select({ label, value, options, onChange, searchable=false, style, panelWidth, panelMaxHeight }: { label: string; value: string; options: Option[]; onChange: (value: string) => void; searchable?: boolean; style?: any; panelWidth?: number; panelMaxHeight?: number }) {
+export function Select({ label, value, options, onChange, searchable=false, style, textStyle, placeholderTextStyle, chevron, panelWidth, panelMaxHeight }: { label: string; value: string; options: Option[]; onChange: (value: string) => void; searchable?: boolean; style?: any; textStyle?: any; placeholderTextStyle?: any; chevron?: string; panelWidth?: number; panelMaxHeight?: number }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [previewLabel, setPreviewLabel] = useState('');
@@ -262,6 +262,7 @@ export function Select({ label, value, options, onChange, searchable=false, styl
 
   const selectedOpt = options.find(o => o.value === value);
   const buttonDisplay = selectedOpt?.shortLabel || selectedOpt?.label || label;
+  const chevronChar = chevron !== undefined ? chevron : '▼';
 
   return <>
     <TouchableOpacity
@@ -271,10 +272,12 @@ export function Select({ label, value, options, onChange, searchable=false, styl
       onPress={handleOpen}
       style={[s.select, style]}
     >
-      <Text style={[s.selectText,!value&&s.selectPlaceholder]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{buttonDisplay}  ▼</Text>
+      <Text style={[s.selectText, !value && s.selectPlaceholder, textStyle, !value && placeholderTextStyle]} numberOfLines={1} ellipsizeMode="tail">
+        {buttonDisplay}{chevronChar ? `  ${chevronChar}` : ''}
+      </Text>
     </TouchableOpacity>
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-      <View style={[s.overlay,Platform.OS==='web'&&s.webSelectOverlay]}><Pressable accessibilityRole="button" accessibilityLabel="Close dropdown" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} onPress={() => setOpen(false)} /><View style={[s.selectPanel,Platform.OS!=='web'&&panelWidth ? {maxWidth:panelWidth} : false,Platform.OS!=='web'&&panelMaxHeight ? {maxHeight:panelMaxHeight} : false,Platform.OS==='web'&&{position:'absolute',left:anchor.x,top:anchor.y,width:anchor.width,maxWidth:anchor.width,maxHeight:anchor.maxHeight,borderWidth:1,borderColor:'#cbd5e1'}] }>
+      <View style={[s.overlay,Platform.OS==='web'&&s.webSelectOverlay]}><Pressable accessibilityRole="button" accessibilityLabel="Close dropdown" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} onPress={() => setOpen(false)} /><View style={[s.selectPanel,Platform.OS!=='web'&&panelWidth ? {maxWidth:panelWidth} : false,Platform.OS!=='web'&&panelMaxHeight ? {maxHeight:panelMaxHeight} : false,Platform.OS==='web'&&{position:'absolute',left:anchor.x,top:anchor.y,width:anchor.width,maxWidth:anchor.width,maxHeight:anchor.maxHeight,borderWidth:1,borderColor:'#cbd5e1',zIndex:1000,boxShadow:'0 4px 12px rgba(0,0,0,0.15)' as any}] }>
         <Text style={s.panelTitle}>{label}</Text>
         {searchable && (
           <TextInput

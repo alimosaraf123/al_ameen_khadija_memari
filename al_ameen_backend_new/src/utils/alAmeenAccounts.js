@@ -433,10 +433,299 @@ async function getFeesReportData({ fromDate = '', toDate = '', session = '', bra
   return report;
 }
 
+const BANKS = [
+  { id: '4310', key: 'axis_24877', name: 'Axis - 24877', full_name: 'Axis Bank A/c No.- 910010023824877' },
+  { id: '9705', key: 'axis_43880', name: 'Axis - 43880', full_name: 'Axis Bank A/C NO - 921010046243880' },
+  { id: '16513', key: 'sbi_19665', name: 'SBI - 19665', full_name: 'S.B.I. A/c - 43718419665' },
+  { id: '6310', key: 'sbi_70917', name: 'SBI - 70917', full_name: 'S.B.I. A/c - 37247970917' },
+];
+
+function cleanNum(val) {
+  if (!val) return 0;
+  const n = parseFloat(String(val).replace(/,/g, '').replace(/[^0-9.-]/g, ''));
+  return isNaN(n) ? 0 : n;
+}
+
+function getFinancialYearInfo(dateStr) {
+  const d = dateStr ? new Date(dateStr) : new Date();
+  const year = isNaN(d.getFullYear()) ? new Date().getFullYear() : d.getFullYear();
+  const month = isNaN(d.getMonth()) ? new Date().getMonth() + 1 : d.getMonth() + 1;
+  const startYear = month >= 4 ? year : year - 1;
+  const label = `${startYear}-${startYear + 1}`;
+  const FY_MAP = {
+    '2022-2023': '3585',
+    '2023-2024': '3699',
+    '2024-2025': '3835',
+    '2025-2026': '3961',
+    '2026-2027': '4097',
+    '2027-2028': '4097',
+  };
+  return { id: FY_MAP[label] || '4097', label };
+}
+
+async function getAvailableBanks(cookie) {
+  try {
+    const res = await fetchPortalPage(ACCOUNTS_BASE_URL + '?action=bank_book', 'GET', null, cookie);
+    const selectMatch = res.text.match(/<select[^>]*name=["']bank_id["'][\s\S]*?<\/select>/i);
+    if (!selectMatch) return BANKS;
+    const opts = [...selectMatch[0].matchAll(/<option\b[^>]*value=["']([^"']+)["'][^>]*>([\s\S]*?)<\/option>/gi)];
+    const banks = opts.map(o => {
+      const id = o[1].trim();
+      const label = cleanText(o[2]);
+      const known = BANKS.find(b => b.id === id);
+      if (known) return known;
+      let name = label;
+      const digitsMatch = label.match(/(\d{4,6})$/);
+      if (digitsMatch) {
+        if (/axis/i.test(label)) name = `Axis - ${digitsMatch[1]}`;
+        else if (/sbi|s\.b\.i/i.test(label)) name = `SBI - ${digitsMatch[1]}`;
+        else name = `${label.slice(0, 10)} - ${digitsMatch[1]}`;
+      }
+      return { id, key: `bank_${id}`, name, full_name: label };
+    });
+    return banks.length > 0 ? banks : BANKS;
+  } catch {
+    return BANKS;
+  }
+}
+
+function parseBookHtml(html) {
+  const tableMatch = html.match(/<table[^>]*id=["']fee_report["'][\s\S]*?<\/table>/i) ||
+                     html.match(/<table[^>]*class=["'][^"']*data_table[^"']*["'][\s\S]*?<\/table>/i);
+  if (!tableMatch) {
+    return { opening: 0, receipt: 0, payment: 0, closing: 0, transactions: [] };
+  }
+
+  const trs = [...tableMatch[0].matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)];
+  let openingDebit = 0;
+  let openingCredit = 0;
+  let hasOpening = false;
+  let totalDebit = null;
+  let totalCredit = null;
+  let closingDebit = 0;
+  let closingCredit = 0;
+  let hasClosing = false;
+  let sumTxnDebit = 0;
+  let sumTxnCredit = 0;
+  const transactions = [];
+
+  for (const tr of trs) {
+    const cells = [...tr[1].matchAll(/<t[hd]\b[^>]*>([\s\S]*?)<\/t[hd]>/gi)]
+      .map(m => cleanText(m[1]));
+    if (cells.length < 3) continue;
+
+    const rowText = cells.join(' ').toLowerCase();
+
+    if (rowText.includes('opening balance')) {
+      hasOpening = true;
+      openingDebit = cleanNum(cells[2] || cells[3] || 0);
+      openingCredit = cleanNum(cells[3] || cells[4] || 0);
+      continue;
+    }
+
+    if (rowText.includes('total amount')) {
+      totalDebit = cleanNum(cells[2] || cells[3] || 0);
+      totalCredit = cleanNum(cells[3] || cells[4] || 0);
+      continue;
+    }
+
+    if (rowText.includes('closing balance')) {
+      hasClosing = true;
+      closingDebit = cleanNum(cells[2] || cells[3] || 0);
+      closingCredit = cleanNum(cells[3] || cells[4] || 0);
+      continue;
+    }
+
+    if (cells[0] === '0' && cells[1] === '') continue;
+    if (rowText.includes('date') && (rowText.includes('ledger') || rowText.includes('particulars'))) continue;
+
+    const len = cells.length;
+    let debit = 0;
+    let credit = 0;
+    if (len >= 7) {
+      credit = cleanNum(cells[len - 2]);
+      debit = cleanNum(cells[len - 3]);
+    }
+    sumTxnDebit += debit;
+    sumTxnCredit += credit;
+
+    let date = cells[1] || '';
+    let particulars = cells[2] || '';
+    let narration = '';
+    let vch_type = '';
+    let vch_no = '';
+
+    const c3Lower = String(cells[3] || '').trim().toLowerCase();
+    const c4Lower = String(cells[4] || '').trim().toLowerCase();
+
+    if (['receipt', 'payment', 'contra', 'journal'].includes(c3Lower)) {
+      // Bank Book column structure: Date, Particulars, Vch Type, Vch No, Cheque/Ref No
+      vch_type = cells[3];
+      vch_no = cells[4] || '';
+      narration = cells[5] || '';
+    } else if (['receipt', 'payment', 'contra', 'journal'].includes(c4Lower)) {
+      // Cash Book column structure: Date, Particulars, Narration, Vch Type, Vch No
+      narration = cells[3] || '';
+      vch_type = cells[4];
+      vch_no = cells[5] || '';
+    } else {
+      narration = cells[3] || '';
+      vch_type = cells[4] || '';
+      vch_no = cells[5] || '';
+    }
+
+    transactions.push({
+      date,
+      particulars,
+      narration,
+      vch_type,
+      vch_no,
+      receipt: debit,
+      payment: credit,
+    });
+  }
+
+  const opening = Number((openingDebit - openingCredit).toFixed(2));
+  let receipt = 0;
+  let payment = 0;
+
+  if (totalDebit !== null && hasOpening) {
+    receipt = Number(Math.max(0, totalDebit - openingDebit).toFixed(2));
+  } else {
+    receipt = Number(sumTxnDebit.toFixed(2));
+  }
+
+  if (totalCredit !== null && hasOpening) {
+    payment = Number(Math.max(0, totalCredit - openingCredit).toFixed(2));
+  } else {
+    payment = Number(sumTxnCredit.toFixed(2));
+  }
+
+  let closing = 0;
+  if (hasClosing) {
+    closing = Number((closingDebit - closingCredit).toFixed(2));
+  } else if (totalDebit !== null && totalCredit !== null) {
+    closing = Number((totalDebit - totalCredit).toFixed(2));
+  } else {
+    closing = Number((opening + receipt - payment).toFixed(2));
+  }
+
+  return {
+    opening,
+    receipt,
+    payment,
+    closing,
+    transactions
+  };
+}
+
+async function getReceiptPaymentReportData({ fromDate = '', toDate = '' } = {}) {
+  const today = toYmd(new Date());
+  const sdate = fromDate || today;
+  const edate = toDate || sdate;
+
+  let cookie;
+  try {
+    cookie = await ensureValidCookie();
+  } catch (err) {
+    return {
+      success: false,
+      need_login: true,
+      message: err.message || 'Login required for Al-Ameen Accounts portal.',
+    };
+  }
+
+  const fyInfo = getFinancialYearInfo(sdate);
+  const banks = await getAvailableBanks(cookie);
+
+  // 1. Fetch Cash Book
+  const cashForm = new URLSearchParams({
+    financial_year_id: fyInfo.id,
+    sdate,
+    edate,
+    branch_id: MEMARI_BRANCH_ID,
+    search: ''
+  });
+
+  const cashResPromise = fetchPortalPage(ACCOUNTS_BASE_URL + '?action=cash_book', 'POST', cashForm, cookie)
+    .then(r => parseBookHtml(r.text))
+    .catch(err => {
+      console.error('Error fetching cash book:', err.message);
+      return { opening: 0, receipt: 0, payment: 0, closing: 0, transactions: [] };
+    });
+
+  // 2. Fetch Bank Books
+  const bankPromises = banks.map(b => {
+    const bankForm = new URLSearchParams({
+      financial_year_id: fyInfo.id,
+      bank_id: b.id,
+      sdate,
+      edate,
+      branch_id: MEMARI_BRANCH_ID,
+      search: ''
+    });
+    return fetchPortalPage(ACCOUNTS_BASE_URL + '?action=bank_book', 'POST', bankForm, cookie)
+      .then(r => ({ ...b, ...parseBookHtml(r.text) }))
+      .catch(err => {
+        console.error(`Error fetching bank book ${b.name}:`, err.message);
+        return { ...b, opening: 0, receipt: 0, payment: 0, closing: 0, transactions: [] };
+      });
+  });
+
+  const [cashData, ...bankResults] = await Promise.all([cashResPromise, ...bankPromises]);
+
+  // Construct rows matching Image 5:
+  // [Cash, Axis - 24877, Axis - 43880, SBI - 19665, SBI - 70917]
+  const rows = [
+    {
+      account_id: 'cash',
+      account_name: 'Cash',
+      code: 'cash',
+      opening_balance: cashData.opening,
+      receipt: cashData.receipt,
+      payment: cashData.payment,
+      closing_balance: cashData.closing,
+      transaction_count: cashData.transactions.length,
+      transactions: cashData.transactions,
+    },
+    ...bankResults.map(b => ({
+      account_id: b.id,
+      account_name: b.name,
+      code: b.key,
+      full_name: b.full_name,
+      opening_balance: b.opening,
+      receipt: b.receipt,
+      payment: b.payment,
+      closing_balance: b.closing,
+      transaction_count: b.transactions.length,
+      transactions: b.transactions,
+    }))
+  ];
+
+  const total = {
+    account_name: 'Total',
+    opening_balance: Number(rows.reduce((sum, r) => sum + r.opening_balance, 0).toFixed(2)),
+    receipt: Number(rows.reduce((sum, r) => sum + r.receipt, 0).toFixed(2)),
+    payment: Number(rows.reduce((sum, r) => sum + r.payment, 0).toFixed(2)),
+    closing_balance: Number(rows.reduce((sum, r) => sum + r.closing_balance, 0).toFixed(2)),
+  };
+
+  return {
+    success: true,
+    from_date: sdate,
+    to_date: edate,
+    financial_year: fyInfo.label,
+    branch: 'Memari',
+    rows,
+    total
+  };
+}
+
 module.exports = {
   getPortalCredentials,
   savePortalCredentials,
   loginToPortal,
   getFeesReportData,
+  getReceiptPaymentReportData,
   FEES_REPORT_URL,
 };

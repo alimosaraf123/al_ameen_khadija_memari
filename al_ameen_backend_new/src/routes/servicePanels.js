@@ -140,9 +140,144 @@ router.post('/guardian-exit',auth,allow('gateman','super_admin','admin'),asyncHa
 router.post('/gate-entry',auth,allow('gateman','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const b=req.body||{},type=b.permission_type;if(!['visit','gate_pass'].includes(type)||!b.permission_id)return res.status(400).json({success:false,message:'Choose a valid permission'});const table=type==='visit'?'student_visits':'student_gate_passes',dateCol=type==='visit'?'visit_at':'departure_at';const statusCondition=type==='visit'?"status='approved'":"status IN('draft','pending')";const q=await pool.query(`SELECT student_id FROM ${table} WHERE id=$1 AND ${dateCol}::date=CURRENT_DATE AND ${statusCondition}`,[b.permission_id]);if(!q.rowCount)return res.status(409).json({success:false,message:'Today’s valid permission was not found'});if((await pool.query('SELECT 1 FROM gate_entry_logs WHERE permission_type=$1 AND permission_id=$2 AND entered_at::date=CURRENT_DATE',[type,b.permission_id])).rowCount)return res.status(409).json({success:false,message:'This permission has already been entered today'});const log=(await pool.query(`INSERT INTO gate_entry_logs(student_id,permission_type,permission_id,entered_by,remarks) VALUES($1,$2,$3,$4,$5) RETURNING *`,[q.rows[0].student_id,type,b.permission_id,req.user.userId,b.remarks||null])).rows[0];res.status(201).json({success:true,entry:log})}));
 router.post('/gate-visitor-entry',auth,allow('gateman','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const permissionId=Number(req.body?.permission_id);if(!permissionId)return res.status(400).json({success:false,message:'Visit permission is required'});const visit=(await pool.query(`SELECT id,student_id,visitor_name,visitor_relation,COALESCE(person_count, 1)::int person_count FROM student_visits WHERE id=$1 AND visit_at::date=CURRENT_DATE AND status='approved'`,[permissionId])).rows[0];if(!visit)return res.status(404).json({success:false,message:'Today’s visit permission was not found'});const existing=await pool.query(`SELECT id FROM gate_guardian_visit_entries WHERE permission_id=$1 AND entry_mode='with_permission'`,[permissionId]);if(existing.rowCount)return res.status(409).json({success:false,message:'This visitor entry is already recorded'});const personCount=Math.min(9,Math.max(1,Number(req.body?.person_count)||Number(visit.person_count)||1));const entry=(await pool.query(`INSERT INTO gate_guardian_visit_entries(student_id,visitor_name,visitor_relation,visitor_source,permission_id,entry_mode,entered_by,remarks,person_count) VALUES($1,$2,$3,'permission',$4,'with_permission',$5,$6,$7) RETURNING *`,[visit.student_id,visit.visitor_name,visit.visitor_relation,permissionId,req.user.userId,req.body?.remarks||null,personCount])).rows[0];await pool.query(`INSERT INTO gate_entry_logs(student_id,permission_type,permission_id,entered_by,remarks) VALUES($1,'visit',$2,$3,$4) ON CONFLICT DO NOTHING`,[visit.student_id,permissionId,req.user.userId,req.body?.remarks||null]);res.status(201).json({success:true,entry})}));
 router.get('/dining',auth,allow('office','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const q=await pool.query('SELECT * FROM dining_stock ORDER BY item_name');res.json({success:true,stock:q.rows})}));
-router.get('/dining/transactions',auth,allow('office','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const q=await pool.query(`SELECT t.*,s.item_name,s.unit,u.full_name entered_by_name FROM dining_stock_transactions t JOIN dining_stock s ON s.id=t.stock_id LEFT JOIN users u ON u.id=t.entered_by ORDER BY t.created_at DESC,t.id DESC LIMIT 500`);res.json({success:true,transactions:q.rows})}));
+router.get('/dining/transactions',auth,allow('office','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const q=await pool.query(`SELECT t.*, TO_CHAR(t.transaction_date, 'YYYY-MM-DD') as transaction_date, s.item_name, s.unit, u.full_name entered_by_name FROM dining_stock_transactions t JOIN dining_stock s ON s.id=t.stock_id LEFT JOIN users u ON u.id=t.entered_by ORDER BY t.created_at DESC,t.id DESC LIMIT 500`);res.json({success:true,transactions:q.rows})}));
 router.post('/dining/items',auth,allow('office','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const b=req.body||{};if(!b.item_name||!b.unit)return res.status(400).json({success:false,message:'Item and unit are required'});const q=await pool.query(`INSERT INTO dining_stock(item_name,unit,current_quantity,reorder_level) VALUES($1,$2,$3,$4) RETURNING *`,[b.item_name,b.unit,Number(b.current_quantity)||0,Number(b.reorder_level)||0]);res.status(201).json({success:true,item:q.rows[0]})}));
-router.post('/dining/transaction',auth,allow('office','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const b=req.body||{},qty=Number(b.quantity);if(!b.stock_id||!['in','out'].includes(b.transaction_type)||!(qty>0))return res.status(400).json({success:false,message:'Stock item, type and positive quantity are required'});const c=await pool.connect();try{await c.query('BEGIN');const st=(await c.query('SELECT * FROM dining_stock WHERE id=$1 FOR UPDATE',[b.stock_id])).rows[0];if(!st)throw new Error('Stock item not found');const transactionDate=b.transaction_date||null;const duplicate=await c.query(`SELECT id FROM dining_stock_transactions WHERE stock_id=$1 AND transaction_type=$2 AND transaction_date=COALESCE($3::date,CURRENT_DATE) LIMIT 1`,[st.id,b.transaction_type,transactionDate]);if(duplicate.rowCount)throw new Error(st.item_name+' already has a Stock '+(b.transaction_type==='in'?'In':'Out')+' entry for this date');const next=Number(st.current_quantity)+(b.transaction_type==='in'?qty:-qty);if(next<0)throw new Error('Quantity Out cannot exceed available balance of '+Number(st.current_quantity)+' '+st.unit);await c.query('UPDATE dining_stock SET current_quantity=$1,updated_at=NOW() WHERE id=$2',[next,st.id]);await c.query(`INSERT INTO dining_stock_transactions(stock_id,transaction_type,quantity,note,entered_by,transaction_date,invoice_no,supplier_name,rate,opening_quantity,closing_quantity) VALUES($1,$2,$3,$4,$5,COALESCE($6::date,CURRENT_DATE),$7,$8,$9,$10,$11)`,[st.id,b.transaction_type,qty,b.note||null,req.user.userId,b.transaction_date||null,b.invoice_no||null,b.supplier_name||null,b.rate===''||b.rate==null?null:Number(b.rate),Number(st.current_quantity),next]);await c.query('COMMIT');res.json({success:true,current_quantity:next})}catch(e){await c.query('ROLLBACK');res.status(409).json({success:false,message:e.message})}finally{c.release()}}));
+router.patch('/dining/items/:id',auth,allow('office','super_admin','admin'),asyncHandler(async(req,res)=>{
+  await schemaReady;
+  const id=Number(req.params.id);
+  const b=req.body||{};
+  if(!id)return res.status(400).json({success:false,message:'Valid item ID is required'});
+  const existing=(await pool.query('SELECT * FROM dining_stock WHERE id=$1',[id])).rows[0];
+  if(!existing)return res.status(404).json({success:false,message:'Stock item not found'});
+
+  const newName=b.item_name!==undefined?String(b.item_name).trim():existing.item_name;
+  const newUnit=b.unit!==undefined?String(b.unit).trim():existing.unit;
+  const newReorder=b.reorder_level!==undefined?Number(b.reorder_level):existing.reorder_level;
+  const newQty=b.current_quantity!==undefined?Number(b.current_quantity):existing.current_quantity;
+
+  if(!newName)return res.status(400).json({success:false,message:'Item name cannot be empty'});
+  if(!newUnit)return res.status(400).json({success:false,message:'Unit cannot be empty'});
+
+  try{
+    const updated=(await pool.query(
+      `UPDATE dining_stock 
+       SET item_name=$1, unit=$2, reorder_level=$3, current_quantity=$4, updated_at=NOW() 
+       WHERE id=$5 RETURNING *`,
+      [newName, newUnit, newReorder, newQty, id]
+    )).rows[0];
+    res.json({success:true,message:'Item updated successfully',item:updated});
+  }catch(err){
+    if(err.code==='23505'){
+      return res.status(409).json({success:false,message:`An item named "${newName}" already exists`});
+    }
+    throw err;
+  }
+}));
+router.post('/dining/transaction',auth,allow('office','super_admin','admin'),asyncHandler(async(req,res)=>{await schemaReady;const b=req.body||{},qty=Number(b.quantity);if(!b.stock_id||!['in','out'].includes(b.transaction_type)||!(qty>0))return res.status(400).json({success:false,message:'Stock item, type and positive quantity are required'});const c=await pool.connect();try{await c.query('BEGIN');const st=(await c.query('SELECT * FROM dining_stock WHERE id=$1 FOR UPDATE',[b.stock_id])).rows[0];if(!st)throw new Error('Stock item not found');const next=Number(st.current_quantity)+(b.transaction_type==='in'?qty:-qty);if(next<0)throw new Error('Quantity Out cannot exceed available balance of '+Number(st.current_quantity)+' '+st.unit);await c.query('UPDATE dining_stock SET current_quantity=$1,updated_at=NOW() WHERE id=$2',[next,st.id]);await c.query(`INSERT INTO dining_stock_transactions(stock_id,transaction_type,quantity,note,entered_by,transaction_date,invoice_no,supplier_name,rate,opening_quantity,closing_quantity) VALUES($1,$2,$3,$4,$5,COALESCE($6::date,CURRENT_DATE),$7,$8,$9,$10,$11)`,[st.id,b.transaction_type,qty,b.note||null,req.user.userId,b.transaction_date||null,b.invoice_no||null,b.supplier_name||null,b.rate===''||b.rate==null?null:Number(b.rate),Number(st.current_quantity),next]);await c.query('COMMIT');res.json({success:true,current_quantity:next})}catch(e){await c.query('ROLLBACK');res.status(409).json({success:false,message:e.message})}finally{c.release()}}));
+router.post('/dining/transactions-batch',auth,allow('office','super_admin','admin'),asyncHandler(async(req,res)=>{
+  await schemaReady;
+  const b=req.body||{};
+  const type=b.transaction_type;
+  const items=Array.isArray(b.items)?b.items:[];
+  const transactionDate=b.transaction_date||null;
+  const invoiceNo=b.invoice_no||null;
+  const supplierName=b.supplier_name||null;
+
+  if(!['in','out'].includes(type)){
+    return res.status(400).json({success:false,message:'Valid transaction type (in/out) is required'});
+  }
+
+  const validItems=items.filter(it=>((it.stock_id||it.item_name)&&Number(it.quantity)>0));
+  if(validItems.length===0){
+    return res.status(400).json({success:false,message:'Please provide at least one item with a valid positive quantity'});
+  }
+
+  // Prevent duplicate items in the same batch
+  const seenBatchKeys = new Set();
+  for (const it of validItems) {
+    const rawName = String(it.item_name || '').trim().toLowerCase();
+    const rawId = it.stock_id ? String(it.stock_id).trim() : '';
+    const keyName = rawName ? `name:${rawName}` : null;
+    const keyId = rawId ? `id:${rawId}` : null;
+    if ((keyName && seenBatchKeys.has(keyName)) || (keyId && seenBatchKeys.has(keyId))) {
+      return res.status(400).json({
+        success: false,
+        message: `Duplicate item "${it.item_name || 'selected item'}" detected. Each item can only be entered once per batch.`
+      });
+    }
+    if (keyName) seenBatchKeys.add(keyName);
+    if (keyId) seenBatchKeys.add(keyId);
+  }
+
+  const c=await pool.connect();
+  try{
+    await c.query('BEGIN');
+    const results=[];
+
+    for(const it of validItems){
+      let stockItem;
+      const qty=Number(it.quantity);
+
+      if(it.stock_id){
+        stockItem=(await c.query('SELECT * FROM dining_stock WHERE id=$1 FOR UPDATE',[it.stock_id])).rows[0];
+      }
+      if(!stockItem&&it.item_name){
+        stockItem=(await c.query('SELECT * FROM dining_stock WHERE LOWER(TRIM(item_name))=LOWER(TRIM($1)) FOR UPDATE',[it.item_name.trim()])).rows[0];
+      }
+
+      if(!stockItem){
+        if(type==='out'){
+          throw new Error(`Item "${it.item_name||'Selected item'}" not found in stock`);
+        }
+        const insertRes=await c.query(
+          'INSERT INTO dining_stock(item_name, unit, current_quantity, reorder_level) VALUES($1, $2, 0, 0) RETURNING *',
+          [it.item_name.trim(), it.unit||'Kg']
+        );
+        stockItem=insertRes.rows[0];
+      }
+
+      const currentQty=Number(stockItem.current_quantity);
+      if(type==='out'&&qty>currentQty){
+        throw new Error(`Insufficient stock for "${stockItem.item_name}". Available: ${currentQty} ${stockItem.unit}, entered: ${qty}`);
+      }
+
+      const nextQty=currentQty+(type==='in'?qty:-qty);
+      await c.query('UPDATE dining_stock SET current_quantity=$1, updated_at=NOW() WHERE id=$2',[nextQty,stockItem.id]);
+
+      const rateVal=(it.rate===''||it.rate==null)?null:Number(it.rate);
+      const noteVal=it.note||it.description||null;
+
+      await c.query(
+        `INSERT INTO dining_stock_transactions(
+          stock_id, transaction_type, quantity, note, entered_by,
+          transaction_date, invoice_no, supplier_name, rate, opening_quantity, closing_quantity
+        ) VALUES($1, $2, $3, $4, $5, COALESCE($6::date, CURRENT_DATE), $7, $8, $9, $10, $11)`,
+        [
+          stockItem.id,
+          type,
+          qty,
+          noteVal,
+          req.user.userId,
+          transactionDate,
+          invoiceNo,
+          supplierName,
+          rateVal,
+          currentQty,
+          nextQty
+        ]
+      );
+      results.push({stock_id:stockItem.id,item_name:stockItem.item_name,next_quantity:nextQty});
+    }
+
+    await c.query('COMMIT');
+    res.json({success:true,message:`Successfully saved ${results.length} item(s)`,items:results});
+  }catch(e){
+    await c.query('ROLLBACK');
+    res.status(409).json({success:false,message:e.message});
+  }finally{
+    c.release();
+  }
+}));
 router.get('/library/status',auth,allow('library','super_admin','admin'),asyncHandler(async(req,res)=>{
   await schemaReady;
   const status=String(req.query.status||'issued'),search='%'+String(req.query.q||'').trim()+'%';

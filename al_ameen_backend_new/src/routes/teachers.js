@@ -1,4 +1,5 @@
 const express = require('express');
+const ExcelJS = require('exceljs');
 const multer=require('multer');const sharp=require('sharp');const path=require('path');const {uploadBuffer,deleteCloudinaryUrl}=require('../utils/cloudStorage');
 const bcrypt = require('bcryptjs');
 const pool = require('../db');
@@ -11,7 +12,8 @@ async function teacherCanAccess(req,id){if(['admin','super_admin'].includes(req.
 const teacherDetailsSchemaReady = pool.query([
   "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS profile_details JSONB NOT NULL DEFAULT '{}'::jsonb",
   "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS education_details JSONB NOT NULL DEFAULT '[]'::jsonb",
-  "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS profile_edit_count INTEGER NOT NULL DEFAULT 0"
+  "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS profile_edit_count INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS residential_type VARCHAR(50)"
 ].join(';'));
 
 function firstNameLogin(name) {
@@ -23,14 +25,101 @@ function firstNameLogin(name) {
 }
 
 router.get('/me', auth, allow('teacher'), asyncHandler(async(req,res)=>{await teacherDetailsSchemaReady;const result=await pool.query(`SELECT t.*,u.full_name,u.login_id FROM teachers t JOIN users u ON u.id=t.user_id WHERE t.user_id=$1 LIMIT 1`,[req.user.userId]);if(!result.rowCount)return res.status(404).json({success:false,message:'Teacher profile not found'});res.json({success:true,teacher:result.rows[0],profile_edit_count:result.rows[0].profile_edit_count||0,profile_edits_remaining:Math.max(0,2-(result.rows[0].profile_edit_count||0))});}));
-async function ensureStaffAvailability(){await pool.query(`CREATE TABLE IF NOT EXISTS staff_attendance (teacher_id INTEGER REFERENCES teachers(id),attendance_date DATE NOT NULL,status TEXT NOT NULL CHECK(status IN ('Present','Absent','Late','Leave')),marked_by INTEGER REFERENCES users(id),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),PRIMARY KEY(teacher_id,attendance_date))`)}
-router.get('/me/availability',auth,allow('teacher'),asyncHandler(async(req,res)=>{const date=String(req.query.date||new Date().toISOString().slice(0,10));await ensureStaffAvailability();const r=await pool.query(`SELECT COALESCE(a.status,'Present') status FROM teachers t LEFT JOIN staff_attendance a ON a.teacher_id=t.id AND a.attendance_date=$1 WHERE t.user_id=$2 LIMIT 1`,[date,req.user.userId]);res.json({success:true,status:r.rows[0]?.status||'Present',date});}));
-router.post('/me/availability',auth,allow('teacher'),asyncHandler(async(req,res)=>{const date=String(req.body?.date||new Date().toISOString().slice(0,10)),status=String(req.body?.status||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!['Present','Absent'].includes(status))return res.status(400).json({message:'Choose Present or Absent.'});await ensureStaffAvailability();const t=await pool.query('SELECT id FROM teachers WHERE user_id=$1 LIMIT 1',[req.user.userId]);if(!t.rowCount)return res.status(404).json({message:'Teacher profile not found'});await pool.query(`INSERT INTO staff_attendance(teacher_id,attendance_date,status,marked_by) VALUES($1,$2,$3,$4) ON CONFLICT(teacher_id,attendance_date) DO UPDATE SET status=EXCLUDED.status,marked_by=EXCLUDED.marked_by,updated_at=NOW()`,[t.rows[0].id,date,status,req.user.userId]);res.json({success:true,status,date});}));
+const MISSION_LOCATION = {
+  latitude: 23.186813165763375,
+  longitude: 88.11163491185468,
+  maxDistanceMeters: 200,
+};
+const LOCATION_ERROR_MSG = 'please contact- 7479020091 for submit attednance';
+
+function getDistanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371e3;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function ensureStaffAvailability(){
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS staff_attendance (
+      teacher_id INTEGER REFERENCES teachers(id),
+      attendance_date DATE NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('Present','Absent','Late','Leave')),
+      marked_by INTEGER REFERENCES users(id),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY(teacher_id,attendance_date)
+    );
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS distance_meters DOUBLE PRECISION;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS punch_in TIMESTAMPTZ;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS punch_out TIMESTAMPTZ;
+  `);
+}
+
+router.get('/me/availability',auth,allow('teacher'),asyncHandler(async(req,res)=>{
+  const date=String(req.query.date||new Date().toISOString().slice(0,10));
+  await ensureStaffAvailability();
+  const r=await pool.query(`SELECT COALESCE(a.status,'Present') status, a.punch_in, a.punch_out, a.distance_meters FROM teachers t LEFT JOIN staff_attendance a ON a.teacher_id=t.id AND a.attendance_date=$1 WHERE t.user_id=$2 LIMIT 1`,[date,req.user.userId]);
+  res.json({success:true,status:r.rows[0]?.status||'Present',date,punch_in:r.rows[0]?.punch_in,punch_out:r.rows[0]?.punch_out,distance:r.rows[0]?.distance_meters});
+}));
+
+router.post('/me/availability',auth,allow('teacher'),asyncHandler(async(req,res)=>{
+  const date=String(req.body?.date||new Date().toISOString().slice(0,10));
+  const status=String(req.body?.status||'');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!['Present','Absent'].includes(status)){
+    return res.status(400).json({message:'Choose Present or Absent.'});
+  }
+
+  const lat = Number(req.body?.latitude);
+  const lng = Number(req.body?.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return res.status(403).json({ success: false, message: LOCATION_ERROR_MSG });
+  }
+
+  const distance = getDistanceMeters(lat, lng, MISSION_LOCATION.latitude, MISSION_LOCATION.longitude);
+  if (!Number.isFinite(distance) || distance > MISSION_LOCATION.maxDistanceMeters) {
+    return res.status(403).json({
+      success: false,
+      message: LOCATION_ERROR_MSG,
+      distance: Number.isFinite(distance) ? Math.round(distance) : null,
+    });
+  }
+
+  await ensureStaffAvailability();
+  const t=await pool.query('SELECT id FROM teachers WHERE user_id=$1 LIMIT 1',[req.user.userId]);
+  if(!t.rowCount)return res.status(404).json({message:'Teacher profile not found'});
+
+  await pool.query(`
+    INSERT INTO staff_attendance(
+      teacher_id, attendance_date, status, marked_by, latitude, longitude, distance_meters, punch_in, punch_out, updated_at
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7,
+      CASE WHEN $3 = 'Present' THEN NOW() ELSE NULL END,
+      CASE WHEN $3 = 'Absent' THEN NOW() ELSE NULL END,
+      NOW()
+    )
+    ON CONFLICT(teacher_id, attendance_date) DO UPDATE SET
+      status = EXCLUDED.status,
+      marked_by = EXCLUDED.marked_by,
+      latitude = EXCLUDED.latitude,
+      longitude = EXCLUDED.longitude,
+      distance_meters = EXCLUDED.distance_meters,
+      punch_in = CASE WHEN EXCLUDED.status = 'Present' AND staff_attendance.punch_in IS NULL THEN NOW() ELSE staff_attendance.punch_in END,
+      punch_out = CASE WHEN EXCLUDED.status = 'Absent' THEN NOW() ELSE staff_attendance.punch_out END,
+      updated_at = NOW()
+  `, [t.rows[0].id, date, status, req.user.userId, lat, lng, Math.round(distance)]);
+
+  res.json({ success: true, status, date, distance: Math.round(distance) });
+}));
 router.get('/availability',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{const date=String(req.query.date||new Date().toISOString().slice(0,10));await ensureStaffAvailability();const r=await pool.query(`SELECT t.id,t.name,COALESCE(a.status,'Present') status FROM teachers t LEFT JOIN staff_attendance a ON a.teacher_id=t.id AND a.attendance_date=$1 WHERE t.is_active=TRUE ORDER BY t.name,t.id`,[date]);res.json({success:true,date,staff:r.rows});}));
 router.patch('/me', auth, allow('teacher'), asyncHandler(async(req,res)=>{
   await teacherDetailsSchemaReady;
   const b=req.body||{};
-  const allowed=['staff_id','name','designation','qualification','mobile','whatsapp','email','address','gender','date_of_birth','joining_date','subject','profile_details','education_details'];
+  const allowed=['staff_id','name','designation','qualification','mobile','whatsapp','email','address','gender','date_of_birth','joining_date','subject','profile_details','education_details','residential_type'];
   const set=[],values=[];
   for(const f of allowed){
     if(b[f]===undefined)continue;
@@ -51,10 +140,136 @@ router.patch('/me', auth, allow('teacher'), asyncHandler(async(req,res)=>{
   }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }));
 
+router.get('/export', auth, allow('super_admin','admin'), asyncHandler(async (req, res) => {
+  await teacherDetailsSchemaReady;
+  const result = await pool.query(`
+    SELECT t.*, COALESCE(t.residential_type, t.profile_details->>'residential_type', '') AS residential_type,
+      u.login_id, u.full_name, u.role AS user_role, u.is_active AS user_active
+    FROM teachers t
+    LEFT JOIN users u ON u.id=t.user_id
+    ORDER BY CASE WHEN t.staff_id ~ '^\\d+$' THEN 0 ELSE 1 END,
+      NULLIF(regexp_replace(COALESCE(t.staff_id,''), '\\D', '', 'g'), '')::int ASC NULLS LAST,
+      t.name, t.id
+  `);
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Staff List', {
+    pageSetup: { orientation: 'landscape', paperSize: 9 }
+  });
+
+  sheet.columns = [
+    { header: 'SL', key: 'sl', width: 6 },
+    { header: 'Staff ID', key: 'staff_id', width: 14 },
+    { header: 'Name', key: 'name', width: 26 },
+    { header: 'Designation', key: 'designation', width: 18 },
+    { header: 'Staff Role', key: 'staff_role', width: 18 },
+    { header: 'Staff Type', key: 'staff_type', width: 16 },
+    { header: 'Residential Type', key: 'residential_type', width: 18 },
+    { header: 'Subject', key: 'subject', width: 22 },
+    { header: 'Qualification', key: 'qualification', width: 20 },
+    { header: 'Mobile', key: 'mobile', width: 15 },
+    { header: 'WhatsApp', key: 'whatsapp', width: 15 },
+    { header: 'Email', key: 'email', width: 26 },
+    { header: 'Gender', key: 'gender', width: 10 },
+    { header: 'DOB', key: 'date_of_birth', width: 13 },
+    { header: 'Joining Date', key: 'joining_date', width: 13 },
+    { header: 'Status', key: 'status', width: 10 },
+    { header: 'Salary', key: 'salary', width: 12 },
+    { header: 'Present Address', key: 'present_address', width: 35 },
+    { header: 'Permanent Address', key: 'permanent_address', width: 35 },
+    { header: 'Bank Name', key: 'bank_name', width: 18 },
+    { header: 'Account No', key: 'account_no', width: 20 },
+    { header: 'IFSC Code', key: 'ifsc_code', width: 14 },
+    { header: 'Aadhaar No', key: 'aadhaar_no', width: 16 },
+    { header: 'PAN No', key: 'pan_no', width: 14 },
+    { header: 'Voter No', key: 'voter_no', width: 14 },
+    { header: 'Login ID', key: 'login_id', width: 15 }
+  ];
+
+  const headerRow = sheet.getRow(1);
+  headerRow.height = 28;
+  headerRow.eachCell((cell) => {
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1F4E78' }
+    };
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+    };
+  });
+
+  result.rows.forEach((t, index) => {
+    const d = t.profile_details || {};
+    const presentAddr = [d.present_village, d.present_post_office, d.present_police_station, d.present_district, d.present_state, d.present_pin_code].filter(Boolean).join(', ') || t.address || '';
+    const permAddr = [d.permanent_village, d.permanent_post_office, d.permanent_police_station, d.permanent_district, d.permanent_state, d.permanent_pin_code].filter(Boolean).join(', ') || '';
+
+    const row = sheet.addRow({
+      sl: index + 1,
+      staff_id: t.staff_id || '',
+      name: t.name || '',
+      designation: t.designation || '',
+      staff_role: d.staff_role || '',
+      staff_type: d.staff_type || '',
+      residential_type: t.residential_type || d.residential_type || '',
+      subject: t.subject || '',
+      qualification: t.qualification || '',
+      mobile: t.mobile || '',
+      whatsapp: t.whatsapp || '',
+      email: t.email || '',
+      gender: t.gender || '',
+      date_of_birth: t.date_of_birth ? String(t.date_of_birth).slice(0, 10) : '',
+      joining_date: t.joining_date ? String(t.joining_date).slice(0, 10) : '',
+      status: t.is_active ? 'Active' : 'Inactive',
+      salary: d.salary || '',
+      present_address: presentAddr,
+      permanent_address: permAddr,
+      bank_name: d.bank_name || '',
+      account_no: d.account_no || '',
+      ifsc_code: d.ifsc_code || '',
+      aadhaar_no: d.aadhaar_no || '',
+      pan_no: d.pan_no || '',
+      voter_no: d.voter_no || '',
+      login_id: t.login_id || ''
+    });
+
+    row.height = 22;
+    row.eachCell((cell, colNum) => {
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: [1, 2, 10, 11, 13, 14, 15, 16, 22, 23, 24].includes(colNum) ? 'center' : 'left'
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+      };
+      if (index % 2 === 1) {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFF8FAFC' }
+        };
+      }
+    });
+  });
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="Staff_List_${new Date().toISOString().slice(0,10)}.xlsx"`);
+  await workbook.xlsx.write(res);
+  res.end();
+}));
+
 router.get('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res)=>{
   await teacherDetailsSchemaReady;
   const result = await pool.query(`
-    SELECT t.*, u.login_id, u.full_name, u.role AS user_role, u.is_active AS user_active,
+    SELECT t.*, COALESCE(t.residential_type, t.profile_details->>'residential_type', '') AS residential_type, u.login_id, u.full_name, u.role AS user_role, u.is_active AS user_active,
       COALESCE((
         SELECT json_agg(DISTINCT subject_name)
         FROM (
@@ -105,18 +320,34 @@ router.post('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res
       INSERT INTO users(login_id,password_hash,full_name,role)
       VALUES($1,$2,$3,'teacher') RETURNING id
     `, [loginId, hash, name]);
+    const residentialType = String(body.residential_type || body.profile_details?.residential_type || '').trim() || null;
+    const profileDetails = {
+      ...(body.profile_details || {}),
+      residential_type: residentialType || ''
+    };
+    const cleanDate = (val) => {
+      const s = String(val || '').trim();
+      if (!s || s.startsWith('0000') || s === 'Invalid Date') return null;
+      const d = new Date(s);
+      if (isNaN(d.getTime()) || d.getFullYear() < 1900 || d.getFullYear() > 2100) return null;
+      return s;
+    };
+    const dob = cleanDate(body.date_of_birth);
+    const joiningDate = cleanDate(body.joining_date);
+
     const teacher = await client.query(`
       INSERT INTO teachers(
         user_id,staff_id,name,designation,subject,mobile,whatsapp,gender,email,address,
-        date_of_birth,joining_date,qualification,photo_url,profile_details,education_details
-      ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        date_of_birth,joining_date,qualification,photo_url,profile_details,education_details,residential_type
+      ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
       RETURNING *
     `, [
       user.rows[0].id, staffId, name, body.designation || null, body.subject || null,
       body.mobile || null, body.whatsapp || null, body.gender || null, body.email || null,
-      body.address || null, body.date_of_birth || null, body.joining_date || null,
+      body.address || null, dob, joiningDate,
       body.qualification || null, body.photo_url || null,
-      JSON.stringify(body.profile_details || {}), JSON.stringify(Array.isArray(body.education_details) ? body.education_details : []),
+      JSON.stringify(profileDetails), JSON.stringify(Array.isArray(body.education_details) ? body.education_details : []),
+      residentialType
     ]);
     await client.query('COMMIT');
     res.status(201).json({
@@ -143,18 +374,40 @@ router.put('/:id', auth, allow('super_admin','admin'), asyncHandler(async (req,r
   const staffId=String(body.staff_id??old.staff_id).trim();
   const name=String(body.name??old.name).trim();
   if(!staffId||!name)return res.status(400).json({success:false,message:'Staff ID and name are required'});
-  const active=body.is_active===undefined ? old.user_active!==false : body.is_active!==false;
+  const active=body.is_active===undefined ? (old.user_active!==false && old.is_active!==false) : body.is_active!==false;
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
+    const residentialType = body.residential_type !== undefined
+      ? (String(body.residential_type || '').trim() || null)
+      : (body.profile_details?.residential_type !== undefined
+          ? (String(body.profile_details.residential_type || '').trim() || null)
+          : (old.residential_type || old.profile_details?.residential_type || null));
+    const profileDetails = {
+      ...(old.profile_details || {}),
+      ...(body.profile_details || {}),
+      residential_type: residentialType || ''
+    };
+    const cleanDate = (val, fallback) => {
+      let raw = val;
+      if (raw === undefined) raw = fallback;
+      const s = String(raw || '').trim();
+      if (!s || s.startsWith('0000') || s === 'Invalid Date') return null;
+      const d = new Date(s);
+      if (isNaN(d.getTime()) || d.getFullYear() < 1900 || d.getFullYear() > 2100) return null;
+      return s;
+    };
+    const dob = cleanDate(body.date_of_birth, old.date_of_birth);
+    const joiningDate = cleanDate(body.joining_date, old.joining_date);
+
     const teacher=await client.query(
-      'UPDATE teachers SET staff_id=$1,name=$2,designation=$3,subject=$4,mobile=$5,whatsapp=$6,gender=$7,email=$8,address=$9,date_of_birth=$10,joining_date=$11,qualification=$12,profile_details=$13,education_details=$14,is_active=$15 WHERE id=$16 RETURNING *',
+      'UPDATE teachers SET staff_id=$1,name=$2,designation=$3,subject=$4,mobile=$5,whatsapp=$6,gender=$7,email=$8,address=$9,date_of_birth=$10,joining_date=$11,qualification=$12,profile_details=$13,education_details=$14,is_active=$15,residential_type=$16 WHERE id=$17 RETURNING *',
       [staffId,name,body.designation??old.designation,body.subject??old.subject,body.mobile??old.mobile,
        body.whatsapp??old.whatsapp,body.gender??old.gender,body.email??old.email,body.address??old.address,
-       body.date_of_birth??old.date_of_birth,body.joining_date??old.joining_date,body.qualification??old.qualification,
-       JSON.stringify(body.profile_details??old.profile_details??{}),
+       dob,joiningDate,body.qualification??old.qualification,
+       JSON.stringify(profileDetails),
        JSON.stringify(Array.isArray(body.education_details)?body.education_details:(old.education_details||[])),
-       active,req.params.id]
+       active,residentialType,req.params.id]
     );
     if(old.login_user_id){
       const loginId=String(body.login_id??old.login_id).trim().toLowerCase();

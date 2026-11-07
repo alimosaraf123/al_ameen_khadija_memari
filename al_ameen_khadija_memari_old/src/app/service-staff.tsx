@@ -260,8 +260,8 @@ export default function ServiceStaff() {
 
         {/* HEADER */}
         <View style={s.top}>
-          <TouchableOpacity style={s.light} onPress={() => router.push('/superadmin' as any)}>
-            <Text style={s.bold}>← Super Admin</Text>
+          <TouchableOpacity style={s.light} onPress={() => router.replace('/superadmin?menu=staff')}>
+            <Text style={s.bold}>← Back to Staff</Text>
           </TouchableOpacity>
           <View>
             <Text style={s.title}>Service Staff Management</Text>
@@ -320,10 +320,10 @@ export default function ServiceStaff() {
               />
             </View>
             <Field p="Staff ID (e.g. GATE-005)" v={staffId} set={setStaffId} />
-            <Field p="Full Name (e.g. Rahul Mondal)" v={name} set={setName} />
-            <Field p="User ID / Login (e.g. gateman05)" v={login} set={setLogin} />
-            <Field p="Initial Password" v={password} set={setPassword} secure />
-            <Field p="Re-enter Password" v={confirmPassword} set={setConfirmPassword} secure />
+            <Field p="Full Name (e.g. Rahul Mondal)" v={name} set={setName} required />
+            <Field p="User ID / Login (e.g. gateman05)" v={login} set={setLogin} required />
+            <Field p="Initial Password" v={password} set={setPassword} secure required />
+            <Field p="Re-enter Password" v={confirmPassword} set={setConfirmPassword} secure required />
             <Field p="Mobile Number" v={mobile} set={setMobile} />
             <TouchableOpacity style={s.primary} onPress={add} disabled={creating}>
               <Text style={s.white}>{creating ? 'Creating...' : 'Create Login'}</Text>
@@ -574,14 +574,20 @@ export default function ServiceStaff() {
   );
 }
 
-const Field = ({ p, v, set, secure }: any) => (
-  <TextInput
-    secureTextEntry={secure}
-    value={v}
-    onChangeText={set}
-    placeholder={p}
-    style={s.input}
-  />
+const Field = ({ p, v, set, secure, required }: any) => (
+  <View style={{ marginBottom: 10 }}>
+    <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 4 }}>
+      {p}
+      {required ? <Text style={{ color: '#dc2626', fontWeight: '900' }}> *</Text> : null}
+    </Text>
+    <TextInput
+      secureTextEntry={secure}
+      value={v}
+      onChangeText={set}
+      placeholder={p}
+      style={s.input}
+    />
+  </View>
 );
 
 const s = StyleSheet.create({

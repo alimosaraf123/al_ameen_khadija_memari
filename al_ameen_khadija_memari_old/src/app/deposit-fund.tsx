@@ -85,7 +85,7 @@ export default function DepositFund() {
   const [details, setDetails] =
     useState('Cash');
 
-  const [paymentMode, setPaymentMode] = useState<'cash' | 'online'>('cash');
+  const [paymentMode, setPaymentMode] = useState<'cash'>('cash');
 
   const [sdfBookNo, setSdfBookNo] = useState('');
   const [bookNoEditing, setBookNoEditing] = useState(true);
@@ -923,9 +923,9 @@ export default function DepositFund() {
 
               {transactionType === 'deposit' && <View style={styles.paymentModeRow}>
                 <Text style={styles.paymentModeLabel}>Payment Mode</Text>
-                {(['cash', 'online'] as const).map(mode => <TouchableOpacity key={mode} onPress={() => setPaymentMode(mode)} style={[styles.paymentModeButton, paymentMode === mode && styles.paymentModeSelected]}>
-                  <Text style={[styles.paymentModeText, paymentMode === mode && styles.paymentModeSelectedText]}>{mode === 'online' ? 'Online (EDC)' : 'Cash'}</Text>
-                </TouchableOpacity>)}
+                <View style={[styles.paymentModeButton, styles.paymentModeSelected]}>
+                  <Text style={[styles.paymentModeText, styles.paymentModeSelectedText]}>Cash</Text>
+                </View>
               </View>}
 
 
