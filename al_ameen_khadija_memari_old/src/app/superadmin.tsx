@@ -50,7 +50,7 @@ const menus: any[] = [
 
   ['Student Deposit Fund', '/deposit-fund'],
 
-  ['Fees Collection Report', '/fees'],
+  ['Accounts', '/fees'],
   ['Asset Register', '/asset-register'],
 
   ['Activity Audit Log', '/audit-log'],
@@ -74,6 +74,7 @@ export default function Dashboard() {
   const [hostelMenu,setHostelMenu]=useState(false);
   const [academyMenu,setAcademyMenu]=useState(false);
   const [studentMenu,setStudentMenu]=useState(false);
+  const [accountsMenu,setAccountsMenu]=useState(false);
   const [genericMenu,setGenericMenu]=useState<{title:string;path:string}|null>(null);
   const [restricted,setRestricted]=useState(false),[permissions,setPermissions]=useState<string[]>([]),[userRole,setUserRole]=useState(''),[dashboardName,setDashboardName]=useState('');
 
@@ -86,6 +87,8 @@ export default function Dashboard() {
       setHostelMenu(true);
     } else if (menu === 'academy') {
       setAcademyMenu(true);
+    } else if (menu === 'accounts') {
+      setAccountsMenu(true);
     }
   }, [menu]);
 
@@ -113,6 +116,12 @@ export default function Dashboard() {
       router.setParams({ menu: '' });
     }
   };
+  const closeAccountsMenu = () => {
+    setAccountsMenu(false);
+    if (menu === 'accounts') {
+      router.setParams({ menu: '' });
+    }
+  };
   const loadCounter=async()=>{try{const d=await api('/api/notices/admin-counter');setUnread(d.unread||0);}catch{}};
   useEffect(()=>{void getUser<any>().then(u=>{if(u)setDashboardName(String(u.full_name||u.name||u.login_id||'').trim())});void api('/api/me').then(d=>{setRestricted(!!d.restricted);setPermissions(d.permissions||[]);setUserRole(d.user?.role||'');setDashboardName(String(d.user?.full_name||d.user?.name||d.user?.login_id||'').trim())}).catch(()=>{});void loadCounter();const timer=setInterval(loadCounter,30000);return()=>clearInterval(timer);},[]);
   const openNotifications=async()=>{try{await api('/api/notices/read-all',{method:'POST'});setUnread(0);}finally{router.push('/notices');}};
@@ -121,6 +130,7 @@ export default function Dashboard() {
     if(title==='Students'){setStudentMenu(true);return;}
     if(title==='Hostel'){setHostelMenu(true);return;}
     if(title==='Academy'){setAcademyMenu(true);return;}
+    if(title==='Accounts'){setAccountsMenu(true);return;}
     router.push(path as any);
   };
 
@@ -153,9 +163,6 @@ export default function Dashboard() {
             {restricted ? (dashboardName ? dashboardName+' Dashboard' : 'Dashboard') : 'Super Admin Dashboard'}
           </Text>
           <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
-            <TouchableOpacity onPress={()=>router.push('/daily-attendance' as any)} style={{flexDirection:'row',alignItems:'center',backgroundColor:'#ecfdf5',borderWidth:1,borderColor:'#a7f3d0',borderRadius:20,paddingVertical:7,paddingHorizontal:13,gap:6}}>
-              <Text style={{fontSize:13,fontWeight:'800',color:'#047857'}}>📋 Daily Attendance</Text>
-            </TouchableOpacity>
             <TouchableOpacity onPress={openNotifications} style={s.notification}>
               <Text style={s.notificationText}>🔔 Admin Notifications</Text>
               {unread>0&&<View style={s.badge}><Text style={s.badgeText}>{unread>99?'99+':unread}</Text></View>}
@@ -175,7 +182,7 @@ export default function Dashboard() {
 
                 key={title}
 
-                path={title==='Students' || title==='Staff' || title==='Hostel' || title==='Academy' ? '#' : path}
+                path={title==='Students' || title==='Staff' || title==='Hostel' || title==='Academy' || title==='Accounts' ? '#' : path}
 
                 style={s.card}
 
@@ -239,6 +246,12 @@ export default function Dashboard() {
       <Modal visible={hostelMenu} transparent animationType="fade" onRequestClose={closeHostelMenu}>
         <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={closeHostelMenu} accessibilityRole="button" accessibilityLabel="Close hostel menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Hostel</Text><TouchableOpacity onPress={closeHostelMenu}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
           <View style={s.modalGrid}>{[["Rooms","/rooms"],["Teacher Room Assignment","/room-assignments"],["Daily Student Attendance","/daily-attendance"],["Evening Room Attendance","/attendance"],["Student Behaviour","/behavior"],["Student Illness","/illness"],["Room Problem","/problems"],["Stock","/dining-stock"]].map(([label,path])=><AdminLink path={path} key={label} style={s.modalItem} onPress={()=>{setHostelMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></AdminLink>)}</View>
+        </View></View>
+      </Modal>
+
+      <Modal visible={accountsMenu} transparent animationType="fade" onRequestClose={closeAccountsMenu}>
+        <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={closeAccountsMenu} accessibilityRole="button" accessibilityLabel="Close accounts menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Accounts</Text><TouchableOpacity onPress={closeAccountsMenu}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
+          <View style={s.modalGrid}>{[["Fees","/fees?tab=fees_collection"],["Receipt & Payment","/fees?tab=receipt_payment"]].map(([label,path])=><AdminLink path={path} key={label} style={s.modalItem} onPress={()=>{setAccountsMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></AdminLink>)}</View>
         </View></View>
       </Modal>
 

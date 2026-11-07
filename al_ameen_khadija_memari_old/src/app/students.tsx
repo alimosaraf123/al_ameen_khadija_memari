@@ -52,7 +52,6 @@ const STUDENT_DOCUMENT_TYPES = [
   { key: 'hs_marksheet', label: 'HS Marksheet' },
   { key: 'hs_certificate', label: 'HS Certificate' },
   { key: 'admission_slip', label: 'Admission Slip' },
-  { key: 'transfer_certificate', label: 'T.C.' },
   { key: 'other', label: 'Others' },
   { key: 'other_2', label: 'Others-2' },
   { key: 'other_3', label: 'Others-3' },
@@ -404,14 +403,18 @@ export default function Students() {
       Alert.alert('Required', 'Student Name is required');
       return;
     }
-    const requiredFields = [
+    const baseRequired = [
       ['Admission Date', form.admission_date], ['Class', form.class_name], ['Admission Session', form.academic_session],
       ['Date of Birth', form.date_of_birth], ['Father Name', form.father_name], ['Mother Name', form.mother_name],
+    ];
+    const addressRequired = [
       ['Present Village', form.present_village], ['Present Police Station', form.present_police_station], ['Present PIN Code', form.present_pin_code],
       ['Present Post Office', form.present_post_office], ['Present Block', form.present_block], ['Present District', form.present_district], ['Present State', form.present_state],
       ['Permanent Village', form.permanent_village], ['Permanent Police Station', form.permanent_police_station], ['Permanent PIN Code', form.permanent_pin_code],
       ['Permanent Post Office', form.permanent_post_office], ['Permanent Block', form.permanent_block], ['Permanent District', form.permanent_district], ['Permanent State', form.permanent_state],
-    ].filter(([, value]) => !String(value || '').trim());
+    ];
+    const requiredList = editingId !== null ? baseRequired : [...baseRequired, ...addressRequired];
+    const requiredFields = requiredList.filter(([, value]) => !String(value || '').trim());
     if (requiredFields.length) {
       Alert.alert('Required', 'Complete these mandatory fields:\n' + requiredFields.map(([label]) => '• ' + label).join('\n'));
       return;

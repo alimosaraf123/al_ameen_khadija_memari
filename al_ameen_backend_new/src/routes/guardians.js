@@ -6,6 +6,7 @@ const {
   savePortalCredentials,
   loginToPortal,
   getFeesReportData,
+  getReceiptPaymentReportData,
   FEES_REPORT_URL,
 } = require('../utils/alAmeenAccounts');
 const express = require('express');
@@ -2125,6 +2126,166 @@ router.post('/admin/fees-portal-credentials', auth, allow('super_admin'), asyncH
     await savePortalCredentials({ portalUrl: targetUrl || undefined, username: user, password: pass });
     res.status(400).json({ success: false, message: err.message || 'Login to Al-Ameen Accounts failed.' });
   }
+}));
+
+// ADMIN / SUPER ADMIN / OFFICE: Receipt & Payment statement from Cash Book & Bank Books
+router.get('/admin/receipt-payment-report', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
+  const fromDate = String(req.query.from_date || '').trim();
+  const toDate = String(req.query.to_date || '').trim();
+
+  const validDate = value => !value || /^\d{4}-\d{2}-\d{2}$/.test(value);
+  if (!validDate(fromDate) || !validDate(toDate)) {
+    return res.status(400).json({ success: false, message: 'Dates must be in YYYY-MM-DD format' });
+  }
+  if (fromDate && toDate && fromDate > toDate) {
+    return res.status(400).json({ success: false, message: 'From Date cannot be after To Date' });
+  }
+
+  try {
+    const data = await getReceiptPaymentReportData({ fromDate, toDate });
+    return res.json(data);
+  } catch (err) {
+    console.error('Receipt payment report error:', err);
+    return res.status(502).json({
+      success: false,
+      message: err.message || 'Failed to fetch Receipt & Payment report from portal',
+    });
+  }
+}));
+
+// ADMIN / SUPER ADMIN / OFFICE: Receipt & Payment Excel Export
+router.get('/admin/receipt-payment-export', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
+  const fromDate = String(req.query.from_date || '').trim();
+  const toDate = String(req.query.to_date || '').trim();
+  const ExcelJS = require('exceljs');
+
+  const data = await getReceiptPaymentReportData({ fromDate, toDate });
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Al-Ameen Mission Memari';
+  workbook.created = new Date();
+
+  const ws = workbook.addWorksheet('Receipt & Payment');
+
+  // Title row
+  ws.addRow([`Al-Ameen Mission Accounts - Receipt & Payment Statement (${data.from_date}${data.from_date !== data.to_date ? ' to ' + data.to_date : ''})`]);
+  ws.mergeCells('A1:E1');
+  ws.getCell('A1').font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FF155724' } };
+  ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(1).height = 30;
+
+  // Header row matching screenshot (Title Case)
+  const headerRow = ws.addRow(['Cash', 'Opening Balance', 'Receipt', 'Payment', 'Closing Balance']);
+  headerRow.height = 24;
+  headerRow.eachCell((cell) => {
+    cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF000000' } };
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFFFFFFF' },
+    };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF000000' } },
+      left: { style: 'thin', color: { argb: 'FF000000' } },
+      bottom: { style: 'thin', color: { argb: 'FF000000' } },
+      right: { style: 'thin', color: { argb: 'FF000000' } },
+    };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  });
+
+  // Account rows: Zebra pattern (even index white, odd index FFF2CEEF matching screenshot)
+  data.rows.forEach((r, idx) => {
+    const isPinkRow = idx % 2 === 1;
+    const rowBg = isPinkRow ? 'FFF2CEEF' : 'FFFFFFFF';
+    const row = ws.addRow([
+      r.account_name,
+      r.opening_balance,
+      r.receipt,
+      r.payment,
+      r.closing_balance,
+    ]);
+    row.height = 22;
+    row.eachCell((cell, colNumber) => {
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF000000' } },
+        bottom: { style: 'thin', color: { argb: 'FF000000' } },
+        right: { style: 'thin', color: { argb: 'FF000000' } },
+      };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
+      if (colNumber === 1) {
+        cell.alignment = { horizontal: 'left', vertical: 'middle' };
+        cell.font = { name: 'Calibri', size: 11, bold: true };
+      } else {
+        cell.alignment = { horizontal: 'right', vertical: 'middle' };
+        cell.numFmt = '#,##0.00';
+      }
+    });
+  });
+
+  // Total row (Row 6 is odd index 5 => Pink FFF2CEEF matching screenshot)
+  const totalRow = ws.addRow([
+    'Total',
+    data.total.opening_balance,
+    data.total.receipt,
+    data.total.payment,
+    data.total.closing_balance,
+  ]);
+  totalRow.height = 24;
+  totalRow.eachCell((cell, colNumber) => {
+    cell.font = { name: 'Calibri', size: 11, bold: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2CEEF' } };
+    cell.border = {
+      top: { style: 'medium', color: { argb: 'FF000000' } },
+      left: { style: 'thin', color: { argb: 'FF000000' } },
+      bottom: { style: 'double', color: { argb: 'FF000000' } },
+      right: { style: 'thin', color: { argb: 'FF000000' } },
+    };
+    if (colNumber === 1) {
+      cell.alignment = { horizontal: 'left', vertical: 'middle' };
+    } else {
+      cell.alignment = { horizontal: 'right', vertical: 'middle' };
+      cell.numFmt = '#,##0.00';
+    }
+  });
+
+  // Column widths
+  ws.getColumn(1).width = 24;
+  ws.getColumn(2).width = 20;
+  ws.getColumn(3).width = 18;
+  ws.getColumn(4).width = 18;
+  ws.getColumn(5).width = 20;
+
+  // Sheet 2: Detailed Transactions with Excel AutoFilter
+  const wsTxn = workbook.addWorksheet('Transactions');
+  const txnHead = wsTxn.addRow(['Account', 'Date', 'Particulars / Ledger', 'Narration', 'Vch Type', 'Vch No', 'Receipt (Debit)', 'Payment (Credit)']);
+  txnHead.font = { bold: true };
+  txnHead.height = 22;
+  wsTxn.autoFilter = 'A1:H1';
+
+  data.rows.forEach(acc => {
+    (acc.transactions || []).forEach(t => {
+      wsTxn.addRow([
+        acc.account_name,
+        t.date,
+        t.particulars,
+        t.narration || '',
+        t.vch_type,
+        t.vch_no,
+        t.receipt || 0,
+        t.payment || 0
+      ]);
+    });
+  });
+
+  wsTxn.columns.forEach(col => { col.width = 18; });
+  wsTxn.getColumn(3).width = 32;
+  wsTxn.getColumn(4).width = 40;
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="receipt_payment_${fromDate || 'today'}.xlsx"`);
+  res.send(buffer);
 }));
 
 // ADMIN / SUPER ADMIN: collected fees report from https://alameenmission.net/alameen/accounts/?action=fees_report

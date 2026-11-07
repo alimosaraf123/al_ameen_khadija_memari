@@ -153,6 +153,50 @@ router.patch('/weekly-tests/:id', auth, allow('super_admin','admin','teacher'), 
   }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }));
 
+router.delete('/weekly-tests/:id', auth, allow('super_admin','admin','teacher'), asyncHandler(async(req,res)=>{
+  const client = await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const batchResult = await client.query('SELECT b.*, e.exam_name FROM mark_entry_batches b JOIN exams e ON e.id=b.exam_id WHERE b.id=$1 FOR UPDATE', [req.params.id]);
+    if(!batchResult.rowCount){
+      await client.query('ROLLBACK');
+      return res.status(404).json({success:false,message:'Weekly test not found'});
+    }
+    const batch = batchResult.rows[0];
+
+    if(req.user.role==='teacher'){
+      if(Number(batch.entered_by)!==Number(req.user.userId) || batch.locked){
+        await client.query('ROLLBACK');
+        return res.status(403).json({success:false,message:'You can only delete your own draft. Submitted tests cannot be deleted.'});
+      }
+    }
+
+    const marker = `result://batch/${batch.id}`;
+    const noticeResult = await client.query('SELECT id FROM notices WHERE attachment_url=$1', [marker]);
+    for(const notice of noticeResult.rows){
+      await client.query('DELETE FROM notice_targets WHERE notice_id=$1', [notice.id]);
+      await client.query('DELETE FROM notices WHERE id=$1', [notice.id]);
+    }
+
+    const otherBatches = await client.query('SELECT id FROM mark_entry_batches WHERE exam_id=$1 AND id<>$2', [batch.exam_id, batch.id]);
+    if(!otherBatches.rowCount){
+      await client.query('DELETE FROM exams WHERE id=$1', [batch.exam_id]);
+    }else{
+      await client.query('DELETE FROM student_marks WHERE exam_id=$1 AND subject_id=$2', [batch.exam_id, batch.subject_id]);
+      await client.query('DELETE FROM exam_subjects WHERE exam_id=$1 AND subject_id=$2', [batch.exam_id, batch.subject_id]);
+      await client.query('DELETE FROM mark_entry_batches WHERE id=$1', [batch.id]);
+    }
+
+    await client.query('COMMIT');
+    res.json({success:true,message:'Weekly test deleted successfully'});
+  }catch(error){
+    await client.query('ROLLBACK');
+    throw error;
+  }finally{
+    client.release();
+  }
+}));
+
 router.get('/exams',auth,asyncHandler(async(req,res)=>{const r=await pool.query(`SELECT * FROM exams ORDER BY created_at DESC`);res.json({success:true,exams:r.rows});}));
 router.post('/exams',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{const b=req.body;const r=await pool.query(`INSERT INTO exams(exam_name,class_name,session_name,exam_date,created_by) VALUES($1,$2,$3,$4,$5) RETURNING *`,[b.exam_name,b.class_name,b.session_name||null,b.exam_date||null,req.user.userId]);res.status(201).json({success:true,exam:r.rows[0]});}));
 router.post('/subjects',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{const r=await pool.query(`INSERT INTO subjects(subject_name) VALUES($1) ON CONFLICT(subject_name) DO UPDATE SET subject_name=EXCLUDED.subject_name RETURNING *`,[req.body.subject_name]);res.json({success:true,subject:r.rows[0]});}));

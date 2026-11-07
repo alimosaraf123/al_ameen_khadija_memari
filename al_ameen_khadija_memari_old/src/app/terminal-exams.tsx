@@ -194,6 +194,11 @@ export default function TerminalExams() {
   const [markErrors, setMarkErrors] = useState<Record<number, string>>({});
   const [publishingId, setPublishingId] = useState<number | null>(null);
   const [submittingMode, setSubmittingMode] = useState<'draft' | 'final' | null>(null);
+  const [entrySearch, setEntrySearch] = useState('');
+  const [entryFilter, setEntryFilter] = useState<'all' | 'completed' | 'pending' | 'absent'>('all');
+  const [entrySortColumn, setEntrySortColumn] = useState<'sl' | 'rank' | 'reg' | 'name' | 'marks' | null>('sl');
+  const [entrySortDirection, setEntrySortDirection] = useState<'asc' | 'desc'>('asc');
+  const [entryActiveHeaderMenu, setEntryActiveHeaderMenu] = useState<'sl' | 'rank' | 'reg' | 'name' | 'marks' | 'absent' | null>(null);
 
   // Class-wise & Exam-wise Filter & Accordion states
   const [statusTab, setStatusTab] = useState<'all' | 'ongoing' | 'published'>('all');
@@ -240,6 +245,8 @@ export default function TerminalExams() {
       const d = await api(`/api/terminal-exams/subjects/${id}/entry`);
       setEntry(d.assignment);
       setMarkErrors({});
+      setEntrySearch('');
+      setEntryFilter('all');
       setStudents(
         (d.students || []).map((x: any) => ({
           ...x,
@@ -404,6 +411,85 @@ export default function TerminalExams() {
     return map;
   }, [students]);
 
+  const entryCompletedCount = useMemo(() => {
+    return students.filter(s => s.absent || (s.written !== '' || s.mcq !== '' || s.oral !== '')).length;
+  }, [students]);
+  const entryAbsentCount = useMemo(() => {
+    return students.filter(s => s.absent).length;
+  }, [students]);
+  const entryPendingCount = useMemo(() => {
+    return students.filter(s => !s.absent && s.written === '' && s.mcq === '' && s.oral === '').length;
+  }, [students]);
+
+  const toggleEntrySort = (col: 'sl' | 'rank' | 'reg' | 'name' | 'marks') => {
+    if (entrySortColumn === col) {
+      setEntrySortDirection(curr => (curr === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setEntrySortColumn(col);
+      setEntrySortDirection(col === 'marks' ? 'desc' : 'asc');
+    }
+  };
+
+  const resetEntryFilters = () => {
+    setEntrySortColumn('sl');
+    setEntrySortDirection('asc');
+    setEntryFilter('all');
+    setEntrySearch('');
+    setEntryActiveHeaderMenu(null);
+  };
+
+  const filteredEntryStudents = useMemo(() => {
+    const list = students.map((s, idx) => ({ ...s, originalIndex: idx })).filter(s => {
+      const isCompleted = s.absent || (s.written !== '' || s.mcq !== '' || s.oral !== '');
+      if (entryFilter === 'completed' && !isCompleted) return false;
+      if (entryFilter === 'pending' && isCompleted) return false;
+      if (entryFilter === 'absent' && !s.absent) return false;
+      if (entrySearch.trim()) {
+        const q = entrySearch.trim().toLowerCase();
+        const mName = String(s.student_name || '').toLowerCase().includes(q);
+        const mReg = String(s.registration_no || '').toLowerCase().includes(q);
+        if (!mName && !mReg) return false;
+      }
+      return true;
+    });
+
+    if (!entrySortColumn) return list;
+
+    return list.slice().sort((a, b) => {
+      if (entrySortColumn === 'sl') {
+        return entrySortDirection === 'asc' ? a.originalIndex - b.originalIndex : b.originalIndex - a.originalIndex;
+      }
+      if (entrySortColumn === 'rank') {
+        const rA = rankMap[a.student_id] ?? 999999;
+        const rB = rankMap[b.student_id] ?? 999999;
+        return entrySortDirection === 'asc' ? rA - rB : rB - rA;
+      }
+      if (entrySortColumn === 'reg') {
+        const numA = Number(a.registration_no) || 0;
+        const numB = Number(b.registration_no) || 0;
+        if (numA !== numB) {
+          return entrySortDirection === 'asc' ? numA - numB : numB - numA;
+        }
+        return entrySortDirection === 'asc'
+          ? String(a.registration_no).localeCompare(String(b.registration_no))
+          : String(b.registration_no).localeCompare(String(a.registration_no));
+      }
+      if (entrySortColumn === 'name') {
+        const comp = String(a.student_name || '').localeCompare(String(b.student_name || ''));
+        return entrySortDirection === 'asc' ? comp : -comp;
+      }
+      if (entrySortColumn === 'marks') {
+        if (a.absent && !b.absent) return 1;
+        if (!a.absent && b.absent) return -1;
+        if (a.absent && b.absent) return 0;
+        const totA = (Number(a.written) || 0) + (Number(a.mcq) || 0) + (Number(a.oral) || 0);
+        const totB = (Number(b.written) || 0) + (Number(b.mcq) || 0) + (Number(b.oral) || 0);
+        return entrySortDirection === 'asc' ? totA - totB : totB - totA;
+      }
+      return 0;
+    });
+  }, [students, entryFilter, entrySearch, entrySortColumn, entrySortDirection, rankMap]);
+
   // Filtered exams according to active status tab, class, and exam name
   const filteredExams = useMemo(() => {
     return exams.filter(e => {
@@ -523,79 +609,313 @@ export default function TerminalExams() {
               {entry.subject_name} - Full Marks {entry.full_marks} - {String(entry.exam_date || '').slice(0, 10)}
             </Text>
 
-            {students.map((x, i) => (
-              <View key={x.student_id} style={s.student}>
-                <Text style={s.sl}>{i + 1}</Text>
-        <Text style={s.rank}>{rankMap[x.student_id] ?? '-'}</Text>
-        <View style={{ width: 210, flexShrink: 1, marginRight: 12 }}>
-          <Text numberOfLines={1} ellipsizeMode="tail" style={s.bold}>
-            {x.student_name}
-          </Text>
-          <Text style={s.help}>Reg. {x.registration_no}</Text>
-        </View>
-                
-                <View style={{ width: 250, display: x.absent ? 'none' : 'flex' }}>
-                  <Text style={s.help}>Written / MCQ / Oral</Text>
-                  <View style={{ flexDirection: 'row', gap: 4 }}>
-                    <TextInput
-                      editable={entry.status !== 'submitted' || admin}
-                      value={x.written}
-                      placeholder="Written"
-                      onChangeText={v =>
-                        setStudents(a =>
-                          a.map(y => (y.student_id === x.student_id ? { ...y, written: v.replace(/[^0-9.]/g, ''), absent: false } : y))
-                        )
-                      }
-                      keyboardType="numeric"
-                      style={[s.mark, { width: 70 }]}
-                    />
-                    <TextInput
-                      editable={entry.status !== 'submitted' || admin}
-                      value={x.mcq}
-                      placeholder="MCQ"
-                      onChangeText={v =>
-                        setStudents(a =>
-                          a.map(y => (y.student_id === x.student_id ? { ...y, mcq: v.replace(/[^0-9.]/g, ''), absent: false } : y))
-                        )
-                      }
-                      keyboardType="numeric"
-                      style={[s.mark, { width: 70 }]}
-                    />
-                    <TextInput
-                      editable={entry.status !== 'submitted' || admin}
-                      value={x.oral}
-                      placeholder="Oral"
-                      onChangeText={v =>
-                        setStudents(a =>
-                          a.map(y => (y.student_id === x.student_id ? { ...y, oral: v.replace(/[^0-9.]/g, ''), absent: false } : y))
-                        )
-                      }
-                      keyboardType="numeric"
-                      style={[s.mark, { width: 70 }]}
-                    />
-                  </View>
-                </View>
-                {markErrors[x.student_id] && (
-                  <Text style={{ color: '#c62828', fontSize: 11, fontWeight: '800', width: 150 }}>
-                    {markErrors[x.student_id]}
-                  </Text>
-                )}
-                <TouchableOpacity
-                  onPress={() =>
-                    setStudents(a =>
-                      a.map(y =>
-                        y.student_id === x.student_id
-                          ? { ...y, absent: !y.absent, written: '', mcq: '', oral: '', mark: '' }
-                          : y
-                      )
-                    )
-                  }
-                  style={[s.absent, x.absent && s.absentOn]}
-                >
-                  <Text style={x.absent ? s.white : s.red}>{x.absent ? 'Absent' : 'Mark Absent'}</Text>
-                </TouchableOpacity>
+            <View style={s.entrySummary}>
+              <Text style={s.entrySummaryText}>Total: {students.length}</Text>
+              <Text style={[s.entrySummaryText, { color: '#166534' }]}>Completed: {entryCompletedCount}</Text>
+              <Text style={[s.entrySummaryText, { color: '#b45309' }]}>Pending: {entryPendingCount}</Text>
+              <Text style={[s.entrySummaryText, { color: '#b91c1c' }]}>Absent: {entryAbsentCount}</Text>
+            </View>
+
+            <View style={s.entryFilterRow}>
+              <View style={s.entrySearchWrap}>
+                <TextInput
+                  placeholder="🔍 Search name or Reg No..."
+                  placeholderTextColor="#8492a6"
+                  value={entrySearch}
+                  onChangeText={setEntrySearch}
+                  style={s.entrySearchInput}
+                />
+                {entrySearch ? (
+                  <TouchableOpacity onPress={() => setEntrySearch('')} style={s.entryClearBtn}>
+                    <Text style={s.entryClearBtnText}>✕</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
-            ))}
+              <View style={s.entryFilterTabs}>
+                {[
+                  { id: 'all', label: `All (${students.length})` },
+                  { id: 'pending', label: `Pending (${entryPendingCount})` },
+                  { id: 'completed', label: `Completed (${entryCompletedCount})` },
+                  { id: 'absent', label: `Absent (${entryAbsentCount})` }
+                ].map(tab => (
+                  <TouchableOpacity
+                    key={tab.id}
+                    onPress={() => setEntryFilter(tab.id as any)}
+                    style={[s.entryFilterChip, entryFilter === tab.id && s.entryFilterChipActive]}
+                  >
+                    <Text style={[s.entryFilterChipText, entryFilter === tab.id && s.entryFilterChipTextActive]}>
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                {(entrySortColumn !== 'sl' || entrySortDirection !== 'asc' || entryFilter !== 'all' || entrySearch !== '') && (
+                  <TouchableOpacity onPress={resetEntryFilters} style={s.resetAllBtn}>
+                    <Text style={s.resetAllText}>🔄 Reset Filter & Sort</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            <View style={s.entryTableCard}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ minWidth: '100%' }}>
+                <View style={{ flex: 1, minWidth: 680, position: 'relative' }}>
+                  <View style={s.entryTableHeader}>
+                    <View style={[s.thCellWrap, s.entryColSl]}>
+                      <TouchableOpacity onPress={() => toggleEntrySort('sl')} style={s.thTitleBtn}>
+                        <Text style={s.entryThCell}>sl no</Text>
+                        {entrySortColumn === 'sl' && <Text style={s.sortBadge}>{entrySortDirection === 'asc' ? ' ▲' : ' ▼'}</Text>}
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => setEntryActiveHeaderMenu(entryActiveHeaderMenu === 'sl' ? null : 'sl')} style={s.filterTrigger}>
+                        <Text style={[s.filterTriggerText, entryActiveHeaderMenu === 'sl' && s.filterTriggerActive]}>▾</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={[s.thCellWrap, s.entryColRank]}>
+                      <TouchableOpacity onPress={() => toggleEntrySort('rank')} style={s.thTitleBtn}>
+                        <Text style={s.entryThCell}>rank</Text>
+                        {entrySortColumn === 'rank' && <Text style={s.sortBadge}>{entrySortDirection === 'asc' ? ' ▲' : ' ▼'}</Text>}
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={[s.thCellWrap, s.entryColReg]}>
+                      <TouchableOpacity onPress={() => toggleEntrySort('reg')} style={s.thTitleBtn}>
+                        <Text style={s.entryThCell}>reg no</Text>
+                        {entrySortColumn === 'reg' && <Text style={s.sortBadge}>{entrySortDirection === 'asc' ? ' ▲' : ' ▼'}</Text>}
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => setEntryActiveHeaderMenu(entryActiveHeaderMenu === 'reg' ? null : 'reg')} style={s.filterTrigger}>
+                        <Text style={[s.filterTriggerText, entryActiveHeaderMenu === 'reg' && s.filterTriggerActive]}>▾</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={[s.thCellWrap, s.entryColName]}>
+                      <TouchableOpacity onPress={() => toggleEntrySort('name')} style={s.thTitleBtn}>
+                        <Text style={s.entryThCell}>name</Text>
+                        {entrySortColumn === 'name' && <Text style={s.sortBadge}>{entrySortDirection === 'asc' ? ' ▲' : ' ▼'}</Text>}
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => setEntryActiveHeaderMenu(entryActiveHeaderMenu === 'name' ? null : 'name')} style={s.filterTrigger}>
+                        <Text style={[s.filterTriggerText, entryActiveHeaderMenu === 'name' && s.filterTriggerActive]}>▾</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={[s.thCellWrap, s.entryColMarks]}>
+                      <TouchableOpacity onPress={() => toggleEntrySort('marks')} style={s.thTitleBtn}>
+                        <Text style={s.entryThCell}>written / mcq / oral</Text>
+                        {entrySortColumn === 'marks' && <Text style={s.sortBadge}>{entrySortDirection === 'asc' ? ' ▲' : ' ▼'}</Text>}
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => setEntryActiveHeaderMenu(entryActiveHeaderMenu === 'marks' ? null : 'marks')} style={s.filterTrigger}>
+                        <Text style={[s.filterTriggerText, entryActiveHeaderMenu === 'marks' && s.filterTriggerActive]}>▾</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={[s.thCellWrap, s.entryColAbsent]}>
+                      <TouchableOpacity onPress={() => setEntryActiveHeaderMenu(entryActiveHeaderMenu === 'absent' ? null : 'absent')} style={s.thTitleBtn}>
+                        <Text style={s.entryThCell}>absent</Text>
+                        <Text style={s.filterTriggerText}>▾</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {entryActiveHeaderMenu && (
+                    <View style={[
+                      s.columnMenuDropdown,
+                      entryActiveHeaderMenu === 'sl' && { left: 4 },
+                      entryActiveHeaderMenu === 'reg' && { left: 80 },
+                      entryActiveHeaderMenu === 'name' && { left: 160 },
+                      entryActiveHeaderMenu === 'marks' && { right: 120 },
+                      entryActiveHeaderMenu === 'absent' && { right: 6 }
+                    ]}>
+                      {entryActiveHeaderMenu === 'sl' && (
+                        <>
+                          <Text style={s.menuHeader}>Sl No Filter & Sort</Text>
+                          <TouchableOpacity style={s.menuItem} onPress={() => { setEntrySortColumn('sl'); setEntrySortDirection('asc'); setEntryActiveHeaderMenu(null); }}>
+                            <Text style={s.menuItemText}>⬆️ Sort: 1 → {students.length} (Ascending)</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={s.menuItem} onPress={() => { setEntrySortColumn('sl'); setEntrySortDirection('desc'); setEntryActiveHeaderMenu(null); }}>
+                            <Text style={s.menuItemText}>⬇️ Sort: {students.length} → 1 (Descending)</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={s.menuItem} onPress={() => { setEntrySortColumn('sl'); setEntrySortDirection('asc'); setEntryActiveHeaderMenu(null); }}>
+                            <Text style={[s.menuItemText, { color: '#0F52BA' }]}>🔄 Reset to Default (1 → {students.length})</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                      {entryActiveHeaderMenu === 'reg' && (
+                        <>
+                          <Text style={s.menuHeader}>Reg No Filter & Sort</Text>
+                          <TouchableOpacity style={s.menuItem} onPress={() => { setEntrySortColumn('reg'); setEntrySortDirection('asc'); setEntryActiveHeaderMenu(null); }}>
+                            <Text style={s.menuItemText}>⬆️ Sort: Lowest Reg No first</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={s.menuItem} onPress={() => { setEntrySortColumn('reg'); setEntrySortDirection('desc'); setEntryActiveHeaderMenu(null); }}>
+                            <Text style={s.menuItemText}>⬇️ Sort: Highest Reg No first</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={s.menuItem} onPress={() => { setEntrySortColumn('sl'); setEntrySortDirection('asc'); setEntryActiveHeaderMenu(null); }}>
+                            <Text style={[s.menuItemText, { color: '#0F52BA' }]}>🔄 Reset to Original Order</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                      {entryActiveHeaderMenu === 'name' && (
+                        <>
+                          <Text style={s.menuHeader}>Name Filter & Sort</Text>
+                          <TouchableOpacity style={s.menuItem} onPress={() => { setEntrySortColumn('name'); setEntrySortDirection('asc'); setEntryActiveHeaderMenu(null); }}>
+                            <Text style={s.menuItemText}>⬆️ Sort: A → Z (Alphabetical)</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={s.menuItem} onPress={() => { setEntrySortColumn('name'); setEntrySortDirection('desc'); setEntryActiveHeaderMenu(null); }}>
+                            <Text style={s.menuItemText}>⬇️ Sort: Z → A (Reverse)</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={s.menuItem} onPress={() => { setEntrySortColumn('sl'); setEntrySortDirection('asc'); setEntryActiveHeaderMenu(null); }}>
+                            <Text style={[s.menuItemText, { color: '#0F52BA' }]}>🔄 Reset to Original Order</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                      {entryActiveHeaderMenu === 'marks' && (
+                        <>
+                          <Text style={s.menuHeader}>Marks Filter & Sort</Text>
+                          <TouchableOpacity style={s.menuItem} onPress={() => { setEntrySortColumn('marks'); setEntrySortDirection('desc'); setEntryActiveHeaderMenu(null); }}>
+                            <Text style={s.menuItemText}>⬇️ Sort: Highest Total First</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={s.menuItem} onPress={() => { setEntrySortColumn('marks'); setEntrySortDirection('asc'); setEntryActiveHeaderMenu(null); }}>
+                            <Text style={s.menuItemText}>⬆️ Sort: Lowest Total First</Text>
+                          </TouchableOpacity>
+                          <View style={s.menuDivider} />
+                          <TouchableOpacity style={s.menuItem} onPress={() => { setEntryFilter('completed'); setEntryActiveHeaderMenu(null); }}>
+                            <Text style={s.menuItemText}>✓ Filter: Entered Marks Only ({entryCompletedCount})</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={s.menuItem} onPress={() => { setEntryFilter('pending'); setEntryActiveHeaderMenu(null); }}>
+                            <Text style={s.menuItemText}>⏳ Filter: Missing / Pending Only ({entryPendingCount})</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={s.menuItem} onPress={() => { setEntryFilter('absent'); setEntryActiveHeaderMenu(null); }}>
+                            <Text style={s.menuItemText}>❌ Filter: Absent Only ({entryAbsentCount})</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={s.menuItem} onPress={() => { setEntryFilter('all'); setEntrySortColumn('sl'); setEntrySortDirection('asc'); setEntryActiveHeaderMenu(null); }}>
+                            <Text style={[s.menuItemText, { color: '#0F52BA' }]}>🔄 Show All & Reset Sort</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                      {entryActiveHeaderMenu === 'absent' && (
+                        <>
+                          <Text style={s.menuHeader}>Absent Filter</Text>
+                          <TouchableOpacity style={s.menuItem} onPress={() => { setEntryFilter('absent'); setEntryActiveHeaderMenu(null); }}>
+                            <Text style={s.menuItemText}>❌ Filter: Absent Only ({entryAbsentCount})</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={s.menuItem} onPress={() => { setEntryFilter('completed'); setEntryActiveHeaderMenu(null); }}>
+                            <Text style={s.menuItemText}>✓ Filter: Present / With Marks</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={s.menuItem} onPress={() => { setEntryFilter('all'); setEntryActiveHeaderMenu(null); }}>
+                            <Text style={[s.menuItemText, { color: '#0F52BA' }]}>📋 Show All Students ({students.length})</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                      <TouchableOpacity style={s.menuCloseBtn} onPress={() => setEntryActiveHeaderMenu(null)}>
+                        <Text style={s.menuCloseText}>Close</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {filteredEntryStudents.length === 0 ? (
+                    <View style={s.entryEmptyRow}>
+                      <Text style={s.entryEmptyRowText}>No students match the search/filter criteria.</Text>
+                    </View>
+                  ) : (
+                    filteredEntryStudents.map((x, i) => (
+                      <View
+                        key={x.student_id}
+                        style={[
+                          s.entryTableRow,
+                          x.absent && s.entryRowAbsent,
+                          i % 2 === 1 && s.entryRowAlt
+                        ]}
+                      >
+                        <Text style={[s.entryTdCell, s.entryColSl, { fontWeight: '700', color: '#64748b' }]}>
+                          {x.originalIndex + 1}
+                        </Text>
+                        <Text style={[s.entryTdCell, s.entryColRank, { fontWeight: '700', color: '#0369a1' }]}>
+                          {rankMap[x.student_id] ?? '-'}
+                        </Text>
+                        <Text style={[s.entryTdCell, s.entryColReg, s.entryRegText]}>
+                          {x.registration_no}
+                        </Text>
+                        <View style={[s.entryColName, { paddingHorizontal: 6 }]}>
+                          <Text numberOfLines={1} ellipsizeMode="tail" style={s.entryNameText}>
+                            {x.student_name}
+                          </Text>
+                        </View>
+
+                        <View style={s.entryColMarks}>
+                          {x.absent ? (
+                            <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                              <Text style={{ color: '#b91c1c', fontWeight: '800', fontSize: 12 }}>ABSENT</Text>
+                            </View>
+                          ) : (
+                            <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                              <TextInput
+                                editable={entry.status !== 'submitted' || admin}
+                                value={x.written}
+                                placeholder="Written"
+                                placeholderTextColor="#cbd5e1"
+                                onChangeText={v =>
+                                  setStudents(a =>
+                                    a.map(y => (y.student_id === x.student_id ? { ...y, written: v.replace(/[^0-9.]/g, ''), absent: false } : y))
+                                  )
+                                }
+                                keyboardType="numeric"
+                                style={[s.mark, { width: 70 }]}
+                              />
+                              <TextInput
+                                editable={entry.status !== 'submitted' || admin}
+                                value={x.mcq}
+                                placeholder="MCQ"
+                                placeholderTextColor="#cbd5e1"
+                                onChangeText={v =>
+                                  setStudents(a =>
+                                    a.map(y => (y.student_id === x.student_id ? { ...y, mcq: v.replace(/[^0-9.]/g, ''), absent: false } : y))
+                                  )
+                                }
+                                keyboardType="numeric"
+                                style={[s.mark, { width: 70 }]}
+                              />
+                              <TextInput
+                                editable={entry.status !== 'submitted' || admin}
+                                value={x.oral}
+                                placeholder="Oral"
+                                placeholderTextColor="#cbd5e1"
+                                onChangeText={v =>
+                                  setStudents(a =>
+                                    a.map(y => (y.student_id === x.student_id ? { ...y, oral: v.replace(/[^0-9.]/g, ''), absent: false } : y))
+                                  )
+                                }
+                                keyboardType="numeric"
+                                style={[s.mark, { width: 70 }]}
+                              />
+                            </View>
+                          )}
+                          {markErrors[x.student_id] && (
+                            <Text style={{ color: '#c62828', fontSize: 11, fontWeight: '800', marginTop: 3 }}>
+                              {markErrors[x.student_id]}
+                            </Text>
+                          )}
+                        </View>
+
+                        <View style={s.entryColAbsent}>
+                          <TouchableOpacity
+                            onPress={() =>
+                              setStudents(a =>
+                                a.map(y =>
+                                  y.student_id === x.student_id
+                                    ? { ...y, absent: !y.absent, written: '', mcq: '', oral: '', mark: '' }
+                                    : y
+                                )
+                              )
+                            }
+                            style={[s.absent, x.absent && s.absentOn]}
+                          >
+                            <Text style={x.absent ? s.white : s.red}>{x.absent ? 'ABSENT' : 'Mark Absent'}</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))
+                  )}
+                </View>
+              </ScrollView>
+            </View>
 
             {(entry.status !== 'submitted' || admin) && (
               <TouchableOpacity
@@ -1377,5 +1697,260 @@ const s = StyleSheet.create({
     paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9'
+  },
+  entrySummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#dfeefe',
+    borderRadius: 10,
+    padding: 12,
+    marginVertical: 12,
+    flexWrap: 'wrap',
+    gap: 8
+  },
+  entrySummaryText: {
+    fontWeight: '900',
+    color: '#214e7d',
+    fontSize: 13.5
+  },
+  entryFilterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 10
+  },
+  entrySearchWrap: {
+    flex: 1,
+    minWidth: 220,
+    position: 'relative',
+    justifyContent: 'center'
+  },
+  entrySearchInput: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 13,
+    color: '#1e293b'
+  },
+  entryClearBtn: {
+    position: 'absolute',
+    right: 10,
+    padding: 4
+  },
+  entryClearBtnText: {
+    color: '#94a3b8',
+    fontSize: 14,
+    fontWeight: '800'
+  },
+  entryFilterTabs: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap'
+  },
+  entryFilterChip: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 7
+  },
+  entryFilterChipActive: {
+    backgroundColor: '#0F52BA',
+    borderColor: '#0F52BA'
+  },
+  entryFilterChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569'
+  },
+  entryFilterChipTextActive: {
+    color: '#ffffff'
+  },
+  entryTableCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#d8e2ed',
+    overflow: 'hidden',
+    marginBottom: 12
+  },
+  entryTableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#173d68',
+    paddingVertical: 11,
+    paddingHorizontal: 8
+  },
+  entryThCell: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5
+  },
+  thCellWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  thTitleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3
+  },
+  sortBadge: {
+    color: '#fbbf24',
+    fontSize: 10,
+    fontWeight: '900'
+  },
+  filterTrigger: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 2
+  },
+  filterTriggerText: {
+    color: '#93c5fd',
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  filterTriggerActive: {
+    color: '#ffffff',
+    backgroundColor: '#1e40af'
+  },
+  resetAllBtn: {
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 7
+  },
+  resetAllText: {
+    color: '#b91c1c',
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  columnMenuDropdown: {
+    position: 'absolute',
+    top: 44,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    padding: 8,
+    minWidth: 210,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 1000
+  },
+  menuHeader: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#475569',
+    marginBottom: 6,
+    paddingHorizontal: 6,
+    textTransform: 'uppercase'
+  },
+  menuItem: {
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    marginVertical: 1
+  },
+  menuItemText: {
+    fontSize: 12.5,
+    color: '#1e293b',
+    fontWeight: '700'
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#e2e8f0',
+    marginVertical: 5
+  },
+  menuCloseBtn: {
+    marginTop: 6,
+    paddingVertical: 5,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 6,
+    alignItems: 'center'
+  },
+  menuCloseText: {
+    color: '#64748b',
+    fontSize: 11.5,
+    fontWeight: '700'
+  },
+  entryTableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    backgroundColor: '#ffffff'
+  },
+  entryRowAlt: {
+    backgroundColor: '#f8fafc'
+  },
+  entryRowAbsent: {
+    backgroundColor: '#fef2f2'
+  },
+  entryTdCell: {
+    fontSize: 13,
+    color: '#334155'
+  },
+  entryRegText: {
+    fontWeight: '800',
+    color: '#0F52BA'
+  },
+  entryNameText: {
+    fontWeight: '800',
+    color: '#1e293b',
+    fontSize: 13.5
+  },
+  entryColSl: {
+    width: 48,
+    textAlign: 'center'
+  },
+  entryColRank: {
+    width: 45,
+    textAlign: 'center'
+  },
+  entryColReg: {
+    width: 85,
+    textAlign: 'center'
+  },
+  entryColName: {
+    flex: 1,
+    minWidth: 160
+  },
+  entryColMarks: {
+    width: 240,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  entryColAbsent: {
+    width: 110,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  entryEmptyRow: {
+    padding: 25,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  entryEmptyRowText: {
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '600'
   }
 });
