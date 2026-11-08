@@ -523,7 +523,7 @@ export default function Marks() {
       </View>
     </View>}
 
-    <View style={{marginTop:26,marginBottom:10}}>
+    <View style={{marginTop:8,marginBottom:8}}>
       <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
         <Text style={[s.sectionTitle,{marginTop:0,marginBottom:0}]}>Weekly Tests ({displayedWeeklyTests.length})</Text>
         <View style={{flexDirection:'row',gap:6,alignItems:'center',flexWrap:'wrap'}}>
@@ -571,7 +571,7 @@ const s=StyleSheet.create({
   dateField:{minHeight:42,borderWidth:1,borderColor:'#ccd3da',borderRadius:10,padding:12,backgroundColor:'#fff'},
   label:{fontWeight:'700',color:'#486079',marginBottom:5},
   input:{marginBottom:0},
-  loadButton:{backgroundColor:'#1d5fa7',borderRadius:9,padding:13,marginTop:14},
+  loadButton:{backgroundColor:'#1d5fa7',borderRadius:9,padding:11,marginTop:8},
   buttonText:{color:'#fff',fontWeight:'900',textAlign:'center'},
   lockBox:{backgroundColor:'#fff0d2',borderRadius:8,padding:10,marginBottom:12},
   adminBox:{backgroundColor:'#e0f1ff'},
@@ -647,12 +647,12 @@ const s=StyleSheet.create({
   saveButton:{flex:1,backgroundColor:'#145b9f',borderRadius:10,padding:14},
   printButton:{borderWidth:1,borderColor:'#145b9f',borderRadius:10,paddingHorizontal:24,justifyContent:'center'},
   printText:{color:'#145b9f',fontWeight:'900'},
-  publishPanel:{backgroundColor:'#eaf3ff',borderWidth:1,borderColor:'#bfd7f0',borderRadius:12,padding:13,marginTop:24},
-  publishTitle:{fontSize:17,fontWeight:'900',color:'#173d68',marginBottom:10},
-  publishControls:{flexDirection:'row',flexWrap:'wrap',gap:10,alignItems:'center'},
+  publishPanel:{backgroundColor:'#eaf3ff',borderWidth:1,borderColor:'#bfd7f0',borderRadius:10,padding:10,marginTop:8},
+  publishTitle:{fontSize:15,fontWeight:'900',color:'#173d68',marginBottom:6},
+  publishControls:{flexDirection:'row',flexWrap:'wrap',gap:8,alignItems:'center'},
   publishSelect:{flex:1,minWidth:210},
-  publishButton:{backgroundColor:'#167447',borderRadius:9,padding:13,minWidth:150},
-  sectionTitle:{fontSize:19,fontWeight:'900',color:'#213e5d',marginTop:26,marginBottom:10},
+  publishButton:{backgroundColor:'#167447',borderRadius:9,padding:11,minWidth:140},
+  sectionTitle:{fontSize:18,fontWeight:'900',color:'#213e5d',marginTop:0,marginBottom:6},
   testCard:{backgroundColor:'#fff',borderRadius:12,padding:13,marginBottom:8,flexDirection:'row',alignItems:'center',gap:10},
   testTitle:{fontWeight:'900',color:'#243f5c'},
   viewButton:{backgroundColor:'#e1edfa',borderRadius:8,paddingHorizontal:15,paddingVertical:10},

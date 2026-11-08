@@ -1092,6 +1092,54 @@ export default function TerminalExams() {
                   </TouchableOpacity>
                 </View>
 
+                {/* Exam Name Dropdown & Clear Filter (moved to top empty space as requested) */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {distinctExamNames.length > 0 && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[s.filterLabel, { marginBottom: 0 }]}>Exam Wise Menu:</Text>
+                      {Platform.OS === 'web' ? (
+                        <select
+                          style={{
+                            padding: '6px 10px',
+                            borderRadius: 7,
+                            border: '1px solid #cbd5e1',
+                            backgroundColor: '#ffffff',
+                            fontSize: 12,
+                            color: '#1e293b',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            outline: 'none',
+                            maxWidth: 260
+                          }}
+                          value={examNameFilter}
+                          onChange={(e: any) => setExamNameFilter(e.target.value)}
+                        >
+                          <option value="ALL">All Exams</option>
+                          {distinctExamNames.map(n => (
+                            <option key={n} value={n}>
+                              {n.trim()}
+                            </option>
+                          ))}
+                        </select>
+                      ) : null}
+                    </View>
+                  )}
+
+                  {/* Reset Filters button */}
+                  {(classFilter !== 'ALL' || examNameFilter !== 'ALL' || statusTab !== 'all') && (
+                    <TouchableOpacity
+                      style={s.btnClearFilter}
+                      onPress={() => {
+                        setClassFilter('ALL');
+                        setExamNameFilter('ALL');
+                        setStatusTab('all');
+                      }}
+                    >
+                      <Text style={s.btnClearFilterText}>✕ Clear Filter</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
                 <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
                   <TouchableOpacity
                     style={s.btnExpandToggle}
@@ -1108,16 +1156,12 @@ export default function TerminalExams() {
                 </View>
               </View>
 
-              {/* Row 2: Class Wise & Exam Wise Menu */}
+              {/* Row 2: Class Wise Menu */}
               <View style={s.menuFiltersRow}>
                 {/* Class Wise Pill Menu */}
-                <View style={{ flex: 2, minWidth: 260 }}>
+                <View style={{ flex: 1, minWidth: '100%' }}>
                   <Text style={s.filterLabel}>Class Wise Menu (ক্লাস অনুযায়ী ফিল্টার):</Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={s.classPillsContent}
-                  >
+                  <View style={s.classPillsContent}>
                     <TouchableOpacity
                       style={[s.classPill, classFilter === 'ALL' && s.classPillActive]}
                       onPress={() => setClassFilter('ALL')}
@@ -1137,43 +1181,8 @@ export default function TerminalExams() {
                         </Text>
                       </TouchableOpacity>
                     ))}
-                  </ScrollView>
-                </View>
-
-                {/* Exam Name Dropdown (if multiple exams exist) */}
-                {distinctExamNames.length > 1 && (
-                  <View style={{ flex: 1, minWidth: 160 }}>
-                    <Text style={s.filterLabel}>Exam Wise Menu:</Text>
-                    {Platform.OS === 'web' ? (
-                      <select
-                        style={s.examSelect}
-                        value={examNameFilter}
-                        onChange={(e: any) => setExamNameFilter(e.target.value)}
-                      >
-                        <option value="ALL">All Exams</option>
-                        {distinctExamNames.map(n => (
-                          <option key={n} value={n}>
-                            {n}
-                          </option>
-                        ))}
-                      </select>
-                    ) : null}
                   </View>
-                )}
-
-                {/* Reset Filters button */}
-                {(classFilter !== 'ALL' || examNameFilter !== 'ALL' || statusTab !== 'all') && (
-                  <TouchableOpacity
-                    style={s.btnClearFilter}
-                    onPress={() => {
-                      setClassFilter('ALL');
-                      setExamNameFilter('ALL');
-                      setStatusTab('all');
-                    }}
-                  >
-                    <Text style={s.btnClearFilterText}>✕ Clear Filter</Text>
-                  </TouchableOpacity>
-                )}
+                </View>
               </View>
             </View>
 
@@ -1561,6 +1570,7 @@ const s = StyleSheet.create({
   },
   classPillsContent: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 6,
     alignItems: 'center',
     paddingVertical: 2
