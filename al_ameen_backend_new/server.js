@@ -85,8 +85,6 @@ app.use('/api/dues',...moduleAccess('dues'),require('./src/routes/dues'));
 app.use('/api/documents',...moduleAccess('documents'),require('./src/routes/documents'));
 app.use('/api/assets',...moduleAccess('asset_register'),require('./src/routes/assetRegister'));
 app.use('/api/omr',require('./src/routes/omr'));
-app.use('/api/calls',require('./src/routes/calls'));
-app.use('/api/calling-schedules',require('./src/routes/callingSchedule'));
 
 app.use((err,req,res,next)=>{console.error(err);if(err.code==='CLOUDINARY_NOT_CONFIGURED')return res.status(503).json({success:false,message:err.message});res.status(err.status||500).json({success:false,message:err.status?err.message:'Server error',error:process.env.NODE_ENV==='development'?err.message:undefined});});
 
