@@ -172,12 +172,22 @@ export default function AcademyHeader({
               <Text style={styles.dutyText} numberOfLines={1}>
                 👮 Gate Duty: {gatemanDisplayName}
               </Text>
-              {subtitle || (
+              {typeof subtitle === 'string' ? (
                 <Text style={styles.greetingText} numberOfLines={1}>
-                  {timeGreeting.icon} {timeGreeting.bengali}, 🟢 অন-ডিউটি (On Duty)
+                  {subtitle}
                 </Text>
+              ) : (
+                subtitle || (
+                  <Text style={styles.greetingText} numberOfLines={1}>
+                    {timeGreeting.icon} {timeGreeting.bengali}, 🟢 অন-ডিউটি (On Duty)
+                  </Text>
+                )
               )}
             </>
+          ) : typeof subtitle === 'string' ? (
+            <Text style={styles.greetingText} numberOfLines={1}>
+              {subtitle}
+            </Text>
           ) : (
             subtitle || null
           )}

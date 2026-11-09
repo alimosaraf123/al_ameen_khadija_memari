@@ -258,7 +258,11 @@ export default function DueFeesScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <AcademyHeader
-        subtitle="Al-Ameen Mission Academy Memari • Accounts Portal Live Sync"
+        subtitle={
+          <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }} numberOfLines={1}>
+            Al-Ameen Mission Academy Memari • Accounts Portal Live Sync
+          </Text>
+        }
         extraActions={
           isSuperAdmin ? (
             <TouchableOpacity
@@ -329,7 +333,7 @@ export default function DueFeesScreen() {
                     backgroundColor: '#ffffff',
                     fontSize: 14,
                     color: '#1e293b',
-                    outline: 'none',
+                    outlineStyle: 'none',
                     fontWeight: 600,
                   }}
                 >
@@ -358,7 +362,7 @@ export default function DueFeesScreen() {
                     backgroundColor: '#ffffff',
                     fontSize: 14,
                     color: '#1e293b',
-                    outline: 'none',
+                    outlineStyle: 'none',
                     fontWeight: 600,
                   }}
                 >
@@ -825,7 +829,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#0f172a',
     height: 40,
-    outline: 'none',
+    outlineStyle: 'none',
   } as any,
   clearSearchIcon: {
     fontSize: 14,
