@@ -82,6 +82,7 @@ app.use('/api/service-panels',...moduleAccess('service_panels'),require('./src/r
 app.use('/api/marks',...moduleAccess('marks'),require('./src/routes/marks'));
 app.use('/api/terminal-exams',...moduleAccess('terminal_exams'),require('./src/routes/terminalExams'));
 app.use('/api/dues',...moduleAccess('dues'),require('./src/routes/dues'));
+app.use('/api/bank-matcher',...moduleAccess('fees'),require('./src/routes/bankStatementMatcher'));
 app.use('/api/documents',...moduleAccess('documents'),require('./src/routes/documents'));
 app.use('/api/assets',...moduleAccess('asset_register'),require('./src/routes/assetRegister'));
 app.use('/api/omr',require('./src/routes/omr'));

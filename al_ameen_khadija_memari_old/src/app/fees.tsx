@@ -638,6 +638,17 @@ export default function Fees() {
               ⏳ Due Fees
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              router.push('/bank-statement-matcher' as any);
+            }}
+            style={[styles.tabBtn, { backgroundColor: '#e0e7ff', borderColor: '#6366f1', borderWidth: 1 }]}
+          >
+            <Text style={[styles.tabBtnText, { color: '#4338ca' }]}>
+              🏦 Bank Matcher
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Date Filter & Search Actions */}

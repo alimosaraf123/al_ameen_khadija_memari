@@ -303,6 +303,13 @@ export default function DueFeesScreen() {
               ⏳ Due Fees
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => router.push('/bank-statement-matcher' as any)}
+            style={styles.tabBtn}
+          >
+            <Text style={styles.tabBtnText}>🏦 Bank Matcher</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Filter Controls Bar */}
