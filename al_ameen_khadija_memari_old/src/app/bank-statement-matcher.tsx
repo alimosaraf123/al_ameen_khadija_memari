@@ -140,9 +140,109 @@ export default function BankStatementMatcherScreen() {
   const [activeResultTab, setActiveResultTab] = useState<'all' | 'matched' | 'unmatched_statement' | 'mismatch_bills'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  // Saved History & Notes State
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [savedHistory, setSavedHistory] = useState<any[]>([]);
+  const [historyModalOpen, setHistoryModalOpen] = useState<boolean>(false);
+  const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
+  const [savingSession, setSavingSession] = useState<boolean>(false);
+  const [currentSavedId, setCurrentSavedId] = useState<number | null>(null);
+
   useEffect(() => {
     void loadMasterStatus();
   }, []);
+
+  const loadHistory = async () => {
+    try {
+      setLoadingHistory(true);
+      const data = await api('/api/bank-matcher/history');
+      if (data?.success) {
+        setSavedHistory(data.history || []);
+      }
+    } catch (err: any) {
+      console.error('Failed to load history:', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleSaveSession = async () => {
+    if (!result) return;
+    try {
+      setSavingSession(true);
+      const payload = {
+        id: currentSavedId || undefined,
+        statement_filename: statementFile?.name || 'SBI_Statement.xlsx',
+        from_date: fromDate,
+        to_date: toDate,
+        summary: result.summary,
+        statement_rows: result.statement_rows,
+        matched_rows: result.matched_rows,
+        mismatch_rows: result.mismatch_rows,
+        notes_map: notes,
+        download_token: downloadToken,
+      };
+
+      const res = await api('/api/bank-matcher/save-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (res?.success) {
+        if (res.id) setCurrentSavedId(res.id);
+        Alert.alert('Saved Successfully', 'Reconciled statement and notes have been saved to database. You can review them anytime from Saved History.');
+        void loadHistory();
+      } else {
+        Alert.alert('Save Failed', res?.message || 'Could not save session.');
+      }
+    } catch (err: any) {
+      Alert.alert('Save Error', err.message || 'Failed to save session.');
+    } finally {
+      setSavingSession(false);
+    }
+  };
+
+  const handleOpenSavedRecord = async (id: number) => {
+    try {
+      setLoadingHistory(true);
+      const res = await api(`/api/bank-matcher/history/${id}`);
+      if (res?.success && res.record) {
+        const rec = res.record;
+        setResult({
+          summary: rec.summary,
+          statement_rows: rec.statement_rows,
+          matched_rows: rec.matched_rows,
+          mismatch_rows: rec.mismatch_rows,
+        });
+        setNotes(rec.notes_map || {});
+        setCurrentSavedId(rec.id);
+        if (rec.from_date) setFromDate(rec.from_date);
+        if (rec.to_date) setToDate(rec.to_date);
+        if (rec.download_token) setDownloadToken(rec.download_token);
+        setHistoryModalOpen(false);
+        Alert.alert('Record Loaded', `Loaded ${rec.batch_title || 'saved reconciliation'} with ${Object.keys(rec.notes_map || {}).length} saved notes.`);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to load saved record.');
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleDeleteSavedRecord = async (id: number) => {
+    try {
+      const res = await api(`/api/bank-matcher/history/${id}`, { method: 'DELETE' });
+      if (res?.success) {
+        setSavedHistory((prev) => prev.filter((item) => item.id !== id));
+        if (currentSavedId === id) {
+          setCurrentSavedId(null);
+        }
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to delete record.');
+    }
+  };
 
   const loadMasterStatus = async () => {
     try {
@@ -245,6 +345,8 @@ export default function BankStatementMatcherScreen() {
       if (data?.success) {
         setResult(data);
         setDownloadToken(data.download_token);
+        setCurrentSavedId(null);
+        setNotes({});
         if (data.summary.matched_count === 0) {
           Alert.alert(
             'No Matches Found',
@@ -412,6 +514,18 @@ export default function BankStatementMatcherScreen() {
           >
             <Text style={styles.studentMasterTabBtnText}>
               👥 Student Master ({masterStatus?.custom_master_count || 473})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              void loadHistory();
+              setHistoryModalOpen(true);
+            }}
+            style={[styles.tabBtn, styles.historyTabBtn]}
+          >
+            <Text style={styles.historyTabBtnText}>
+              📜 Saved History
             </Text>
           </TouchableOpacity>
         </View>
@@ -630,25 +744,37 @@ export default function BankStatementMatcherScreen() {
               </View>
             </View>
 
-            {/* Download Matched Excel Banner */}
+            {/* Download & Save Banner */}
             <View style={styles.downloadBanner}>
               <View style={styles.downloadBannerLeft}>
                 <Text style={styles.downloadBannerTitle}>
                   🎉 Statement Reconciled Successfully!
                 </Text>
                 <Text style={styles.downloadBannerSubtitle}>
-                  Sheet 1 preserves original SBI Statement + 6 added columns (Reg. No., Recpt. No., Amount, Class, Name, Check). Sheet 2 contains full MISMATCH DETAILS + Summary Box.
+                  Original SBI Statement + 6 added student & notes columns. Add custom notes to any transaction and save to database for future reference.
                 </Text>
               </View>
 
-              <TouchableOpacity
-                style={styles.downloadExcelBtn}
-                onPress={handleDownloadMatchedExcel}
-              >
-                <Text style={styles.downloadExcelBtnText}>
-                  📥 Download Matched Excel (.xlsx)
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.bannerActionRow}>
+                <TouchableOpacity
+                  style={[styles.saveRecordBtn, savingSession && styles.saveRecordBtnDisabled]}
+                  onPress={handleSaveSession}
+                  disabled={savingSession}
+                >
+                  <Text style={styles.saveRecordBtnText}>
+                    {savingSession ? '💾 Saving...' : currentSavedId ? '💾 Update Saved Record' : '💾 Save Record & Notes'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.downloadExcelBtn}
+                  onPress={handleDownloadMatchedExcel}
+                >
+                  <Text style={styles.downloadExcelBtnText}>
+                    📥 Download Matched Excel (.xlsx)
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Results Preview Card with Search & Tabs */}
@@ -754,9 +880,9 @@ export default function BankStatementMatcherScreen() {
                           🏦 ORIGINAL BANK STATEMENT (UNCHANGED COLUMNS)
                         </Text>
                       </View>
-                      <View style={[styles.superHeaderStudent, { width: 560 }]}>
+                      <View style={[styles.superHeaderStudent, { width: 740 }]}>
                         <Text style={styles.superHeaderTextStudent}>
-                          🎓 MATCHED STUDENT DETAILS (ADDED BESIDE BALANCE)
+                          🎓 MATCHED STUDENT DETAILS & NOTES (ADDED BESIDE BALANCE)
                         </Text>
                       </View>
                     </View>
@@ -791,7 +917,7 @@ export default function BankStatementMatcherScreen() {
                         <Text style={styles.pThText}>Balance</Text>
                       </View>
 
-                      {/* Student details headers (Order: Reg. No., Student Name, Class, Recpt. No., Amount - Check removed) */}
+                      {/* Student details headers (Order: Reg. No., Student Name, Class, Recpt. No., Amount, Note) */}
                       <View style={[styles.pTh, styles.pThStudentDivider, { width: 90 }]}>
                         <Text style={styles.pThTextStudent}>Reg. No.</Text>
                       </View>
@@ -804,8 +930,11 @@ export default function BankStatementMatcherScreen() {
                       <View style={[styles.pTh, styles.pThStudent, { width: 90 }]}>
                         <Text style={styles.pThTextStudent}>Recpt. No.</Text>
                       </View>
-                      <View style={[styles.pTh, styles.pThStudent, { width: 100, borderRightWidth: 0 }]}>
+                      <View style={[styles.pTh, styles.pThStudent, { width: 100 }]}>
                         <Text style={styles.pThTextStudent}>Amount</Text>
+                      </View>
+                      <View style={[styles.pTh, styles.pThStudent, { width: 180, borderRightWidth: 0 }]}>
+                        <Text style={styles.pThTextStudent}>Note</Text>
                       </View>
                     </View>
 
@@ -912,12 +1041,26 @@ export default function BankStatementMatcherScreen() {
                             {row.is_matched ? row.receipt_no : '-'}
                           </Text>
                         </View>
-                        <View style={[styles.pTd, styles.pTdStudent, { width: 100, borderRightWidth: 0 }]}>
+                        <View style={[styles.pTd, styles.pTdStudent, { width: 100 }]}>
                           <Text
                             style={row.is_matched ? styles.pTdAmount : styles.pTdTextMuted}
                           >
                             {row.is_matched ? `₹${formatCurrency(row.amount)}` : '-'}
                           </Text>
+                        </View>
+                        <View style={[styles.pTd, styles.pTdStudent, { width: 180, borderRightWidth: 0, paddingVertical: 4, paddingHorizontal: 6 }]}>
+                          <TextInput
+                            style={styles.noteInput}
+                            placeholder="Add note..."
+                            placeholderTextColor="#94a3b8"
+                            value={notes[row.statement_row || idx] || ''}
+                            onChangeText={(val) => {
+                              setNotes((prev) => ({
+                                ...prev,
+                                [row.statement_row || idx]: val,
+                              }));
+                            }}
+                          />
                         </View>
                       </View>
                     ))}
@@ -949,8 +1092,11 @@ export default function BankStatementMatcherScreen() {
                       <View style={[styles.pTh, { width: 100 }]}>
                         <Text style={styles.pThText}>Class</Text>
                       </View>
-                      <View style={[styles.pTh, { width: 500, alignItems: 'flex-start', borderRightWidth: 0 }]}>
+                      <View style={[styles.pTh, { width: 500, alignItems: 'flex-start' }]}>
                         <Text style={styles.pThText}>Particulars / Description</Text>
+                      </View>
+                      <View style={[styles.pTh, { width: 180, borderRightWidth: 0 }]}>
+                        <Text style={styles.pThText}>Note</Text>
                       </View>
                     </View>
 
@@ -993,12 +1139,26 @@ export default function BankStatementMatcherScreen() {
                           <Text style={styles.pTdText}>{row.class_name || '-'}</Text>
                         </View>
                         <View
-                          style={[styles.pTd, { width: 500, alignItems: 'flex-start', borderRightWidth: 0 }]}
+                          style={[styles.pTd, { width: 500, alignItems: 'flex-start' }]}
                           {...(Platform.OS === 'web' ? ({ title: row.particulars || row.description || '' } as any) : {})}
                         >
                           <Text style={styles.pTdDesc} numberOfLines={1} selectable>
                             {row.particulars || row.description || '-'}
                           </Text>
+                        </View>
+                        <View style={[styles.pTd, { width: 180, borderRightWidth: 0, paddingVertical: 4, paddingHorizontal: 6 }]}>
+                          <TextInput
+                            style={styles.noteInput}
+                            placeholder="Add note..."
+                            placeholderTextColor="#94a3b8"
+                            value={notes[`mismatch_${idx}`] || ''}
+                            onChangeText={(val) => {
+                              setNotes((prev) => ({
+                                ...prev,
+                                [`mismatch_${idx}`]: val,
+                              }));
+                            }}
+                          />
                         </View>
                       </View>
                     ))}
@@ -1084,6 +1244,87 @@ export default function BankStatementMatcherScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Saved History Modal */}
+      <Modal visible={historyModalOpen} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 720, maxHeight: '85%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>📜 Saved Reconciliation Records</Text>
+              <TouchableOpacity onPress={() => setHistoryModalOpen(false)}>
+                <Text style={styles.closeBtn}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalNote}>
+              Previously saved statements and notes are stored permanently in the database. You can review and download them anytime without uploading statement files again!
+            </Text>
+
+            {loadingHistory ? (
+              <View style={{ padding: 30, alignItems: 'center' }}>
+                <ActivityIndicator size="large" color="#0284c7" />
+                <Text style={{ marginTop: 10, color: '#64748b' }}>Loading saved records...</Text>
+              </View>
+            ) : savedHistory.length === 0 ? (
+              <View style={{ padding: 30, alignItems: 'center' }}>
+                <Text style={{ fontSize: 15, color: '#94a3b8', fontWeight: '600' }}>
+                  No saved reconciliation records yet.
+                </Text>
+                <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
+                  After reconciling transactions, click "💾 Save Record & Notes" to save it here.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={{ maxHeight: 420 }}>
+                {savedHistory.map((item: any) => (
+                  <View key={`hist_${item.id}`} style={styles.historyCard}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.historyTitle}>{item.batch_title || 'Reconciliation Record'}</Text>
+                      <View style={styles.historyStatsRow}>
+                        <Text style={styles.historyBadgeMatched}>
+                          ✅ {item.summary?.matched_count || 0} Matched (₹{formatCurrency(item.summary?.matched_amount || 0)})
+                        </Text>
+                        <Text style={styles.historyBadgeUnmatched}>
+                          ⚠️ {item.summary?.statement_unmatched_count || 0} Unmatched Stmt
+                        </Text>
+                        <Text style={styles.historyBadgeBills}>
+                          📑 {item.summary?.bill_unmatched_count || 0} Unmatched Bills
+                        </Text>
+                      </View>
+                      <Text style={styles.historyMeta}>
+                        📁 File: {item.statement_filename || 'SBI'} • 👤 By: {item.created_by || 'Staff'} • 🕒 {formatDateDisplay(item.created_at)}
+                      </Text>
+                    </View>
+                    <View style={styles.historyActions}>
+                      <TouchableOpacity
+                        style={styles.historyViewBtn}
+                        onPress={() => handleOpenSavedRecord(item.id)}
+                      >
+                        <Text style={styles.historyViewBtnText}>👁 Open</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.historyDelBtn}
+                        onPress={() => handleDeleteSavedRecord(item.id)}
+                      >
+                        <Text style={styles.historyDelBtnText}>🗑</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCloseActionBtn}
+                onPress={() => setHistoryModalOpen(false)}
+              >
+                <Text style={styles.modalCloseActionBtnText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1127,6 +1368,16 @@ const styles = StyleSheet.create({
   },
   tabBtnTextActive: {
     color: '#ffffff',
+  },
+  historyTabBtn: {
+    backgroundColor: '#f1f5f9',
+    borderColor: '#94a3b8',
+    borderWidth: 1,
+  },
+  historyTabBtnText: {
+    color: '#334155',
+    fontWeight: '800',
+    fontSize: 14,
   },
   cardsRow: {
     flexDirection: 'row',
@@ -1417,6 +1668,32 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 14,
   },
+  bannerActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  saveRecordBtn: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    shadowColor: '#059669',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  saveRecordBtnDisabled: {
+    backgroundColor: '#9ca3af',
+    shadowOpacity: 0,
+  },
+  saveRecordBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
   previewCard: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
@@ -1666,6 +1943,100 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#b91c1c',
+  },
+  noteInput: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    fontSize: 11,
+    color: '#0f172a',
+    width: '100%',
+    height: 30,
+  },
+  historyCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 12,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  historyTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  historyStatsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 6,
+  },
+  historyBadgeMatched: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803d',
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  historyBadgeUnmatched: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#b45309',
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  historyBadgeBills: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#b91c1c',
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  historyMeta: {
+    fontSize: 11,
+    color: '#64748b',
+  },
+  historyActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  historyViewBtn: {
+    backgroundColor: '#0284c7',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  historyViewBtnText: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  historyDelBtn: {
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+  },
+  historyDelBtnText: {
+    fontSize: 12,
   },
   modalOverlay: {
     flex: 1,

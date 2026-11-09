@@ -30,14 +30,30 @@ setInterval(() => {
   }
 }, 10 * 60 * 1000);
 
-// Initialize database table for master
+// Initialize database tables
 const readyTable = pool.query(`
   CREATE TABLE IF NOT EXISTS bank_matcher_master (
     registration_no VARCHAR(50) PRIMARY KEY,
     student_name VARCHAR(150),
     class_name VARCHAR(50),
     updated_at TIMESTAMPTZ DEFAULT NOW()
-  )
+  );
+  CREATE TABLE IF NOT EXISTS bank_reconciliation_records (
+    id SERIAL PRIMARY KEY,
+    batch_title VARCHAR(255),
+    statement_filename VARCHAR(255),
+    from_date VARCHAR(20),
+    to_date VARCHAR(20),
+    summary JSONB,
+    statement_rows JSONB,
+    matched_rows JSONB,
+    mismatch_rows JSONB,
+    notes_map JSONB,
+    excel_buffer BYTEA,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    created_by VARCHAR(100)
+  );
 `);
 
 // GET /api/bank-matcher/master - Check current master status
@@ -198,6 +214,124 @@ router.post(
     }
   })
 );
+
+// POST /api/bank-matcher/save-session - Save or update reconciled session with notes
+router.post('/save-session', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
+  await readyTable;
+  const {
+    id,
+    statement_filename,
+    from_date,
+    to_date,
+    summary,
+    statement_rows,
+    matched_rows,
+    mismatch_rows,
+    notes_map,
+    download_token,
+  } = req.body;
+
+  const username = req.user?.username || req.user?.name || req.user?.user_id || 'Staff';
+  const title = `Reconciliation: ${from_date || 'N/A'}${to_date && to_date !== from_date ? ' to ' + to_date : ''} (${summary?.matched_count || 0} Matched)`;
+
+  let excelBuffer = null;
+  if (download_token && downloadCache.has(download_token)) {
+    excelBuffer = downloadCache.get(download_token)?.buffer || null;
+  }
+
+  if (id) {
+    // Update existing record
+    await pool.query(
+      `UPDATE bank_reconciliation_records 
+       SET summary = $1, statement_rows = $2, matched_rows = $3, mismatch_rows = $4, notes_map = $5,
+           excel_buffer = COALESCE($6, excel_buffer), updated_at = NOW()
+       WHERE id = $7`,
+      [
+        summary ? JSON.stringify(summary) : null,
+        JSON.stringify(statement_rows || []),
+        JSON.stringify(matched_rows || []),
+        JSON.stringify(mismatch_rows || []),
+        JSON.stringify(notes_map || {}),
+        excelBuffer,
+        id,
+      ]
+    );
+    return res.json({ success: true, message: 'Record and notes updated successfully.', id });
+  }
+
+  const insertRes = await pool.query(
+    `INSERT INTO bank_reconciliation_records 
+     (batch_title, statement_filename, from_date, to_date, summary, statement_rows, matched_rows, mismatch_rows, notes_map, excel_buffer, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     RETURNING id`,
+    [
+      title,
+      statement_filename || '',
+      from_date || '',
+      to_date || '',
+      summary ? JSON.stringify(summary) : null,
+      JSON.stringify(statement_rows || []),
+      JSON.stringify(matched_rows || []),
+      JSON.stringify(mismatch_rows || []),
+      JSON.stringify(notes_map || {}),
+      excelBuffer,
+      username,
+    ]
+  );
+
+  res.json({ success: true, message: 'Record and notes saved successfully.', id: insertRes.rows[0].id });
+}));
+
+// GET /api/bank-matcher/history - List saved reconciliation records
+router.get('/history', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
+  await readyTable;
+  const historyRes = await pool.query(`
+    SELECT id, batch_title, statement_filename, from_date, to_date, summary, created_at, updated_at, created_by
+    FROM bank_reconciliation_records
+    ORDER BY created_at DESC
+    LIMIT 60
+  `);
+  res.json({ success: true, history: historyRes.rows });
+}));
+
+// GET /api/bank-matcher/history/:id - Load full saved record with notes & re-enable download
+router.get('/history/:id', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
+  await readyTable;
+  const itemRes = await pool.query(
+    `SELECT * FROM bank_reconciliation_records WHERE id = $1`,
+    [req.params.id]
+  );
+  if (itemRes.rows.length === 0) {
+    return res.status(404).json({ success: false, message: 'Saved record not found.' });
+  }
+
+  const record = itemRes.rows[0];
+  let token = null;
+  if (record.excel_buffer) {
+    token = crypto.randomBytes(16).toString('hex');
+    const dateLabel = record.from_date && record.to_date && record.from_date !== record.to_date
+      ? `${record.from_date}_to_${record.to_date}`
+      : (record.from_date || 'reconciled');
+    downloadCache.set(token, {
+      buffer: record.excel_buffer,
+      createdAt: Date.now(),
+      filename: `Matched_Bank_Statement_${dateLabel}.xlsx`,
+    });
+  }
+
+  // Remove raw buffer from JSON payload
+  delete record.excel_buffer;
+  record.download_token = token;
+
+  res.json({ success: true, record });
+}));
+
+// DELETE /api/bank-matcher/history/:id - Delete saved record
+router.delete('/history/:id', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
+  await readyTable;
+  await pool.query(`DELETE FROM bank_reconciliation_records WHERE id = $1`, [req.params.id]);
+  res.json({ success: true, message: 'Record deleted successfully.' });
+}));
 
 // GET /api/bank-matcher/download/:token - Download Matched Excel
 router.get('/download/:token', asyncHandler(async (req, res) => {

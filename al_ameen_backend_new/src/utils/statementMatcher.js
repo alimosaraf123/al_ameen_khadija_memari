@@ -549,6 +549,7 @@ async function reconcileStatement({
   fromDate = '',
   toDate = '',
   customMaster = null,
+  notesMap = {},
 }) {
   const qFrom = fromDate || targetDate || '';
   const qTo = toDate || fromDate || targetDate || '';
@@ -622,9 +623,9 @@ async function reconcileStatement({
   }
 
   // Prepare Output Columns next to Balance
-  // User Requested Order: Reg. No., Student Name, Class, Recpt. No., Amount (Check column removed)
-  const OUTPUT_HEADERS = ['Reg. No.', 'Student Name', 'Class', 'Recpt. No.', 'Amount'];
-  const OUTPUT_WIDTHS = [14, 26, 16, 14, 14];
+  // User Requested Order: Reg. No., Student Name, Class, Recpt. No., Amount, Note
+  const OUTPUT_HEADERS = ['Reg. No.', 'Student Name', 'Class', 'Recpt. No.', 'Amount', 'Note'];
+  const OUTPUT_WIDTHS = [14, 26, 16, 14, 14, 25];
   const outputCol = balCol + 1;
 
   // Set Header row styles for output columns
@@ -801,13 +802,14 @@ async function reconcileStatement({
             fgColor: { argb: 'FFFFFF00' }
           };
 
-          // 2. Populate the 5 columns in original statement worksheet
-          // Order: Reg. No., Student Name, Class, Recpt. No., Amount
+          // 2. Populate the 6 columns in original statement worksheet
+          // Order: Reg. No., Student Name, Class, Recpt. No., Amount, Note
           ws.getCell(entry.row, outputCol + 0).value = record.reg || '';
           ws.getCell(entry.row, outputCol + 1).value = studentName;
           ws.getCell(entry.row, outputCol + 2).value = studentClass;
           ws.getCell(entry.row, outputCol + 3).value = record.receipt || '';
           ws.getCell(entry.row, outputCol + 4).value = billAmt;
+          ws.getCell(entry.row, outputCol + 5).value = (notesMap && (notesMap[entry.row] || notesMap[String(entry.row)] || notesMap[record.reg])) || '';
 
           matchedRowsForPreview.push({
             statement_row: entry.row,
@@ -836,9 +838,13 @@ async function reconcileStatement({
       addDetail(billIdx !== null ? 'BANK + BILL' : 'BANK', status, entry, billIdx);
       if (billIdx !== null) reportedBills.add(billIdx);
 
-      // Unmatched rows stay completely blank on the Statement's right side
+      // Unmatched rows stay completely blank on the Statement's right side (except Note if present)
       for (let offset = 0; offset < OUTPUT_HEADERS.length; offset++) {
         ws.getCell(entry.row, outputCol + offset).value = null;
+      }
+      const unmatchedNote = (notesMap && (notesMap[entry.row] || notesMap[String(entry.row)])) || '';
+      if (unmatchedNote) {
+        ws.getCell(entry.row, outputCol + 5).value = unmatchedNote;
       }
     }
 
