@@ -336,15 +336,21 @@ async function reconcileStatement({
   let debitCol = null;
   let creditCol = null;
   let dateCol = null;
+  let valueDateCol = null;
+  let refNoCol = null;
+  let branchCodeCol = null;
 
   const hRow = ws.getRow(headerRow);
   hRow.eachCell({ includeEmpty: false }, (cell, colNumber) => {
     const val = textValue(cell.value).toLowerCase();
+    if (val.includes('value date')) valueDateCol = colNumber;
+    else if (val.includes('date') || val.includes('txn date')) dateCol = colNumber;
     if (val.includes('description')) descCol = colNumber;
+    if (val.includes('ref no') || val.includes('cheque')) refNoCol = colNumber;
+    if (val.includes('branch code') || val.includes('branch co')) branchCodeCol = colNumber;
     if (val.includes('balance')) balCol = colNumber;
     if (val.includes('debit')) debitCol = colNumber;
     if (val.includes('credit')) creditCol = colNumber;
-    if (val.includes('date')) dateCol = colNumber;
   });
 
   if (!descCol || !balCol) {
@@ -353,6 +359,7 @@ async function reconcileStatement({
 
   // Prepare Output Columns next to Balance
   const OUTPUT_HEADERS = ['Reg. No.', 'Recpt. No.', 'Amount', 'Class', 'Student Name', 'Check'];
+  const OUTPUT_WIDTHS = [12, 14, 14, 16, 26, 12];
   const outputCol = balCol + 1;
 
   // Set Header row styles for output columns
@@ -363,6 +370,7 @@ async function reconcileStatement({
     if (balCell.font) cell.font = Object.assign({}, balCell.font);
     if (balCell.fill) cell.fill = Object.assign({}, balCell.fill);
     cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    ws.getColumn(outputCol + offset).width = OUTPUT_WIDTHS[offset];
   }
 
   // Index Bills by key
@@ -381,7 +389,11 @@ async function reconcileStatement({
     const desc = textValue(row.getCell(descCol).value);
     const debit = money(row.getCell(debitCol || 0).value);
     const credit = money(row.getCell(creditCol || 0).value);
-    const date = textValue(row.getCell(dateCol || 1).value);
+    const dateRaw = row.getCell(dateCol || 1).value;
+    const valueDateRaw = valueDateCol ? row.getCell(valueDateCol).value : null;
+    const refNo = refNoCol ? textValue(row.getCell(refNoCol).value) : '';
+    const branchCode = branchCodeCol ? textValue(row.getCell(branchCodeCol).value) : '';
+    const balance = balCol ? money(row.getCell(balCol).value) : null;
 
     if (!desc || (debit === null && credit === null)) continue;
 
@@ -392,7 +404,11 @@ async function reconcileStatement({
       keys,
       debit,
       credit,
-      date,
+      date: textValue(dateRaw),
+      value_date: textValue(valueDateRaw),
+      ref_no: refNo,
+      branch_code: branchCode,
+      balance,
     };
     bankRows.push(entry);
 
@@ -406,6 +422,7 @@ async function reconcileStatement({
   const issues = [];
   const billStatus = new Map();
   const reportedBills = new Set();
+  const allStatementRowsForPreview = [];
   const matchedRowsForPreview = [];
   const mismatchRowsForPreview = [];
 
@@ -498,7 +515,14 @@ async function reconcileStatement({
           const studentName = student.name || '';
           const studentClass = student.class || '';
 
-          // Populate the 6 columns in original statement worksheet
+          // 1. Highlight Description cell in Yellow in the Excel sheet
+          ws.getCell(entry.row, descCol).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFFF00' }
+          };
+
+          // 2. Populate the 6 columns in original statement worksheet
           ws.getCell(entry.row, outputCol + 0).value = record.reg || '';
           ws.getCell(entry.row, outputCol + 1).value = record.receipt || '';
           ws.getCell(entry.row, outputCol + 2).value = billAmt;
@@ -525,11 +549,40 @@ async function reconcileStatement({
       }
     }
 
-    if (status !== 'OK') {
+    const isMatched = status === 'OK';
+    const rec = isMatched && billIdx !== null ? bills[billIdx] : null;
+    const std = rec ? (master.get(norm(rec.reg)) || {}) : {};
+
+    if (!isMatched) {
       bankUnmatchedCount++;
       addDetail(billIdx !== null ? 'BANK + BILL' : 'BANK', status, entry, billIdx);
       if (billIdx !== null) reportedBills.add(billIdx);
+
+      // Unmatched rows stay completely blank on the Statement's right side
+      for (let offset = 0; offset < OUTPUT_HEADERS.length; offset++) {
+        ws.getCell(entry.row, outputCol + offset).value = null;
+      }
     }
+
+    allStatementRowsForPreview.push({
+      statement_row: entry.row,
+      date: entry.date,
+      value_date: entry.value_date,
+      description: entry.description,
+      ref_no: entry.ref_no,
+      branch_code: entry.branch_code,
+      debit: entry.debit,
+      credit: entry.credit,
+      balance: entry.balance,
+      is_matched: isMatched,
+      reg_no: isMatched && rec ? rec.reg : '',
+      receipt_no: isMatched && rec ? rec.receipt : '',
+      amount: isMatched && rec ? rec.amount : null,
+      class_name: isMatched ? (std.class || '') : '',
+      student_name: isMatched ? (std.name || '') : '',
+      check: isMatched ? 'OK' : '',
+      status: status,
+    });
   }
 
   // Report Unmatched Bills
@@ -620,6 +673,7 @@ async function reconcileStatement({
       statement_unmatched_count: bankUnmatchedCount,
       bill_unmatched_count: unmatchedBillsCount,
     },
+    statement_rows: allStatementRowsForPreview,
     matched_rows: matchedRowsForPreview,
     mismatch_rows: mismatchRowsForPreview,
     output_buffer: outputBuffer,
@@ -637,3 +691,4 @@ module.exports = {
   fetchLiveBillsFromPortal,
   reconcileStatement,
 };
+

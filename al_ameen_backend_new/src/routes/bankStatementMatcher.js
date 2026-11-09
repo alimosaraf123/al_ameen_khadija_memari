@@ -178,6 +178,7 @@ router.post(
       res.json({
         success: true,
         summary: result.summary,
+        statement_rows: result.statement_rows || [],
         matched_rows: result.matched_rows.slice(0, 200),
         mismatch_rows: result.mismatch_rows.slice(0, 500),
         download_token: token,

@@ -57,7 +57,7 @@ export default function BankStatementMatcherScreen() {
   const [reconciling, setReconciling] = useState<boolean>(false);
   const [result, setResult] = useState<any>(null);
   const [downloadToken, setDownloadToken] = useState<string | null>(null);
-  const [activeResultTab, setActiveResultTab] = useState<'matched' | 'mismatch'>('matched');
+  const [activeResultTab, setActiveResultTab] = useState<'all' | 'matched' | 'unmatched_statement' | 'mismatch_bills'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   useEffect(() => {
@@ -209,9 +209,19 @@ export default function BankStatementMatcherScreen() {
     }
   };
 
-  // Filtered rows for matched table
-  const filteredMatchedRows = useMemo(() => {
-    const rows = result?.matched_rows || [];
+  // All statement rows (Side-by-side view with Student Details beside Balance)
+  const allStatementRows = useMemo(() => {
+    return result?.statement_rows || [];
+  }, [result?.statement_rows]);
+
+  // Filtered statement rows based on activeResultTab ('all' | 'matched' | 'unmatched_statement') and search
+  const filteredStatementRows = useMemo(() => {
+    let rows = allStatementRows;
+    if (activeResultTab === 'matched') {
+      rows = rows.filter((r: any) => r.is_matched);
+    } else if (activeResultTab === 'unmatched_statement') {
+      rows = rows.filter((r: any) => !r.is_matched);
+    }
     if (!searchQuery.trim()) return rows;
     const q = searchQuery.toLowerCase().trim();
     return rows.filter((r: any) => {
@@ -220,14 +230,17 @@ export default function BankStatementMatcherScreen() {
         String(r.student_name || '').toLowerCase().includes(q) ||
         String(r.receipt_no || '').toLowerCase().includes(q) ||
         String(r.class_name || '').toLowerCase().includes(q) ||
-        String(r.reference || '').toLowerCase().includes(q) ||
-        String(r.description || '').toLowerCase().includes(q)
+        String(r.description || '').toLowerCase().includes(q) ||
+        String(r.ref_no || '').toLowerCase().includes(q) ||
+        String(r.date || '').toLowerCase().includes(q) ||
+        String(r.credit || '').toLowerCase().includes(q) ||
+        String(r.debit || '').toLowerCase().includes(q)
       );
     });
-  }, [result?.matched_rows, searchQuery]);
+  }, [allStatementRows, activeResultTab, searchQuery]);
 
-  // Filtered rows for mismatch table
-  const filteredMismatchRows = useMemo(() => {
+  // Filtered rows for mismatch bills (Sheet 2)
+  const filteredMismatchBills = useMemo(() => {
     const rows = result?.mismatch_rows || [];
     if (!searchQuery.trim()) return rows;
     const q = searchQuery.toLowerCase().trim();
@@ -239,6 +252,7 @@ export default function BankStatementMatcherScreen() {
         String(r.inst_no || '').toLowerCase().includes(q) ||
         String(r.statement_ref || '').toLowerCase().includes(q) ||
         String(r.description || '').toLowerCase().includes(q) ||
+        String(r.particulars || '').toLowerCase().includes(q) ||
         String(r.source || '').toLowerCase().includes(q)
       );
     });
@@ -553,6 +567,23 @@ export default function BankStatementMatcherScreen() {
                   <TouchableOpacity
                     style={[
                       styles.previewTab,
+                      activeResultTab === 'all' && styles.previewTabActive,
+                    ]}
+                    onPress={() => setActiveResultTab('all')}
+                  >
+                    <Text
+                      style={[
+                        styles.previewTabText,
+                        activeResultTab === 'all' && styles.previewTabTextActive,
+                      ]}
+                    >
+                      📄 All Transactions ({result.statement_rows?.length || result.summary.statement_count})
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.previewTab,
                       activeResultTab === 'matched' && styles.previewTabActive,
                     ]}
                     onPress={() => setActiveResultTab('matched')}
@@ -570,17 +601,34 @@ export default function BankStatementMatcherScreen() {
                   <TouchableOpacity
                     style={[
                       styles.previewTab,
-                      activeResultTab === 'mismatch' && styles.previewTabActive,
+                      activeResultTab === 'unmatched_statement' && styles.previewTabActive,
                     ]}
-                    onPress={() => setActiveResultTab('mismatch')}
+                    onPress={() => setActiveResultTab('unmatched_statement')}
                   >
                     <Text
                       style={[
                         styles.previewTabText,
-                        activeResultTab === 'mismatch' && styles.previewTabTextActive,
+                        activeResultTab === 'unmatched_statement' && styles.previewTabTextActive,
                       ]}
                     >
-                      ⚠️ Mismatches & Unmatched ({result.mismatch_rows?.length || 0})
+                      ⚠️ Unmatched Statement ({result.summary.statement_unmatched_count})
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.previewTab,
+                      activeResultTab === 'mismatch_bills' && styles.previewTabActive,
+                    ]}
+                    onPress={() => setActiveResultTab('mismatch_bills')}
+                  >
+                    <Text
+                      style={[
+                        styles.previewTabText,
+                        activeResultTab === 'mismatch_bills' && styles.previewTabTextActive,
+                      ]}
+                    >
+                      📑 Unmatched Bills ({result.summary.bill_unmatched_count})
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -605,73 +653,186 @@ export default function BankStatementMatcherScreen() {
 
               {/* Data Table */}
               <ScrollView horizontal style={styles.horizontalScroll}>
-                {activeResultTab === 'matched' ? (
+                {activeResultTab !== 'mismatch_bills' ? (
                   <View style={styles.previewTable}>
-                    <View style={styles.pHeadRow}>
-                      <View style={[styles.pTh, { width: 60 }]}>
-                        <Text style={styles.pThText}>Sl No</Text>
+                    {/* Super Header: Categorizing Bank Statement vs Student Details */}
+                    <View style={styles.superHeaderRow}>
+                      <View style={[styles.superHeaderBank, { width: 1055 }]}>
+                        <Text style={styles.superHeaderTextBank}>
+                          🏦 ORIGINAL BANK STATEMENT (UNCHANGED COLUMNS)
+                        </Text>
                       </View>
-                      <View style={[styles.pTh, { width: 90 }]}>
-                        <Text style={styles.pThText}>Reg. No.</Text>
-                      </View>
-                      <View style={[styles.pTh, { width: 90 }]}>
-                        <Text style={styles.pThText}>Recpt. No.</Text>
-                      </View>
-                      <View style={[styles.pTh, { width: 110 }]}>
-                        <Text style={styles.pThText}>Amount</Text>
-                      </View>
-                      <View style={[styles.pTh, { width: 100 }]}>
-                        <Text style={styles.pThText}>Class</Text>
-                      </View>
-                      <View style={[styles.pTh, { width: 200, alignItems: 'flex-start' }]}>
-                        <Text style={styles.pThText}>Student Name</Text>
-                      </View>
-                      <View style={[styles.pTh, { width: 80 }]}>
-                        <Text style={styles.pThText}>Check</Text>
-                      </View>
-                      <View style={[styles.pTh, { width: 160 }]}>
-                        <Text style={styles.pThText}>UPI / Ref No.</Text>
-                      </View>
-                      <View style={[styles.pTh, { width: 300, alignItems: 'flex-start' }]}>
-                        <Text style={styles.pThText}>Statement Description</Text>
+                      <View style={[styles.superHeaderStudent, { width: 625 }]}>
+                        <Text style={styles.superHeaderTextStudent}>
+                          🎓 MATCHED STUDENT DETAILS (ADDED BESIDE BALANCE)
+                        </Text>
                       </View>
                     </View>
 
-                    {filteredMatchedRows.map((row: any, idx: number) => (
+                    {/* Column Headers */}
+                    <View style={styles.pHeadRow}>
+                      <View style={[styles.pTh, { width: 45 }]}>
+                        <Text style={styles.pThText}>#</Text>
+                      </View>
+                      <View style={[styles.pTh, { width: 95 }]}>
+                        <Text style={styles.pThText}>Txn Date</Text>
+                      </View>
+                      <View style={[styles.pTh, { width: 95 }]}>
+                        <Text style={styles.pThText}>Value Date</Text>
+                      </View>
+                      <View style={[styles.pTh, { width: 330, alignItems: 'flex-start' }]}>
+                        <Text style={styles.pThText}>Description</Text>
+                      </View>
+                      <View style={[styles.pTh, { width: 140 }]}>
+                        <Text style={styles.pThText}>Ref No./Cheque No.</Text>
+                      </View>
+                      <View style={[styles.pTh, { width: 75 }]}>
+                        <Text style={styles.pThText}>Branch</Text>
+                      </View>
+                      <View style={[styles.pTh, { width: 85 }]}>
+                        <Text style={styles.pThText}>Debit</Text>
+                      </View>
+                      <View style={[styles.pTh, { width: 95 }]}>
+                        <Text style={styles.pThText}>Credit</Text>
+                      </View>
+                      <View style={[styles.pTh, { width: 95 }]}>
+                        <Text style={styles.pThText}>Balance</Text>
+                      </View>
+
+                      {/* Student details headers (Beside Balance, with distinct red left divider) */}
+                      <View style={[styles.pTh, styles.pThStudentDivider, { width: 85 }]}>
+                        <Text style={styles.pThTextStudent}>Reg. No.</Text>
+                      </View>
+                      <View style={[styles.pTh, styles.pThStudent, { width: 85 }]}>
+                        <Text style={styles.pThTextStudent}>Recpt. No.</Text>
+                      </View>
+                      <View style={[styles.pTh, styles.pThStudent, { width: 95 }]}>
+                        <Text style={styles.pThTextStudent}>Amount</Text>
+                      </View>
+                      <View style={[styles.pTh, styles.pThStudent, { width: 105 }]}>
+                        <Text style={styles.pThTextStudent}>Class</Text>
+                      </View>
+                      <View style={[styles.pTh, styles.pThStudent, { width: 180, alignItems: 'flex-start' }]}>
+                        <Text style={styles.pThTextStudent}>Student Name</Text>
+                      </View>
+                      <View style={[styles.pTh, styles.pThStudent, { width: 75 }]}>
+                        <Text style={styles.pThTextStudent}>Check</Text>
+                      </View>
+                    </View>
+
+                    {/* Data Rows */}
+                    {filteredStatementRows.map((row: any, idx: number) => (
                       <View
-                        key={`matched_${idx}`}
+                        key={`stmt_row_${idx}`}
                         style={[styles.pTr, idx % 2 === 0 ? styles.pTrEven : styles.pTrOdd]}
                       >
-                        <View style={[styles.pTd, { width: 60 }]}>
+                        <View style={[styles.pTd, { width: 45 }]}>
                           <Text style={styles.pTdTextMuted}>{idx + 1}</Text>
                         </View>
-                        <View style={[styles.pTd, { width: 90 }]}>
-                          <Text style={styles.pTdTextBold}>{row.reg_no}</Text>
+                        <View style={[styles.pTd, { width: 95 }]}>
+                          <Text style={styles.pTdTextMuted}>{row.date || '-'}</Text>
                         </View>
-                        <View style={[styles.pTd, { width: 90 }]}>
-                          <Text style={styles.pTdText}>{row.receipt_no}</Text>
+                        <View style={[styles.pTd, { width: 95 }]}>
+                          <Text style={styles.pTdTextMuted}>{row.value_date || row.date || '-'}</Text>
                         </View>
-                        <View style={[styles.pTd, { width: 110 }]}>
-                          <Text style={styles.pTdAmount}>₹{formatCurrency(row.amount)}</Text>
-                        </View>
-                        <View style={[styles.pTd, { width: 100 }]}>
-                          <Text style={styles.pTdText}>{row.class_name}</Text>
-                        </View>
-                        <View style={[styles.pTd, { width: 200, alignItems: 'flex-start' }]}>
-                          <Text style={styles.pTdName}>{row.student_name}</Text>
-                        </View>
-                        <View style={[styles.pTd, { width: 80 }]}>
-                          <View style={styles.okBadge}>
-                            <Text style={styles.okBadgeText}>OK</Text>
-                          </View>
-                        </View>
-                        <View style={[styles.pTd, { width: 160 }]}>
-                          <Text style={styles.pTdRef}>{row.reference}</Text>
-                        </View>
-                        <View style={[styles.pTd, { width: 300, alignItems: 'flex-start' }]}>
-                          <Text style={styles.pTdDesc} numberOfLines={1}>
+                        {/* Highlight Description cell in Yellow if matched! */}
+                        <View
+                          style={[
+                            styles.pTd,
+                            { width: 330, alignItems: 'flex-start' },
+                            row.is_matched && styles.pTdDescMatched,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.pTdDescText,
+                              row.is_matched && styles.pTdDescTextMatched,
+                            ]}
+                            numberOfLines={1}
+                          >
                             {row.description}
                           </Text>
+                        </View>
+                        <View style={[styles.pTd, { width: 140 }]}>
+                          <Text style={styles.pTdRef} numberOfLines={1}>
+                            {row.ref_no || '-'}
+                          </Text>
+                        </View>
+                        <View style={[styles.pTd, { width: 75 }]}>
+                          <Text style={styles.pTdTextMuted}>{row.branch_code || '-'}</Text>
+                        </View>
+                        <View style={[styles.pTd, { width: 85 }]}>
+                          <Text style={styles.pTdTextMuted}>
+                            {row.debit ? `₹${formatCurrency(row.debit)}` : ''}
+                          </Text>
+                        </View>
+                        <View style={[styles.pTd, { width: 95 }]}>
+                          <Text
+                            style={[
+                              styles.pTdAmount,
+                              { color: row.credit ? '#15803d' : '#64748b' },
+                            ]}
+                          >
+                            {row.credit ? `₹${formatCurrency(row.credit)}` : ''}
+                          </Text>
+                        </View>
+                        <View style={[styles.pTd, { width: 95 }]}>
+                          <Text style={styles.pTdTextMuted}>
+                            {row.balance ? `₹${formatCurrency(row.balance)}` : ''}
+                          </Text>
+                        </View>
+
+                        {/* Student Details (Beside Balance, with red divider) */}
+                        <View style={[styles.pTd, styles.pTdStudentDivider, { width: 85 }]}>
+                          <Text
+                            style={row.is_matched ? styles.pTdTextBold : styles.pTdTextMuted}
+                          >
+                            {row.is_matched ? row.reg_no : '-'}
+                          </Text>
+                        </View>
+                        <View style={[styles.pTd, styles.pTdStudent, { width: 85 }]}>
+                          <Text
+                            style={row.is_matched ? styles.pTdText : styles.pTdTextMuted}
+                          >
+                            {row.is_matched ? row.receipt_no : '-'}
+                          </Text>
+                        </View>
+                        <View style={[styles.pTd, styles.pTdStudent, { width: 95 }]}>
+                          <Text
+                            style={row.is_matched ? styles.pTdAmount : styles.pTdTextMuted}
+                          >
+                            {row.is_matched ? `₹${formatCurrency(row.amount)}` : '-'}
+                          </Text>
+                        </View>
+                        <View style={[styles.pTd, styles.pTdStudent, { width: 105 }]}>
+                          <Text
+                            style={row.is_matched ? styles.pTdText : styles.pTdTextMuted}
+                          >
+                            {row.is_matched ? row.class_name : '-'}
+                          </Text>
+                        </View>
+                        <View
+                          style={[
+                            styles.pTd,
+                            styles.pTdStudent,
+                            { width: 180, alignItems: 'flex-start' },
+                          ]}
+                        >
+                          <Text
+                            style={row.is_matched ? styles.pTdName : styles.pTdTextMuted}
+                            numberOfLines={1}
+                          >
+                            {row.is_matched ? row.student_name : '-'}
+                          </Text>
+                        </View>
+                        <View style={[styles.pTd, styles.pTdStudent, { width: 75 }]}>
+                          {row.is_matched ? (
+                            <View style={styles.okBadge}>
+                              <Text style={styles.okBadgeText}>OK</Text>
+                            </View>
+                          ) : (
+                            <Text style={styles.pTdTextMuted}>-</Text>
+                          )}
                         </View>
                       </View>
                     ))}
@@ -682,11 +843,11 @@ export default function BankStatementMatcherScreen() {
                       <View style={[styles.pTh, { width: 80 }]}>
                         <Text style={styles.pThText}>Source</Text>
                       </View>
-                      <View style={[styles.pTh, { width: 160, alignItems: 'flex-start' }]}>
+                      <View style={[styles.pTh, { width: 180, alignItems: 'flex-start' }]}>
                         <Text style={styles.pThText}>Reason</Text>
                       </View>
-                      <View style={[styles.pTh, { width: 140 }]}>
-                        <Text style={styles.pThText}>Statement Ref</Text>
+                      <View style={[styles.pTh, { width: 160 }]}>
+                        <Text style={styles.pThText}>Statement Ref / Inst. No.</Text>
                       </View>
                       <View style={[styles.pTh, { width: 110 }]}>
                         <Text style={styles.pThText}>Amount</Text>
@@ -703,14 +864,14 @@ export default function BankStatementMatcherScreen() {
                       <View style={[styles.pTh, { width: 100 }]}>
                         <Text style={styles.pThText}>Class</Text>
                       </View>
-                      <View style={[styles.pTh, { width: 280, alignItems: 'flex-start' }]}>
+                      <View style={[styles.pTh, { width: 320, alignItems: 'flex-start' }]}>
                         <Text style={styles.pThText}>Particulars / Description</Text>
                       </View>
                     </View>
 
-                    {filteredMismatchRows.map((row: any, idx: number) => (
+                    {filteredMismatchBills.map((row: any, idx: number) => (
                       <View
-                        key={`mismatch_${idx}`}
+                        key={`mismatch_bill_${idx}`}
                         style={[styles.pTr, idx % 2 === 0 ? styles.pTrEven : styles.pTrOdd]}
                       >
                         <View style={[styles.pTd, { width: 80 }]}>
@@ -718,11 +879,13 @@ export default function BankStatementMatcherScreen() {
                             <Text style={styles.sourceBadgeText}>{row.source}</Text>
                           </View>
                         </View>
-                        <View style={[styles.pTd, { width: 160, alignItems: 'flex-start' }]}>
+                        <View style={[styles.pTd, { width: 180, alignItems: 'flex-start' }]}>
                           <Text style={styles.reasonText}>{row.reason}</Text>
                         </View>
-                        <View style={[styles.pTd, { width: 140 }]}>
-                          <Text style={styles.pTdRef}>{row.statement_ref || row.inst_no || '-'}</Text>
+                        <View style={[styles.pTd, { width: 160 }]}>
+                          <Text style={styles.pTdRef}>
+                            {row.statement_ref || row.inst_no || '-'}
+                          </Text>
                         </View>
                         <View style={[styles.pTd, { width: 110 }]}>
                           <Text style={styles.pTdAmount}>
@@ -741,7 +904,7 @@ export default function BankStatementMatcherScreen() {
                         <View style={[styles.pTd, { width: 100 }]}>
                           <Text style={styles.pTdText}>{row.class_name || '-'}</Text>
                         </View>
-                        <View style={[styles.pTd, { width: 280, alignItems: 'flex-start' }]}>
+                        <View style={[styles.pTd, { width: 320, alignItems: 'flex-start' }]}>
                           <Text style={styles.pTdDesc} numberOfLines={1}>
                             {row.particulars || row.description || '-'}
                           </Text>
@@ -1214,7 +1377,36 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   previewTable: {
-    minWidth: 1050,
+    minWidth: 1680,
+  },
+  superHeaderRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#cbd5e1',
+  },
+  superHeaderBank: {
+    backgroundColor: '#0284c7',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRightWidth: 3,
+    borderRightColor: '#ef4444',
+  },
+  superHeaderTextBank: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 12,
+    letterSpacing: 0.5,
+  },
+  superHeaderStudent: {
+    backgroundColor: '#16a34a',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+  },
+  superHeaderTextStudent: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 12,
+    letterSpacing: 0.5,
   },
   pHeadRow: {
     flexDirection: 'row',
@@ -1230,10 +1422,26 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     borderRightColor: '#93c5fd',
   },
+  pThStudentDivider: {
+    borderLeftWidth: 3,
+    borderLeftColor: '#ef4444',
+    backgroundColor: '#dcfce7',
+    borderRightColor: '#bbf7d0',
+  },
+  pThStudent: {
+    backgroundColor: '#dcfce7',
+    borderRightColor: '#bbf7d0',
+  },
   pThText: {
     fontSize: 12,
     fontWeight: '800',
     color: '#0f172a',
+    textAlign: 'center',
+  },
+  pThTextStudent: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#14532d',
     textAlign: 'center',
   },
   pTr: {
@@ -1254,6 +1462,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRightWidth: 1,
     borderRightColor: '#e2e8f0',
+  },
+  pTdStudentDivider: {
+    borderLeftWidth: 3,
+    borderLeftColor: '#ef4444',
+    backgroundColor: '#f0fdf4',
+  },
+  pTdStudent: {
+    backgroundColor: '#f0fdf4',
+  },
+  pTdDescMatched: {
+    backgroundColor: '#fef08a',
+  },
+  pTdDescText: {
+    fontSize: 11,
+    color: '#334155',
+  },
+  pTdDescTextMatched: {
+    fontWeight: '700',
+    color: '#713f12',
   },
   pTdText: {
     fontSize: 12,
@@ -1403,3 +1630,4 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
 });
+
