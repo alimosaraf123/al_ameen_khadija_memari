@@ -192,15 +192,37 @@ export default function BankStatementMatcherScreen() {
 
     try {
       const base = getApiBase();
+      const token = await getToken();
       const downloadUrl = `${base}/api/bank-matcher/download/${downloadToken}`;
+      const filename = `Matched_Bank_Statement_${targetDate || 'reconciled'}.xlsx`;
 
       if (Platform.OS === 'web') {
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = `Matched_Bank_Statement_${targetDate || 'reconciled'}.xlsx`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
+        try {
+          const res = await fetch(downloadUrl, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          if (!res.ok) {
+            const errData = await res.json().catch(() => null);
+            throw new Error(errData?.message || `Download failed (${res.status})`);
+          }
+          const blob = await res.blob();
+          const blobUrl = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+        } catch {
+          // Direct URL fallback
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+        }
       } else {
         await Linking.openURL(downloadUrl);
       }
