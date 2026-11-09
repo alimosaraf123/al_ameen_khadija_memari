@@ -33,7 +33,7 @@ import { SUBJECTS, SUBJECT_OPTIONS } from '../lib/subjects';
 const emptyEducation = { qualification: '', board_university: '', institution: '', marks_grade: '', passing_year: '' };
 const ACADEMY_LOGO_URI = '/al-ameen-logo.jpg';
 const QUALIFICATION_OPTIONS = ['Primary', 'Upper Primary', 'HS', 'Graduation', 'Post Graduation', 'B.Ed', 'D.El.Ed', 'Diploma', 'Hafiz', 'Maulana', 'Other'];
-const STAFF_TYPE_OPTIONS = ['Teachers', 'Medical', 'Academy', 'Kitchen', 'Electric', 'Construction', 'Sweeper', 'Driver', 'Security Guard', 'Office', 'Shopkeeper', 'Imam', 'Marketing', 'Management Staff'];
+const STAFF_TYPE_OPTIONS = ['Teachers', 'Labour', 'Medical', 'Academy', 'Kitchen', 'Electric', 'Construction', 'Sweeper', 'Driver', 'Security Guard', 'Office', 'Shopkeeper', 'Imam', 'Marketing', 'Management Staff'];
 const STAFF_ROLE_OPTIONS = ['Senior', 'Junior', 'Provisional', 'Contractual'];
 const RESIDENTIAL_OPTIONS = ['Residential', 'Non-residential', 'Guest'];
 const BLOOD_GROUP_OPTIONS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'UK'];
