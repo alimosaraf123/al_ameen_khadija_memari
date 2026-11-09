@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import AcademyHeader from '../components/AcademyHeader';
+import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import { Field } from '../components/ui';
 import { Select } from '../components/StudentDirectory';
 import { api, API_BASE } from '../lib/api';
@@ -33,6 +34,7 @@ const SESSION_OPTIONS = Array.from({ length: 10 }, (_, i) => {
 }).flat();
 
 export default function TerminalExams() {
+  const scrollRef = useRef<any>(null);
   const [admin, setAdmin] = useState(false);
   const [teachers, setTeachers] = useState<any[]>([]);
   const [exams, setExams] = useState<any[]>([]);
@@ -528,7 +530,7 @@ export default function TerminalExams() {
 
   return (
     <SafeAreaView style={s.page}>
-      <ScrollView contentContainerStyle={s.body}>
+      <ScrollView ref={scrollRef} contentContainerStyle={s.body}>
         <AcademyHeader />
         <View style={s.nav}>
           <TouchableOpacity
@@ -1403,6 +1405,7 @@ export default function TerminalExams() {
           </>
         )}
       </ScrollView>
+      <ScrollNavigationButtons scrollRef={scrollRef} />
     </SafeAreaView>
   );
 }

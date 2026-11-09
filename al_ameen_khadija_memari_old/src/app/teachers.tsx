@@ -22,6 +22,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView, PinchGestureHandler, State } from 'react-native-gesture-handler';
 import { router, useLocalSearchParams } from 'expo-router';
 import AcademyHeader from '../components/AcademyHeader';
+import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import DatePickerField from '../components/DatePickerField';
 import { Select } from '../components/StudentDirectory';
 import { Button, Card, Field } from '../components/ui';
@@ -1140,6 +1141,7 @@ export default function Teachers() {
           </>
         )}
       </ScrollView>
+      <ScrollNavigationButtons scrollRef={scrollRef} />
 
       <Modal visible={!!documentTeacher} animationType="slide" onRequestClose={closeDocuments}>
         <View style={s.modalBackdrop}>

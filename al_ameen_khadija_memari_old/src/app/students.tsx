@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import AcademyHeader from '../components/AcademyHeader';
+import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import {
   ScrollView,
   Text,
@@ -217,6 +218,8 @@ const asDate = (value: any) =>
 export default function Students() {
   const [students, setStudents] = useState<any[]>([]);
   const [rooms, setRooms] = useState<any[]>([]);
+  const detailsScrollRef = useRef<any>(null);
+  const entryScrollRef = useRef<any>(null);
   const [editingId, setEditingId] = useState<any>(null);
   const [menuOpen, setMenuOpen] = useState(true);
   const [screen, setScreen] = useState<'details' | 'entry'>('details');
@@ -657,7 +660,7 @@ export default function Students() {
 
   if (screen === 'details') {
     return <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView ref={detailsScrollRef} contentContainerStyle={styles.content}>
         <AcademyHeader />
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <H1>Students</H1>
@@ -665,6 +668,7 @@ export default function Students() {
         </View>
         <StudentDirectory students={students} loading={listLoading} error={listError} onRefresh={loadStudents} onEdit={startEdit} onDeactivate={deleteStudent} />
       </ScrollView>
+      <ScrollNavigationButtons scrollRef={detailsScrollRef} />
       <StudentMenu visible={menuOpen} onClose={() => setMenuOpen(false)} onSelect={key => {
         setMenuOpen(false);
         if (key === 'entry') { clearForm(); setScreen('entry'); }
@@ -689,6 +693,7 @@ export default function Students() {
     <StudentFormContext.Provider value={{ form, update }}>
       <SafeAreaView style={styles.container}>
       <ScrollView
+        ref={entryScrollRef}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
@@ -945,6 +950,7 @@ export default function Students() {
         </View>
 
       </ScrollView>
+      <ScrollNavigationButtons scrollRef={entryScrollRef} />
       </SafeAreaView>
     </StudentFormContext.Provider>
   );

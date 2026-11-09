@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Alert,
   Image,
@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import AcademyHeader from '../components/AcademyHeader';
+import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import { api, API_BASE } from '../lib/api';
 import { getToken } from '../lib/auth';
 import { Select } from '../components/StudentDirectory';
@@ -27,6 +28,7 @@ const ROLE_OPTIONS = [
 ];
 
 export default function ServiceStaff() {
+  const scrollRef = useRef<any>(null);
   const [list, setList] = useState<any[]>([]);
   const [roleFilter, setRoleFilter] = useState<'all' | 'gateman' | 'office' | 'library'>('all');
 
@@ -255,7 +257,7 @@ export default function ServiceStaff() {
 
   return (
     <SafeAreaView style={s.page}>
-      <ScrollView contentContainerStyle={s.body}>
+      <ScrollView ref={scrollRef} contentContainerStyle={s.body}>
         <AcademyHeader />
 
         {/* HEADER */}
@@ -570,6 +572,7 @@ export default function ServiceStaff() {
           </View>
         </Modal>
       </ScrollView>
+      <ScrollNavigationButtons scrollRef={scrollRef} />
     </SafeAreaView>
   );
 }

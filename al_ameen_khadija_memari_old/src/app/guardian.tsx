@@ -22,6 +22,7 @@ import * as Sharing from 'expo-sharing';
 import { GestureHandlerRootView, PinchGestureHandler, State } from 'react-native-gesture-handler';
 import { api, API_BASE } from '../lib/api';
 import { clearSession, getToken } from '../lib/auth';
+import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import {
   saveGuardianBiometricToken,
   hasGuardianBiometricToken,
@@ -101,6 +102,7 @@ export default function Guardian() {
   const [documentZoom, setDocumentZoom] = useState(1);
   const documentPinchScale = useRef(new Animated.Value(1)).current;
   const documentBaseZoom = useRef(1);
+  const mainScrollRef = useRef<any>(null);
   const [visitorEntries, setVisitorEntries] = useState<any[]>([]);
   const [visitHistory, setVisitHistory] = useState<any[]>([]);
   const [libraryLoans, setLibraryLoans] = useState<any[]>([]);
@@ -686,6 +688,7 @@ export default function Guardian() {
       </View>
 
       <ScrollView
+        ref={mainScrollRef}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
@@ -1381,6 +1384,7 @@ export default function Guardian() {
           </>
         )}
       </ScrollView>
+      <ScrollNavigationButtons scrollRef={mainScrollRef} />
     </SafeAreaView>
   );
 }

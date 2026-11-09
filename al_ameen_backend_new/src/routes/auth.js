@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const pool = require('../db');
 const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
-const { loginRateLimit } = require('../middleware/security');
+const { loginRateLimit, recordFailedLogin, clearFailedLogin } = require('../middleware/security');
 
 const router = express.Router();
 const passwordSchemaReady=pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_change_required BOOLEAN NOT NULL DEFAULT FALSE");
@@ -87,9 +87,21 @@ router.post(
     );
 
     if (!result.rowCount) {
+      const lockInfo = recordFailedLogin(req, login_id);
+      if (lockInfo.isBlocked) {
+        return res.status(429).json({
+          success: false,
+          blocked: true,
+          remaining_minutes: 15,
+          message: 'একই IP থেকে ৫ বার ভুল পাসওয়ার্ড দেওয়ার কারণে এই IPটি ১৫ মিনিটের জন্য ব্লক করা হয়েছে। অনুগ্রহ করে ১৫ মিনিট পর আবার চেষ্টা করুন।'
+        });
+      }
       return res.status(401).json({
         success: false,
-        message: 'User ID or password is incorrect',
+        remaining_attempts: lockInfo.remainingAttempts,
+        message: lockInfo.remainingAttempts > 0
+          ? `User ID or password is incorrect. (${lockInfo.remainingAttempts} attempt(s) remaining)`
+          : 'User ID or password is incorrect.'
       });
     }
 
@@ -108,11 +120,26 @@ router.post(
     );
 
     if (!ok) {
+      const lockInfo = recordFailedLogin(req, login_id);
+      if (lockInfo.isBlocked) {
+        return res.status(429).json({
+          success: false,
+          blocked: true,
+          remaining_minutes: 15,
+          message: 'একই IP থেকে ৫ বার ভুল পাসওয়ার্ড দেওয়ার কারণে এই IPটি ১৫ মিনিটের জন্য ব্লক করা হয়েছে। অনুগ্রহ করে ১৫ মিনিট পর আবার চেষ্টা করুন।'
+        });
+      }
       return res.status(401).json({
         success: false,
-        message: 'Wrong password',
+        remaining_attempts: lockInfo.remainingAttempts,
+        message: lockInfo.remainingAttempts > 0
+          ? `Wrong password. (${lockInfo.remainingAttempts} attempt(s) remaining before 15-minute lockout)`
+          : 'Wrong password. Account/IP blocked for 15 minutes.'
       });
     }
+
+    // Success: clear failed attempts
+    clearFailedLogin(req, login_id);
 
     const token = await issueToken(user, req.body?.device_id || req.headers['x-device-id']);
 
@@ -486,10 +513,21 @@ router.post(
       );
 
     if (!result.rowCount) {
+      const lockInfo = recordFailedLogin(req, login_id);
+      if (lockInfo.isBlocked) {
+        return res.status(429).json({
+          success: false,
+          blocked: true,
+          remaining_minutes: 15,
+          message: 'একই IP থেকে ৫ বার ভুল পাসওয়ার্ড/mPIN দেওয়ার কারণে এই IPটি ১৫ মিনিটের জন্য ব্লক করা হয়েছে। অনুগ্রহ করে ১৫ মিনিট পর আবার চেষ্টা করুন।'
+        });
+      }
       return res.status(401).json({
         success: false,
-        message:
-          'Invalid User ID or mPIN',
+        remaining_attempts: lockInfo.remainingAttempts,
+        message: lockInfo.remainingAttempts > 0
+          ? `Invalid User ID or mPIN. (${lockInfo.remainingAttempts} attempt(s) remaining)`
+          : 'Invalid User ID or mPIN.'
       });
     }
 
@@ -529,12 +567,26 @@ router.post(
       );
 
     if (!mpinOk) {
+      const lockInfo = recordFailedLogin(req, login_id);
+      if (lockInfo.isBlocked) {
+        return res.status(429).json({
+          success: false,
+          blocked: true,
+          remaining_minutes: 15,
+          message: 'একই IP থেকে ৫ বার ভুল পাসওয়ার্ড/mPIN দেওয়ার কারণে এই IPটি ১৫ মিনিটের জন্য ব্লক করা হয়েছে। অনুগ্রহ করে ১৫ মিনিট পর আবার চেষ্টা করুন।'
+        });
+      }
       return res.status(401).json({
         success: false,
-        message:
-          'Invalid User ID or mPIN',
+        remaining_attempts: lockInfo.remainingAttempts,
+        message: lockInfo.remainingAttempts > 0
+          ? `Invalid User ID or mPIN. (${lockInfo.remainingAttempts} attempt(s) remaining before 15-minute lockout)`
+          : 'Invalid User ID or mPIN. Account/IP blocked for 15 minutes.'
       });
     }
+
+    // Success: clear failed attempts
+    clearFailedLogin(req, login_id);
 
     const token = await issueToken(user, req.body?.device_id || req.headers['x-device-id']);
 

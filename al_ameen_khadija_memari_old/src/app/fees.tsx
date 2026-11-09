@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
   Alert,
   Linking,
@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import AcademyHeader from '../components/AcademyHeader';
+import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import DatePickerField from '../components/DatePickerField';
 import { api, getApiBase } from '../lib/api';
 import { getToken, getUser } from '../lib/auth';
@@ -59,6 +60,7 @@ const getTodayDate = () => {
 type TabMode = 'receipt_payment' | 'fees_collection';
 
 export default function Fees() {
+  const scrollRef = useRef<any>(null);
   const { tab } = useLocalSearchParams<{ tab?: string }>();
   const initialTab: TabMode = tab === 'fees_collection' || tab === 'fees' ? 'fees_collection' : 'receipt_payment';
   const [activeTab, setActiveTab] = useState<TabMode>(initialTab);
@@ -581,7 +583,7 @@ export default function Fees() {
 
   return (
     <SafeAreaView style={styles.page}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
         <AcademyHeader />
 
         {/* Top Header Bar */}
@@ -2101,6 +2103,7 @@ export default function Fees() {
           </Modal>
         )}
       </ScrollView>
+      <ScrollNavigationButtons scrollRef={scrollRef} />
     </SafeAreaView>
   );
 }

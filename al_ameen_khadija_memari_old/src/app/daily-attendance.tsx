@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import { router } from 'expo-router';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import AcademyHeader from '../components/AcademyHeader';
+import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import DatePickerField from '../components/DatePickerField';
 import { api, API_BASE } from '../lib/api';
 import { getUser, getToken } from '../lib/auth';
@@ -48,6 +49,7 @@ function addDays(ymd: string, days: number) {
 }
 
 export default function DailyAttendance() {
+  const scrollRef = useRef<any>(null);
   const [date, setDate] = useState(getLocalDateString());
   const [students, setStudents] = useState<any[]>([]);
   const [initialStatuses, setInitialStatuses] = useState<Record<number, string>>({});
@@ -364,7 +366,7 @@ export default function DailyAttendance() {
 
   return (
     <SafeAreaView style={styles.page}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.container}>
         <AcademyHeader compact />
 
         {/* TOP CONTROLS & FILTER BAR */}
@@ -847,6 +849,7 @@ export default function DailyAttendance() {
           </View>
         )}
       </ScrollView>
+      <ScrollNavigationButtons scrollRef={scrollRef} />
 
       {/* Monthly Attendance Excel Modal */}
       <Modal

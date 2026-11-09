@@ -29,7 +29,7 @@ import { api } from '../lib/api';
 
 
 const menuPermission:Record<string,string>={
- '/students':'students','/teachers':'teachers','/hostel-menu':'rooms','/academy-menu':'marks','/omr-evaluation':'omr_evaluation','/service-staff':'service_staff','/office':'office_panel','/library':'library_panel','/dining-stock':'dining_stock','/guardians':'guardians','/rooms':'rooms','/room-assignments':'room_assignments','/attendance':'attendance','/daily-attendance':'attendance','/behavior':'behavior','/asset-register':'asset_register','/gate-pass':'gate_passes','/visits':'visits','/student-lifecycle':'student_lifecycle','/illness':'illness','/marks':'marks','/terminal-exams':'terminal_exams','/class-results':'published_results','/problems':'problems','/routines':'routines','/notices':'notices','/deposit-fund':'deposit_fund','/fees':'fees','/audit-log':'audit_log'
+ '/students':'students','/teachers':'teachers','/hostel-menu':'rooms','/academy-menu':'marks','/omr-evaluation':'omr_evaluation','/service-staff':'service_staff','/office':'office_panel','/library':'library_panel','/dining-stock':'dining_stock','/guardians':'guardians','/rooms':'rooms','/room-assignments':'room_assignments','/attendance':'attendance','/daily-attendance':'attendance','/behavior':'behavior','/asset-register':'asset_register','/gate-pass':'gate_passes','/visits':'visits','/student-lifecycle':'student_lifecycle','/illness':'illness','/marks':'marks','/terminal-exams':'terminal_exams','/class-results':'published_results','/problems':'problems','/routines':'routines','/notices':'notices','/deposit-fund':'deposit_fund','/fees':'fees','/audit-log':'audit_log','/calling-schedule':'rooms'
 };
 
 const menus: any[] = [
@@ -47,6 +47,8 @@ const menus: any[] = [
   ['Student Gate Pass', '/gate-pass'],
 
   ['Visiting Day Record / Permission', '/visits'],
+
+  ['Calling Schedule', '/calling-schedule'],
 
   ['Student Deposit Fund', '/deposit-fund'],
 
@@ -245,7 +247,7 @@ export default function Dashboard() {
 
       <Modal visible={hostelMenu} transparent animationType="fade" onRequestClose={closeHostelMenu}>
         <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={closeHostelMenu} accessibilityRole="button" accessibilityLabel="Close hostel menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Hostel</Text><TouchableOpacity onPress={closeHostelMenu}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
-          <View style={s.modalGrid}>{[["Rooms","/rooms"],["Teacher Room Assignment","/room-assignments"],["Daily Student Attendance","/daily-attendance"],["Evening Room Attendance","/attendance"],["Student Behaviour","/behavior"],["Student Illness","/illness"],["Room Problem","/problems"],["Stock","/dining-stock"]].map(([label,path])=><AdminLink path={path} key={label} style={s.modalItem} onPress={()=>{setHostelMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></AdminLink>)}</View>
+          <View style={s.modalGrid}>{[["Rooms","/rooms"],["Teacher Room Assignment","/room-assignments"],["Calling Schedule","/calling-schedule"],["Daily Student Attendance","/daily-attendance"],["Evening Room Attendance","/attendance"],["Student Behaviour","/behavior"],["Student Illness","/illness"],["Room Problem","/problems"],["Stock","/dining-stock"]].map(([label,path])=><AdminLink path={path} key={label} style={s.modalItem} onPress={()=>{setHostelMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></AdminLink>)}</View>
         </View></View>
       </Modal>
 

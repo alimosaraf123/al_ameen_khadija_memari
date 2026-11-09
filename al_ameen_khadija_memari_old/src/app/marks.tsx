@@ -5,6 +5,7 @@ import * as Print from 'expo-print';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import AcademyHeader from '../components/AcademyHeader';
+import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import { Select } from '../components/StudentDirectory';
 import { Field } from '../components/ui';
 import { API_BASE, api } from '../lib/api';
@@ -39,6 +40,7 @@ export default function Marks() {
   const [weeklyTestClassFilter,setWeeklyTestClassFilter]=useState('all');
   const [weeklyTestSearch,setWeeklyTestSearch]=useState('');
   const rosterRequest=useRef(0);
+  const scrollRef=useRef<any>(null);
 
   const loadTests=async()=>{try{const data=await api('/api/marks/weekly-tests');setTests(data.tests||[]);}catch(error:any){Alert.alert('Error',error.message);}};
   useEffect(()=>{void getUser<any>().then(user=>setCanManage(user?.role==='admin'||user?.role==='super_admin'));void api('/api/marks/subjects').then(data=>setSubjects(data.subjects||[])).catch(error=>Alert.alert('Subjects',error.message));void api('/api/marks/weekly-tests').then(data=>setTests(data.tests||[])).catch(error=>Alert.alert('Drafts',error.message));},[]);
@@ -239,7 +241,7 @@ export default function Marks() {
   const downloadExcel=async()=>{if(!editingId)return;try{const token=await getToken();const response=await fetch(`${API_BASE}/api/marks/published-results/${editingId}/excel`,{headers:{Authorization:`Bearer ${token}`}});if(!response.ok)throw new Error('Publish the result before downloading Excel.');if(Platform.OS==='web'){const blob=await response.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`class-result-${editingId}.xlsx`;a.click();URL.revokeObjectURL(url);}else Alert.alert('Excel ready','Mobile sharing will be enabled in the app package.');}catch(error:any){Alert.alert('Excel',error.message);}};
   const lockedForTeacher=editingId!==null&&!canManage&&!!editingTest?.locked;
 
-  return <SafeAreaView style={s.page}><ScrollView contentContainerStyle={s.content}>
+  return <SafeAreaView style={s.page}><ScrollView ref={scrollRef} contentContainerStyle={s.content}>
     <AcademyHeader />
     <View style={s.titleRow}><View><Text style={s.title}>Weekly Test Marks Entry</Text><Text style={s.help}>Selecting a class will load all students. Teachers cannot edit marks after submission.</Text></View>{(loaded||editingId)&&<TouchableOpacity onPress={newEntry} style={s.newButton}><Text style={s.newText}>{editingId?'Back / New Entry':'New Entry'}</Text></TouchableOpacity>}</View>
     {!canManage&&<View style={s.formCard}><View style={s.titleRow}><Text style={s.sectionTitle}>My Drafts ({tests.filter(test=>!test.locked).length})</Text><TouchableOpacity onPress={loadTests} style={s.viewButton}><Text style={s.viewText}>Refresh</Text></TouchableOpacity></View>{tests.filter(test=>!test.locked).map(test=><View key={test.id} style={s.testCard}><TouchableOpacity onPress={()=>openTest(test.id)} style={{flex:1}}><Text style={s.testTitle}>{test.exam_name}  -  Class {test.class_name}</Text><Text style={s.meta}>{test.subject_name} | Session {test.session_name} | {String(test.exam_date).slice(0,10)}</Text></TouchableOpacity><TouchableOpacity onPress={()=>openTest(test.id)} style={s.viewButton}><Text style={s.viewText}>Continue Draft</Text></TouchableOpacity><TouchableOpacity onPress={()=>deleteTest(test)} style={[s.viewButton,s.deleteButton]}><Text style={[s.viewText,s.deleteText]}>Delete</Text></TouchableOpacity></View>)}{!tests.some(test=>!test.locked)&&<Text style={s.meta}>No saved drafts.</Text>}</View>}
@@ -554,7 +556,9 @@ export default function Marks() {
     {displayedWeeklyTests.map(test=><View key={test.id} style={s.testCard}><View style={{flex:1}}><Text style={s.testTitle}>{test.exam_name}  -  {test.class_name}</Text><Text style={s.meta}>Session {test.session_name||'Not set'}  -  {test.subject_name}  -  Full {test.full_marks}  -  {String(test.exam_date).slice(0,10)}</Text><Text style={s.meta}>{test.student_count} students</Text><Text style={{marginTop:6,fontWeight:'900',color:test.locked?'#167447':'#a56700'}}>{test.locked?'Submitted':'Draft'}</Text><Text style={s.meta}>{test.locked?'Submitted by: ':'Draft saved by: '}{test.entered_by_name||'User'}</Text></View>{canManage&&test.locked&&<TouchableOpacity onPress={()=>publish(test)} style={[s.viewButton,test.is_published&&{backgroundColor:'#dff3e5'}]}><Text style={s.viewText}>{test.is_published?'Published':'Publish'}</Text></TouchableOpacity>}<TouchableOpacity onPress={()=>openTest(test.id)} style={s.viewButton}><Text style={s.viewText}>{canManage||!test.locked?'Edit':'View'}</Text></TouchableOpacity>{(canManage||!test.locked)&&<TouchableOpacity onPress={()=>deleteTest(test)} style={[s.viewButton,s.deleteButton]}><Text style={[s.viewText,s.deleteText]}>Delete</Text></TouchableOpacity>}</View>)}
     {displayedWeeklyTests.length===0&&<View style={s.emptyRow}><Text style={s.emptyRowText}>No weekly tests found.</Text></View>}
     {loading&&<ActivityIndicator color="#1d5fa7" style={{margin:15}}/>}
-  </ScrollView></SafeAreaView>;
+  </ScrollView>
+  <ScrollNavigationButtons scrollRef={scrollRef} />
+  </SafeAreaView>;
 }
 
 const s=StyleSheet.create({
