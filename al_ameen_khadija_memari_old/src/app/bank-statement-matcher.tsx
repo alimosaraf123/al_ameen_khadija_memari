@@ -261,11 +261,7 @@ export default function BankStatementMatcherScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <AcademyHeader
-        subtitle={
-          <Text style={styles.headerSubtitle} numberOfLines={1}>
-            SBI Bank Statement + Accounts Portal Live Reconcile Engine
-          </Text>
-        }
+        subtitle="SBI Bank Statement + Accounts Portal Live Reconcile Engine"
       />
 
       <ScrollView

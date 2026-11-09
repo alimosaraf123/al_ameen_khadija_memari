@@ -963,7 +963,7 @@ const webSelectStyle: any = {
   fontSize: '13px',
   fontWeight: '600',
   color: '#1e293b',
-  outline: 'none',
+  outlineStyle: 'none',
   minHeight: '34px',
 };
 

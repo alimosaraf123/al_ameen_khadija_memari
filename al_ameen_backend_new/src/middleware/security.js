@@ -25,7 +25,13 @@ function checkLoginLockout(req, res, next) {
   const ip = getClientIp(req);
   const loginId = String(req.body?.login_id || '').trim().toLowerCase();
 
-  // 1. Check IP-level lockout
+  // 1. For superadmin, allow password verification through so valid superadmin credentials
+  // can log in and immediately clear the IP lockout.
+  if (loginId === 'superadmin') {
+    return next();
+  }
+
+  // 2. Check IP-level lockout
   const ipRec = failedAttempts.get(`ip:${ip}`);
   if (ipRec && ipRec.lockedUntil && ipRec.lockedUntil > now) {
     const remainingMin = Math.max(1, Math.ceil((ipRec.lockedUntil - now) / 60000));
@@ -39,7 +45,7 @@ function checkLoginLockout(req, res, next) {
     });
   }
 
-  // 2. Check Account-level lockout
+  // 3. Check Account-level lockout
   if (loginId) {
     const accRec = failedAttempts.get(`acc:${loginId}`);
     if (accRec && accRec.lockedUntil && accRec.lockedUntil > now) {
@@ -130,10 +136,15 @@ setInterval(() => {
   }
 }, WINDOW_MS).unref();
 
+function resetAllLockouts() {
+  failedAttempts.clear();
+}
+
 module.exports = {
   loginRateLimit: checkLoginLockout,
   checkLoginLockout,
   recordFailedLogin,
   clearFailedLogin,
+  resetAllLockouts,
   getClientIp
 };

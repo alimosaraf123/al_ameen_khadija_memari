@@ -134,6 +134,36 @@ export default function AcademyHeader({
         ? headerPhoto
         : (user?.photo_url ? cleanPhotoUrl(user.photo_url) : avatarFallback)));
 
+  const renderSubtitle = () => {
+    if (user?.role === 'gateman') {
+      return (
+        <>
+          <Text style={styles.dutyText} numberOfLines={1}>
+            👮 Gate Duty: {gatemanDisplayName}
+          </Text>
+          {subtitle ? (
+            React.isValidElement(subtitle) ? subtitle : (
+              <Text style={styles.greetingText} numberOfLines={1}>
+                {String(subtitle)}
+              </Text>
+            )
+          ) : (
+            <Text style={styles.greetingText} numberOfLines={1}>
+              {timeGreeting.icon} {timeGreeting.bengali}, 🟢 অন-ডিউটি (On Duty)
+            </Text>
+          )}
+        </>
+      );
+    }
+    if (!subtitle) return null;
+    if (React.isValidElement(subtitle)) return subtitle;
+    return (
+      <Text style={styles.greetingText} numberOfLines={1}>
+        {String(subtitle)}
+      </Text>
+    );
+  };
+
   return (
     <View style={[styles.header, compact && styles.compactHeader, fixed && styles.fixedHeader]}>
       {/* ROW 1: BRAND + TITLE/INFO (LEFT/CENTER) + GATEMAN PHOTO (TOP RIGHT) */}
@@ -154,20 +184,7 @@ export default function AcademyHeader({
           >
             Al-Ameen Mission Academy Memari
           </Text>
-          {user?.role === 'gateman' ? (
-            <>
-              <Text style={styles.dutyText} numberOfLines={1}>
-                👮 Gate Duty: {gatemanDisplayName}
-              </Text>
-              {subtitle || (
-                <Text style={styles.greetingText} numberOfLines={1}>
-                  {timeGreeting.icon} {timeGreeting.bengali}, 🟢 অন-ডিউটি (On Duty)
-                </Text>
-              )}
-            </>
-          ) : (
-            subtitle || null
-          )}
+          {renderSubtitle()}
         </View>
 
         {(user?.role === 'gateman' || headerPhoto || profilePhoto) ? (

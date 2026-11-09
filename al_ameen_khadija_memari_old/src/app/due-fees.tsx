@@ -258,11 +258,7 @@ export default function DueFeesScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <AcademyHeader
-        subtitle={
-          <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }} numberOfLines={1}>
-            Al-Ameen Mission Academy Memari • Accounts Portal Live Sync
-          </Text>
-        }
+        subtitle="Al-Ameen Mission Academy Memari • Accounts Portal Live Sync"
         extraActions={
           isSuperAdmin ? (
             <TouchableOpacity

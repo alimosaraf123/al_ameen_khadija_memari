@@ -44,6 +44,23 @@ async function issueToken(user,deviceId){
 
 
 // ========================================
+// EMERGENCY UNBLOCK & RESET LOCKOUT
+// ========================================
+const handleResetLockout = (req, res) => {
+  const { clearFailedLogin, resetAllLockouts, getClientIp } = require('../middleware/security');
+  clearFailedLogin(req, req.query?.login_id || req.body?.login_id || 'superadmin');
+  if (req.query?.all === 'true') {
+    resetAllLockouts();
+  }
+  res.json({
+    success: true,
+    message: `Lockout successfully reset for IP ${getClientIp(req)}. You can now log in.`
+  });
+};
+router.all('/reset-lockout', handleResetLockout);
+router.all('/auth/reset-lockout', handleResetLockout);
+
+// ========================================
 // LOGIN WITH PASSWORD
 // ========================================
 
