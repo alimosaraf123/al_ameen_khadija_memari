@@ -733,7 +733,7 @@ export default function BankStatementMatcherScreen() {
                   <View style={styles.previewTable}>
                     {/* Super Header: Categorizing Bank Statement vs Student Details */}
                     <View style={styles.superHeaderRow}>
-                      <View style={[styles.superHeaderBank, { width: 1055 }]}>
+                      <View style={[styles.superHeaderBank, { width: 1325 }]}>
                         <Text style={styles.superHeaderTextBank}>
                           🏦 ORIGINAL BANK STATEMENT (UNCHANGED COLUMNS)
                         </Text>
@@ -756,10 +756,10 @@ export default function BankStatementMatcherScreen() {
                       <View style={[styles.pTh, { width: 95 }]}>
                         <Text style={styles.pThText}>Value Date</Text>
                       </View>
-                      <View style={[styles.pTh, { width: 330, alignItems: 'flex-start' }]}>
+                      <View style={[styles.pTh, { width: 500, alignItems: 'flex-start' }]}>
                         <Text style={styles.pThText}>Description</Text>
                       </View>
-                      <View style={[styles.pTh, { width: 140 }]}>
+                      <View style={[styles.pTh, { width: 240 }]}>
                         <Text style={styles.pThText}>Ref No./Cheque No.</Text>
                       </View>
                       <View style={[styles.pTh, { width: 75 }]}>
@@ -812,9 +812,10 @@ export default function BankStatementMatcherScreen() {
                         <View
                           style={[
                             styles.pTd,
-                            { width: 330, alignItems: 'flex-start' },
+                            { width: 500, alignItems: 'flex-start' },
                             row.is_matched && styles.pTdDescMatched,
                           ]}
+                          {...(Platform.OS === 'web' ? ({ title: row.description || '' } as any) : {})}
                         >
                           <Text
                             style={[
@@ -822,12 +823,16 @@ export default function BankStatementMatcherScreen() {
                               row.is_matched && styles.pTdDescTextMatched,
                             ]}
                             numberOfLines={1}
+                            selectable
                           >
                             {row.description}
                           </Text>
                         </View>
-                        <View style={[styles.pTd, { width: 140 }]}>
-                          <Text style={styles.pTdRef} numberOfLines={1}>
+                        <View
+                          style={[styles.pTd, { width: 240 }]}
+                          {...(Platform.OS === 'web' ? ({ title: row.ref_no || '' } as any) : {})}
+                        >
+                          <Text style={styles.pTdRef} numberOfLines={1} selectable>
                             {row.ref_no || '-'}
                           </Text>
                         </View>
@@ -910,7 +915,7 @@ export default function BankStatementMatcherScreen() {
                       <View style={[styles.pTh, { width: 180, alignItems: 'flex-start' }]}>
                         <Text style={styles.pThText}>Reason</Text>
                       </View>
-                      <View style={[styles.pTh, { width: 160 }]}>
+                      <View style={[styles.pTh, { width: 240 }]}>
                         <Text style={styles.pThText}>Statement Ref / Inst. No.</Text>
                       </View>
                       <View style={[styles.pTh, { width: 110 }]}>
@@ -928,7 +933,7 @@ export default function BankStatementMatcherScreen() {
                       <View style={[styles.pTh, { width: 100 }]}>
                         <Text style={styles.pThText}>Class</Text>
                       </View>
-                      <View style={[styles.pTh, { width: 320, alignItems: 'flex-start' }]}>
+                      <View style={[styles.pTh, { width: 500, alignItems: 'flex-start', borderRightWidth: 0 }]}>
                         <Text style={styles.pThText}>Particulars / Description</Text>
                       </View>
                     </View>
@@ -946,8 +951,11 @@ export default function BankStatementMatcherScreen() {
                         <View style={[styles.pTd, { width: 180, alignItems: 'flex-start' }]}>
                           <Text style={styles.reasonText}>{row.reason}</Text>
                         </View>
-                        <View style={[styles.pTd, { width: 160 }]}>
-                          <Text style={styles.pTdRef}>
+                        <View
+                          style={[styles.pTd, { width: 240 }]}
+                          {...(Platform.OS === 'web' ? ({ title: row.statement_ref || row.inst_no || '' } as any) : {})}
+                        >
+                          <Text style={styles.pTdRef} numberOfLines={1} selectable>
                             {row.statement_ref || row.inst_no || '-'}
                           </Text>
                         </View>
@@ -968,8 +976,11 @@ export default function BankStatementMatcherScreen() {
                         <View style={[styles.pTd, { width: 100 }]}>
                           <Text style={styles.pTdText}>{row.class_name || '-'}</Text>
                         </View>
-                        <View style={[styles.pTd, { width: 320, alignItems: 'flex-start' }]}>
-                          <Text style={styles.pTdDesc} numberOfLines={1}>
+                        <View
+                          style={[styles.pTd, { width: 500, alignItems: 'flex-start', borderRightWidth: 0 }]}
+                          {...(Platform.OS === 'web' ? ({ title: row.particulars || row.description || '' } as any) : {})}
+                        >
+                          <Text style={styles.pTdDesc} numberOfLines={1} selectable>
                             {row.particulars || row.description || '-'}
                           </Text>
                         </View>
@@ -1560,6 +1571,7 @@ const styles = StyleSheet.create({
   pTdDescText: {
     fontSize: 11,
     color: '#334155',
+    userSelect: 'text' as any,
   },
   pTdDescTextMatched: {
     fontWeight: '700',
@@ -1599,10 +1611,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#475569',
     fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
+    userSelect: 'text' as any,
   },
   pTdDesc: {
     fontSize: 11,
     color: '#64748b',
+    userSelect: 'text' as any,
   },
   okBadge: {
     backgroundColor: '#dcfce7',

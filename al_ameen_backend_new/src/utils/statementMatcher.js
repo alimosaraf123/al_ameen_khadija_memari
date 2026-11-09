@@ -632,6 +632,16 @@ async function reconcileStatement({
     ws.getColumn(outputCol + offset).width = OUTPUT_WIDTHS[offset];
   }
 
+  // Ensure Description & Ref columns are sufficiently wide in generated Excel
+  if (descCol) {
+    const col = ws.getColumn(descCol);
+    if (!col.width || col.width < 52) col.width = 52;
+  }
+  if (refCol) {
+    const col = ws.getColumn(refCol);
+    if (!col.width || col.width < 28) col.width = 28;
+  }
+
   // Index Bills by key
   const byKey = new Map();
   bills.forEach((record, idx) => {
