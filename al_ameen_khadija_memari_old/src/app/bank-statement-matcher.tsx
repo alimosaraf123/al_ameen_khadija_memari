@@ -301,6 +301,15 @@ export default function BankStatementMatcherScreen() {
               🏦 Bank Matcher
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setMasterModalOpen(true)}
+            style={[styles.tabBtn, styles.studentMasterTabBtn]}
+          >
+            <Text style={styles.studentMasterTabBtnText}>
+              👥 Student Master ({masterStatus?.custom_master_count || 473})
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Input Cards Container */}
@@ -438,41 +447,6 @@ export default function BankStatementMatcherScreen() {
                 )}
               </View>
             )}
-          </View>
-
-          {/* Card 3: Student Details Master */}
-          <View style={styles.inputCard}>
-            <View style={styles.cardHeaderRow}>
-              <Text style={styles.cardBadge}>Step 3</Text>
-              <Text style={styles.cardTitle}>Student Master</Text>
-            </View>
-            <Text style={styles.cardHint}>
-              Saved automatically in software. Only re-upload when student details change.
-            </Text>
-
-            <View style={styles.masterStatusBox}>
-              <View style={styles.masterStatRow}>
-                <Text style={styles.masterStatLabel}>Master Students:</Text>
-                <Text style={styles.masterStatVal}>
-                  {masterStatus?.custom_master_count || 473}
-                </Text>
-              </View>
-              <View style={styles.masterStatRow}>
-                <Text style={styles.masterStatLabel}>Database Students:</Text>
-                <Text style={styles.masterStatVal}>
-                  {masterStatus?.db_students_count || 247}
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.updateMasterBtn}
-                onPress={() => setMasterModalOpen(true)}
-              >
-                <Text style={styles.updateMasterBtnText}>
-                  📤 Upload / Replace Master Excel
-                </Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </View>
 
@@ -927,14 +901,30 @@ export default function BankStatementMatcherScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>📤 Update Student Details Master</Text>
+              <Text style={styles.modalTitle}>👥 Student Details Master</Text>
               <TouchableOpacity onPress={() => setMasterModalOpen(false)}>
                 <Text style={styles.closeBtn}>✕</Text>
               </TouchableOpacity>
             </View>
 
+            {/* Current Master Status */}
+            <View style={styles.modalStatsRow}>
+              <View style={styles.modalStatCard}>
+                <Text style={styles.modalStatLabel}>Master Students</Text>
+                <Text style={styles.modalStatVal}>
+                  {masterStatus?.custom_master_count || 473}
+                </Text>
+              </View>
+              <View style={styles.modalStatCard}>
+                <Text style={styles.modalStatLabel}>Database Students</Text>
+                <Text style={styles.modalStatVal}>
+                  {masterStatus?.db_students_count || 747}
+                </Text>
+              </View>
+            </View>
+
             <Text style={styles.modalNote}>
-              Upload your Registration Master Excel (.xlsx). The file must contain columns named{' '}
+              Student master is saved permanently in software. Only upload/replace when student list changes. File must contain columns:{' '}
               <Text style={{ fontWeight: '700', color: '#0f172a' }}>reg.</Text>,{' '}
               <Text style={{ fontWeight: '700', color: '#0f172a' }}>name</Text>, and{' '}
               <Text style={{ fontWeight: '700', color: '#0f172a' }}>class</Text>.
@@ -1591,6 +1581,41 @@ const styles = StyleSheet.create({
     color: '#64748b',
     lineHeight: 18,
     marginBottom: 16,
+  },
+  studentMasterTabBtn: {
+    backgroundColor: '#eef2ff',
+    borderWidth: 1.5,
+    borderColor: '#818cf8',
+  },
+  studentMasterTabBtnText: {
+    color: '#4338ca',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  modalStatsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  modalStatCard: {
+    flex: 1,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    borderLeftWidth: 3,
+    borderLeftColor: '#6366f1',
+  },
+  modalStatLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+    marginBottom: 4,
+  },
+  modalStatVal: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#1e293b',
   },
   modalUploadBox: {
     borderWidth: 2,
