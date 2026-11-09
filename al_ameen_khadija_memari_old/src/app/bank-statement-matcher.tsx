@@ -62,6 +62,59 @@ const formatDateDisplay = (val: any) => {
   return s;
 };
 
+function NavTabLink({
+  path,
+  style,
+  onPress,
+  children,
+}: {
+  path: string;
+  style: any;
+  onPress?: () => void;
+  children: React.ReactNode;
+}) {
+  if (Platform.OS === 'web') {
+    return (
+      <a
+        href={path}
+        onClick={(e: any) => {
+          if (e.metaKey || e.ctrlKey || e.button === 1) return;
+          e.preventDefault();
+          if (onPress) {
+            onPress();
+          } else {
+            router.push(path as any);
+          }
+        }}
+        style={{
+          ...StyleSheet.flatten(style),
+          display: 'flex',
+          boxSizing: 'border-box',
+          textDecorationLine: 'none',
+          textDecoration: 'none',
+          cursor: 'pointer',
+        } as any}
+      >
+        {children}
+      </a>
+    );
+  }
+  return (
+    <TouchableOpacity
+      style={style}
+      onPress={() => {
+        if (onPress) {
+          onPress();
+        } else {
+          router.push(path as any);
+        }
+      }}
+    >
+      {children}
+    </TouchableOpacity>
+  );
+}
+
 export default function BankStatementMatcherScreen() {
   const scrollRef = useRef<any>(null);
   const statementInputRef = useRef<any>(null);
@@ -319,32 +372,35 @@ export default function BankStatementMatcherScreen() {
       >
         {/* Navigation Tabs (Accounts Sub-Menus) */}
         <View style={styles.tabNav}>
-          <TouchableOpacity
-            onPress={() => router.push('/fees?tab=fees_collection' as any)}
+          <NavTabLink
+            path="/fees?tab=fees_collection"
             style={styles.tabBtn}
           >
             <Text style={styles.tabBtnText}>💳 Fees</Text>
-          </TouchableOpacity>
+          </NavTabLink>
 
-          <TouchableOpacity
-            onPress={() => router.push('/fees?tab=receipt_payment' as any)}
+          <NavTabLink
+            path="/fees?tab=receipt_payment"
             style={styles.tabBtn}
           >
             <Text style={styles.tabBtnText}>📑 Receipt & Payment</Text>
-          </TouchableOpacity>
+          </NavTabLink>
 
-          <TouchableOpacity
-            onPress={() => router.push('/due-fees' as any)}
+          <NavTabLink
+            path="/due-fees"
             style={styles.tabBtn}
           >
             <Text style={styles.tabBtnText}>⏳ Due Fees</Text>
-          </TouchableOpacity>
+          </NavTabLink>
 
-          <TouchableOpacity style={[styles.tabBtn, styles.tabBtnActive]}>
+          <NavTabLink
+            path="/bank-statement-matcher"
+            style={[styles.tabBtn, styles.tabBtnActive]}
+          >
             <Text style={[styles.tabBtnText, styles.tabBtnTextActive]}>
               🏦 Bank Matcher
             </Text>
-          </TouchableOpacity>
+          </NavTabLink>
 
           <TouchableOpacity
             onPress={() => setMasterModalOpen(true)}

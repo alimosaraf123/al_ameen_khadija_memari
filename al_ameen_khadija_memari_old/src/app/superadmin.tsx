@@ -61,7 +61,19 @@ const menus: any[] = [
 
 function AdminLink({ path, style, onPress, children }: { path: string; style: any; onPress: () => void; children: React.ReactNode }) {
   if (Platform.OS === 'web') {
-    return <a href={path} onClick={(event) => { event.preventDefault(); onPress(); }} style={{ ...StyleSheet.flatten(style), display: 'flex', boxSizing: 'border-box', textDecorationLine: 'none', textDecoration: 'none' } as any}>{children}</a>;
+    return (
+      <a
+        href={path}
+        onClick={(event: any) => {
+          if (event.metaKey || event.ctrlKey || event.button === 1) return;
+          event.preventDefault();
+          onPress();
+        }}
+        style={{ ...StyleSheet.flatten(style), display: 'flex', boxSizing: 'border-box', textDecorationLine: 'none', textDecoration: 'none', cursor: 'pointer' } as any}
+      >
+        {children}
+      </a>
+    );
   }
   return <TouchableOpacity style={style} onPress={onPress}>{children}</TouchableOpacity>;
 }

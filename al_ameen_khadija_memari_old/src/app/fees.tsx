@@ -59,6 +59,59 @@ const getTodayDate = () => {
 
 type TabMode = 'receipt_payment' | 'fees_collection';
 
+function NavTabLink({
+  path,
+  style,
+  onPress,
+  children,
+}: {
+  path: string;
+  style: any;
+  onPress?: () => void;
+  children: React.ReactNode;
+}) {
+  if (Platform.OS === 'web') {
+    return (
+      <a
+        href={path}
+        onClick={(e: any) => {
+          if (e.metaKey || e.ctrlKey || e.button === 1) return;
+          e.preventDefault();
+          if (onPress) {
+            onPress();
+          } else {
+            router.push(path as any);
+          }
+        }}
+        style={{
+          ...StyleSheet.flatten(style),
+          display: 'flex',
+          boxSizing: 'border-box',
+          textDecorationLine: 'none',
+          textDecoration: 'none',
+          cursor: 'pointer',
+        } as any}
+      >
+        {children}
+      </a>
+    );
+  }
+  return (
+    <TouchableOpacity
+      style={style}
+      onPress={() => {
+        if (onPress) {
+          onPress();
+        } else {
+          router.push(path as any);
+        }
+      }}
+    >
+      {children}
+    </TouchableOpacity>
+  );
+}
+
 export default function Fees() {
   const scrollRef = useRef<any>(null);
   const { tab } = useLocalSearchParams<{ tab?: string }>();
@@ -604,7 +657,8 @@ export default function Fees() {
 
         {/* Primary Sub-Menu Tabs */}
         <View style={styles.tabNav}>
-          <TouchableOpacity
+          <NavTabLink
+            path="/fees?tab=fees_collection"
             onPress={() => {
               setActiveTab('fees_collection');
               if (!report && !loading) void loadFeesCollection(fromDate, toDate, session);
@@ -614,9 +668,10 @@ export default function Fees() {
             <Text style={[styles.tabBtnText, activeTab === 'fees_collection' && styles.tabBtnTextActive]}>
               💳 Fees
             </Text>
-          </TouchableOpacity>
+          </NavTabLink>
 
-          <TouchableOpacity
+          <NavTabLink
+            path="/fees?tab=receipt_payment"
             onPress={() => {
               setActiveTab('receipt_payment');
               if (!rpData && !rpLoading) void loadReceiptPayment(fromDate, toDate);
@@ -626,29 +681,25 @@ export default function Fees() {
             <Text style={[styles.tabBtnText, activeTab === 'receipt_payment' && styles.tabBtnTextActive]}>
               📑 Receipt & Payment
             </Text>
-          </TouchableOpacity>
+          </NavTabLink>
 
-          <TouchableOpacity
-            onPress={() => {
-              router.push('/due-fees' as any);
-            }}
+          <NavTabLink
+            path="/due-fees"
             style={[styles.tabBtn, { backgroundColor: '#fef3c7', borderColor: '#f59e0b', borderWidth: 1 }]}
           >
             <Text style={[styles.tabBtnText, { color: '#b45309' }]}>
               ⏳ Due Fees
             </Text>
-          </TouchableOpacity>
+          </NavTabLink>
 
-          <TouchableOpacity
-            onPress={() => {
-              router.push('/bank-statement-matcher' as any);
-            }}
+          <NavTabLink
+            path="/bank-statement-matcher"
             style={[styles.tabBtn, { backgroundColor: '#e0e7ff', borderColor: '#6366f1', borderWidth: 1 }]}
           >
             <Text style={[styles.tabBtnText, { color: '#4338ca' }]}>
               🏦 Bank Matcher
             </Text>
-          </TouchableOpacity>
+          </NavTabLink>
         </View>
 
         {/* Date Filter & Search Actions */}
