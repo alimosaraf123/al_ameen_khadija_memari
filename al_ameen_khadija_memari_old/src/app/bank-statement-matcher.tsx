@@ -732,7 +732,7 @@ export default function BankStatementMatcherScreen() {
                       <View style={[styles.pTh, styles.pThStudent, { width: 90 }]}>
                         <Text style={styles.pThTextStudent}>Recpt. No.</Text>
                       </View>
-                      <View style={[styles.pTh, styles.pThStudent, { width: 100 }]}>
+                      <View style={[styles.pTh, styles.pThStudent, { width: 100, borderRightWidth: 0 }]}>
                         <Text style={styles.pThTextStudent}>Amount</Text>
                       </View>
                     </View>
@@ -835,7 +835,7 @@ export default function BankStatementMatcherScreen() {
                             {row.is_matched ? row.receipt_no : '-'}
                           </Text>
                         </View>
-                        <View style={[styles.pTd, styles.pTdStudent, { width: 100 }]}>
+                        <View style={[styles.pTd, styles.pTdStudent, { width: 100, borderRightWidth: 0 }]}>
                           <Text
                             style={row.is_matched ? styles.pTdAmount : styles.pTdTextMuted}
                           >
@@ -1401,12 +1401,13 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   previewTable: {
-    minWidth: 1680,
+    alignSelf: 'flex-start',
   },
   superHeaderRow: {
     flexDirection: 'row',
     borderBottomWidth: 1.5,
     borderBottomColor: '#cbd5e1',
+    alignSelf: 'flex-start',
   },
   superHeaderBank: {
     backgroundColor: '#0284c7',
@@ -1437,6 +1438,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#bae6fd',
     borderBottomWidth: 1.5,
     borderBottomColor: '#7dd3fc',
+    alignSelf: 'flex-start',
   },
   pTh: {
     paddingVertical: 10,
@@ -1472,6 +1474,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
+    alignSelf: 'flex-start',
   },
   pTrEven: {
     backgroundColor: '#ffffff',
