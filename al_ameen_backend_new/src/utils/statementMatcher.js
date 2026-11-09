@@ -87,8 +87,17 @@ function billReference(value) {
     return norm(candidate[1]);
   }
 
-  const labelled = text.match(/(?:UTR|RRN|REF(?:ERENCE)?|UPI)\s*[:#-]?\s*([0-9]+)/i);
+  // Common payment prefixes like EDC, POS, CARD, UPI, CR, DR, etc.
+  const labelled = text.match(/(?:UTR|RRN|REF(?:ERENCE)?|UPI|EDC|POS|CARD|CR|DR|ONLINE|IMPS|NEFT|RTGS)\s*[:#\/\-]?\s*([0-9]{6,})/i);
   if (labelled) return norm(labelled[1]);
+
+  // General alphanumeric prefix before slash, e.g. "EDC/667829184690" or "XYZ/123456"
+  const prefixed = text.match(/(?:^|[A-Za-z0-9_-]+)\/([0-9]{6,})/);
+  if (prefixed) return norm(prefixed[1]);
+
+  // Standalone 6+ digits
+  const standalone = text.match(/(?<![0-9])([0-9]{6,18})(?![0-9])/);
+  if (standalone) return norm(standalone[1]);
 
   if (/^[0-9]+$/.test(text)) return norm(text);
 
@@ -244,7 +253,32 @@ async function fetchLiveBillsFromPortal(targetDate = '') {
   const today = new Date().toISOString().slice(0, 10);
   const qDate = targetDate || today;
   const records = [];
-  const seenKeys = new Set();
+  const seenBillSig = new Map(); // sig -> index in records
+
+  function addBillRecord(item) {
+    const cleanReg = norm(item.reg);
+    const cleanReceipt = norm(item.receipt);
+    const amount = Number(item.amount || 0);
+
+    // Primary bill signature: student reg + receipt (bill no) + amount
+    const sig = (cleanReg && cleanReceipt) ? `${cleanReg}_${cleanReceipt}_${amount}` : null;
+    const fallbackSig = `${item.key}_${cleanReg}_${cleanReceipt}_${amount}`;
+    const effectiveSig = sig || fallbackSig;
+
+    if (seenBillSig.has(effectiveSig)) {
+      const existingIdx = seenBillSig.get(effectiveSig);
+      const existing = records[existingIdx];
+      // If existing had an INVALID key and new one has a valid key, upgrade it!
+      if (existing.key.startsWith('INVALID:') && !item.key.startsWith('INVALID:')) {
+        existing.key = item.key;
+        existing.raw_reference = item.raw_reference;
+      }
+      return;
+    }
+
+    seenBillSig.set(effectiveSig, records.length);
+    records.push(item);
+  }
 
   // 1. Fetch Bank Book for SBI (Account 19665)
   try {
@@ -260,19 +294,15 @@ async function fetchLiveBillsFromPortal(targetDate = '') {
         const amount = Number(tx.receipt || tx.payment || 0);
         const { reg, receipt } = extractRegAndReceipt(tx.particulars || '');
 
-        const dedupeKey = `${key}_${reg}_${receipt}_${amount}`;
-        if (!seenKeys.has(dedupeKey)) {
-          seenKeys.add(dedupeKey);
-          records.push({
-            key,
-            reg,
-            receipt: receipt || textValue(tx.vch_no || ''),
-            amount,
-            particulars: tx.particulars || '',
-            source_row: idx + 1,
-            raw_reference: rawRef,
-          });
-        }
+        addBillRecord({
+          key,
+          reg,
+          receipt: receipt || textValue(tx.vch_no || ''),
+          amount,
+          particulars: tx.particulars || '',
+          source_row: idx + 1,
+          raw_reference: rawRef,
+        });
       });
     }
   } catch (err) {
@@ -299,19 +329,15 @@ async function fetchLiveBillsFromPortal(targetDate = '') {
         const reg = textValue(b.registration_no || '');
         const receipt = textValue(b.bill_number || '');
 
-        const dedupeKey = `${key}_${reg}_${receipt}_${amount}`;
-        if (!seenKeys.has(dedupeKey)) {
-          seenKeys.add(dedupeKey);
-          records.push({
-            key,
-            reg,
-            receipt,
-            amount,
-            particulars: `Fees received from student against Reg. No. ${reg} / Recpt. No. ${receipt}`,
-            source_row: idx + 1,
-            raw_reference: rawRef,
-          });
-        }
+        addBillRecord({
+          key,
+          reg,
+          receipt,
+          amount,
+          particulars: `Fees received from student against Reg. No. ${reg} / Recpt. No. ${receipt}`,
+          source_row: idx + 1,
+          raw_reference: rawRef,
+        });
       });
     }
   } catch (err) {
@@ -655,6 +681,7 @@ async function reconcileStatement({
   const issues = [];
   const billStatus = new Map();
   const reportedBills = new Set();
+  const matchedBillSignatures = new Set();
   const allStatementRowsForPreview = [];
   const matchedRowsForPreview = [];
   const mismatchRowsForPreview = [];
@@ -744,6 +771,9 @@ async function reconcileStatement({
           matchedCount++;
           matchedAmountTotal += billAmt;
 
+          const billSig = (record.reg && record.receipt) ? `${norm(record.reg)}_${norm(record.receipt)}_${record.amount}` : null;
+          if (billSig) matchedBillSignatures.add(billSig);
+
           const student = master.get(norm(record.reg)) || {};
           const studentName = student.name || '';
           const studentClass = student.class || '';
@@ -820,6 +850,11 @@ async function reconcileStatement({
   bills.forEach((record, idx) => {
     if (billStatus.get(idx) === 'OK' || reportedBills.has(idx)) return;
 
+    // If this student's bill was already matched with a statement entry by reg + receipt + amount,
+    // do NOT report it as unmatched!
+    const billSig = (record.reg && record.receipt) ? `${norm(record.reg)}_${norm(record.receipt)}_${record.amount}` : null;
+    if (billSig && matchedBillSignatures.has(billSig)) return;
+
     let reason = 'NOT IN STATEMENT';
     if (record.key.startsWith('INVALID:')) {
       reason = 'INVALID / UNRECOGNIZED BILL REF';
@@ -832,7 +867,12 @@ async function reconcileStatement({
     addDetail('BILL', reason, null, idx);
   });
 
-  const unmatchedBillsCount = bills.filter((_, idx) => billStatus.get(idx) !== 'OK').length;
+  const unmatchedBillsCount = bills.filter((b, idx) => {
+    if (billStatus.get(idx) === 'OK') return false;
+    const billSig = (b.reg && b.receipt) ? `${norm(b.reg)}_${norm(b.receipt)}_${b.amount}` : null;
+    if (billSig && matchedBillSignatures.has(billSig)) return false;
+    return true;
+  }).length;
 
   // 4. Create Sheet 2: MISMATCH DETAILS
   // Remove existing mismatch sheet if present
