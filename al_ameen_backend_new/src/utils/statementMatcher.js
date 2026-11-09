@@ -19,6 +19,32 @@ function textValue(v) {
   return String(v).trim();
 }
 
+function formatDateValue(v) {
+  if (v === null || v === undefined) return '';
+  if (v instanceof Date && !isNaN(v.getTime())) {
+    const d = String(v.getDate()).padStart(2, '0');
+    const m = String(v.getMonth() + 1).padStart(2, '0');
+    const y = v.getFullYear();
+    return `${d}-${m}-${y}`;
+  }
+  let s = textValue(v);
+  if (!s) return '';
+  if (s.includes('GMT') || s.includes('India Standard Time') || /^[A-Za-z]{3}\s+[A-Za-z]{3}\s+\d{1,2}\s+\d{4}/.test(s)) {
+    const parsed = new Date(s);
+    if (!isNaN(parsed.getTime())) {
+      const d = String(parsed.getDate()).padStart(2, '0');
+      const m = String(parsed.getMonth() + 1).padStart(2, '0');
+      const y = parsed.getFullYear();
+      return `${d}-${m}-${y}`;
+    }
+  }
+  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return `${isoMatch[3]}-${isoMatch[2]}-${isoMatch[1]}`;
+  }
+  return s;
+}
+
 function money(v) {
   if (v === null || v === undefined) return null;
   if (typeof v === 'object' && v.result !== undefined) v = v.result;
@@ -564,8 +590,9 @@ async function reconcileStatement({
   }
 
   // Prepare Output Columns next to Balance
-  const OUTPUT_HEADERS = ['Reg. No.', 'Recpt. No.', 'Amount', 'Class', 'Student Name', 'Check'];
-  const OUTPUT_WIDTHS = [12, 14, 14, 16, 26, 12];
+  // User Requested Order: Reg. No., Student Name, Class, Recpt. No., Amount (Check column removed)
+  const OUTPUT_HEADERS = ['Reg. No.', 'Student Name', 'Class', 'Recpt. No.', 'Amount'];
+  const OUTPUT_WIDTHS = [14, 26, 16, 14, 14];
   const outputCol = balCol + 1;
 
   // Set Header row styles for output columns
@@ -610,8 +637,8 @@ async function reconcileStatement({
       keys,
       debit,
       credit,
-      date: textValue(dateRaw),
-      value_date: textValue(valueDateRaw),
+      date: formatDateValue(dateRaw),
+      value_date: formatDateValue(valueDateRaw || dateRaw),
       ref_no: refNo,
       branch_code: branchCode,
       balance,
@@ -728,13 +755,13 @@ async function reconcileStatement({
             fgColor: { argb: 'FFFFFF00' }
           };
 
-          // 2. Populate the 6 columns in original statement worksheet
+          // 2. Populate the 5 columns in original statement worksheet
+          // Order: Reg. No., Student Name, Class, Recpt. No., Amount
           ws.getCell(entry.row, outputCol + 0).value = record.reg || '';
-          ws.getCell(entry.row, outputCol + 1).value = record.receipt || '';
-          ws.getCell(entry.row, outputCol + 2).value = billAmt;
-          ws.getCell(entry.row, outputCol + 3).value = studentClass;
-          ws.getCell(entry.row, outputCol + 4).value = studentName;
-          ws.getCell(entry.row, outputCol + 5).value = 'OK';
+          ws.getCell(entry.row, outputCol + 1).value = studentName;
+          ws.getCell(entry.row, outputCol + 2).value = studentClass;
+          ws.getCell(entry.row, outputCol + 3).value = record.receipt || '';
+          ws.getCell(entry.row, outputCol + 4).value = billAmt;
 
           matchedRowsForPreview.push({
             statement_row: entry.row,
@@ -743,11 +770,10 @@ async function reconcileStatement({
             credit: entry.credit,
             debit: entry.debit,
             reg_no: record.reg,
+            student_name: studentName,
+            class_name: studentClass,
             receipt_no: record.receipt,
             amount: billAmt,
-            class_name: studentClass,
-            student_name: studentName,
-            check: 'OK',
             reference: record.key,
           });
         }
@@ -782,11 +808,10 @@ async function reconcileStatement({
       balance: entry.balance,
       is_matched: isMatched,
       reg_no: isMatched && rec ? rec.reg : '',
+      student_name: isMatched ? (std.name || '') : '',
+      class_name: isMatched ? (std.class || '') : '',
       receipt_no: isMatched && rec ? rec.receipt : '',
       amount: isMatched && rec ? rec.amount : null,
-      class_name: isMatched ? (std.class || '') : '',
-      student_name: isMatched ? (std.name || '') : '',
-      check: isMatched ? 'OK' : '',
       status: status,
     });
   }

@@ -36,6 +36,32 @@ const formatCurrency = (val: any) => {
   });
 };
 
+const formatDateDisplay = (val: any) => {
+  if (!val) return '-';
+  if (val instanceof Date) {
+    const d = String(val.getDate()).padStart(2, '0');
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const y = val.getFullYear();
+    return `${d}-${m}-${y}`;
+  }
+  const s = String(val).trim();
+  if (!s) return '-';
+  if (s.includes('GMT') || s.includes('India Standard Time') || /^[A-Za-z]{3}\s+[A-Za-z]{3}/.test(s)) {
+    const parsed = new Date(s);
+    if (!isNaN(parsed.getTime())) {
+      const d = String(parsed.getDate()).padStart(2, '0');
+      const m = String(parsed.getMonth() + 1).padStart(2, '0');
+      const y = parsed.getFullYear();
+      return `${d}-${m}-${y}`;
+    }
+  }
+  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return `${isoMatch[3]}-${isoMatch[2]}-${isoMatch[1]}`;
+  }
+  return s;
+};
+
 export default function BankStatementMatcherScreen() {
   const scrollRef = useRef<any>(null);
   const statementInputRef = useRef<any>(null);
@@ -656,7 +682,7 @@ export default function BankStatementMatcherScreen() {
                           🏦 ORIGINAL BANK STATEMENT (UNCHANGED COLUMNS)
                         </Text>
                       </View>
-                      <View style={[styles.superHeaderStudent, { width: 625 }]}>
+                      <View style={[styles.superHeaderStudent, { width: 560 }]}>
                         <Text style={styles.superHeaderTextStudent}>
                           🎓 MATCHED STUDENT DETAILS (ADDED BESIDE BALANCE)
                         </Text>
@@ -693,24 +719,21 @@ export default function BankStatementMatcherScreen() {
                         <Text style={styles.pThText}>Balance</Text>
                       </View>
 
-                      {/* Student details headers (Beside Balance, with distinct red left divider) */}
-                      <View style={[styles.pTh, styles.pThStudentDivider, { width: 85 }]}>
+                      {/* Student details headers (Order: Reg. No., Student Name, Class, Recpt. No., Amount - Check removed) */}
+                      <View style={[styles.pTh, styles.pThStudentDivider, { width: 90 }]}>
                         <Text style={styles.pThTextStudent}>Reg. No.</Text>
-                      </View>
-                      <View style={[styles.pTh, styles.pThStudent, { width: 85 }]}>
-                        <Text style={styles.pThTextStudent}>Recpt. No.</Text>
-                      </View>
-                      <View style={[styles.pTh, styles.pThStudent, { width: 95 }]}>
-                        <Text style={styles.pThTextStudent}>Amount</Text>
-                      </View>
-                      <View style={[styles.pTh, styles.pThStudent, { width: 105 }]}>
-                        <Text style={styles.pThTextStudent}>Class</Text>
                       </View>
                       <View style={[styles.pTh, styles.pThStudent, { width: 180, alignItems: 'flex-start' }]}>
                         <Text style={styles.pThTextStudent}>Student Name</Text>
                       </View>
-                      <View style={[styles.pTh, styles.pThStudent, { width: 75 }]}>
-                        <Text style={styles.pThTextStudent}>Check</Text>
+                      <View style={[styles.pTh, styles.pThStudent, { width: 100 }]}>
+                        <Text style={styles.pThTextStudent}>Class</Text>
+                      </View>
+                      <View style={[styles.pTh, styles.pThStudent, { width: 90 }]}>
+                        <Text style={styles.pThTextStudent}>Recpt. No.</Text>
+                      </View>
+                      <View style={[styles.pTh, styles.pThStudent, { width: 100 }]}>
+                        <Text style={styles.pThTextStudent}>Amount</Text>
                       </View>
                     </View>
 
@@ -724,10 +747,10 @@ export default function BankStatementMatcherScreen() {
                           <Text style={styles.pTdTextMuted}>{idx + 1}</Text>
                         </View>
                         <View style={[styles.pTd, { width: 95 }]}>
-                          <Text style={styles.pTdTextMuted}>{row.date || '-'}</Text>
+                          <Text style={styles.pTdTextMuted}>{formatDateDisplay(row.date)}</Text>
                         </View>
                         <View style={[styles.pTd, { width: 95 }]}>
-                          <Text style={styles.pTdTextMuted}>{row.value_date || row.date || '-'}</Text>
+                          <Text style={styles.pTdTextMuted}>{formatDateDisplay(row.value_date || row.date)}</Text>
                         </View>
                         {/* Highlight Description cell in Yellow if matched! */}
                         <View
@@ -777,32 +800,11 @@ export default function BankStatementMatcherScreen() {
                         </View>
 
                         {/* Student Details (Beside Balance, with red divider) */}
-                        <View style={[styles.pTd, styles.pTdStudentDivider, { width: 85 }]}>
+                        <View style={[styles.pTd, styles.pTdStudentDivider, { width: 90 }]}>
                           <Text
                             style={row.is_matched ? styles.pTdTextBold : styles.pTdTextMuted}
                           >
                             {row.is_matched ? row.reg_no : '-'}
-                          </Text>
-                        </View>
-                        <View style={[styles.pTd, styles.pTdStudent, { width: 85 }]}>
-                          <Text
-                            style={row.is_matched ? styles.pTdText : styles.pTdTextMuted}
-                          >
-                            {row.is_matched ? row.receipt_no : '-'}
-                          </Text>
-                        </View>
-                        <View style={[styles.pTd, styles.pTdStudent, { width: 95 }]}>
-                          <Text
-                            style={row.is_matched ? styles.pTdAmount : styles.pTdTextMuted}
-                          >
-                            {row.is_matched ? `₹${formatCurrency(row.amount)}` : '-'}
-                          </Text>
-                        </View>
-                        <View style={[styles.pTd, styles.pTdStudent, { width: 105 }]}>
-                          <Text
-                            style={row.is_matched ? styles.pTdText : styles.pTdTextMuted}
-                          >
-                            {row.is_matched ? row.class_name : '-'}
                           </Text>
                         </View>
                         <View
@@ -819,14 +821,26 @@ export default function BankStatementMatcherScreen() {
                             {row.is_matched ? row.student_name : '-'}
                           </Text>
                         </View>
-                        <View style={[styles.pTd, styles.pTdStudent, { width: 75 }]}>
-                          {row.is_matched ? (
-                            <View style={styles.okBadge}>
-                              <Text style={styles.okBadgeText}>OK</Text>
-                            </View>
-                          ) : (
-                            <Text style={styles.pTdTextMuted}>-</Text>
-                          )}
+                        <View style={[styles.pTd, styles.pTdStudent, { width: 100 }]}>
+                          <Text
+                            style={row.is_matched ? styles.pTdText : styles.pTdTextMuted}
+                          >
+                            {row.is_matched ? row.class_name : '-'}
+                          </Text>
+                        </View>
+                        <View style={[styles.pTd, styles.pTdStudent, { width: 90 }]}>
+                          <Text
+                            style={row.is_matched ? styles.pTdText : styles.pTdTextMuted}
+                          >
+                            {row.is_matched ? row.receipt_no : '-'}
+                          </Text>
+                        </View>
+                        <View style={[styles.pTd, styles.pTdStudent, { width: 100 }]}>
+                          <Text
+                            style={row.is_matched ? styles.pTdAmount : styles.pTdTextMuted}
+                          >
+                            {row.is_matched ? `₹${formatCurrency(row.amount)}` : '-'}
+                          </Text>
                         </View>
                       </View>
                     ))}
