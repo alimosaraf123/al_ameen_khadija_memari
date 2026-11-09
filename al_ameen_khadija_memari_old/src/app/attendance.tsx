@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ActivityIndicator, Alert, Image, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router, useLocalSearchParams } from 'expo-router';
 
 import AcademyHeader from '../components/AcademyHeader';
+import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import { Select } from '../components/StudentDirectory';
 import DatePickerField from '../components/DatePickerField';
 import { API_BASE, api } from '../lib/api';
@@ -37,6 +39,8 @@ function StudentPhoto({ student }: { student: any }) {
 }
 
 export default function Attendance() {
+  const routeParams = useLocalSearchParams<{ room?: string }>();
+  const scrollRef = useRef<any>(null);
   const [rooms, setRooms] = useState<any[]>([]);
   const [roomNumber, setRoomNumber] = useState('');
   const [date, setDate] = useState(localDate());
@@ -73,14 +77,16 @@ export default function Attendance() {
         const activeAssignments = assignmentData.assignments || [];
         setAssignments(activeAssignments);
         const assignedNames = new Set(activeAssignments.map((item: any) => String(item.room_name)));
-        visibleRooms = roomList.filter((room: any) => assignedNames.has(String(room.room_name)));
+        const filtered = roomList.filter((room: any) => assignedNames.has(String(room.room_name)));
+        if (filtered.length > 0) visibleRooms = filtered;
       } catch { setAssignments([]); }
       setRooms(visibleRooms);
-      if (roomList.length === 1) {
-        const onlyRoom = String(roomList[0].room_name);
-        setRoomNumber(onlyRoom);
-        await loadHistory(onlyRoom);
-        await loadAttendance(onlyRoom, localDate());
+
+      const initialRoom = routeParams.room || (visibleRooms.length === 1 ? String(visibleRooms[0].room_name) : (roomList.length === 1 ? String(roomList[0].room_name) : ''));
+      if (initialRoom) {
+        setRoomNumber(initialRoom);
+        await loadHistory(initialRoom, localDate());
+        await loadAttendance(initialRoom, localDate());
       } else {
         await loadHistory('');
       }
@@ -93,6 +99,13 @@ export default function Attendance() {
     void loadRooms();
     void getUser<any>().then(user => setCanManage(['admin','super_admin'].includes(user?.role)));
   }, []);
+
+  useEffect(() => {
+    if (routeParams.room && routeParams.room !== roomNumber) {
+      setRoomNumber(routeParams.room);
+      void loadAttendance(routeParams.room, date);
+    }
+  }, [routeParams.room]);
 
   useEffect(() => { if (canManage) void loadHistory('', date); }, [canManage, date]);
 
@@ -160,8 +173,14 @@ export default function Attendance() {
           })),
         }),
       });
-      await loadAttendance();
-      Alert.alert(result.action === 'updated' ? 'Updated' : 'Submitted', 'Evening room attendance saved successfully.');
+      await loadAttendance(roomNumber, date);
+      const isUpdated = result.action === 'updated' || !!submission;
+      Alert.alert(
+        isUpdated ? 'Attendance Updated' : 'Attendance Submitted',
+        isUpdated
+          ? `Room ${roomNumber} attendance updated successfully for today.`
+          : `Room ${roomNumber} attendance submitted successfully for today.`
+      );
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {
@@ -217,7 +236,7 @@ export default function Attendance() {
 
   return (
     <SafeAreaView style={s.page}>
-      <ScrollView contentContainerStyle={s.content}>
+      <ScrollView ref={scrollRef} contentContainerStyle={s.content}>
         <AcademyHeader />
         <Text style={s.title}>Evening Room Attendance</Text>
         <Text style={s.help}>Everyone starts as Present. Tap only the girls who are absent, then submit.</Text>
@@ -249,10 +268,36 @@ export default function Attendance() {
             <View style={[s.summaryCard, s.absentCard]}><Text style={s.summaryNumber}>{absent}</Text><Text style={s.summaryLabel}>Absent</Text></View>
           </View>
 
-          {submission && (
-            <View style={s.savedBox}>
-              <Text style={s.savedTitle}>Attendance already submitted</Text>
-              <Text style={s.savedText}>Submitted by {submission.submitted_by_name || 'User'} · Last updated by {submission.last_updated_by_name || submission.submitted_by_name || 'User'}</Text>
+          {submission ? (
+            <View style={s.alreadySubmittedCard}>
+              <View style={s.statusHeaderRow}>
+                <View style={s.statusBadgeSuccess}>
+                  <Text style={s.statusBadgeText}>✓ ALREADY SUBMITTED</Text>
+                </View>
+                <Text style={s.statusBanglaBadge}>আজকের অ্যাটেনডেন্স ইতিমধ্যে জমা দেওয়া হয়েছে</Text>
+              </View>
+              <Text style={s.submittedDetailText}>
+                🕒 Submission Time: <Text style={{fontWeight: '800', color: '#166534'}}>{submission.submitted_at_ist || submission.submitted_at || 'Today'}</Text>
+                {submission.submitted_by_name ? ` · Submitted by: ${submission.submitted_by_name}` : ''}
+                {submission.last_updated_by_name && submission.updated_at_ist && submission.updated_at_ist !== submission.submitted_at_ist ? `\n✏️ Last Updated: ${submission.updated_at_ist} by ${submission.last_updated_by_name}` : ''}
+              </Text>
+              <View style={s.editTipBox}>
+                <Text style={s.editTipText}>
+                  💡 <Text style={{fontWeight: '800'}}>প্রয়োজনে পরিবর্তন করুন:</Text> আজকের দিনের মধ্যে যেকোনো ছাত্রীর উপস্থিতি পরিবর্তন করতে পারেন। নামের উপর ট্যাপ করে Present/Absent পরিবর্তন করুন এবং নিচে <Text style={{fontWeight: '800', color: '#0f4c81'}}>"Update Attendance (পরিবর্তন সেভ করুন)"</Text> বাটনে ক্লিক করে সেভ করুন।
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View style={s.pendingStatusCard}>
+              <View style={s.statusHeaderRow}>
+                <View style={s.statusBadgePending}>
+                  <Text style={s.statusBadgeText}>⚠️ PENDING FOR TODAY</Text>
+                </View>
+                <Text style={s.pendingBanglaBadge}>আজকের অ্যাটেনডেন্স এখনো জমা দেওয়া হয়নি</Text>
+              </View>
+              <Text style={s.pendingNoticeText}>
+                অনুপস্থিত ছাত্রীদের নামের উপর ট্যাপ করে লাল (ABSENT) করুন, এরপর নিচে "Submit Attendance" বাটনে ক্লিক করুন।
+              </Text>
             </View>
           )}
 
@@ -276,8 +321,18 @@ export default function Attendance() {
             </TouchableOpacity>
           ))}
 
-          <TouchableOpacity disabled={saving} onPress={save} style={[s.submitButton, saving && s.disabled]}>
-            <Text style={s.submitText}>{saving ? 'Saving...' : submission ? 'Update Attendance' : 'Submit Attendance'}</Text>
+          <TouchableOpacity
+            disabled={saving}
+            onPress={save}
+            style={[submission ? s.updateButton : s.submitButton, saving && s.disabled]}
+          >
+            <Text style={s.submitText}>
+              {saving
+                ? 'Saving...'
+                : submission
+                ? '✏️ Update Attendance (পরিবর্তন সেভ করুন)'
+                : '✓ Submit Attendance (অ্যাটেনডেন্স জমা দিন)'}
+            </Text>
           </TouchableOpacity>
         </>}
 
@@ -298,6 +353,7 @@ export default function Attendance() {
         <Text style={s.pendingTitle}>Pending — Attendance Not Submitted</Text>{pendingRows.length ? pendingRows.map(item => <View key={`pending-${item.room_name}`} style={s.pendingRow}><Text style={s.roomCell}>Room {item.room_name}</Text><Text style={s.teacherCell}>{item.teacher_name || 'Not assigned'}</Text><Text style={s.pendingText}>Pending</Text></View>) : <Text style={s.noHistory}>All rooms have submitted attendance.</Text>}
         </>}
       </ScrollView>
+      <ScrollNavigationButtons scrollRef={scrollRef} />
     </SafeAreaView>
   );
 }
@@ -323,6 +379,19 @@ const s = StyleSheet.create({
   summaryNumber: { fontSize: 25, fontWeight: '900', color: '#18352a' }, summaryLabel: { color: '#425b50', fontWeight: '700' },
   savedBox: { backgroundColor: '#e7f2ff', borderLeftWidth: 4, borderLeftColor: '#1565c0', padding: 12, borderRadius: 8, marginBottom: 12 },
   savedTitle: { color: '#114b8b', fontWeight: '800' }, savedText: { color: '#48627e', fontSize: 12, marginTop: 3 },
+  alreadySubmittedCard: { backgroundColor: '#ecfdf5', borderWidth: 1.5, borderColor: '#10b981', borderRadius: 14, padding: 14, marginBottom: 14 },
+  pendingStatusCard: { backgroundColor: '#fffbeb', borderWidth: 1.5, borderColor: '#f59e0b', borderRadius: 14, padding: 14, marginBottom: 14 },
+  statusHeaderRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 8 },
+  statusBadgeSuccess: { backgroundColor: '#16a34a', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 },
+  statusBadgePending: { backgroundColor: '#d97706', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 },
+  statusBadgeText: { color: '#fff', fontWeight: '900', fontSize: 12, letterSpacing: 0.5 },
+  statusBanglaBadge: { color: '#15803d', fontWeight: '800', fontSize: 14 },
+  pendingBanglaBadge: { color: '#b45309', fontWeight: '800', fontSize: 14 },
+  submittedDetailText: { color: '#374151', fontSize: 13, lineHeight: 19, marginBottom: 8 },
+  pendingNoticeText: { color: '#78350f', fontSize: 13, lineHeight: 18 },
+  editTipBox: { backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 8, padding: 10, marginTop: 4 },
+  editTipText: { color: '#1e3a8a', fontSize: 13, lineHeight: 18 },
+  updateButton: { backgroundColor: '#1d4ed8', borderRadius: 11, padding: 15, marginTop: 10 },
   studentToolbar: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
   search: { flex: 1, minWidth: 220, backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5cf', borderRadius: 9, padding: 11 },
   allPresentButton: { backgroundColor: '#e2f5e8', borderWidth: 1, borderColor: '#57a773', borderRadius: 9, paddingHorizontal: 18, justifyContent: 'center' },

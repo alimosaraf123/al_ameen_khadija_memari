@@ -101,6 +101,67 @@ router.get('/history', auth, allow('super_admin','admin','teacher'), asyncHandle
   res.json({ success: true, history: result.rows });
 }));
 
+router.get('/my-room-status', auth, allow('super_admin','admin','teacher'), asyncHandler(async (req, res) => {
+  const defaultDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  const date = String(req.query.date || defaultDate);
+  if (!isValidDate(date)) return res.status(400).json({ success: false, message: 'Invalid attendance date' });
+
+  let assignedRooms = [];
+  if (req.user.role === 'teacher') {
+    const r = await pool.query(`
+      SELECT r.id, r.room_name
+      FROM teacher_room_assignments tra
+      JOIN teachers t ON t.id=tra.teacher_id
+      JOIN rooms r ON r.id=tra.room_id
+      WHERE tra.is_active=TRUE AND t.user_id=$1
+      ORDER BY r.room_name
+    `, [req.user.userId]);
+    assignedRooms = r.rows;
+  } else {
+    const r = await pool.query(`SELECT id, room_name FROM rooms WHERE is_active=TRUE ORDER BY room_name LIMIT 1`);
+    assignedRooms = r.rows;
+  }
+
+  if (assignedRooms.length === 0) {
+    return res.json({
+      success: true,
+      has_room: false,
+      message: 'No room assigned to this account'
+    });
+  }
+
+  const room = assignedRooms[0];
+  const submission = await pool.query(`
+    SELECT sub.id, sub.room_id, to_char(sub.attendance_date, 'YYYY-MM-DD') AS attendance_date,
+           to_char(sub.submitted_at AT TIME ZONE 'Asia/Kolkata', 'DD-MM-YYYY HH12:MI AM') AS submitted_at_ist,
+           to_char(sub.updated_at AT TIME ZONE 'Asia/Kolkata', 'DD-MM-YYYY HH12:MI AM') AS updated_at_ist,
+           sub.submitted_at, sub.updated_at,
+           r.room_name,
+           submitted.full_name AS submitted_by_name,
+           updated.full_name AS last_updated_by_name,
+           (SELECT COUNT(*)::int FROM attendance a WHERE a.room_id=sub.room_id AND a.attendance_date=sub.attendance_date AND a.status='present') AS present_count,
+           (SELECT COUNT(*)::int FROM attendance a WHERE a.room_id=sub.room_id AND a.attendance_date=sub.attendance_date AND a.status='absent') AS absent_count,
+           (SELECT COUNT(*)::int FROM students s WHERE s.room_id=sub.room_id AND s.is_active=TRUE) AS total_students
+    FROM attendance_submissions sub
+    JOIN rooms r ON r.id=sub.room_id
+    LEFT JOIN users submitted ON submitted.id=sub.submitted_by
+    LEFT JOIN users updated ON updated.id=sub.last_updated_by
+    WHERE sub.room_id=$1 AND sub.attendance_date=$2
+  `, [room.id, date]);
+
+  const sub = submission.rows[0] || null;
+
+  res.json({
+    success: true,
+    has_room: true,
+    room_name: room.room_name,
+    all_rooms: assignedRooms.map(x => x.room_name),
+    submitted: !!sub,
+    submission: sub,
+    date,
+  });
+}));
+
 router.get('/room/:roomNumber', auth, allow('super_admin','admin','teacher'), asyncHandler(async (req, res) => {
   const date = String(req.query.date || new Date().toISOString().slice(0, 10));
   if (!isValidDate(date)) return res.status(400).json({ success: false, message: 'Invalid attendance date' });
@@ -119,7 +180,10 @@ router.get('/room/:roomNumber', auth, allow('super_admin','admin','teacher'), as
   `, [room.id, date]);
 
   const submission = await pool.query(`
-    SELECT sub.*, submitted.full_name AS submitted_by_name,
+    SELECT sub.*,
+           to_char(sub.submitted_at AT TIME ZONE 'Asia/Kolkata', 'DD-MM-YYYY HH12:MI AM') AS submitted_at_ist,
+           to_char(sub.updated_at AT TIME ZONE 'Asia/Kolkata', 'DD-MM-YYYY HH12:MI AM') AS updated_at_ist,
+           submitted.full_name AS submitted_by_name,
            updated.full_name AS last_updated_by_name
     FROM attendance_submissions sub
     LEFT JOIN users submitted ON submitted.id=sub.submitted_by
