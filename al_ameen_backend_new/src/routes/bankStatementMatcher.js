@@ -197,6 +197,35 @@ router.post(
         filename: `Matched_Bank_Statement_${dateLabel}.xlsx`,
       });
 
+      // Automatically save to database for Date-wise history records
+      let savedRecordId = null;
+      try {
+        const username = req.user?.username || req.user?.name || req.user?.user_id || 'Staff';
+        const title = `Reconciliation: ${fromDate || 'N/A'}${toDate && toDate !== fromDate ? ' to ' + toDate : ''} (${result.summary?.matched_count || 0} Matched)`;
+        const insertRes = await pool.query(
+          `INSERT INTO bank_reconciliation_records 
+           (batch_title, statement_filename, from_date, to_date, summary, statement_rows, matched_rows, mismatch_rows, notes_map, excel_buffer, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           RETURNING id`,
+          [
+            title,
+            statementFile.originalname || 'SBI_Statement.xlsx',
+            fromDate || '',
+            toDate || '',
+            JSON.stringify(result.summary || {}),
+            JSON.stringify(result.statement_rows || []),
+            JSON.stringify(result.matched_rows || []),
+            JSON.stringify(result.mismatch_rows || []),
+            JSON.stringify({}),
+            result.output_buffer,
+            username,
+          ]
+        );
+        savedRecordId = insertRes.rows[0]?.id || null;
+      } catch (saveErr) {
+        console.error('Auto-save to history failed (non-fatal):', saveErr);
+      }
+
       res.json({
         success: true,
         summary: result.summary,
@@ -204,6 +233,8 @@ router.post(
         matched_rows: result.matched_rows.slice(0, 200),
         mismatch_rows: result.mismatch_rows.slice(0, 500),
         download_token: token,
+        saved_record_id: savedRecordId,
+        auto_saved: !!savedRecordId,
       });
     } catch (err) {
       console.error('Reconciliation error:', err);
@@ -285,12 +316,22 @@ router.post('/save-session', auth, allow('super_admin', 'admin', 'office'), asyn
 // GET /api/bank-matcher/history - List saved reconciliation records
 router.get('/history', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
   await readyTable;
-  const historyRes = await pool.query(`
+  const { date, q } = req.query;
+  let query = `
     SELECT id, batch_title, statement_filename, from_date, to_date, summary, created_at, updated_at, created_by
     FROM bank_reconciliation_records
-    ORDER BY created_at DESC
-    LIMIT 60
-  `);
+  `;
+  const params = [];
+  if (date) {
+    params.push(date);
+    query += ` WHERE from_date = $1 OR to_date = $1 OR batch_title ILIKE '%' || $1 || '%' `;
+  } else if (q) {
+    params.push(`%${q}%`);
+    query += ` WHERE batch_title ILIKE $1 OR statement_filename ILIKE $1 OR from_date ILIKE $1 OR to_date ILIKE $1 `;
+  }
+  query += ` ORDER BY created_at DESC LIMIT 60`;
+
+  const historyRes = await pool.query(query, params);
   res.json({ success: true, history: historyRes.rows });
 }));
 

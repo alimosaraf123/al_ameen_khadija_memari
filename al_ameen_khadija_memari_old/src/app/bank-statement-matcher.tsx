@@ -141,6 +141,8 @@ export default function BankStatementMatcherScreen() {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Saved History & Notes State
+  const [pageMode, setPageMode] = useState<'reconcile' | 'history'>('reconcile');
+  const [historySearchDate, setHistorySearchDate] = useState<string>('');
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [savedHistory, setSavedHistory] = useState<any[]>([]);
   const [historyModalOpen, setHistoryModalOpen] = useState<boolean>(false);
@@ -148,8 +150,21 @@ export default function BankStatementMatcherScreen() {
   const [savingSession, setSavingSession] = useState<boolean>(false);
   const [currentSavedId, setCurrentSavedId] = useState<number | null>(null);
 
+  const filteredSavedHistory = useMemo(() => {
+    if (!historySearchDate.trim()) return savedHistory;
+    const q = historySearchDate.trim().toLowerCase();
+    return savedHistory.filter((item: any) => {
+      const title = String(item.batch_title || '').toLowerCase();
+      const fDate = String(item.from_date || '').toLowerCase();
+      const tDate = String(item.to_date || '').toLowerCase();
+      const filename = String(item.statement_filename || '').toLowerCase();
+      return title.includes(q) || fDate.includes(q) || tDate.includes(q) || filename.includes(q);
+    });
+  }, [savedHistory, historySearchDate]);
+
   useEffect(() => {
     void loadMasterStatus();
+    void loadHistory();
   }, []);
 
   const loadHistory = async () => {
@@ -345,17 +360,22 @@ export default function BankStatementMatcherScreen() {
       if (data?.success) {
         setResult(data);
         setDownloadToken(data.download_token);
-        setCurrentSavedId(null);
+        if (data.saved_record_id) {
+          setCurrentSavedId(data.saved_record_id);
+          void loadHistory();
+        } else {
+          setCurrentSavedId(null);
+        }
         setNotes({});
         if (data.summary.matched_count === 0) {
           Alert.alert(
-            'No Matches Found',
-            'No transactions matched by reference and amount. Please check the MISMATCH DETAILS tab.'
+            'Reconciliation Auto-Saved',
+            'No transactions matched by reference and amount. Reconciled data is auto-saved in database.'
           );
         } else {
           Alert.alert(
-            'Reconciliation Complete',
-            `Matched ${data.summary.matched_count} transactions (₹${formatCurrency(data.summary.matched_amount)}).`
+            'Reconciliation Complete (Auto-Saved)',
+            `Matched ${data.summary.matched_count} transactions (₹${formatCurrency(data.summary.matched_amount)}).\n\nResult has been automatically saved to database! You can review this date anytime from Saved Archive without uploading files.`
           );
         }
       } else {
@@ -530,8 +550,35 @@ export default function BankStatementMatcherScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Input Cards Container */}
-        <View style={styles.cardsRow}>
+        {/* Mode Toggle Bar */}
+        <View style={styles.modeToggleBar}>
+          <TouchableOpacity
+            style={[styles.modeToggleTab, pageMode === 'reconcile' && styles.modeToggleTabActive]}
+            onPress={() => setPageMode('reconcile')}
+          >
+            <Text style={[styles.modeToggleTabText, pageMode === 'reconcile' && styles.modeToggleTabTextActive]}>
+              ⚡ Reconcile New Statement (নতুন ফাইল ম্যাচ)
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.modeToggleTab, pageMode === 'history' && styles.modeToggleTabActive]}
+            onPress={() => {
+              setPageMode('history');
+              void loadHistory();
+            }}
+          >
+            <Text style={[styles.modeToggleTabText, pageMode === 'history' && styles.modeToggleTabTextActive]}>
+              📅 Date-wise Saved Archive (সংরক্ষিত হিস্ট্রি)
+              {savedHistory.length ? ` (${savedHistory.length})` : ''}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {pageMode === 'reconcile' ? (
+          <>
+            {/* Input Cards Container */}
+            <View style={styles.cardsRow}>
           {/* Card 1: Bank Statement (Daily Upload) */}
           <View style={styles.inputCard}>
             <View style={styles.cardHeaderRow}>
@@ -701,8 +748,111 @@ export default function BankStatementMatcherScreen() {
             )}
           </TouchableOpacity>
         </View>
+      </>
+    ) : (
+      <View style={styles.historyArchiveCard}>
+        <View style={styles.historyArchiveHeader}>
+          <View style={{ flex: 1, minWidth: 260 }}>
+            <Text style={styles.historyArchiveTitle}>
+              📅 Date-wise Reconciled Records Archive
+            </Text>
+            <Text style={styles.historyArchiveSubtitle}>
+              পূর্বে ম্যাচ ও সেভ করা সব স্টেটমেন্টের রেকর্ড। যেকোনো তারিখের রেকর্ডে ক্লিক করলেই ব্যাংক স্টেটমেন্ট ফাইল আপলোড ছাড়াই পুরো ডাটা ও নোট সরাসরি দেখতে পাবেন।
+            </Text>
+          </View>
 
-        {/* Results Section */}
+          <View style={styles.historySearchBox}>
+            <Text style={{ marginRight: 6 }}>🔍</Text>
+            <TextInput
+              style={styles.historySearchInput}
+              placeholder="Filter by date (e.g. 08-11-2026)..."
+              placeholderTextColor="#94a3b8"
+              value={historySearchDate}
+              onChangeText={setHistorySearchDate}
+            />
+            {historySearchDate ? (
+              <TouchableOpacity onPress={() => setHistorySearchDate('')}>
+                <Text style={{ color: '#94a3b8', padding: 4 }}>✕</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
+
+        {loadingHistory ? (
+          <View style={{ padding: 30, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#0284c7" />
+            <Text style={{ marginTop: 10, color: '#64748b' }}>Loading saved records...</Text>
+          </View>
+        ) : filteredSavedHistory.length === 0 ? (
+          <View style={{ padding: 30, alignItems: 'center' }}>
+            <Text style={{ fontSize: 15, color: '#94a3b8', fontWeight: '700' }}>
+              কোনো সংরক্ষিত রেকর্ড পাওয়া যায়নি।
+            </Text>
+            <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
+              'Reconcile New Statement' ট্যাবে গিয়ে স্টেটমেন্ট ম্যাচ করলেই তা স্বয়ংক্রিয়ভাবে এখানে তারিখ অনুযায়ী সেভ হয়ে যাবে।
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.historyGrid}>
+            {filteredSavedHistory.map((item: any) => {
+              const isSelected = currentSavedId === item.id;
+              return (
+                <View
+                  key={`archive_hist_${item.id}`}
+                  style={[styles.historyGridCard, isSelected && styles.historyGridCardSelected]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                      <Text style={styles.historyCardDateBadge}>
+                        📅 {item.from_date || 'N/A'}{item.to_date && item.to_date !== item.from_date ? ` to ${item.to_date}` : ''}
+                      </Text>
+                      {isSelected && (
+                        <Text style={styles.historyActiveBadge}>ACTIVE</Text>
+                      )}
+                    </View>
+                    <Text style={styles.historyGridTitle} numberOfLines={1}>
+                      {item.batch_title || 'Reconciliation Record'}
+                    </Text>
+                    <View style={styles.historyStatsRow}>
+                      <Text style={styles.historyBadgeMatched}>
+                        ✅ {item.summary?.matched_count || 0} Matched (₹{formatCurrency(item.summary?.matched_amount || 0)})
+                      </Text>
+                      <Text style={styles.historyBadgeUnmatched}>
+                        ⚠️ {item.summary?.statement_unmatched_count || 0} Stmt Unmatched
+                      </Text>
+                      <Text style={styles.historyBadgeBills}>
+                        📑 {item.summary?.bill_unmatched_count || 0} Bill Unmatched
+                      </Text>
+                    </View>
+                    <Text style={styles.historyMeta}>
+                      📁 {item.statement_filename || 'SBI'} • 👤 {item.created_by || 'Staff'} • 🕒 {formatDateDisplay(item.created_at)}
+                    </Text>
+                  </View>
+                  <View style={styles.historyActions}>
+                    <TouchableOpacity
+                      style={[styles.historyViewBtn, isSelected && { backgroundColor: '#15803d' }]}
+                      onPress={() => handleOpenSavedRecord(item.id)}
+                    >
+                      <Text style={styles.historyViewBtnText}>
+                        {isSelected ? '✓ Loaded Below' : '👁 Open Record'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.historyDelBtn}
+                      onPress={() => handleDeleteSavedRecord(item.id)}
+                    >
+                      <Text style={styles.historyDelBtnText}>🗑</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </View>
+    )}
+
+    {/* Results Section */}
         {result ? (
           <View style={styles.resultsContainer}>
             {/* KPI Summary Cards */}
@@ -1378,6 +1528,134 @@ const styles = StyleSheet.create({
     color: '#334155',
     fontWeight: '800',
     fontSize: 14,
+  },
+  modeToggleBar: {
+    flexDirection: 'row',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 16,
+    gap: 4,
+    alignSelf: 'flex-start',
+    flexWrap: 'wrap',
+  },
+  modeToggleTab: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 8,
+  },
+  modeToggleTabActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  modeToggleTabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  modeToggleTabTextActive: {
+    color: '#0369a1',
+    fontWeight: '900',
+  },
+  historyArchiveCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  historyArchiveHeader: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    paddingBottom: 12,
+  },
+  historyArchiveTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  historyArchiveSubtitle: {
+    fontSize: 12,
+    color: '#64748b',
+    lineHeight: 17,
+  },
+  historySearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    minWidth: 260,
+  },
+  historySearchInput: {
+    fontSize: 12,
+    color: '#0f172a',
+    outlineStyle: 'none' as any,
+    flex: 1,
+  },
+  historyGrid: {
+    gap: 10,
+  },
+  historyGridCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  historyGridCardSelected: {
+    borderColor: '#0284c7',
+    borderWidth: 2,
+    backgroundColor: '#f0f9ff',
+  },
+  historyCardDateBadge: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0284c7',
+    backgroundColor: '#e0f2fe',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  historyActiveBadge: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#15803d',
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  historyGridTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1e293b',
+    marginBottom: 4,
   },
   cardsRow: {
     flexDirection: 'row',
