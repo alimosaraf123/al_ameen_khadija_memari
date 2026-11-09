@@ -159,21 +159,26 @@ router.post(
     }
 
     const targetDate = String(req.body.target_date || '').trim();
+    const fromDate = String(req.body.from_date || req.body.target_date || '').trim();
+    const toDate = String(req.body.to_date || req.body.from_date || req.body.target_date || '').trim();
 
     try {
       const result = await reconcileStatement({
         statementBuffer: statementFile.buffer,
         statementFilename: statementFile.originalname || '',
         billBuffer: billFile ? billFile.buffer : null,
-        targetDate,
+        targetDate: fromDate,
+        fromDate,
+        toDate,
       });
 
       // Generate download token and cache buffer
       const token = crypto.randomBytes(16).toString('hex');
+      const dateLabel = fromDate && toDate && fromDate !== toDate ? `${fromDate}_to_${toDate}` : (fromDate || 'reconciled');
       downloadCache.set(token, {
         buffer: result.output_buffer,
         createdAt: Date.now(),
-        filename: `Matched_Bank_Statement_${targetDate || 'reconciled'}.xlsx`,
+        filename: `Matched_Bank_Statement_${dateLabel}.xlsx`,
       });
 
       res.json({

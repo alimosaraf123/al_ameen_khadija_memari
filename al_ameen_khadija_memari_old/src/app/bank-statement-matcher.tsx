@@ -125,7 +125,8 @@ export default function BankStatementMatcherScreen() {
   const [statementFile, setStatementFile] = useState<any>(null);
   const [billFile, setBillFile] = useState<any>(null);
   const [billSource, setBillSource] = useState<'portal' | 'upload'>('portal');
-  const [targetDate, setTargetDate] = useState<string>(getTodayDate());
+  const [fromDate, setFromDate] = useState<string>(getTodayDate());
+  const [toDate, setToDate] = useState<string>(getTodayDate());
 
   // Master State
   const [masterStatus, setMasterStatus] = useState<any>(null);
@@ -227,7 +228,9 @@ export default function BankStatementMatcherScreen() {
       if (billSource === 'upload' && billFile) {
         formData.append('bill_file', billFile);
       } else {
-        formData.append('target_date', targetDate);
+        formData.append('from_date', fromDate);
+        formData.append('to_date', toDate);
+        formData.append('target_date', fromDate);
       }
 
       const res = await fetch(`${base}/api/bank-matcher/reconcile`, {
@@ -273,7 +276,8 @@ export default function BankStatementMatcherScreen() {
       const base = getApiBase();
       const token = await getToken();
       const downloadUrl = `${base}/api/bank-matcher/download/${downloadToken}`;
-      const filename = `Matched_Bank_Statement_${targetDate || 'reconciled'}.xlsx`;
+      const dateLabel = fromDate && toDate && fromDate !== toDate ? `${fromDate}_to_${toDate}` : (fromDate || 'reconciled');
+      const filename = `Matched_Bank_Statement_${dateLabel}.xlsx`;
 
       if (Platform.OS === 'web') {
         try {
@@ -502,14 +506,26 @@ export default function BankStatementMatcherScreen() {
 
             {billSource === 'portal' ? (
               <View style={styles.portalParamsBox}>
-                <DatePickerField
-                  label="Statement / Voucher Date"
-                  value={targetDate}
-                  onChange={setTargetDate}
-                />
+                <View style={styles.datePickerRow}>
+                  <View style={{ flex: 1 }}>
+                    <DatePickerField
+                      label="Voucher Date From"
+                      value={fromDate}
+                      onChange={setFromDate}
+                    />
+                  </View>
+                  <View style={{ width: 10 }} />
+                  <View style={{ flex: 1 }}>
+                    <DatePickerField
+                      label="Voucher Date To"
+                      value={toDate}
+                      onChange={setToDate}
+                    />
+                  </View>
+                </View>
                 <View style={styles.portalInfoBox}>
                   <Text style={styles.portalInfoText}>
-                    ⚡ Automatically fetches SBI Account (19665) bank book & live fee bills for Memari across last 2 sessions (2026 & 2025).
+                    ⚡ Automatically fetches SBI Account (19665) bank book & live fee bills for Memari between the selected dates across last 2 sessions (2026 & 2025). Statement transactions and bills match seamlessly by Ref No. + Amount!
                   </Text>
                 </View>
               </View>
@@ -1235,6 +1251,10 @@ const styles = StyleSheet.create({
   },
   toggleBtnTextActive: {
     color: '#0284c7',
+  },
+  datePickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   portalParamsBox: {
     gap: 10,

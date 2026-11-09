@@ -249,9 +249,10 @@ async function parseUploadedBillExcel(buffer) {
 }
 
 // Fetch live bills from Al-Ameen Accounts Portal (fees_report & bank_book)
-async function fetchLiveBillsFromPortal(targetDate = '') {
+async function fetchLiveBillsFromPortal(fromDate = '', toDate = '') {
   const today = new Date().toISOString().slice(0, 10);
-  const qDate = targetDate || today;
+  const qFrom = fromDate || today;
+  const qTo = toDate || qFrom;
   const records = [];
   const seenBillSig = new Map(); // sig -> index in records
 
@@ -282,7 +283,7 @@ async function fetchLiveBillsFromPortal(targetDate = '') {
 
   // 1. Fetch Bank Book for SBI (Account 19665)
   try {
-    const rpData = await getReceiptPaymentReportData({ fromDate: qDate, toDate: qDate });
+    const rpData = await getReceiptPaymentReportData({ fromDate: qFrom, toDate: qTo });
     const sbiRow = (rpData.rows || []).find(r => r.account_name && r.account_name.includes('19665'));
     if (sbiRow && sbiRow.transactions) {
       sbiRow.transactions.forEach((tx, idx) => {
@@ -312,8 +313,8 @@ async function fetchLiveBillsFromPortal(targetDate = '') {
   // 2. Fetch Fees Report for last 2 sessions as supplement/fallback
   try {
     const feesData = await getFeesReportData({
-      fromDate: qDate,
-      toDate: qDate,
+      fromDate: qFrom,
+      toDate: qTo,
       session: 'last_3_sessions',
       branch: 'Memari',
     });
@@ -545,8 +546,13 @@ async function reconcileStatement({
   statementFilename = '',
   billBuffer = null,
   targetDate = '',
+  fromDate = '',
+  toDate = '',
   customMaster = null,
 }) {
+  const qFrom = fromDate || targetDate || '';
+  const qTo = toDate || fromDate || targetDate || '';
+
   // 1. Load Student Master
   let master = customMaster;
   if (!master || !(master instanceof Map)) {
@@ -558,7 +564,7 @@ async function reconcileStatement({
   if (billBuffer && billBuffer.byteLength > 0) {
     bills = await parseUploadedBillExcel(billBuffer);
   } else {
-    bills = await fetchLiveBillsFromPortal(targetDate);
+    bills = await fetchLiveBillsFromPortal(qFrom, qTo);
   }
 
   if (!bills || bills.length === 0) {
