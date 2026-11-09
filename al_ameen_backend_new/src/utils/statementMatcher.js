@@ -643,8 +643,8 @@ async function reconcileStatement({
     const col = ws.getColumn(descCol);
     if (!col.width || col.width < 52) col.width = 52;
   }
-  if (refCol) {
-    const col = ws.getColumn(refCol);
+  if (refNoCol) {
+    const col = ws.getColumn(refNoCol);
     if (!col.width || col.width < 28) col.width = 28;
   }
 
