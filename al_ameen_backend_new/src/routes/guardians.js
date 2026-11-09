@@ -7,7 +7,9 @@ const {
   loginToPortal,
   getFeesReportData,
   getReceiptPaymentReportData,
+  getDueListData,
   FEES_REPORT_URL,
+  DUE_LIST_URL,
 } = require('../utils/alAmeenAccounts');
 const express = require('express');
 const bcrypt = require('bcryptjs');
@@ -2285,6 +2287,103 @@ router.get('/admin/receipt-payment-export', auth, allow('super_admin', 'admin', 
   const buffer = await workbook.xlsx.writeBuffer();
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="receipt_payment_${fromDate || 'today'}.xlsx"`);
+  res.send(buffer);
+}));
+
+// ADMIN / SUPER ADMIN / OFFICE: Due list from Al-Ameen Accounts Portal (https://alameenmission.net/alameen/accounts/?action=due_list)
+router.get('/admin/due-list', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
+  const toDate = String(req.query.to_date || '').trim();
+  const classId = String(req.query.class_id || 'all').trim();
+  const sessionYear = String(req.query.session_year || 'last_2_sessions').trim();
+
+  try {
+    const data = await getDueListData({ toDate, classId, sessionYear });
+    return res.json(data);
+  } catch (err) {
+    console.error('Due list report error:', err);
+    return res.status(502).json({
+      success: false,
+      message: err.message || 'Failed to fetch Due list from portal',
+    });
+  }
+}));
+
+// ADMIN / SUPER ADMIN / OFFICE: Due list Excel Export
+router.get('/admin/due-list-export', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
+  const toDate = String(req.query.to_date || '').trim();
+  const classId = String(req.query.class_id || 'all').trim();
+  const sessionYear = String(req.query.session_year || 'last_2_sessions').trim();
+  const ExcelJS = require('exceljs');
+
+  const data = await getDueListData({ toDate, classId, sessionYear });
+  const rows = data.rows || [];
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Al-Ameen Mission Academy Memari';
+  const sheet = workbook.addWorksheet('Fees Due List');
+
+  sheet.columns = [
+    { header: 'Sl No', key: 'sl_no', width: 8 },
+    { header: 'Reg No', key: 'reg_no', width: 14 },
+    { header: 'Student Name', key: 'name', width: 26 },
+    { header: 'Class', key: 'class_name', width: 12 },
+    { header: 'Admission Due', key: 'adm_due', width: 16 },
+    { header: 'Monthly Due', key: 'monthly_due', width: 16 },
+    { header: 'Due Month', key: 'due_month', width: 14 },
+    { header: 'Total Due', key: 'total_due', width: 16 },
+    { header: 'Phone Number', key: 'phone', width: 16 },
+    { header: 'WhatsApp Number', key: 'whatsapp', width: 16 },
+    { header: 'Father Name', key: 'father', width: 24 },
+    { header: 'Session', key: 'session', width: 12 },
+    { header: 'WhatsApp Message', key: 'message', width: 60 },
+  ];
+
+  const headerRow = sheet.getRow(1);
+  headerRow.font = { bold: true, color: { argb: 'FF1E293B' } };
+  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBAE6FD' } };
+  headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+  rows.forEach((r, idx) => {
+    sheet.addRow({
+      sl_no: idx + 1,
+      reg_no: r.registration_no,
+      name: r.student_name,
+      class_name: r.class_name,
+      adm_due: r.admission_due,
+      monthly_due: r.monthly_due,
+      due_month: r.due_month,
+      total_due: r.total_due,
+      phone: r.phone,
+      whatsapp: r.whatsapp,
+      father: r.father_name,
+      session: r.session_year,
+      message: r.whatsapp_message,
+    });
+  });
+
+  // Total summary row
+  const totalRow = sheet.addRow({
+    sl_no: '',
+    reg_no: '',
+    name: 'TOTAL',
+    class_name: '',
+    adm_due: data.total_admission_due || 0,
+    monthly_due: data.total_monthly_due || 0,
+    due_month: '',
+    total_due: data.grand_total_due || 0,
+    phone: '',
+    whatsapp: '',
+    father: '',
+    session: '',
+    message: '',
+  });
+  totalRow.font = { bold: true };
+  totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+
+  const filename = `due_fees_list_${data.to_date || 'report'}.xlsx`;
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  const buffer = await workbook.xlsx.writeBuffer();
   res.send(buffer);
 }));
 

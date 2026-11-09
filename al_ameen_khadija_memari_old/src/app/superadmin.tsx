@@ -29,7 +29,7 @@ import { api } from '../lib/api';
 
 
 const menuPermission:Record<string,string>={
- '/students':'students','/teachers':'teachers','/hostel-menu':'rooms','/academy-menu':'marks','/omr-evaluation':'omr_evaluation','/service-staff':'service_staff','/office':'office_panel','/library':'library_panel','/dining-stock':'dining_stock','/guardians':'guardians','/rooms':'rooms','/room-assignments':'room_assignments','/attendance':'attendance','/daily-attendance':'attendance','/behavior':'behavior','/asset-register':'asset_register','/gate-pass':'gate_passes','/visits':'visits','/student-lifecycle':'student_lifecycle','/illness':'illness','/marks':'marks','/terminal-exams':'terminal_exams','/class-results':'published_results','/problems':'problems','/routines':'routines','/notices':'notices','/deposit-fund':'deposit_fund','/fees':'fees','/audit-log':'audit_log'
+ '/students':'students','/teachers':'teachers','/hostel-menu':'rooms','/academy-menu':'marks','/omr-evaluation':'omr_evaluation','/service-staff':'service_staff','/office':'office_panel','/library':'library_panel','/dining-stock':'dining_stock','/guardians':'guardians','/rooms':'rooms','/room-assignments':'room_assignments','/attendance':'attendance','/daily-attendance':'attendance','/behavior':'behavior','/asset-register':'asset_register','/gate-pass':'gate_passes','/visits':'visits','/student-lifecycle':'student_lifecycle','/illness':'illness','/marks':'marks','/terminal-exams':'terminal_exams','/class-results':'published_results','/problems':'problems','/routines':'routines','/notices':'notices','/deposit-fund':'deposit_fund','/fees':'fees','/due-fees':'fees','/audit-log':'audit_log'
 };
 
 const menus: any[] = [
@@ -251,7 +251,7 @@ export default function Dashboard() {
 
       <Modal visible={accountsMenu} transparent animationType="fade" onRequestClose={closeAccountsMenu}>
         <View style={s.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={closeAccountsMenu} accessibilityRole="button" accessibilityLabel="Close accounts menu" /><View style={s.teacherModal}><View style={s.modalHeader}><Text style={s.modalTitle}>Accounts</Text><TouchableOpacity onPress={closeAccountsMenu}><Text style={s.closeText}>×</Text></TouchableOpacity></View>
-          <View style={s.modalGrid}>{[["Fees","/fees?tab=fees_collection"],["Receipt & Payment","/fees?tab=receipt_payment"]].map(([label,path])=><AdminLink path={path} key={label} style={s.modalItem} onPress={()=>{setAccountsMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></AdminLink>)}</View>
+          <View style={s.modalGrid}>{[["Fees","/fees?tab=fees_collection"],["Due Fees","/due-fees"],["Receipt & Payment","/fees?tab=receipt_payment"]].map(([label,path])=><AdminLink path={path} key={label} style={s.modalItem} onPress={()=>{setAccountsMenu(false);router.push(path as any)}}><Text style={s.arrow}>›</Text><Text style={s.modalItemText}>{label}</Text></AdminLink>)}</View>
         </View></View>
       </Modal>
 

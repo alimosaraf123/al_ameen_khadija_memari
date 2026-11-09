@@ -721,11 +721,196 @@ async function getReceiptPaymentReportData({ fromDate = '', toDate = '' } = {}) 
   };
 }
 
+const DUE_LIST_URL = 'https://alameenmission.net/alameen/accounts/?action=due_list';
+
+async function getDueListData({ toDate = '', classId = 'all', sessionYear = 'last_2_sessions' } = {}) {
+  const today = toYmd(new Date());
+  const edate = toDate || today;
+
+  let cookie;
+  try {
+    cookie = await ensureValidCookie();
+  } catch (err) {
+    return {
+      success: false,
+      need_login: true,
+      message: err.message || 'Login required for Al-Ameen Accounts portal.',
+    };
+  }
+
+  // Active XI/XII students from local database
+  let activeXiXii = new Map();
+  try {
+    const dbRes = await pool.query(`
+      SELECT registration_no, student_name, class_name, mobile_number, whatsapp_number, father_mobile 
+      FROM students 
+      WHERE is_active = true AND (class_name ILIKE '%XI%' OR class_name ILIKE '%XII%')
+    `);
+    dbRes.rows.forEach(r => {
+      activeXiXii.set(String(r.registration_no).trim(), r);
+    });
+  } catch (dbErr) {
+    console.error('Error fetching active XI/XII students:', dbErr);
+  }
+
+  let targetSessions = [];
+  if (sessionYear === 'last_2_sessions' || !sessionYear) {
+    targetSessions = ['2026', '2025'];
+  } else {
+    targetSessions = [String(sessionYear).trim()];
+  }
+
+  const allDues = [];
+  const seenRegs = new Set();
+
+  for (const sess of targetSessions) {
+    const bodyParams = new URLSearchParams();
+    bodyParams.set('sdate', '');
+    bodyParams.set('edate', edate);
+    bodyParams.set('branch_id', MEMARI_BRANCH_ID);
+    bodyParams.set('classid', classId || 'all');
+    bodyParams.set('session_year', sess);
+    bodyParams.set('search', 'search');
+
+    let res = await fetchPortalPage(DUE_LIST_URL, 'POST', bodyParams, cookie);
+    if (!res || !res.text) continue;
+
+    // Check if session expired
+    if (res.text.includes('id="login_form"') || res.text.includes('Administrator Login')) {
+      const creds = await getPortalCredentials();
+      if (creds.username && creds.password) {
+        cookie = await loginToPortal(creds.username, creds.password);
+        res = await fetchPortalPage(DUE_LIST_URL, 'POST', bodyParams, cookie);
+      }
+    }
+
+    const html = res.text;
+    const theadMatch = html.match(/<thead[^>]*>([\s\S]*?)<\/thead>/i);
+    if (!theadMatch) continue;
+
+    const ths = [...theadMatch[1].matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)].map(m => cleanText(m[1]));
+
+    let totalColIdx = 51;
+    let smsTextColIdx = 53;
+    let dueMonthColIdx = 54;
+    ths.forEach((h, idx) => {
+      if (/total\s*amount/i.test(h)) totalColIdx = idx;
+      if (/sms\s*text/i.test(h)) smsTextColIdx = idx;
+      if (/due\s*months?/i.test(h)) dueMonthColIdx = idx;
+    });
+
+    const admissionColIndices = [];
+    ths.forEach((h, idx) => {
+      if (/registration fee|admission fee|re-admission fee|bedding fee|utensil fee|caution money|development fee/i.test(h)) {
+        admissionColIndices.push(idx);
+      }
+    });
+
+    const tbodyMatch = html.match(/<tbody>([\s\S]*?)<\/tbody>/i);
+    if (!tbodyMatch) continue;
+
+    const rows = [...tbodyMatch[1].matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
+
+    for (const r of rows) {
+      const tds = [...r[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m => cleanText(m[1]));
+      if (tds.length < 10) continue;
+
+      const regNo = (tds[0] || '').trim();
+      const branchName = (tds[1] || '').trim();
+      const className = (tds[2] || '').trim();
+      const studentName = (tds[3] || '').trim();
+      const fatherName = (tds[6] || '').trim();
+      let phone = (tds[7] || '').replace(/[^0-9]/g, '');
+      let whatsapp = (tds[8] || '').replace(/[^0-9]/g, '');
+
+      const clean10 = (num) => {
+        if (!num) return '';
+        let n = String(num).replace(/[^0-9]/g, '');
+        if (n.length === 12 && n.startsWith('91')) n = n.slice(2);
+        if (n.length === 11 && n.startsWith('0')) n = n.slice(1);
+        return n;
+      };
+
+      phone = clean10(phone);
+      whatsapp = clean10(whatsapp);
+
+      const totalDue = parseFloat((tds[totalColIdx] || '0').replace(/[^0-9.]/g, '')) || 0;
+      if (totalDue <= 0) continue;
+
+      let admissionDue = 0;
+      for (const colIdx of admissionColIndices) {
+        const val = parseFloat((tds[colIdx] || '0').replace(/[^0-9.]/g, '')) || 0;
+        admissionDue += val;
+      }
+      const monthlyDue = Math.max(0, totalDue - admissionDue);
+      const dueMonth = (tds[dueMonthColIdx] || '').trim();
+
+      // XI - XII Filter: Only show students who exist in local database
+      const isXiOrXii = /xi|xii/i.test(className);
+      if (isXiOrXii) {
+        if (!activeXiXii.has(regNo)) {
+          continue; // Exclude student not in local DB
+        }
+        const localStud = activeXiXii.get(regNo);
+        if (!phone || phone.length < 10) phone = clean10(localStud.mobile_number || localStud.father_mobile);
+        if (!whatsapp || whatsapp.length < 10) whatsapp = clean10(localStud.whatsapp_number || localStud.mobile_number);
+      }
+
+      if (!whatsapp || whatsapp.length < 10) whatsapp = phone;
+      if (!phone || phone.length < 10) phone = whatsapp;
+
+      // WhatsApp message template as requested:
+      // "Dear, [NAME], Reg.No.[REG], class-[CLASS], Pay Your total dues Rs.[TOTAL_DUE] , if already paid please ignore it. From-Al Ameen Mission Academy,Memari"
+      const waMessage = `Dear, ${studentName}, Reg.No.${regNo}, class-${className}, Pay Your total dues Rs.${totalDue} , if already paid please ignore it. From-Al Ameen Mission Academy,Memari`;
+
+      const uniqueKey = `${regNo}_${sess}`;
+      if (seenRegs.has(uniqueKey)) continue;
+      seenRegs.add(uniqueKey);
+
+      allDues.push({
+        registration_no: regNo,
+        student_name: studentName,
+        branch_name: branchName,
+        class_name: className,
+        father_name: fatherName,
+        phone,
+        whatsapp,
+        admission_due: admissionDue,
+        monthly_due: monthlyDue,
+        due_month: dueMonth,
+        total_due: totalDue,
+        session_year: sess,
+        whatsapp_message: waMessage,
+      });
+    }
+  }
+
+  // Summary totals
+  const totalStudents = allDues.length;
+  const totalAdmissionDue = allDues.reduce((s, r) => s + r.admission_due, 0);
+  const totalMonthlyDue = allDues.reduce((s, r) => s + r.monthly_due, 0);
+  const grandTotalDue = allDues.reduce((s, r) => s + r.total_due, 0);
+
+  return {
+    success: true,
+    to_date: edate,
+    class_id: classId,
+    session_year: sessionYear,
+    total_students: totalStudents,
+    total_admission_due: totalAdmissionDue,
+    total_monthly_due: totalMonthlyDue,
+    grand_total_due: grandTotalDue,
+    rows: allDues,
+  };
+}
+
 module.exports = {
   getPortalCredentials,
   savePortalCredentials,
   loginToPortal,
   getFeesReportData,
   getReceiptPaymentReportData,
+  getDueListData,
   FEES_REPORT_URL,
+  DUE_LIST_URL,
 };

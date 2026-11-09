@@ -627,6 +627,17 @@ export default function Fees() {
               📑 Receipt & Payment
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              router.push('/due-fees' as any);
+            }}
+            style={[styles.tabBtn, { backgroundColor: '#fef3c7', borderColor: '#f59e0b', borderWidth: 1 }]}
+          >
+            <Text style={[styles.tabBtnText, { color: '#b45309' }]}>
+              ⏳ Due Fees
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Date Filter & Search Actions */}
