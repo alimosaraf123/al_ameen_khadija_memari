@@ -126,7 +126,7 @@ export default function BankStatementMatcherScreen() {
 
   const handleReconcile = async () => {
     if (!statementFile) {
-      Alert.alert('Missing Statement', 'Please select or upload your SBI Bank Statement file (.xlsx).');
+      Alert.alert('Missing Statement', 'Please select or upload your SBI Bank Statement file (.xlsx or .pdf).');
       return;
     }
 
@@ -321,7 +321,7 @@ export default function BankStatementMatcherScreen() {
               <Text style={styles.cardTitle}>SBI Bank Statement</Text>
             </View>
             <Text style={styles.cardHint}>
-              Upload your daily SBI Statement (.xlsx). Original cells & formatting remain completely unchanged.
+              Upload your daily SBI Statement (.xlsx, .xls, or .pdf). Reconciled file will be generated in Excel (.xlsx).
             </Text>
 
             <View style={styles.fileBox}>
@@ -329,7 +329,7 @@ export default function BankStatementMatcherScreen() {
                 <input
                   ref={statementInputRef}
                   type="file"
-                  accept=".xlsx, .xls"
+                  accept=".xlsx, .xls, .pdf, application/pdf"
                   onChange={handleStatementFileChange}
                   style={{ display: 'none' }}
                 />
@@ -340,13 +340,15 @@ export default function BankStatementMatcherScreen() {
                 onPress={() => statementInputRef.current?.click()}
               >
                 <Text style={styles.chooseFileBtnText}>
-                  {statementFile ? '🔄 Change Statement' : '📁 Browse Statement (.xlsx)'}
+                  {statementFile ? '🔄 Change Statement' : '📁 Browse Statement (.xlsx, .pdf)'}
                 </Text>
               </TouchableOpacity>
 
               {statementFile ? (
                 <View style={styles.fileSelectedBadge}>
-                  <Text style={styles.fileSelectedIcon}>📄</Text>
+                  <Text style={styles.fileSelectedIcon}>
+                    {String(statementFile.name || '').toLowerCase().endsWith('.pdf') ? '📕' : '📄'}
+                  </Text>
                   <Text style={styles.fileSelectedName} numberOfLines={1}>
                     {statementFile.name}
                   </Text>

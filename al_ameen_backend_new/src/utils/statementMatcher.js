@@ -295,9 +295,202 @@ async function fetchLiveBillsFromPortal(targetDate = '') {
   return records;
 }
 
+// Parse SBI Bank Statement from PDF buffer
+async function parseSbiPdfStatement(pdfBuffer) {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(pdfBuffer) }).promise;
+
+  const rawLines = [];
+
+  for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
+    const page = await doc.getPage(pageNum);
+    const content = await page.getTextContent();
+    const items = content.items || [];
+
+    const lineBuckets = [];
+
+    for (const item of items) {
+      if (!item.str || !item.str.trim()) continue;
+      const x = item.transform[4];
+      const y = item.transform[5];
+
+      let bucket = lineBuckets.find(b => Math.abs(b.y - y) <= 4.0);
+      if (!bucket) {
+        bucket = { y, items: [] };
+        lineBuckets.push(bucket);
+      }
+      bucket.items.push({ x, text: item.str.trim() });
+    }
+
+    lineBuckets.sort((a, b) => b.y - a.y);
+
+    for (const b of lineBuckets) {
+      b.items.sort((a, b) => a.x - b.x);
+      rawLines.push(b.items);
+    }
+  }
+
+  // Detect column header positions from PDF
+  let colX = {
+    date: null,
+    valDate: null,
+    desc: null,
+    ref: null,
+    branch: null,
+    debit: null,
+    credit: null,
+    balance: null
+  };
+
+  for (const line of rawLines) {
+    const fullText = line.map(i => i.text.toLowerCase()).join(' ');
+    if (fullText.includes('description') && (fullText.includes('balance') || fullText.includes('credit'))) {
+      for (const item of line) {
+        const t = item.text.toLowerCase();
+        if (t.includes('txn date') || (t === 'date' && !colX.date)) colX.date = item.x;
+        if (t.includes('value date')) colX.valDate = item.x;
+        if (t.includes('description')) colX.desc = item.x;
+        if (t.includes('ref no') || t.includes('cheque')) colX.ref = item.x;
+        if (t.includes('branch')) colX.branch = item.x;
+        if (t.includes('debit')) colX.debit = item.x;
+        if (t.includes('credit')) colX.credit = item.x;
+        if (t.includes('balance')) colX.balance = item.x;
+      }
+      break;
+    }
+  }
+
+  const DATE_REGEX = /^([0-9]{1,2}[-/.][0-9]{1,2}[-/.][0-9]{2,4}|[0-9]{1,2}\s+[A-Za-z]{3}\s+[0-9]{2,4}|[0-9]{1,2}-[A-Za-z]{3}-[0-9]{2,4})$/;
+
+  function parseAmount(str) {
+    if (!str) return null;
+    const clean = str.replace(/,/g, '').replace(/₹/g, '').trim();
+    const n = parseFloat(clean);
+    return isNaN(n) ? null : n;
+  }
+
+  const transactions = [];
+  let currentTxn = null;
+
+  for (const line of rawLines) {
+    if (line.length === 0) continue;
+
+    const firstItem = line[0];
+    const isNewTxn = DATE_REGEX.test(firstItem.text);
+
+    if (isNewTxn) {
+      if (currentTxn) {
+        transactions.push(currentTxn);
+      }
+
+      currentTxn = {
+        date: firstItem.text,
+        value_date: firstItem.text,
+        description: '',
+        ref_no: '',
+        branch_code: '',
+        debit: null,
+        credit: null,
+        balance: null
+      };
+
+      for (let i = 1; i < line.length; i++) {
+        const item = line[i];
+        const x = item.x;
+        const text = item.text;
+
+        if (colX.balance && x >= colX.balance - 20) {
+          currentTxn.balance = parseAmount(text);
+        } else if (colX.credit && x >= colX.credit - 20) {
+          currentTxn.credit = parseAmount(text);
+        } else if (colX.debit && x >= colX.debit - 20) {
+          currentTxn.debit = parseAmount(text);
+        } else if (colX.branch && x >= colX.branch - 20) {
+          currentTxn.branch_code = text;
+        } else if (colX.ref && x >= colX.ref - 20) {
+          currentTxn.ref_no = (currentTxn.ref_no + ' ' + text).trim();
+        } else if (colX.desc && x >= colX.desc - 20) {
+          currentTxn.description = (currentTxn.description + ' ' + text).trim();
+        } else if (colX.valDate && x >= colX.valDate - 20) {
+          currentTxn.value_date = text;
+        } else {
+          if (DATE_REGEX.test(text) && !currentTxn.value_date) {
+            currentTxn.value_date = text;
+          } else {
+            currentTxn.description = (currentTxn.description + ' ' + text).trim();
+          }
+        }
+      }
+    } else if (currentTxn) {
+      for (const item of line) {
+        const x = item.x;
+        const text = item.text;
+        if (text.includes('Page ') || text.includes('STATE BANK OF INDIA') || text.includes('STATEMENT OF ACCOUNT')) {
+          continue;
+        }
+        if (colX.ref && x >= colX.ref - 20 && (!colX.branch || x < colX.branch - 20)) {
+          currentTxn.ref_no = (currentTxn.ref_no + ' ' + text).trim();
+        } else if (!colX.debit || x < colX.debit - 20) {
+          currentTxn.description = (currentTxn.description + ' ' + text).trim();
+        }
+      }
+    }
+  }
+
+  if (currentTxn) {
+    transactions.push(currentTxn);
+  }
+
+  return transactions;
+}
+
+// Convert parsed PDF transactions to ExcelJS Workbook matching standard SBI statement format
+function createWorkbookFromPdfTransactions(transactions) {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Statement');
+
+  // Metadata headers (rows 1-21)
+  ws.getCell(1, 1).value = 'Account Name :';
+  ws.getCell(1, 2).value = 'AL-AMEEN MISSION TRUST';
+  ws.getCell(2, 1).value = 'Branch :';
+  ws.getCell(2, 2).value = 'UDAYNARAYANPUR(11389)';
+
+  // Row 22: Standard Table Header Row
+  const headers = [
+    'Txn Date',
+    'Value Date',
+    'Description',
+    'Ref No./Cheque No.',
+    'Branch Code',
+    'Debit',
+    'Credit',
+    'Balance'
+  ];
+
+  headers.forEach((h, idx) => {
+    ws.getCell(22, idx + 1).value = h;
+  });
+
+  // Populate data rows starting at row 23
+  transactions.forEach((tx, idx) => {
+    const r = 23 + idx;
+    ws.getCell(r, 1).value = tx.date;
+    ws.getCell(r, 2).value = tx.value_date;
+    ws.getCell(r, 3).value = tx.description;
+    ws.getCell(r, 4).value = tx.ref_no;
+    ws.getCell(r, 5).value = tx.branch_code;
+    ws.getCell(r, 6).value = tx.debit;
+    ws.getCell(r, 7).value = tx.credit;
+    ws.getCell(r, 8).value = tx.balance;
+  });
+
+  return wb;
+}
+
 // Reconcile function: Matches Statement Buffer against Bills & Student Master
 async function reconcileStatement({
   statementBuffer,
+  statementFilename = '',
   billBuffer = null,
   targetDate = '',
   customMaster = null,
@@ -320,9 +513,22 @@ async function reconcileStatement({
     throw new Error('No bill records found for reconciliation. Please check portal connection or upload a Bill Report Excel.');
   }
 
-  // 3. Load Statement Workbook
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(statementBuffer);
+  // 3. Load Statement Workbook (from Excel buffer or PDF buffer)
+  let workbook = new ExcelJS.Workbook();
+  const isPdf = statementBuffer && (
+    (statementBuffer.length > 4 && statementBuffer.slice(0, 4).toString('ascii') === '%PDF') ||
+    String(statementFilename || '').toLowerCase().endsWith('.pdf')
+  );
+
+  if (isPdf) {
+    const transactions = await parseSbiPdfStatement(statementBuffer);
+    if (!transactions || transactions.length === 0) {
+      throw new Error('PDF Bank Statement theke kono transactions paoa jayni. Please ensure it is an SBI Bank Statement PDF.');
+    }
+    workbook = createWorkbookFromPdfTransactions(transactions);
+  } else {
+    await workbook.xlsx.load(statementBuffer);
+  }
   const ws = workbook.worksheets[0];
 
   const headerRow = findStatementHeaderRow(ws);
@@ -689,6 +895,7 @@ module.exports = {
   getStudentMasterMap,
   parseUploadedBillExcel,
   fetchLiveBillsFromPortal,
+  parseSbiPdfStatement,
   reconcileStatement,
 };
 

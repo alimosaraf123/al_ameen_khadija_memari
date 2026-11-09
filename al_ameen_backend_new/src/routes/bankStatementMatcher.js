@@ -154,7 +154,7 @@ router.post(
     if (!statementFile) {
       return res.status(400).json({
         success: false,
-        message: 'Please select an SBI Bank Statement Excel file (.xlsx).',
+        message: 'Please select an SBI Bank Statement file (.xlsx, .xls, or .pdf).',
       });
     }
 
@@ -163,6 +163,7 @@ router.post(
     try {
       const result = await reconcileStatement({
         statementBuffer: statementFile.buffer,
+        statementFilename: statementFile.originalname || '',
         billBuffer: billFile ? billFile.buffer : null,
         targetDate,
       });
