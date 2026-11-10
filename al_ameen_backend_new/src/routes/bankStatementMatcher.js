@@ -110,7 +110,7 @@ router.post('/master', auth, allow('super_admin', 'admin', 'office'), upload.sin
   if (!regCol) {
     return res.status(400).json({
       success: false,
-      message: "Registration Master-e 'reg.' বা 'registration' কলাম পাওয়া যায়নি।",
+      message: "Registration Master: 'reg.' or 'registration' column not found.",
     });
   }
 
@@ -147,7 +147,7 @@ router.post('/master', auth, allow('super_admin', 'admin', 'office'), upload.sin
 
   res.json({
     success: true,
-    message: `সফলভাবে ${values.length} জন ছাত্রীর মাস্টার ডাটা সেভ করা হয়েছে।`,
+    message: `Successfully saved ${values.length} students into Registration Master.`,
     count: values.length,
   });
 }));

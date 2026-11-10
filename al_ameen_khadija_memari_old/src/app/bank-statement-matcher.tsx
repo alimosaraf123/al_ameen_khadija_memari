@@ -1052,8 +1052,7 @@ export default function BankStatementMatcherScreen() {
             }}
           >
             <Text style={[styles.modeToggleTabText, pageMode === 'register' && styles.modeToggleTabTextActive]}>
-              📖 Master Daily Register (তারিখ অনুযায়ী খাতা)
-              {registerDates.length ? ` (${registerDates.length} দিন)` : ''}
+              📖 Master Daily Register{registerDates.length ? ` (${registerDates.length} Days)` : ''}
             </Text>
           </TouchableOpacity>
 
@@ -1062,7 +1061,7 @@ export default function BankStatementMatcherScreen() {
             onPress={() => setPageMode('reconcile')}
           >
             <Text style={[styles.modeToggleTabText, pageMode === 'reconcile' && styles.modeToggleTabTextActive]}>
-              ⚡ Reconcile New Statement (নতুন ফাইল ম্যাচ)
+              ⚡ Reconcile New Statement
             </Text>
           </TouchableOpacity>
         </View>
@@ -1250,11 +1249,11 @@ export default function BankStatementMatcherScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={styles.registerTitle}>📖 Master Daily Bank Register</Text>
                 <View style={styles.liveCountBadge}>
-                  <Text style={styles.liveCountBadgeText}>{registerDates.length} দিন সংরক্ষিত</Text>
+                  <Text style={styles.liveCountBadgeText}>{registerDates.length} Days Recorded</Text>
                 </View>
               </View>
               <Text style={styles.registerSubtitle}>
-                তারিখ অনুযায়ী ব্যাংকের সমস্ত স্টেটমেন্ট ট্রানজ্যাকশন ও ছাত্র-ছাত্রীদের ম্যাচ হওয়া ফি রিসিট এক মাস্টার খাতায় পর পর সাজানো রয়েছে।
+                Chronological master register of bank statements and matched student fee receipts.
               </Text>
             </View>
 
@@ -1264,7 +1263,7 @@ export default function BankStatementMatcherScreen() {
                 style={styles.exportAllBtn}
                 onPress={() => void handleDownloadConsolidatedExcel()}
               >
-                <Text style={styles.exportAllBtnText}>📥 Export Master Excel (সব তারিখ / ১ মাস)</Text>
+                <Text style={styles.exportAllBtnText}>📥 Export Master Excel (All Dates / 1 Month)</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1296,7 +1295,7 @@ export default function BankStatementMatcherScreen() {
           <View style={styles.grandSummaryRow}>
             <View style={[styles.grandStatCard, { borderLeftColor: '#3b82f6' }]}>
               <Text style={styles.grandStatLabel}>RECORDED DATES</Text>
-              <Text style={[styles.grandStatVal, { color: '#1d4ed8' }]}>{grandSummary.dateCount} দিন</Text>
+              <Text style={[styles.grandStatVal, { color: '#1d4ed8' }]}>{grandSummary.dateCount} Days</Text>
             </View>
             <View style={[styles.grandStatCard, { borderLeftColor: '#0284c7' }]}>
               <Text style={styles.grandStatLabel}>TOTAL STATEMENT TXNS</Text>
@@ -1385,10 +1384,10 @@ export default function BankStatementMatcherScreen() {
         ) : filteredRegisterDates.length === 0 ? (
           <View style={styles.emptyRegisterCard}>
             <Text style={{ fontSize: 16, fontWeight: '700', color: '#64748b' }}>
-              কোনো রেকর্ড পাওয়া যায়নি।
+              No reconciliation records found.
             </Text>
             <Text style={{ fontSize: 13, color: '#94a3b8', marginTop: 6 }}>
-              'Reconcile New Statement' ট্যাবে গিয়ে স্টেটমেন্ট মেলালেই তা স্বয়ংক্রিয়ভাবে এখানে তারিখ অনুযায়ী যোগ হয়ে যাবে।
+              Reconcile a bank statement in the 'Reconcile New Statement' tab to automatically record it here by date.
             </Text>
           </View>
         ) : (
