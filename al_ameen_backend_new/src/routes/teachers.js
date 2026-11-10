@@ -271,6 +271,7 @@ router.get('/gateman-sheet', auth, allow('super_admin', 'admin', 'office'), asyn
 
   const staffRes = await pool.query(`
     SELECT t.id, t.staff_id, t.name, t.designation, t.is_active,
+           COALESCE(t.residential_type, t.profile_details->>'residential_type', '') as residential_type,
            COALESCE(t.profile_details->>'staff_type', '') as staff_type,
            COALESCE(t.profile_details->>'type_of_staff', '') as type_of_staff
     FROM teachers t
@@ -302,8 +303,14 @@ router.get('/gateman-sheet', auth, allow('super_admin', 'admin', 'office'), asyn
     return des.includes('non');
   };
 
+  const isNonResidential = (s) => {
+    const rt = String(s.residential_type || '').toLowerCase().trim();
+    return rt.includes('non');
+  };
+
   const isTeacher = (s) => {
     if (String(s.staff_id || '').trim() === '786') return false;  // Sk Hasibul Alam (In-charge) excluded
+    if (isNonResidential(s)) return false; // Non-residential teachers excluded per user request
     return !isSecurity(s) && !isOtherStaff(s);
   };
 

@@ -39,7 +39,13 @@ export default function RoomAssignments() {
   }, []);
 
   const loginTeachers = useMemo(
-    () => teachers.filter((teacher) => teacher.user_id && teacher.user_active !== false),
+    () =>
+      teachers.filter((teacher) => {
+        const isNonRes = String(teacher.residential_type || teacher.profile_details?.residential_type || '')
+          .toLowerCase()
+          .includes('non');
+        return teacher.user_id && teacher.user_active !== false && !isNonRes;
+      }),
     [teachers]
   );
 
