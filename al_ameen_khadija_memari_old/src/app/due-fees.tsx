@@ -5,6 +5,7 @@ import {
   Linking,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -35,6 +36,65 @@ const formatCurrency = (val: any) => {
     maximumFractionDigits: 0,
   });
 };
+
+interface DueColumnDef {
+  key: string;
+  label: string;
+  width: number;
+  align?: 'flex-start' | 'center' | 'flex-end';
+  sortable?: boolean;
+}
+
+const DUE_TABLE_COLUMNS: DueColumnDef[] = [
+  { key: 'sl', label: 'Sl No', width: 60, align: 'center', sortable: true },
+  { key: 'registration_no', label: 'Reg No', width: 90, align: 'center', sortable: true },
+  { key: 'student_name', label: 'Name', width: 220, align: 'flex-start', sortable: true },
+  { key: 'admission_due', label: 'Admission Due', width: 120, align: 'center', sortable: true },
+  { key: 'monthly_due', label: 'Monthly Due', width: 120, align: 'center', sortable: true },
+  { key: 'due_month', label: 'Due Month', width: 110, align: 'center', sortable: true },
+  { key: 'total_due', label: 'Total Due', width: 120, align: 'center', sortable: true },
+  { key: 'whatsapp', label: 'Whatsapp', width: 95, align: 'center', sortable: false },
+  { key: 'phone', label: 'Phone call', width: 95, align: 'center', sortable: false },
+  { key: 'whatsapp_call', label: 'Whatsapp call', width: 105, align: 'center', sortable: false },
+];
+
+function getSortAscLabel(key?: string) {
+  switch (key) {
+    case 'sl':
+      return '(1 → 100)';
+    case 'registration_no':
+      return '(Lowest First)';
+    case 'student_name':
+      return '(A → Z)';
+    case 'due_month':
+      return '(Jan → Dec)';
+    case 'admission_due':
+    case 'monthly_due':
+    case 'total_due':
+      return '(Low → High)';
+    default:
+      return '(A → Z)';
+  }
+}
+
+function getSortDescLabel(key?: string) {
+  switch (key) {
+    case 'sl':
+      return '(100 → 1)';
+    case 'registration_no':
+      return '(Highest First)';
+    case 'student_name':
+      return '(Z → A)';
+    case 'due_month':
+      return '(Dec → Jan)';
+    case 'admission_due':
+    case 'monthly_due':
+    case 'total_due':
+      return '(High → Low)';
+    default:
+      return '(Z → A)';
+  }
+}
 
 function NavTabLink({
   path,
@@ -120,6 +180,24 @@ export default function DueFeesScreen() {
   const [exportingExcel, setExportingExcel] = useState<boolean>(false);
   const [dueData, setDueData] = useState<any>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(false);
+
+  // Column Sorting
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [activeFilterMenuCol, setActiveFilterMenuCol] = useState<DueColumnDef | null>(null);
+
+  const openColumnMenu = (col: DueColumnDef) => {
+    setActiveFilterMenuCol(col);
+  };
+
+  const handleSort = (colKey: string, direction: 'asc' | 'desc') => {
+    if (sortColumn === colKey && sortDirection === direction) {
+      setSortColumn(null);
+    } else {
+      setSortColumn(colKey);
+      setSortDirection(direction);
+    }
+  };
 
   // Portal Credentials Modal
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -284,7 +362,7 @@ export default function DueFeesScreen() {
   };
 
   // Filtered rows by search input
-  const filteredRows = useMemo(() => {
+  const searchedRows = useMemo(() => {
     const rows = dueData?.rows || [];
     if (!searchQuery.trim()) return rows;
     const q = searchQuery.toLowerCase().trim();
@@ -298,6 +376,97 @@ export default function DueFeesScreen() {
       return reg.includes(q) || name.includes(q) || cls.includes(q) || fName.includes(q) || phone.includes(q) || month.includes(q);
     });
   }, [dueData?.rows, searchQuery]);
+
+  // Sorted rows
+  const filteredRows = useMemo(() => {
+    if (!sortColumn) return searchedRows;
+    const sorted = [...searchedRows];
+
+    const parseNum = (val: any) => {
+      if (typeof val === 'number') return val;
+      const clean = String(val || '').replace(/[^0-9.-]/g, '');
+      const n = parseFloat(clean);
+      return isNaN(n) ? 0 : n;
+    };
+
+    const MONTH_MAP: Record<string, number> = {
+      jan: 1, january: 1,
+      feb: 2, february: 2,
+      mar: 3, march: 3,
+      apr: 4, april: 4,
+      may: 5,
+      jun: 6, june: 6,
+      jul: 7, july: 7,
+      aug: 8, august: 8,
+      sep: 9, sept: 9, september: 9,
+      oct: 10, october: 10,
+      nov: 11, november: 11,
+      dec: 12, december: 12,
+    };
+
+    const getMonthNum = (val: any) => {
+      const str = String(val || '').toLowerCase().trim();
+      for (const [k, num] of Object.entries(MONTH_MAP)) {
+        if (str.includes(k)) return num;
+      }
+      return 99;
+    };
+
+    sorted.sort((a: any, b: any) => {
+      let cmp = 0;
+      switch (sortColumn) {
+        case 'sl': {
+          const slA = parseNum(a.sl_no || a.sl || 0);
+          const slB = parseNum(b.sl_no || b.sl || 0);
+          cmp = slA - slB;
+          break;
+        }
+        case 'registration_no': {
+          const numA = parseNum(a.registration_no);
+          const numB = parseNum(b.registration_no);
+          if (numA && numB && numA !== numB) {
+            cmp = numA - numB;
+          } else {
+            cmp = String(a.registration_no || '').localeCompare(String(b.registration_no || ''), undefined, { numeric: true });
+          }
+          break;
+        }
+        case 'student_name': {
+          cmp = String(a.student_name || '').localeCompare(String(b.student_name || ''));
+          break;
+        }
+        case 'admission_due': {
+          cmp = parseNum(a.admission_due) - parseNum(b.admission_due);
+          break;
+        }
+        case 'monthly_due': {
+          cmp = parseNum(a.monthly_due) - parseNum(b.monthly_due);
+          break;
+        }
+        case 'due_month': {
+          const mA = getMonthNum(a.due_month);
+          const mB = getMonthNum(b.due_month);
+          cmp = mA - mB;
+          if (cmp === 0) {
+            cmp = String(a.due_month || '').localeCompare(String(b.due_month || ''));
+          }
+          break;
+        }
+        case 'total_due': {
+          cmp = parseNum(a.total_due) - parseNum(b.total_due);
+          break;
+        }
+        default: {
+          const valA = String(a[sortColumn] || '');
+          const valB = String(b[sortColumn] || '');
+          cmp = valA.localeCompare(valB);
+        }
+      }
+      return sortDirection === 'desc' ? -cmp : cmp;
+    });
+
+    return sorted;
+  }, [searchedRows, sortColumn, sortDirection]);
 
   // Dynamic filtered totals
   const totals = useMemo(() => {
@@ -511,12 +680,26 @@ export default function DueFeesScreen() {
         {/* Table Content Card */}
         <View style={styles.tableCard}>
           <View style={styles.tableHeaderInfo}>
-            <Text style={styles.tableTitle}>
-              📋 Student Fees Due List ({filteredRows.length} Records)
-            </Text>
-            <Text style={styles.tableSubtitle}>
-              Branch: <Text style={{ fontWeight: '700', color: '#0f172a' }}>Memari</Text> • XI-XII filtered to local active students only
-            </Text>
+            <View style={styles.tableHeaderInfoRow}>
+              <View>
+                <Text style={styles.tableTitle}>
+                  📋 Student Fees Due List ({filteredRows.length} Records)
+                </Text>
+                <Text style={styles.tableSubtitle}>
+                  Branch: <Text style={{ fontWeight: '700', color: '#0f172a' }}>Memari</Text> • XI-XII filtered to local active students only
+                </Text>
+              </View>
+              {sortColumn && (
+                <View style={styles.activeSortChip}>
+                  <Text style={styles.activeSortChipText}>
+                    Sorted by: {DUE_TABLE_COLUMNS.find((c) => c.key === sortColumn)?.label} ({sortDirection === 'asc' ? 'Ascending ▲' : 'Descending ▼'})
+                  </Text>
+                  <TouchableOpacity onPress={() => setSortColumn(null)} style={styles.activeSortClearBtn}>
+                    <Text style={styles.activeSortClearBtnText}>✕ Reset</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
           </View>
 
           {loading ? (
@@ -535,38 +718,67 @@ export default function DueFeesScreen() {
           ) : (
             <ScrollView horizontal style={styles.horizontalScroll}>
               <View style={styles.table}>
-                {/* Table Header Row (Matching Screenshot 4) */}
+                {/* Table Header Row with Filter & Sort */}
                 <View style={styles.tableHeadRow}>
-                  <View style={[styles.thCell, { width: 60 }]}>
-                    <Text style={styles.thText}>Sl No</Text>
-                  </View>
-                  <View style={[styles.thCell, { width: 90 }]}>
-                    <Text style={styles.thText}>Reg No</Text>
-                  </View>
-                  <View style={[styles.thCell, { width: 220, alignItems: 'flex-start' }]}>
-                    <Text style={styles.thText}>Name</Text>
-                  </View>
-                  <View style={[styles.thCell, { width: 120 }]}>
-                    <Text style={styles.thText}>Admissin Due</Text>
-                  </View>
-                  <View style={[styles.thCell, { width: 120 }]}>
-                    <Text style={styles.thText}>Monthly Due</Text>
-                  </View>
-                  <View style={[styles.thCell, { width: 110 }]}>
-                    <Text style={styles.thText}>Due Month</Text>
-                  </View>
-                  <View style={[styles.thCell, { width: 120 }]}>
-                    <Text style={styles.thText}>Total Due</Text>
-                  </View>
-                  <View style={[styles.thCell, { width: 95 }]}>
-                    <Text style={styles.thText}>Whatsapp</Text>
-                  </View>
-                  <View style={[styles.thCell, { width: 95 }]}>
-                    <Text style={styles.thText}>Phone call</Text>
-                  </View>
-                  <View style={[styles.thCell, { width: 105 }]}>
-                    <Text style={styles.thText}>Whatsapp call</Text>
-                  </View>
+                  {DUE_TABLE_COLUMNS.map((col, cIdx) => {
+                    const isSorted = sortColumn === col.key;
+                    const isLast = cIdx === DUE_TABLE_COLUMNS.length - 1;
+                    if (!col.sortable) {
+                      return (
+                        <View
+                          key={col.key}
+                          style={[
+                            styles.thCell,
+                            { width: col.width },
+                            isLast && { borderRightWidth: 0 },
+                          ]}
+                        >
+                          <Text style={styles.thText}>{col.label}</Text>
+                        </View>
+                      );
+                    }
+
+                    return (
+                      <TouchableOpacity
+                        key={col.key}
+                        activeOpacity={0.7}
+                        style={[
+                          styles.thCell,
+                          styles.thCellSortable,
+                          { width: col.width },
+                          isSorted && styles.thCellSorted,
+                          isLast && { borderRightWidth: 0 },
+                        ]}
+                        onPress={() => openColumnMenu(col)}
+                      >
+                        <View
+                          style={[
+                            styles.thInnerRow,
+                            col.align === 'flex-start' ? { justifyContent: 'flex-start' } : { justifyContent: 'center' },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.thText,
+                              isSorted && styles.thTextSorted,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {col.label}
+                          </Text>
+                          <View style={[styles.thBadgeWrap, isSorted && styles.thBadgeWrapSorted]}>
+                            {isSorted ? (
+                              <Text style={styles.sortIndicatorText}>
+                                {sortDirection === 'asc' ? '▲' : '▼'}
+                              </Text>
+                            ) : (
+                              <Text style={styles.sortDefaultIndicator}>▾</Text>
+                            )}
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
 
                 {/* Table Body Rows */}
@@ -711,6 +923,95 @@ export default function DueFeesScreen() {
 
       {/* Floating 1-Click Scroll Top and Bottom Buttons */}
       <ScrollNavigationButtons scrollRef={scrollRef} />
+
+      {/* Column Sort / Filter Modal */}
+      <Modal
+        visible={Boolean(activeFilterMenuCol)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActiveFilterMenuCol(null)}
+      >
+        <View style={styles.filterModalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setActiveFilterMenuCol(null)}
+          />
+          <View style={styles.filterModalCard}>
+            {/* Modal Header */}
+            <View style={styles.filterModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 16 }}>📊</Text>
+                <Text style={styles.filterModalTitle}>
+                  Sort: {activeFilterMenuCol?.label}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.filterModalCloseBtn}
+                onPress={() => setActiveFilterMenuCol(null)}
+              >
+                <Text style={styles.filterModalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionTitle}>SORTING ORDER</Text>
+              <View style={styles.sortButtonsRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.sortBtn,
+                    sortColumn === activeFilterMenuCol?.key && sortDirection === 'asc' && styles.sortBtnActive,
+                  ]}
+                  onPress={() => {
+                    handleSort(activeFilterMenuCol!.key, 'asc');
+                    setActiveFilterMenuCol(null);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.sortBtnText,
+                      sortColumn === activeFilterMenuCol?.key && sortDirection === 'asc' && styles.sortBtnTextActive,
+                    ]}
+                  >
+                    ▲ Sort Ascending {getSortAscLabel(activeFilterMenuCol?.key)}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.sortBtn,
+                    sortColumn === activeFilterMenuCol?.key && sortDirection === 'desc' && styles.sortBtnActive,
+                  ]}
+                  onPress={() => {
+                    handleSort(activeFilterMenuCol!.key, 'desc');
+                    setActiveFilterMenuCol(null);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.sortBtnText,
+                      sortColumn === activeFilterMenuCol?.key && sortDirection === 'desc' && styles.sortBtnTextActive,
+                    ]}
+                  >
+                    ▼ Sort Descending {getSortDescLabel(activeFilterMenuCol?.key)}
+                  </Text>
+                </TouchableOpacity>
+
+                {sortColumn === activeFilterMenuCol?.key && (
+                  <TouchableOpacity
+                    style={styles.clearSortBtn}
+                    onPress={() => {
+                      setSortColumn(null);
+                      setActiveFilterMenuCol(null);
+                    }}
+                  >
+                    <Text style={styles.clearSortBtnText}>⟲ Reset / Clear Sort</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Al-Ameen Accounts Portal Credentials Modal */}
       <Modal visible={settingsOpen} transparent animationType="fade">
@@ -1274,5 +1575,177 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#ffffff',
+  },
+  tableHeaderInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  activeSortChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#e0f2fe',
+    borderWidth: 1,
+    borderColor: '#7dd3fc',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  activeSortChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0369a1',
+  },
+  activeSortClearBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: '#bae6fd',
+  },
+  activeSortClearBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0369a1',
+  },
+  thCellSortable: {
+    cursor: 'pointer' as any,
+    userSelect: 'none' as any,
+  },
+  thCellSorted: {
+    backgroundColor: '#7dd3fc',
+    borderBottomWidth: 2,
+    borderBottomColor: '#0284c7',
+  },
+  thInnerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    width: '100%',
+    paddingHorizontal: 2,
+  },
+  thTextSorted: {
+    color: '#0369a1',
+    fontWeight: '900',
+  },
+  thBadgeWrap: {
+    marginLeft: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  thBadgeWrapSorted: {
+    backgroundColor: '#0284c7',
+  },
+  sortIndicatorText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#ffffff',
+  },
+  sortDefaultIndicator: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  filterModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  filterModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  filterModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    marginBottom: 12,
+  },
+  filterModalTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  filterModalCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterModalCloseText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#64748b',
+  },
+  modalSection: {
+    marginBottom: 8,
+  },
+  modalSectionTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748b',
+    letterSpacing: 0.6,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  sortButtonsRow: {
+    gap: 8,
+  },
+  sortBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  sortBtnActive: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#16a34a',
+  },
+  sortBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  sortBtnTextActive: {
+    color: '#15803d',
+    fontWeight: '800',
+  },
+  clearSortBtn: {
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  clearSortBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#dc2626',
   },
 });
