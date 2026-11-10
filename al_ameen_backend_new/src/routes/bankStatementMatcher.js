@@ -466,7 +466,7 @@ router.get('/register', auth, allow('super_admin', 'admin', 'office'), asyncHand
     params.push(`%${q}%`);
     query += ` WHERE from_date ILIKE $1 OR to_date ILIKE $1 OR batch_title ILIKE $1 `;
   }
-  query += ` ORDER BY from_date DESC, id DESC LIMIT 50`;
+  query += ` ORDER BY from_date DESC, id DESC LIMIT 500`;
 
   const dbRes = await pool.query(query, params);
 
