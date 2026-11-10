@@ -144,8 +144,8 @@ export default function BankStatementMatcherScreen() {
   const [pageMode, setPageMode] = useState<'reconcile' | 'history'>('reconcile');
   const [historySearchDate, setHistorySearchDate] = useState<string>('');
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [noteStatus, setNoteStatus] = useState<Record<string, 'saving' | 'saved' | 'error'>>({});
   const [savedHistory, setSavedHistory] = useState<any[]>([]);
-  const [historyModalOpen, setHistoryModalOpen] = useState<boolean>(false);
   const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
   const [savingSession, setSavingSession] = useState<boolean>(false);
   const [currentSavedId, setCurrentSavedId] = useState<number | null>(null);
@@ -181,17 +181,68 @@ export default function BankStatementMatcherScreen() {
     }
   };
 
+  // Real-time note auto-save for individual transactions
+  const saveSingleNote = async (rowKey: string, noteText: string) => {
+    if (!currentSavedId) return;
+    try {
+      setNoteStatus((prev) => ({ ...prev, [rowKey]: 'saving' }));
+      const res = await api('/api/bank-matcher/save-note', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: currentSavedId,
+          row_key: rowKey,
+          note: noteText,
+        }),
+      });
+      if (res?.success) {
+        setNoteStatus((prev) => ({ ...prev, [rowKey]: 'saved' }));
+        // Also update note inside statement_rows so it stays in sync
+        setResult((prev: any) => {
+          if (!prev?.statement_rows) return prev;
+          const updated = prev.statement_rows.map((r: any, idx: number) => {
+            const k = String(r.statement_row ?? (r.ref_no || idx));
+            if (k === String(rowKey)) {
+              return { ...r, note: noteText };
+            }
+            return r;
+          });
+          return { ...prev, statement_rows: updated };
+        });
+        setTimeout(() => {
+          setNoteStatus((prev) => {
+            const copy = { ...prev };
+            delete copy[rowKey];
+            return copy;
+          });
+        }, 2200);
+      } else {
+        setNoteStatus((prev) => ({ ...prev, [rowKey]: 'error' }));
+      }
+    } catch {
+      setNoteStatus((prev) => ({ ...prev, [rowKey]: 'error' }));
+    }
+  };
+
   const handleSaveSession = async () => {
     if (!result) return;
     try {
       setSavingSession(true);
+
+      // Embed all current notes into statement_rows before saving
+      const statementRowsWithNotes = (result.statement_rows || []).map((r: any, idx: number) => {
+        const k = String(r.statement_row ?? (r.ref_no || idx));
+        const n = notes[k] !== undefined ? notes[k] : (r.note || '');
+        return { ...r, note: n };
+      });
+
       const payload = {
         id: currentSavedId || undefined,
         statement_filename: statementFile?.name || 'SBI_Statement.xlsx',
         from_date: fromDate,
         to_date: toDate,
         summary: result.summary,
-        statement_rows: result.statement_rows,
+        statement_rows: statementRowsWithNotes,
         matched_rows: result.matched_rows,
         mismatch_rows: result.mismatch_rows,
         notes_map: notes,
@@ -206,7 +257,14 @@ export default function BankStatementMatcherScreen() {
 
       if (res?.success) {
         if (res.id) setCurrentSavedId(res.id);
-        Alert.alert('Saved Successfully', 'Reconciled statement and notes have been saved to database. You can review them anytime from Saved History.');
+        setResult((prev: any) => ({
+          ...prev,
+          statement_rows: statementRowsWithNotes,
+        }));
+        Alert.alert(
+          'Saved Successfully',
+          'Reconciled statement and all custom notes have been saved permanently to the database.\nYou can reopen this anytime from the Date-wise Saved Archive.'
+        );
         void loadHistory();
       } else {
         Alert.alert('Save Failed', res?.message || 'Could not save session.');
@@ -224,19 +282,43 @@ export default function BankStatementMatcherScreen() {
       const res = await api(`/api/bank-matcher/history/${id}`);
       if (res?.success && res.record) {
         const rec = res.record;
+
+        // Consolidate notes from both rec.notes_map and rec.statement_rows
+        const mergedNotes: Record<string, string> = {};
+        if (rec.notes_map && typeof rec.notes_map === 'object') {
+          Object.assign(mergedNotes, rec.notes_map);
+        }
+        if (Array.isArray(rec.statement_rows)) {
+          rec.statement_rows.forEach((r: any, idx: number) => {
+            const k = String(r.statement_row ?? (r.ref_no || idx));
+            if (r.note && mergedNotes[k] === undefined) {
+              mergedNotes[k] = r.note;
+            }
+          });
+        }
+
         setResult({
           summary: rec.summary,
           statement_rows: rec.statement_rows,
           matched_rows: rec.matched_rows,
           mismatch_rows: rec.mismatch_rows,
         });
-        setNotes(rec.notes_map || {});
+        setNotes(mergedNotes);
         setCurrentSavedId(rec.id);
         if (rec.from_date) setFromDate(rec.from_date);
         if (rec.to_date) setToDate(rec.to_date);
         if (rec.download_token) setDownloadToken(rec.download_token);
-        setHistoryModalOpen(false);
-        Alert.alert('Record Loaded', `Loaded ${rec.batch_title || 'saved reconciliation'} with ${Object.keys(rec.notes_map || {}).length} saved notes.`);
+
+        // Switch automatically to reconcile view so transactions & notes appear instantly
+        setPageMode('reconcile');
+
+        const filledCount = Object.values(mergedNotes).filter((v) => !!String(v).trim()).length;
+        Alert.alert(
+          'Record Loaded',
+          `Loaded ${rec.batch_title || 'saved reconciliation'}.\n${
+            filledCount > 0 ? `📝 ${filledCount} saved notes loaded into table.` : 'No custom notes previously saved.'
+          }`
+        );
       }
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to load saved record.');
@@ -534,18 +616,6 @@ export default function BankStatementMatcherScreen() {
           >
             <Text style={styles.studentMasterTabBtnText}>
               👥 Student Master ({masterStatus?.custom_master_count || 473})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => {
-              void loadHistory();
-              setHistoryModalOpen(true);
-            }}
-            style={[styles.tabBtn, styles.historyTabBtn]}
-          >
-            <Text style={styles.historyTabBtnText}>
-              📜 Saved History
             </Text>
           </TouchableOpacity>
         </View>
@@ -1030,7 +1100,7 @@ export default function BankStatementMatcherScreen() {
                           🏦 ORIGINAL BANK STATEMENT (UNCHANGED COLUMNS)
                         </Text>
                       </View>
-                      <View style={[styles.superHeaderStudent, { width: 740 }]}>
+                      <View style={[styles.superHeaderStudent, { width: 780 }]}>
                         <Text style={styles.superHeaderTextStudent}>
                           🎓 MATCHED STUDENT DETAILS & NOTES (ADDED BESIDE BALANCE)
                         </Text>
@@ -1083,15 +1153,19 @@ export default function BankStatementMatcherScreen() {
                       <View style={[styles.pTh, styles.pThStudent, { width: 100 }]}>
                         <Text style={styles.pThTextStudent}>Amount</Text>
                       </View>
-                      <View style={[styles.pTh, styles.pThStudent, { width: 180, borderRightWidth: 0 }]}>
+                      <View style={[styles.pTh, styles.pThStudent, { width: 220, borderRightWidth: 0 }]}>
                         <Text style={styles.pThTextStudent}>Note</Text>
                       </View>
                     </View>
 
                     {/* Data Rows */}
-                    {filteredStatementRows.map((row: any, idx: number) => (
-                      <View
-                        key={`stmt_row_${idx}`}
+                    {filteredStatementRows.map((row: any, idx: number) => {
+                      const rowKey = String(row.statement_row ?? (row.ref_no ? row.ref_no : idx));
+                      const rowNote = notes[rowKey] !== undefined ? notes[rowKey] : (row.note || '');
+                      const status = noteStatus[rowKey];
+                      return (
+                        <View
+                          key={`stmt_row_${rowKey}_${idx}`}
                         style={[styles.pTr, idx % 2 === 0 ? styles.pTrEven : styles.pTrOdd]}
                       >
                         <View style={[styles.pTd, { width: 45 }]}>
@@ -1198,22 +1272,36 @@ export default function BankStatementMatcherScreen() {
                             {row.is_matched ? `₹${formatCurrency(row.amount)}` : '-'}
                           </Text>
                         </View>
-                        <View style={[styles.pTd, styles.pTdStudent, { width: 180, borderRightWidth: 0, paddingVertical: 4, paddingHorizontal: 6 }]}>
-                          <TextInput
-                            style={styles.noteInput}
-                            placeholder="Add note..."
-                            placeholderTextColor="#94a3b8"
-                            value={notes[row.statement_row || idx] || ''}
-                            onChangeText={(val) => {
-                              setNotes((prev) => ({
-                                ...prev,
-                                [row.statement_row || idx]: val,
-                              }));
-                            }}
-                          />
+                        <View style={[styles.pTd, styles.pTdStudent, { width: 220, borderRightWidth: 0, paddingVertical: 4, paddingHorizontal: 6 }]}>
+                          <View style={styles.noteInputContainer}>
+                            <TextInput
+                              style={styles.noteInput}
+                              placeholder="Add note..."
+                              placeholderTextColor="#94a3b8"
+                              value={rowNote}
+                              onChangeText={(val) => {
+                                setNotes((prev) => ({
+                                  ...prev,
+                                  [rowKey]: val,
+                                }));
+                              }}
+                              onBlur={() => {
+                                if (currentSavedId) {
+                                  void saveSingleNote(rowKey, notes[rowKey] !== undefined ? notes[rowKey] : (row.note || ''));
+                                }
+                              }}
+                            />
+                            {status === 'saving' && (
+                              <Text style={styles.noteStatusSaving}>💾 saving...</Text>
+                            )}
+                            {status === 'saved' && (
+                              <Text style={styles.noteStatusSaved}>✓ saved</Text>
+                            )}
+                          </View>
                         </View>
                       </View>
-                    ))}
+                    );
+                  })}
                   </View>
                 ) : (
                   <View style={styles.previewTable}>
@@ -1245,73 +1333,93 @@ export default function BankStatementMatcherScreen() {
                       <View style={[styles.pTh, { width: 500, alignItems: 'flex-start' }]}>
                         <Text style={styles.pThText}>Particulars / Description</Text>
                       </View>
-                      <View style={[styles.pTh, { width: 180, borderRightWidth: 0 }]}>
+                      <View style={[styles.pTh, { width: 220, borderRightWidth: 0 }]}>
                         <Text style={styles.pThText}>Note</Text>
                       </View>
                     </View>
 
-                    {filteredMismatchBills.map((row: any, idx: number) => (
-                      <View
-                        key={`mismatch_bill_${idx}`}
-                        style={[styles.pTr, idx % 2 === 0 ? styles.pTrEven : styles.pTrOdd]}
-                      >
-                        <View style={[styles.pTd, { width: 80 }]}>
-                          <View style={styles.sourceBadge}>
-                            <Text style={styles.sourceBadgeText}>{row.source}</Text>
+                    {filteredMismatchBills.map((row: any, idx: number) => {
+                      const mismatchKey = row.reg_no
+                        ? `bill_${row.reg_no}_${row.receipt_no || idx}`
+                        : (row.statement_ref ? `bill_${row.statement_ref}` : `mismatch_${idx}`);
+                      const mismatchNote = notes[mismatchKey] !== undefined ? notes[mismatchKey] : (row.note || '');
+                      const mStatus = noteStatus[mismatchKey];
+                      return (
+                        <View
+                          key={`mismatch_bill_${mismatchKey}_${idx}`}
+                          style={[styles.pTr, idx % 2 === 0 ? styles.pTrEven : styles.pTrOdd]}
+                        >
+                          <View style={[styles.pTd, { width: 80 }]}>
+                            <View style={styles.sourceBadge}>
+                              <Text style={styles.sourceBadgeText}>{row.source}</Text>
+                            </View>
+                          </View>
+                          <View style={[styles.pTd, { width: 180, alignItems: 'flex-start' }]}>
+                            <Text style={styles.reasonText}>{row.reason}</Text>
+                          </View>
+                          <View
+                            style={[styles.pTd, { width: 240 }]}
+                            {...(Platform.OS === 'web' ? ({ title: row.statement_ref || row.inst_no || '' } as any) : {})}
+                          >
+                            <Text style={styles.pTdRef} numberOfLines={1} selectable>
+                              {row.statement_ref || row.inst_no || '-'}
+                            </Text>
+                          </View>
+                          <View style={[styles.pTd, { width: 110 }]}>
+                            <Text style={styles.pTdAmount}>
+                              ₹{formatCurrency(row.credit || row.debit || row.bill_amount)}
+                            </Text>
+                          </View>
+                          <View style={[styles.pTd, { width: 90 }]}>
+                            <Text style={styles.pTdTextBold}>{row.reg_no || '-'}</Text>
+                          </View>
+                          <View style={[styles.pTd, { width: 90 }]}>
+                            <Text style={styles.pTdText}>{row.receipt_no || '-'}</Text>
+                          </View>
+                          <View style={[styles.pTd, { width: 180, alignItems: 'flex-start' }]}>
+                            <Text style={styles.pTdName}>{row.student_name || '-'}</Text>
+                          </View>
+                          <View style={[styles.pTd, { width: 100 }]}>
+                            <Text style={styles.pTdText}>{row.class_name || '-'}</Text>
+                          </View>
+                          <View
+                            style={[styles.pTd, { width: 500, alignItems: 'flex-start' }]}
+                            {...(Platform.OS === 'web' ? ({ title: row.particulars || row.description || '' } as any) : {})}
+                          >
+                            <Text style={styles.pTdDesc} numberOfLines={1} selectable>
+                              {row.particulars || row.description || '-'}
+                            </Text>
+                          </View>
+                          <View style={[styles.pTd, { width: 220, borderRightWidth: 0, paddingVertical: 4, paddingHorizontal: 6 }]}>
+                            <View style={styles.noteInputContainer}>
+                              <TextInput
+                                style={styles.noteInput}
+                                placeholder="Add note..."
+                                placeholderTextColor="#94a3b8"
+                                value={mismatchNote}
+                                onChangeText={(val) => {
+                                  setNotes((prev) => ({
+                                    ...prev,
+                                    [mismatchKey]: val,
+                                  }));
+                                }}
+                                onBlur={() => {
+                                  if (currentSavedId) {
+                                    void saveSingleNote(mismatchKey, notes[mismatchKey] !== undefined ? notes[mismatchKey] : (row.note || ''));
+                                  }
+                                }}
+                              />
+                              {mStatus === 'saving' && (
+                                <Text style={styles.noteStatusSaving}>💾 saving...</Text>
+                              )}
+                              {mStatus === 'saved' && (
+                                <Text style={styles.noteStatusSaved}>✓ saved</Text>
+                              )}
+                            </View>
                           </View>
                         </View>
-                        <View style={[styles.pTd, { width: 180, alignItems: 'flex-start' }]}>
-                          <Text style={styles.reasonText}>{row.reason}</Text>
-                        </View>
-                        <View
-                          style={[styles.pTd, { width: 240 }]}
-                          {...(Platform.OS === 'web' ? ({ title: row.statement_ref || row.inst_no || '' } as any) : {})}
-                        >
-                          <Text style={styles.pTdRef} numberOfLines={1} selectable>
-                            {row.statement_ref || row.inst_no || '-'}
-                          </Text>
-                        </View>
-                        <View style={[styles.pTd, { width: 110 }]}>
-                          <Text style={styles.pTdAmount}>
-                            ₹{formatCurrency(row.credit || row.debit || row.bill_amount)}
-                          </Text>
-                        </View>
-                        <View style={[styles.pTd, { width: 90 }]}>
-                          <Text style={styles.pTdTextBold}>{row.reg_no || '-'}</Text>
-                        </View>
-                        <View style={[styles.pTd, { width: 90 }]}>
-                          <Text style={styles.pTdText}>{row.receipt_no || '-'}</Text>
-                        </View>
-                        <View style={[styles.pTd, { width: 180, alignItems: 'flex-start' }]}>
-                          <Text style={styles.pTdName}>{row.student_name || '-'}</Text>
-                        </View>
-                        <View style={[styles.pTd, { width: 100 }]}>
-                          <Text style={styles.pTdText}>{row.class_name || '-'}</Text>
-                        </View>
-                        <View
-                          style={[styles.pTd, { width: 500, alignItems: 'flex-start' }]}
-                          {...(Platform.OS === 'web' ? ({ title: row.particulars || row.description || '' } as any) : {})}
-                        >
-                          <Text style={styles.pTdDesc} numberOfLines={1} selectable>
-                            {row.particulars || row.description || '-'}
-                          </Text>
-                        </View>
-                        <View style={[styles.pTd, { width: 180, borderRightWidth: 0, paddingVertical: 4, paddingHorizontal: 6 }]}>
-                          <TextInput
-                            style={styles.noteInput}
-                            placeholder="Add note..."
-                            placeholderTextColor="#94a3b8"
-                            value={notes[`mismatch_${idx}`] || ''}
-                            onChangeText={(val) => {
-                              setNotes((prev) => ({
-                                ...prev,
-                                [`mismatch_${idx}`]: val,
-                              }));
-                            }}
-                          />
-                        </View>
-                      </View>
-                    ))}
+                      );
+                    })}
                   </View>
                 )}
               </ScrollView>
@@ -1387,87 +1495,6 @@ export default function BankStatementMatcherScreen() {
               <TouchableOpacity
                 style={styles.modalCloseActionBtn}
                 onPress={() => setMasterModalOpen(false)}
-              >
-                <Text style={styles.modalCloseActionBtnText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Saved History Modal */}
-      <Modal visible={historyModalOpen} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 720, maxHeight: '85%' }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>📜 Saved Reconciliation Records</Text>
-              <TouchableOpacity onPress={() => setHistoryModalOpen(false)}>
-                <Text style={styles.closeBtn}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.modalNote}>
-              Previously saved statements and notes are stored permanently in the database. You can review and download them anytime without uploading statement files again!
-            </Text>
-
-            {loadingHistory ? (
-              <View style={{ padding: 30, alignItems: 'center' }}>
-                <ActivityIndicator size="large" color="#0284c7" />
-                <Text style={{ marginTop: 10, color: '#64748b' }}>Loading saved records...</Text>
-              </View>
-            ) : savedHistory.length === 0 ? (
-              <View style={{ padding: 30, alignItems: 'center' }}>
-                <Text style={{ fontSize: 15, color: '#94a3b8', fontWeight: '600' }}>
-                  No saved reconciliation records yet.
-                </Text>
-                <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
-                  After reconciling transactions, click "💾 Save Record & Notes" to save it here.
-                </Text>
-              </View>
-            ) : (
-              <ScrollView style={{ maxHeight: 420 }}>
-                {savedHistory.map((item: any) => (
-                  <View key={`hist_${item.id}`} style={styles.historyCard}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.historyTitle}>{item.batch_title || 'Reconciliation Record'}</Text>
-                      <View style={styles.historyStatsRow}>
-                        <Text style={styles.historyBadgeMatched}>
-                          ✅ {item.summary?.matched_count || 0} Matched (₹{formatCurrency(item.summary?.matched_amount || 0)})
-                        </Text>
-                        <Text style={styles.historyBadgeUnmatched}>
-                          ⚠️ {item.summary?.statement_unmatched_count || 0} Unmatched Stmt
-                        </Text>
-                        <Text style={styles.historyBadgeBills}>
-                          📑 {item.summary?.bill_unmatched_count || 0} Unmatched Bills
-                        </Text>
-                      </View>
-                      <Text style={styles.historyMeta}>
-                        📁 File: {item.statement_filename || 'SBI'} • 👤 By: {item.created_by || 'Staff'} • 🕒 {formatDateDisplay(item.created_at)}
-                      </Text>
-                    </View>
-                    <View style={styles.historyActions}>
-                      <TouchableOpacity
-                        style={styles.historyViewBtn}
-                        onPress={() => handleOpenSavedRecord(item.id)}
-                      >
-                        <Text style={styles.historyViewBtnText}>👁 Open</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.historyDelBtn}
-                        onPress={() => handleDeleteSavedRecord(item.id)}
-                      >
-                        <Text style={styles.historyDelBtnText}>🗑</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalCloseActionBtn}
-                onPress={() => setHistoryModalOpen(false)}
               >
                 <Text style={styles.modalCloseActionBtnText}>Close</Text>
               </TouchableOpacity>
@@ -2222,17 +2249,45 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#b91c1c',
   },
+  noteInputContainer: {
+    width: '100%',
+    position: 'relative',
+    justifyContent: 'center',
+  },
   noteInput: {
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 6,
-    paddingHorizontal: 8,
+    paddingLeft: 8,
+    paddingRight: 60,
     paddingVertical: 4,
     fontSize: 11,
     color: '#0f172a',
     width: '100%',
     height: 30,
+  },
+  noteStatusSaving: {
+    position: 'absolute',
+    right: 6,
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#0284c7',
+    backgroundColor: '#f0f9ff',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  noteStatusSaved: {
+    position: 'absolute',
+    right: 6,
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#15803d',
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
   },
   historyCard: {
     backgroundColor: '#ffffff',

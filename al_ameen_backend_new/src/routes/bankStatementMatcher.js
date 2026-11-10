@@ -271,6 +271,17 @@ router.post('/save-session', auth, allow('super_admin', 'admin', 'office'), asyn
   }
 
   if (id) {
+    let rowsToSave = statement_rows || [];
+    if (Array.isArray(rowsToSave) && notes_map) {
+      rowsToSave = rowsToSave.map((r, i) => {
+        const k = r.statement_row ? String(r.statement_row) : (r.ref_no ? String(r.ref_no) : String(i));
+        return {
+          ...r,
+          note: notes_map[k] ?? notes_map[String(r.statement_row)] ?? r.note ?? '',
+        };
+      });
+    }
+
     // Update existing record
     await pool.query(
       `UPDATE bank_reconciliation_records 
@@ -279,7 +290,7 @@ router.post('/save-session', auth, allow('super_admin', 'admin', 'office'), asyn
        WHERE id = $7`,
       [
         summary ? JSON.stringify(summary) : null,
-        JSON.stringify(statement_rows || []),
+        JSON.stringify(rowsToSave),
         JSON.stringify(matched_rows || []),
         JSON.stringify(mismatch_rows || []),
         JSON.stringify(notes_map || {}),
@@ -288,6 +299,17 @@ router.post('/save-session', auth, allow('super_admin', 'admin', 'office'), asyn
       ]
     );
     return res.json({ success: true, message: 'Record and notes updated successfully.', id });
+  }
+
+  let initialRows = statement_rows || [];
+  if (Array.isArray(initialRows) && notes_map) {
+    initialRows = initialRows.map((r, i) => {
+      const k = r.statement_row ? String(r.statement_row) : (r.ref_no ? String(r.ref_no) : String(i));
+      return {
+        ...r,
+        note: notes_map[k] ?? notes_map[String(r.statement_row)] ?? r.note ?? '',
+      };
+    });
   }
 
   const insertRes = await pool.query(
@@ -301,7 +323,7 @@ router.post('/save-session', auth, allow('super_admin', 'admin', 'office'), asyn
       from_date || '',
       to_date || '',
       summary ? JSON.stringify(summary) : null,
-      JSON.stringify(statement_rows || []),
+      JSON.stringify(initialRows),
       JSON.stringify(matched_rows || []),
       JSON.stringify(mismatch_rows || []),
       JSON.stringify(notes_map || {}),
@@ -311,6 +333,42 @@ router.post('/save-session', auth, allow('super_admin', 'admin', 'office'), asyn
   );
 
   res.json({ success: true, message: 'Record and notes saved successfully.', id: insertRes.rows[0].id });
+}));
+
+// POST /api/bank-matcher/save-note - Fast real-time save for individual transaction note
+router.post('/save-note', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
+  await readyTable;
+  const { id, row_key, note } = req.body;
+  if (!id) {
+    return res.status(400).json({ success: false, message: 'Record ID is required to save note.' });
+  }
+  if (!row_key && row_key !== 0) {
+    return res.status(400).json({ success: false, message: 'Row key is required.' });
+  }
+
+  const keyStr = String(row_key);
+  const noteStr = String(note || '');
+
+  const result = await pool.query(
+    `UPDATE bank_reconciliation_records
+     SET notes_map = COALESCE(notes_map, '{}'::jsonb) || jsonb_build_object($1::text, $2::text),
+         updated_at = NOW()
+     WHERE id = $3
+     RETURNING id, notes_map`,
+    [keyStr, noteStr, id]
+  );
+
+  if (result.rowCount === 0) {
+    return res.status(404).json({ success: false, message: 'Saved reconciliation record not found.' });
+  }
+
+  res.json({
+    success: true,
+    message: 'Note saved successfully.',
+    row_key: keyStr,
+    note: noteStr,
+    notes_map: result.rows[0].notes_map,
+  });
 }));
 
 // GET /api/bank-matcher/history - List saved reconciliation records
@@ -357,6 +415,19 @@ router.get('/history/:id', auth, allow('super_admin', 'admin', 'office'), asyncH
       buffer: record.excel_buffer,
       createdAt: Date.now(),
       filename: `Matched_Bank_Statement_${dateLabel}.xlsx`,
+    });
+  }
+
+  // Ensure each row in statement_rows has its note property attached
+  record.notes_map = record.notes_map || {};
+  if (Array.isArray(record.statement_rows)) {
+    const nMap = record.notes_map;
+    record.statement_rows = record.statement_rows.map((r, i) => {
+      const k = r.statement_row ? String(r.statement_row) : (r.ref_no ? String(r.ref_no) : String(i));
+      return {
+        ...r,
+        note: nMap[k] ?? nMap[String(r.statement_row)] ?? r.note ?? '',
+      };
     });
   }
 

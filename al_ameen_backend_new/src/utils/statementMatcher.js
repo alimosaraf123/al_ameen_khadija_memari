@@ -865,6 +865,7 @@ async function reconcileStatement({
       receipt_no: isMatched && rec ? rec.receipt : '',
       amount: isMatched && rec ? rec.amount : null,
       status: status,
+      note: '',
     });
   }
 
