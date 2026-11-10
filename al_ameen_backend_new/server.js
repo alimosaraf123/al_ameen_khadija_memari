@@ -53,6 +53,21 @@ app.use((req, res, next) => {
 });
 app.use(express.json({limit:'20mb'}));
 app.use(express.urlencoded({extended:true,limit:'20mb'}));
+
+// =========================================================================
+// Real-time IP & Traffic Logger (Visible in Render Logs)
+// =========================================================================
+app.use((req, res, next) => {
+  const rawIp = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : (req.socket?.remoteAddress || req.ip);
+  const clientIp = rawIp ? rawIp.replace(/^::ffff:/, '') : 'Unknown IP';
+  const ua = req.headers['user-agent'] || 'App/Unknown';
+  console.log(`[TRAFFIC] ${new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })} IST | IP: ${clientIp} | ${req.method} ${req.originalUrl} | UA: ${ua.slice(0, 60)}`);
+  next();
+});
+
+// Privacy policy for Google Play Console & Users
+app.use(['/privacy', '/privacy-policy'], require('./src/routes/privacy'));
+
 app.use(governance);
 app.get('/uploads/routines/:filename',require('./src/routes/routines').servePublishedImage);
 app.use('/uploads',express.static(path.join(__dirname,'uploads')));
