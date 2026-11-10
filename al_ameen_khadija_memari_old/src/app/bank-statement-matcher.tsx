@@ -334,6 +334,33 @@ export default function BankStatementMatcherScreen() {
     }
   };
 
+  const handleDownloadConsolidatedExcel = async () => {
+    try {
+      const token = await getToken();
+      const base = getApiBase();
+      let url = `${base}/api/bank-matcher/export-consolidated`;
+      if (selectedFilterDate !== 'all') {
+        url += `?from_date=${selectedFilterDate}&to_date=${selectedFilterDate}`;
+      }
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data?.success && data.download_token) {
+        const downloadUrl = `${base}/api/bank-matcher/download/${data.download_token}`;
+        if (Platform.OS === 'web') {
+          window.open(downloadUrl, '_blank');
+        } else {
+          void Linking.openURL(downloadUrl);
+        }
+      } else {
+        Alert.alert('Export Error', data?.message || 'Could not export consolidated register.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to export consolidated register.');
+    }
+  };
+
   const handleSaveSession = async () => {
     if (!result) return;
     try {
@@ -883,6 +910,13 @@ export default function BankStatementMatcherScreen() {
 
             {/* Right Quick Actions */}
             <View style={styles.registerTopActions}>
+              <TouchableOpacity
+                style={styles.exportAllBtn}
+                onPress={() => void handleDownloadConsolidatedExcel()}
+              >
+                <Text style={styles.exportAllBtnText}>📥 Export Master Excel (সব তারিখ / ১ মাস)</Text>
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.expandAllBtn}
                 onPress={() => {
@@ -2876,6 +2910,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  exportAllBtn: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  exportAllBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
   },
   expandAllBtn: {
     backgroundColor: '#f1f5f9',

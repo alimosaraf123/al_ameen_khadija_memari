@@ -598,4 +598,188 @@ router.get('/download/:token', asyncHandler(async (req, res) => {
   res.send(item.buffer);
 }));
 
+// GET /api/bank-matcher/export-consolidated - Export consolidated multi-date / monthly Excel
+router.get('/export-consolidated', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
+  await readyTable;
+  const { from_date, to_date } = req.query;
+
+  let query = `SELECT * FROM bank_reconciliation_records`;
+  const params = [];
+  if (from_date && to_date) {
+    query += ` WHERE (from_date >= $1 AND to_date <= $2) OR (from_date BETWEEN $1 AND $2)`;
+    params.push(from_date, to_date);
+  }
+  query += ` ORDER BY from_date ASC, id ASC`;
+
+  const recordsRes = await pool.query(query, params);
+  const records = recordsRes.rows;
+
+  if (records.length === 0) {
+    return res.status(404).json({ success: false, message: 'No saved records found for the selected period.' });
+  }
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Al-Ameen Mission Academy Memari';
+  wb.created = new Date();
+
+  // Sheet 1: Master Register
+  const ws = wb.addWorksheet('MASTER REGISTER');
+
+  // Title Row
+  ws.mergeCells('A1:O1');
+  const titleCell = ws.getCell('A1');
+  titleCell.value = `AL-AMEEN MISSION ACADEMY MEMARI - CONSOLIDATED BANK STATEMENT REGISTER (${from_date || 'ALL DATES'} TO ${to_date || 'ALL DATES'})`;
+  titleCell.font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
+  titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(1).height = 28;
+
+  // Header Row
+  const headers = [
+    '#', 'Txn Date', 'Value Date', 'Description', 'Ref No./Cheque No.',
+    'Branch', 'Debit', 'Credit', 'Balance', 'Reg. No.', 'Student Name', 'Class', 'Recpt. No.', 'Amount', 'Note'
+  ];
+  ws.addRow(headers);
+  const hRow = ws.getRow(2);
+  hRow.height = 24;
+  hRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  hRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+  for (let c = 1; c <= 15; c++) {
+    const cell = hRow.getCell(c);
+    if (c <= 9) {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0284C7' } };
+    } else {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF16A34A' } };
+    }
+    cell.border = {
+      top: { style: 'thin' },
+      left: { style: 'thin' },
+      bottom: { style: 'medium' },
+      right: { style: 'thin' }
+    };
+  }
+
+  let sl = 1;
+  for (const rec of records) {
+    const rows = Array.isArray(rec.statement_rows) ? rec.statement_rows : [];
+    const nMap = rec.notes_map || {};
+
+    for (const r of rows) {
+      const k = r.statement_row ? String(r.statement_row) : (r.ref_no ? String(r.ref_no) : String(sl));
+      const rowNote = nMap[k] ?? nMap[String(r.statement_row)] ?? r.note ?? '';
+
+      const rowValues = [
+        sl++,
+        r.date || rec.from_date || '',
+        r.value_date || r.date || '',
+        r.description || '',
+        r.ref_no || '',
+        r.branch_code || '',
+        r.debit ? Number(r.debit) : '',
+        r.credit ? Number(r.credit) : '',
+        r.balance !== null && r.balance !== undefined ? Number(r.balance) : '',
+        r.is_matched ? (r.reg_no || '') : '',
+        r.is_matched ? (r.student_name || '') : '',
+        r.is_matched ? (r.class_name || '') : '',
+        r.is_matched ? (r.receipt_no || '') : '',
+        r.is_matched && r.amount ? Number(r.amount) : '',
+        rowNote,
+      ];
+
+      const excelRow = ws.addRow(rowValues);
+      excelRow.height = 20;
+
+      if (r.is_matched) {
+        excelRow.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFE0' } };
+      }
+
+      for (let c = 1; c <= 15; c++) {
+        excelRow.getCell(c).border = {
+          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+        };
+      }
+    }
+  }
+
+  ws.columns = [
+    { width: 6 },
+    { width: 14 },
+    { width: 14 },
+    { width: 45 },
+    { width: 28 },
+    { width: 10 },
+    { width: 12 },
+    { width: 12 },
+    { width: 14 },
+    { width: 12 },
+    { width: 24 },
+    { width: 14 },
+    { width: 12 },
+    { width: 14 },
+    { width: 30 },
+  ];
+
+  // Sheet 2: Summary Breakdown by Date
+  const sw = wb.addWorksheet('DATE-WISE SUMMARY');
+  sw.addRow(['Date', 'Statement File', 'Total Txns', 'Matched Count', 'Matched Amount (₹)', 'Unmatched Txns', 'Unmatched Bills', 'Reconciled By']);
+  const sHead = sw.getRow(1);
+  sHead.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  sHead.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+  sHead.alignment = { vertical: 'middle', horizontal: 'center' };
+  sw.getRow(1).height = 24;
+
+  let grandTxns = 0;
+  let grandMatched = 0;
+  let grandMatchedAmt = 0;
+  let grandUnmatched = 0;
+
+  for (const rec of records) {
+    const s = rec.summary || {};
+    const txnCount = (rec.statement_rows || []).length;
+    const mCount = s.matched_count || 0;
+    const mAmt = Number(s.matched_amount || 0);
+    const uCount = s.statement_unmatched_count || 0;
+    const bCount = s.bill_unmatched_count || 0;
+
+    grandTxns += txnCount;
+    grandMatched += mCount;
+    grandMatchedAmt += mAmt;
+    grandUnmatched += uCount;
+
+    sw.addRow([
+      rec.from_date || '-',
+      rec.statement_filename || 'SBI',
+      txnCount,
+      mCount,
+      mAmt,
+      uCount,
+      bCount,
+      rec.created_by || 'Staff',
+    ]);
+  }
+
+  const totalRow = sw.addRow(['TOTAL', `${records.length} Dates`, grandTxns, grandMatched, grandMatchedAmt, grandUnmatched, '-', '-']);
+  totalRow.font = { bold: true };
+  totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+
+  sw.columns = [
+    { width: 16 }, { width: 28 }, { width: 12 }, { width: 14 }, { width: 20 }, { width: 16 }, { width: 16 }, { width: 18 }
+  ];
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const token = crypto.randomBytes(16).toString('hex');
+  const fileLabel = from_date && to_date ? `${from_date}_to_${to_date}` : 'All_Dates';
+  downloadCache.set(token, {
+    buffer,
+    createdAt: Date.now(),
+    filename: `Consolidated_Bank_Register_${fileLabel}.xlsx`,
+  });
+
+  res.json({ success: true, download_token: token, filename: `Consolidated_Bank_Register_${fileLabel}.xlsx` });
+}));
+
 module.exports = router;
