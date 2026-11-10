@@ -169,6 +169,7 @@ export default function BankStatementMatcherScreen() {
           String(r.class_name || '').toLowerCase().includes(q) ||
           String(r.description || '').toLowerCase().includes(q) ||
           String(r.ref_no || '').toLowerCase().includes(q) ||
+          String(r.bill_date || '').toLowerCase().includes(q) ||
           String(r.note || '').toLowerCase().includes(q) ||
           String(r.credit || '').includes(q)
         );
@@ -616,6 +617,7 @@ export default function BankStatementMatcherScreen() {
         String(r.reg_no || '').toLowerCase().includes(q) ||
         String(r.student_name || '').toLowerCase().includes(q) ||
         String(r.receipt_no || '').toLowerCase().includes(q) ||
+        String(r.bill_date || '').toLowerCase().includes(q) ||
         String(r.class_name || '').toLowerCase().includes(q) ||
         String(r.description || '').toLowerCase().includes(q) ||
         String(r.ref_no || '').toLowerCase().includes(q) ||
@@ -1119,7 +1121,7 @@ export default function BankStatementMatcherScreen() {
                             🏦 ORIGINAL BANK STATEMENT (UNCHANGED COLUMNS)
                           </Text>
                         </View>
-                        <View style={[styles.superHeaderStudent, { width: 780 }]}>
+                        <View style={[styles.superHeaderStudent, { width: 885 }]}>
                           <Text style={styles.superHeaderTextStudent}>
                             🎓 MATCHED STUDENT DETAILS & NOTES (ADDED BESIDE BALANCE)
                           </Text>
@@ -1170,6 +1172,9 @@ export default function BankStatementMatcherScreen() {
                         </View>
                         <View style={[styles.pTh, styles.pThStudent, { width: 100 }]}>
                           <Text style={styles.pThTextStudent}>Amount</Text>
+                        </View>
+                        <View style={[styles.pTh, styles.pThStudent, { width: 105 }]}>
+                          <Text style={styles.pThTextStudent}>Bill Date</Text>
                         </View>
                         <View style={[styles.pTh, styles.pThStudent, { width: 220, borderRightWidth: 0 }]}>
                           <Text style={styles.pThTextStudent}>Note</Text>
@@ -1263,6 +1268,11 @@ export default function BankStatementMatcherScreen() {
                             <View style={[styles.pTd, styles.pTdStudent, { width: 100 }]}>
                               <Text style={row.is_matched ? styles.pTdAmount : styles.pTdTextMuted}>
                                 {row.is_matched ? `₹${formatCurrency(row.amount)}` : '-'}
+                              </Text>
+                            </View>
+                            <View style={[styles.pTd, styles.pTdStudent, { width: 105 }]}>
+                              <Text style={row.is_matched && row.bill_date ? styles.pTdTextBold : styles.pTdTextMuted}>
+                                {row.is_matched && row.bill_date ? formatDateDisplay(row.bill_date) : '-'}
                               </Text>
                             </View>
                             <View style={[styles.pTd, styles.pTdStudent, { width: 220, borderRightWidth: 0, paddingVertical: 4, paddingHorizontal: 6 }]}>
@@ -1481,7 +1491,7 @@ export default function BankStatementMatcherScreen() {
                           🏦 ORIGINAL BANK STATEMENT (UNCHANGED COLUMNS)
                         </Text>
                       </View>
-                      <View style={[styles.superHeaderStudent, { width: 780 }]}>
+                      <View style={[styles.superHeaderStudent, { width: 885 }]}>
                         <Text style={styles.superHeaderTextStudent}>
                           🎓 MATCHED STUDENT DETAILS & NOTES (ADDED BESIDE BALANCE)
                         </Text>
@@ -1518,7 +1528,7 @@ export default function BankStatementMatcherScreen() {
                         <Text style={styles.pThText}>Balance</Text>
                       </View>
 
-                      {/* Student details headers (Order: Reg. No., Student Name, Class, Recpt. No., Amount, Note) */}
+                      {/* Student details headers (Order: Reg. No., Student Name, Class, Recpt. No., Amount, Bill Date, Note) */}
                       <View style={[styles.pTh, styles.pThStudentDivider, { width: 90 }]}>
                         <Text style={styles.pThTextStudent}>Reg. No.</Text>
                       </View>
@@ -1533,6 +1543,9 @@ export default function BankStatementMatcherScreen() {
                       </View>
                       <View style={[styles.pTh, styles.pThStudent, { width: 100 }]}>
                         <Text style={styles.pThTextStudent}>Amount</Text>
+                      </View>
+                      <View style={[styles.pTh, styles.pThStudent, { width: 105 }]}>
+                        <Text style={styles.pThTextStudent}>Bill Date</Text>
                       </View>
                       <View style={[styles.pTh, styles.pThStudent, { width: 220, borderRightWidth: 0 }]}>
                         <Text style={styles.pThTextStudent}>Note</Text>
@@ -1651,6 +1664,11 @@ export default function BankStatementMatcherScreen() {
                             style={row.is_matched ? styles.pTdAmount : styles.pTdTextMuted}
                           >
                             {row.is_matched ? `₹${formatCurrency(row.amount)}` : '-'}
+                          </Text>
+                        </View>
+                        <View style={[styles.pTd, styles.pTdStudent, { width: 105 }]}>
+                          <Text style={row.is_matched && row.bill_date ? styles.pTdTextBold : styles.pTdTextMuted}>
+                            {row.is_matched && row.bill_date ? formatDateDisplay(row.bill_date) : '-'}
                           </Text>
                         </View>
                         <View style={[styles.pTd, styles.pTdStudent, { width: 220, borderRightWidth: 0, paddingVertical: 4, paddingHorizontal: 6 }]}>

@@ -274,6 +274,9 @@ async function fetchLiveBillsFromPortal(fromDate = '', toDate = '') {
         existing.key = item.key;
         existing.raw_reference = item.raw_reference;
       }
+      if (item.date && !existing.date) {
+        existing.date = item.date;
+      }
       return;
     }
 
@@ -303,6 +306,7 @@ async function fetchLiveBillsFromPortal(fromDate = '', toDate = '') {
           particulars: tx.particulars || '',
           source_row: idx + 1,
           raw_reference: rawRef,
+          date: tx.date || '',
         });
       });
     }
@@ -338,6 +342,7 @@ async function fetchLiveBillsFromPortal(fromDate = '', toDate = '') {
           particulars: `Fees received from student against Reg. No. ${reg} / Recpt. No. ${receipt}`,
           source_row: idx + 1,
           raw_reference: rawRef,
+          date: b.transaction_date || b.raw_date || '',
         });
       });
     }
@@ -623,9 +628,9 @@ async function reconcileStatement({
   }
 
   // Prepare Output Columns next to Balance
-  // User Requested Order: Reg. No., Student Name, Class, Recpt. No., Amount, Note
-  const OUTPUT_HEADERS = ['Reg. No.', 'Student Name', 'Class', 'Recpt. No.', 'Amount', 'Note'];
-  const OUTPUT_WIDTHS = [14, 26, 16, 14, 14, 25];
+  // User Requested Order: Reg. No., Student Name, Class, Recpt. No., Amount, Bill Date, Note
+  const OUTPUT_HEADERS = ['Reg. No.', 'Student Name', 'Class', 'Recpt. No.', 'Amount', 'Bill Date', 'Note'];
+  const OUTPUT_WIDTHS = [14, 26, 16, 14, 14, 15, 25];
   const outputCol = balCol + 1;
 
   // Set Header row styles for output columns
@@ -802,14 +807,16 @@ async function reconcileStatement({
             fgColor: { argb: 'FFFFFF00' }
           };
 
-          // 2. Populate the 6 columns in original statement worksheet
-          // Order: Reg. No., Student Name, Class, Recpt. No., Amount, Note
+          // 2. Populate the 7 columns in original statement worksheet
+          // Order: Reg. No., Student Name, Class, Recpt. No., Amount, Bill Date, Note
+          const billDate = record.date ? formatDateValue(record.date) : '';
           ws.getCell(entry.row, outputCol + 0).value = record.reg || '';
           ws.getCell(entry.row, outputCol + 1).value = studentName;
           ws.getCell(entry.row, outputCol + 2).value = studentClass;
           ws.getCell(entry.row, outputCol + 3).value = record.receipt || '';
           ws.getCell(entry.row, outputCol + 4).value = billAmt;
-          ws.getCell(entry.row, outputCol + 5).value = (notesMap && (notesMap[entry.row] || notesMap[String(entry.row)] || notesMap[record.reg])) || '';
+          ws.getCell(entry.row, outputCol + 5).value = billDate;
+          ws.getCell(entry.row, outputCol + 6).value = (notesMap && (notesMap[entry.row] || notesMap[String(entry.row)] || notesMap[record.reg])) || '';
 
           matchedRowsForPreview.push({
             statement_row: entry.row,
@@ -822,6 +829,7 @@ async function reconcileStatement({
             class_name: studentClass,
             receipt_no: record.receipt,
             amount: billAmt,
+            bill_date: billDate,
             reference: record.key,
           });
         }
@@ -844,7 +852,7 @@ async function reconcileStatement({
       }
       const unmatchedNote = (notesMap && (notesMap[entry.row] || notesMap[String(entry.row)])) || '';
       if (unmatchedNote) {
-        ws.getCell(entry.row, outputCol + 5).value = unmatchedNote;
+        ws.getCell(entry.row, outputCol + 6).value = unmatchedNote;
       }
     }
 
@@ -864,6 +872,7 @@ async function reconcileStatement({
       class_name: isMatched ? (std.class || '') : '',
       receipt_no: isMatched && rec ? rec.receipt : '',
       amount: isMatched && rec ? rec.amount : null,
+      bill_date: isMatched && rec && rec.date ? formatDateValue(rec.date) : '',
       status: status,
       note: '',
     });

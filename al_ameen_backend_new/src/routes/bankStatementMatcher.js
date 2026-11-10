@@ -626,7 +626,7 @@ router.get('/export-consolidated', auth, allow('super_admin', 'admin', 'office')
   const ws = wb.addWorksheet('MASTER REGISTER');
 
   // Title Row
-  ws.mergeCells('A1:O1');
+  ws.mergeCells('A1:P1');
   const titleCell = ws.getCell('A1');
   titleCell.value = `AL-AMEEN MISSION ACADEMY MEMARI - CONSOLIDATED BANK STATEMENT REGISTER (${from_date || 'ALL DATES'} TO ${to_date || 'ALL DATES'})`;
   titleCell.font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
@@ -637,7 +637,7 @@ router.get('/export-consolidated', auth, allow('super_admin', 'admin', 'office')
   // Header Row
   const headers = [
     '#', 'Txn Date', 'Value Date', 'Description', 'Ref No./Cheque No.',
-    'Branch', 'Debit', 'Credit', 'Balance', 'Reg. No.', 'Student Name', 'Class', 'Recpt. No.', 'Amount', 'Note'
+    'Branch', 'Debit', 'Credit', 'Balance', 'Reg. No.', 'Student Name', 'Class', 'Recpt. No.', 'Amount', 'Bill Date', 'Note'
   ];
   ws.addRow(headers);
   const hRow = ws.getRow(2);
@@ -645,7 +645,7 @@ router.get('/export-consolidated', auth, allow('super_admin', 'admin', 'office')
   hRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
   hRow.alignment = { vertical: 'middle', horizontal: 'center' };
 
-  for (let c = 1; c <= 15; c++) {
+  for (let c = 1; c <= 16; c++) {
     const cell = hRow.getCell(c);
     if (c <= 9) {
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0284C7' } };
@@ -684,6 +684,7 @@ router.get('/export-consolidated', auth, allow('super_admin', 'admin', 'office')
         r.is_matched ? (r.class_name || '') : '',
         r.is_matched ? (r.receipt_no || '') : '',
         r.is_matched && r.amount ? Number(r.amount) : '',
+        r.is_matched ? (r.bill_date || '') : '',
         rowNote,
       ];
 
@@ -694,7 +695,7 @@ router.get('/export-consolidated', auth, allow('super_admin', 'admin', 'office')
         excelRow.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFE0' } };
       }
 
-      for (let c = 1; c <= 15; c++) {
+      for (let c = 1; c <= 16; c++) {
         excelRow.getCell(c).border = {
           top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
           bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
@@ -719,6 +720,7 @@ router.get('/export-consolidated', auth, allow('super_admin', 'admin', 'office')
     { width: 24 },
     { width: 14 },
     { width: 12 },
+    { width: 14 },
     { width: 14 },
     { width: 30 },
   ];
