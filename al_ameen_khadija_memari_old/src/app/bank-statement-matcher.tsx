@@ -448,11 +448,9 @@ export default function BankStatementMatcherScreen() {
       const data = await api('/api/bank-matcher/register');
       if (data?.success && data.dates) {
         setRegisterDates(data.dates);
-        // By default expand all loaded dates
-        const exp: Record<number, boolean> = {};
+        // By default keep all loaded dates collapsed
         const notesObj: Record<string, string> = {};
         data.dates.forEach((d: any) => {
-          exp[d.id] = true;
           if (d.notes_map) {
             Object.keys(d.notes_map).forEach((k) => {
               notesObj[`${d.id}_${k}`] = d.notes_map[k];
@@ -467,7 +465,7 @@ export default function BankStatementMatcherScreen() {
             });
           }
         });
-        setExpandedDates(exp);
+        setExpandedDates({});
         setNotes((prev) => ({ ...prev, ...notesObj }));
       }
     } catch (err: any) {
