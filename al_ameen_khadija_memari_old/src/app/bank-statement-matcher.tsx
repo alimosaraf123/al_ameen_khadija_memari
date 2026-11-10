@@ -62,6 +62,180 @@ const formatDateDisplay = (val: any) => {
   return s;
 };
 
+export interface ColumnDef {
+  key: string;
+  label: string;
+  width: number;
+  isStudent?: boolean;
+  isDivider?: boolean;
+  align?: 'flex-start' | 'center' | 'flex-end';
+}
+
+export const TABLE_COLUMNS: ColumnDef[] = [
+  { key: 'statement_row', label: '#', width: 45, align: 'center' },
+  { key: 'date', label: 'Txn Date', width: 95, align: 'center' },
+  { key: 'value_date', label: 'Value Date', width: 95, align: 'center' },
+  { key: 'description', label: 'Description', width: 500, align: 'flex-start' },
+  { key: 'ref_no', label: 'Ref No./Cheque No.', width: 240, align: 'center' },
+  { key: 'branch_code', label: 'Branch', width: 75, align: 'center' },
+  { key: 'debit', label: 'Debit', width: 85, align: 'center' },
+  { key: 'credit', label: 'Credit', width: 95, align: 'center' },
+  { key: 'balance', label: 'Balance', width: 95, align: 'center' },
+  { key: 'reg_no', label: 'Reg. No.', width: 90, isStudent: true, isDivider: true, align: 'center' },
+  { key: 'student_name', label: 'Student Name', width: 180, isStudent: true, align: 'flex-start' },
+  { key: 'class_name', label: 'Class', width: 100, isStudent: true, align: 'center' },
+  { key: 'receipt_no', label: 'Recpt. No.', width: 90, isStudent: true, align: 'center' },
+  { key: 'amount', label: 'Amount', width: 100, isStudent: true, align: 'center' },
+  { key: 'bill_date', label: 'Bill Date', width: 105, isStudent: true, align: 'center' },
+  { key: 'note', label: 'Note', width: 220, isStudent: true, align: 'flex-start' },
+];
+
+export const parseDateToTimestamp = (dStr: any): number => {
+  if (!dStr) return 0;
+  const s = String(dStr).trim();
+  const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (dmy) {
+    return new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1])).getTime();
+  }
+  const ymd = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (ymd) {
+    return new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3])).getTime();
+  }
+  const parsed = Date.parse(s);
+  return isNaN(parsed) ? 0 : parsed;
+};
+
+export const getRowValue = (row: any, colKey: string, notesMap?: Record<string, string>, idx?: number) => {
+  if (!row) return '';
+  switch (colKey) {
+    case 'statement_row':
+      return row.statement_row ?? (idx !== undefined ? idx + 1 : '');
+    case 'date':
+      return row.date || '';
+    case 'value_date':
+      return row.value_date || row.date || '';
+    case 'description':
+      return row.description || '';
+    case 'ref_no':
+      return row.ref_no || '';
+    case 'branch_code':
+      return row.branch_code || '';
+    case 'debit':
+      return row.debit !== null && row.debit !== undefined && row.debit !== '' ? Number(row.debit) : '';
+    case 'credit':
+      return row.credit !== null && row.credit !== undefined && row.credit !== '' ? Number(row.credit) : '';
+    case 'balance':
+      return row.balance !== null && row.balance !== undefined && row.balance !== '' ? Number(row.balance) : '';
+    case 'reg_no':
+      return row.is_matched ? (row.reg_no || '') : '';
+    case 'student_name':
+      return row.is_matched ? (row.student_name || '') : '';
+    case 'class_name':
+      return row.is_matched ? (row.class_name || '') : '';
+    case 'receipt_no':
+      return row.is_matched ? (row.receipt_no || '') : '';
+    case 'amount':
+      return row.is_matched && row.amount !== null && row.amount !== undefined ? Number(row.amount) : '';
+    case 'bill_date':
+      return row.is_matched ? (row.bill_date || '') : '';
+    case 'note': {
+      const rowKey = String(row.statement_row ?? (row.ref_no ? row.ref_no : idx ?? ''));
+      return (notesMap && notesMap[rowKey] !== undefined ? notesMap[rowKey] : (row.note || '')).trim();
+    }
+    default:
+      return row[colKey] !== undefined && row[colKey] !== null ? row[colKey] : '';
+  }
+};
+
+export const sortAndFilterRows = (
+  rawRows: any[],
+  tab: 'all' | 'matched' | 'unmatched_statement' | 'mismatch_bills',
+  globalQuery: string,
+  colFilters: Record<string, string>,
+  sortCol: string | null,
+  sortDir: 'asc' | 'desc',
+  notesMap: Record<string, string>
+) => {
+  let rows = [...rawRows];
+
+  // 1. Tab filter
+  if (tab === 'matched') {
+    rows = rows.filter((r) => r.is_matched);
+  } else if (tab === 'unmatched_statement') {
+    rows = rows.filter((r) => !r.is_matched);
+  }
+
+  // 2. Global search query
+  if (globalQuery && globalQuery.trim()) {
+    const q = globalQuery.toLowerCase().trim();
+    rows = rows.filter((r, idx) => {
+      return (
+        String(r.reg_no || '').toLowerCase().includes(q) ||
+        String(r.student_name || '').toLowerCase().includes(q) ||
+        String(r.receipt_no || '').toLowerCase().includes(q) ||
+        String(r.bill_date || '').toLowerCase().includes(q) ||
+        String(r.class_name || '').toLowerCase().includes(q) ||
+        String(r.description || '').toLowerCase().includes(q) ||
+        String(r.ref_no || '').toLowerCase().includes(q) ||
+        String(r.date || '').toLowerCase().includes(q) ||
+        String(r.credit || '').toLowerCase().includes(q) ||
+        String(r.debit || '').toLowerCase().includes(q) ||
+        String(getRowValue(r, 'note', notesMap, idx)).toLowerCase().includes(q)
+      );
+    });
+  }
+
+  // 3. Column-specific filters
+  for (const [colKey, filterVal] of Object.entries(colFilters)) {
+    if (!filterVal || !filterVal.trim()) continue;
+    const lowerFilter = filterVal.toLowerCase().trim();
+
+    rows = rows.filter((r, idx) => {
+      const rawVal = getRowValue(r, colKey, notesMap, idx);
+      if (filterVal === '__has_note__') {
+        return String(rawVal).trim().length > 0;
+      }
+      if (filterVal === '__no_note__') {
+        return String(rawVal).trim().length === 0;
+      }
+      if (filterVal === '__blank__') {
+        return String(rawVal).trim() === '' || rawVal === null || rawVal === undefined;
+      }
+      return String(rawVal).toLowerCase().includes(lowerFilter);
+    });
+  }
+
+  // 4. Sorting
+  if (sortCol) {
+    const isDateCol = sortCol === 'date' || sortCol === 'value_date' || sortCol === 'bill_date';
+    const isNumCol =
+      sortCol === 'amount' ||
+      sortCol === 'credit' ||
+      sortCol === 'debit' ||
+      sortCol === 'balance' ||
+      sortCol === 'statement_row';
+
+    rows.sort((a, b) => {
+      const valA = getRowValue(a, sortCol, notesMap);
+      const valB = getRowValue(b, sortCol, notesMap);
+
+      let diff = 0;
+      if (isDateCol) {
+        diff = parseDateToTimestamp(valA) - parseDateToTimestamp(valB);
+      } else if (isNumCol) {
+        const numA = typeof valA === 'number' ? valA : parseFloat(String(valA).replace(/[^0-9.-]+/g, '')) || 0;
+        const numB = typeof valB === 'number' ? valB : parseFloat(String(valB).replace(/[^0-9.-]+/g, '')) || 0;
+        diff = numA - numB;
+      } else {
+        diff = String(valA).localeCompare(String(valB), undefined, { numeric: true, sensitivity: 'base' });
+      }
+      return sortDir === 'asc' ? diff : -diff;
+    });
+  }
+
+  return rows;
+};
+
 function NavTabLink({
   path,
   style,
@@ -152,34 +326,95 @@ export default function BankStatementMatcherScreen() {
   const [savingSession, setSavingSession] = useState<boolean>(false);
   const [currentSavedId, setCurrentSavedId] = useState<number | null>(null);
 
+  // Column-level filters and sorting for Tables
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [activeFilterMenuCol, setActiveFilterMenuCol] = useState<ColumnDef | null>(null);
+  const [colSearchQuery, setColSearchQuery] = useState<string>('');
+
+  const openColumnMenu = (col: ColumnDef) => {
+    setActiveFilterMenuCol(col);
+    setColSearchQuery(columnFilters[col.key] || '');
+  };
+
+  const handleSort = (colKey: string, direction: 'asc' | 'desc') => {
+    if (sortColumn === colKey && sortDirection === direction) {
+      setSortColumn(null);
+    } else {
+      setSortColumn(colKey);
+      setSortDirection(direction);
+    }
+  };
+
+  const handleApplyFilter = (colKey: string, value: string) => {
+    setColumnFilters((prev) => {
+      const updated = { ...prev };
+      if (!value || !value.trim()) {
+        delete updated[colKey];
+      } else {
+        updated[colKey] = value;
+      }
+      return updated;
+    });
+  };
+
+  const handleClearColumnFilter = (colKey: string) => {
+    setColumnFilters((prev) => {
+      const updated = { ...prev };
+      delete updated[colKey];
+      return updated;
+    });
+    if (sortColumn === colKey) {
+      setSortColumn(null);
+    }
+  };
+
+  const handleClearAllFilters = () => {
+    setColumnFilters({});
+    setSortColumn(null);
+    setSearchQuery('');
+    setRegisterSearchQuery('');
+  };
+
   // Filtered dates and search across all dates in Master Register
   const filteredRegisterDates = useMemo(() => {
     let list = registerDates;
     if (selectedFilterDate !== 'all') {
-      list = list.filter((d) => String(d.id) === selectedFilterDate || d.from_date === selectedFilterDate || d.to_date === selectedFilterDate);
+      list = list.filter(
+        (d) =>
+          String(d.id) === selectedFilterDate ||
+          d.from_date === selectedFilterDate ||
+          d.to_date === selectedFilterDate
+      );
     }
-    if (!registerSearchQuery.trim()) return list;
+
+    const hasColFilters = Object.keys(columnFilters).length > 0;
+    const hasColSort = Boolean(sortColumn);
+    const hasGlobalQ = Boolean(registerSearchQuery.trim());
+
+    if (!hasColFilters && !hasColSort && !hasGlobalQ) return list;
+
     const q = registerSearchQuery.toLowerCase().trim();
-    return list.map((d) => {
-      const matchingRows = (d.statement_rows || []).filter((r: any) => {
-        return (
-          String(r.reg_no || '').toLowerCase().includes(q) ||
-          String(r.student_name || '').toLowerCase().includes(q) ||
-          String(r.receipt_no || '').toLowerCase().includes(q) ||
-          String(r.class_name || '').toLowerCase().includes(q) ||
-          String(r.description || '').toLowerCase().includes(q) ||
-          String(r.ref_no || '').toLowerCase().includes(q) ||
-          String(r.bill_date || '').toLowerCase().includes(q) ||
-          String(r.note || '').toLowerCase().includes(q) ||
-          String(r.credit || '').includes(q)
+
+    return list
+      .map((d) => {
+        const rows = sortAndFilterRows(
+          d.statement_rows || [],
+          'all',
+          q,
+          columnFilters,
+          sortColumn,
+          sortDirection,
+          notes
         );
-      });
-      return {
-        ...d,
-        statement_rows: matchingRows,
-      };
-    }).filter((d) => d.statement_rows.length > 0 || String(d.from_date).includes(q));
-  }, [registerDates, selectedFilterDate, registerSearchQuery]);
+        return {
+          ...d,
+          statement_rows: rows,
+        };
+      })
+      .filter((d) => d.statement_rows.length > 0 || (q && String(d.from_date).includes(q)));
+  }, [registerDates, selectedFilterDate, registerSearchQuery, columnFilters, sortColumn, sortDirection, notes]);
 
   // Grand summary across all saved dates in register
   const grandSummary = useMemo(() => {
@@ -602,31 +837,39 @@ export default function BankStatementMatcherScreen() {
     return result?.statement_rows || [];
   }, [result?.statement_rows]);
 
-  // Filtered statement rows based on activeResultTab ('all' | 'matched' | 'unmatched_statement') and search
-  const filteredStatementRows = useMemo(() => {
-    let rows = allStatementRows;
-    if (activeResultTab === 'matched') {
-      rows = rows.filter((r: any) => r.is_matched);
-    } else if (activeResultTab === 'unmatched_statement') {
-      rows = rows.filter((r: any) => !r.is_matched);
+  // Distinct values for the currently active filter column menu
+  const distinctValuesForActiveCol = useMemo(() => {
+    if (!activeFilterMenuCol) return [];
+    const counts: Record<string, number> = {};
+    const colKey = activeFilterMenuCol.key;
+    const isRegister = pageMode === 'register';
+
+    const sourceRows = isRegister
+      ? registerDates.flatMap((d) => d.statement_rows || [])
+      : (result?.statement_rows || []);
+
+    for (const r of sourceRows) {
+      const raw = getRowValue(r, colKey, notes);
+      const strVal = String(raw !== null && raw !== undefined ? raw : '').trim();
+      const displayKey = strVal || '(Blank)';
+      counts[displayKey] = (counts[displayKey] || 0) + 1;
     }
-    if (!searchQuery.trim()) return rows;
-    const q = searchQuery.toLowerCase().trim();
-    return rows.filter((r: any) => {
-      return (
-        String(r.reg_no || '').toLowerCase().includes(q) ||
-        String(r.student_name || '').toLowerCase().includes(q) ||
-        String(r.receipt_no || '').toLowerCase().includes(q) ||
-        String(r.bill_date || '').toLowerCase().includes(q) ||
-        String(r.class_name || '').toLowerCase().includes(q) ||
-        String(r.description || '').toLowerCase().includes(q) ||
-        String(r.ref_no || '').toLowerCase().includes(q) ||
-        String(r.date || '').toLowerCase().includes(q) ||
-        String(r.credit || '').toLowerCase().includes(q) ||
-        String(r.debit || '').toLowerCase().includes(q)
-      );
-    });
-  }, [allStatementRows, activeResultTab, searchQuery]);
+
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [activeFilterMenuCol, pageMode, registerDates, result?.statement_rows, notes]);
+
+  // Filtered statement rows based on activeResultTab ('all' | 'matched' | 'unmatched_statement'), search, and column filters
+  const filteredStatementRows = useMemo(() => {
+    return sortAndFilterRows(
+      allStatementRows,
+      activeResultTab,
+      searchQuery,
+      columnFilters,
+      sortColumn,
+      sortDirection,
+      notes
+    );
+  }, [allStatementRows, activeResultTab, searchQuery, columnFilters, sortColumn, sortDirection, notes]);
 
   // Filtered rows for mismatch bills (Sheet 2)
   const filteredMismatchBills = useMemo(() => {
@@ -646,6 +889,104 @@ export default function BankStatementMatcherScreen() {
       );
     });
   }, [result?.mismatch_rows, searchQuery]);
+
+  const renderTableHeader = () => (
+    <View style={styles.pHeadRow}>
+      {TABLE_COLUMNS.map((col, cIdx) => {
+        const isSorted = sortColumn === col.key;
+        const filterVal = columnFilters[col.key];
+        const hasFilter = Boolean(filterVal && filterVal.trim());
+        const isLast = cIdx === TABLE_COLUMNS.length - 1;
+
+        return (
+          <TouchableOpacity
+            key={`th_${col.key}`}
+            activeOpacity={0.7}
+            style={[
+              styles.pTh,
+              col.isDivider && styles.pThStudentDivider,
+              col.isStudent && styles.pThStudent,
+              { width: col.width },
+              isLast && { borderRightWidth: 0 },
+              hasFilter && (col.isStudent ? styles.pThFilteredStudent : styles.pThFiltered),
+              isSorted && (col.isStudent ? styles.pThSortedStudent : styles.pThSorted),
+            ]}
+            onPress={() => openColumnMenu(col)}
+          >
+            <View
+              style={[
+                styles.thInnerRow,
+                col.align === 'flex-start' ? { justifyContent: 'flex-start' } : { justifyContent: 'center' },
+              ]}
+            >
+              <Text
+                numberOfLines={1}
+                style={[
+                  col.isStudent ? styles.pThTextStudent : styles.pThText,
+                  (hasFilter || isSorted) && styles.pThTextHighlighted,
+                ]}
+              >
+                {col.label}
+              </Text>
+              <View style={[styles.thBadgeWrap, hasFilter && styles.thBadgeWrapActive]}>
+                {isSorted ? (
+                  <Text style={styles.sortIndicator}>{sortDirection === 'asc' ? '▲' : '▼'}</Text>
+                ) : (
+                  <Text style={[styles.filterIndicator, hasFilter && styles.filterIndicatorActive]}>
+                    {hasFilter ? '▼' : '▾'}
+                  </Text>
+                )}
+              </View>
+            </View>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+
+  const renderActiveFiltersBar = (totalCount: number, filteredCount: number) => {
+    const hasColFilters = Object.keys(columnFilters).length > 0;
+    const hasColSort = Boolean(sortColumn);
+    if (!hasColFilters && !hasColSort) return null;
+
+    return (
+      <View style={styles.activeFiltersBar}>
+        <View style={styles.activeFiltersLeft}>
+          <Text style={styles.activeFiltersLabel}>⚡ Active Filters:</Text>
+          {sortColumn && (
+            <View style={styles.filterChip}>
+              <Text style={styles.filterChipText}>
+                Sort: {TABLE_COLUMNS.find((c) => c.key === sortColumn)?.label} ({sortDirection === 'asc' ? 'Asc ↑' : 'Desc ↓'})
+              </Text>
+              <TouchableOpacity onPress={() => setSortColumn(null)} style={styles.filterChipRemoveBtn}>
+                <Text style={styles.filterChipRemove}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {Object.entries(columnFilters).map(([k, v]) => {
+            const col = TABLE_COLUMNS.find((c) => c.key === k);
+            const labelText = v === '__has_note__' ? 'Has Note' : v === '__no_note__' ? 'No Note' : v === '__blank__' ? 'Blank' : v;
+            return (
+              <View key={`af_${k}`} style={styles.filterChip}>
+                <Text style={styles.filterChipText}>
+                  {col?.label || k}: <Text style={{ fontWeight: '700' }}>"{labelText}"</Text>
+                </Text>
+                <TouchableOpacity onPress={() => handleClearColumnFilter(k)} style={styles.filterChipRemoveBtn}>
+                  <Text style={styles.filterChipRemove}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+          <TouchableOpacity style={styles.clearAllFiltersBtn} onPress={handleClearAllFilters}>
+            <Text style={styles.clearAllFiltersBtnText}>Clear All Filters</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.filteredCountText}>
+          Showing {filteredCount} of {totalCount} rows
+        </Text>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1021,6 +1362,11 @@ export default function BankStatementMatcherScreen() {
           </View>
         </View>
 
+        {renderActiveFiltersBar(
+          grandSummary.totalTxns,
+          filteredRegisterDates.reduce((s, d) => s + (d.statement_rows?.length || 0), 0)
+        )}
+
         {/* Date-wise Sections - Chronologically rendered one after another! */}
         {loadingRegister ? (
           <View style={{ padding: 40, alignItems: 'center' }}>
@@ -1132,57 +1478,7 @@ export default function BankStatementMatcherScreen() {
                       </View>
 
                       {/* Column Headers */}
-                      <View style={styles.pHeadRow}>
-                        <View style={[styles.pTh, { width: 45 }]}>
-                          <Text style={styles.pThText}>#</Text>
-                        </View>
-                        <View style={[styles.pTh, { width: 95 }]}>
-                          <Text style={styles.pThText}>Txn Date</Text>
-                        </View>
-                        <View style={[styles.pTh, { width: 95 }]}>
-                          <Text style={styles.pThText}>Value Date</Text>
-                        </View>
-                        <View style={[styles.pTh, { width: 500, alignItems: 'flex-start' }]}>
-                          <Text style={styles.pThText}>Description</Text>
-                        </View>
-                        <View style={[styles.pTh, { width: 240 }]}>
-                          <Text style={styles.pThText}>Ref No./Cheque No.</Text>
-                        </View>
-                        <View style={[styles.pTh, { width: 75 }]}>
-                          <Text style={styles.pThText}>Branch</Text>
-                        </View>
-                        <View style={[styles.pTh, { width: 85 }]}>
-                          <Text style={styles.pThText}>Debit</Text>
-                        </View>
-                        <View style={[styles.pTh, { width: 95 }]}>
-                          <Text style={styles.pThText}>Credit</Text>
-                        </View>
-                        <View style={[styles.pTh, { width: 95 }]}>
-                          <Text style={styles.pThText}>Balance</Text>
-                        </View>
-
-                        <View style={[styles.pTh, styles.pThStudentDivider, { width: 90 }]}>
-                          <Text style={styles.pThTextStudent}>Reg. No.</Text>
-                        </View>
-                        <View style={[styles.pTh, styles.pThStudent, { width: 180, alignItems: 'flex-start' }]}>
-                          <Text style={styles.pThTextStudent}>Student Name</Text>
-                        </View>
-                        <View style={[styles.pTh, styles.pThStudent, { width: 100 }]}>
-                          <Text style={styles.pThTextStudent}>Class</Text>
-                        </View>
-                        <View style={[styles.pTh, styles.pThStudent, { width: 90 }]}>
-                          <Text style={styles.pThTextStudent}>Recpt. No.</Text>
-                        </View>
-                        <View style={[styles.pTh, styles.pThStudent, { width: 100 }]}>
-                          <Text style={styles.pThTextStudent}>Amount</Text>
-                        </View>
-                        <View style={[styles.pTh, styles.pThStudent, { width: 105 }]}>
-                          <Text style={styles.pThTextStudent}>Bill Date</Text>
-                        </View>
-                        <View style={[styles.pTh, styles.pThStudent, { width: 220, borderRightWidth: 0 }]}>
-                          <Text style={styles.pThTextStudent}>Note</Text>
-                        </View>
-                      </View>
+                      {renderTableHeader()}
 
                       {/* Rows */}
                       {dateItem.statement_rows.map((row: any, idx: number) => {
@@ -1483,6 +1779,8 @@ export default function BankStatementMatcherScreen() {
                 </View>
               </View>
 
+              {renderActiveFiltersBar(allStatementRows.length, filteredStatementRows.length)}
+
               {/* Data Table */}
               <ScrollView horizontal style={styles.horizontalScroll}>
                 {activeResultTab !== 'mismatch_bills' ? (
@@ -1502,58 +1800,7 @@ export default function BankStatementMatcherScreen() {
                     </View>
 
                     {/* Column Headers */}
-                    <View style={styles.pHeadRow}>
-                      <View style={[styles.pTh, { width: 45 }]}>
-                        <Text style={styles.pThText}>#</Text>
-                      </View>
-                      <View style={[styles.pTh, { width: 95 }]}>
-                        <Text style={styles.pThText}>Txn Date</Text>
-                      </View>
-                      <View style={[styles.pTh, { width: 95 }]}>
-                        <Text style={styles.pThText}>Value Date</Text>
-                      </View>
-                      <View style={[styles.pTh, { width: 500, alignItems: 'flex-start' }]}>
-                        <Text style={styles.pThText}>Description</Text>
-                      </View>
-                      <View style={[styles.pTh, { width: 240 }]}>
-                        <Text style={styles.pThText}>Ref No./Cheque No.</Text>
-                      </View>
-                      <View style={[styles.pTh, { width: 75 }]}>
-                        <Text style={styles.pThText}>Branch</Text>
-                      </View>
-                      <View style={[styles.pTh, { width: 85 }]}>
-                        <Text style={styles.pThText}>Debit</Text>
-                      </View>
-                      <View style={[styles.pTh, { width: 95 }]}>
-                        <Text style={styles.pThText}>Credit</Text>
-                      </View>
-                      <View style={[styles.pTh, { width: 95 }]}>
-                        <Text style={styles.pThText}>Balance</Text>
-                      </View>
-
-                      {/* Student details headers (Order: Reg. No., Student Name, Class, Recpt. No., Amount, Bill Date, Note) */}
-                      <View style={[styles.pTh, styles.pThStudentDivider, { width: 90 }]}>
-                        <Text style={styles.pThTextStudent}>Reg. No.</Text>
-                      </View>
-                      <View style={[styles.pTh, styles.pThStudent, { width: 180, alignItems: 'flex-start' }]}>
-                        <Text style={styles.pThTextStudent}>Student Name</Text>
-                      </View>
-                      <View style={[styles.pTh, styles.pThStudent, { width: 100 }]}>
-                        <Text style={styles.pThTextStudent}>Class</Text>
-                      </View>
-                      <View style={[styles.pTh, styles.pThStudent, { width: 90 }]}>
-                        <Text style={styles.pThTextStudent}>Recpt. No.</Text>
-                      </View>
-                      <View style={[styles.pTh, styles.pThStudent, { width: 100 }]}>
-                        <Text style={styles.pThTextStudent}>Amount</Text>
-                      </View>
-                      <View style={[styles.pTh, styles.pThStudent, { width: 105 }]}>
-                        <Text style={styles.pThTextStudent}>Bill Date</Text>
-                      </View>
-                      <View style={[styles.pTh, styles.pThStudent, { width: 220, borderRightWidth: 0 }]}>
-                        <Text style={styles.pThTextStudent}>Note</Text>
-                      </View>
-                    </View>
+                    {renderTableHeader()}
 
                     {/* Data Rows */}
                     {filteredStatementRows.map((row: any, idx: number) => {
@@ -1899,6 +2146,243 @@ export default function BankStatementMatcherScreen() {
                 onPress={() => setMasterModalOpen(false)}
               >
                 <Text style={styles.modalCloseActionBtnText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Excel-Style Column Filter & Sort Modal */}
+      <Modal
+        visible={Boolean(activeFilterMenuCol)}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setActiveFilterMenuCol(null)}
+      >
+        <View style={styles.filterModalOverlay}>
+          <TouchableOpacity
+            activeOpacity={1}
+            style={StyleSheet.absoluteFill}
+            onPress={() => setActiveFilterMenuCol(null)}
+          />
+          <View style={styles.filterModalCard}>
+            {/* Modal Header */}
+            <View style={styles.filterModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 16 }}>📊</Text>
+                <Text style={styles.filterModalTitle}>
+                  Filter & Sort: {activeFilterMenuCol?.label}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.filterModalCloseBtn}
+                onPress={() => setActiveFilterMenuCol(null)}
+              >
+                <Text style={styles.filterModalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+              {/* Sort Section */}
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>SORTING</Text>
+                <View style={styles.sortButtonsRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.sortBtn,
+                      sortColumn === activeFilterMenuCol?.key && sortDirection === 'asc' && styles.sortBtnActive,
+                    ]}
+                    onPress={() => handleSort(activeFilterMenuCol!.key, 'asc')}
+                  >
+                    <Text
+                      style={[
+                        styles.sortBtnText,
+                        sortColumn === activeFilterMenuCol?.key && sortDirection === 'asc' && styles.sortBtnTextActive,
+                      ]}
+                    >
+                      ▲ Sort Ascending (A → Z / Low → High)
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.sortBtn,
+                      sortColumn === activeFilterMenuCol?.key && sortDirection === 'desc' && styles.sortBtnActive,
+                    ]}
+                    onPress={() => handleSort(activeFilterMenuCol!.key, 'desc')}
+                  >
+                    <Text
+                      style={[
+                        styles.sortBtnText,
+                        sortColumn === activeFilterMenuCol?.key && sortDirection === 'desc' && styles.sortBtnTextActive,
+                      ]}
+                    >
+                      ▼ Sort Descending (Z → A / High → Low)
+                    </Text>
+                  </TouchableOpacity>
+
+                  {sortColumn === activeFilterMenuCol?.key && (
+                    <TouchableOpacity
+                      style={styles.clearSortBtn}
+                      onPress={() => setSortColumn(null)}
+                    >
+                      <Text style={styles.clearSortBtnText}>⟲ Reset Sort</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
+              {/* Filter Input Section */}
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>FILTER BY TEXT / SEARCH</Text>
+                <View style={styles.modalSearchBox}>
+                  <Text style={{ marginRight: 6 }}>🔍</Text>
+                  <TextInput
+                    style={styles.modalSearchInput}
+                    placeholder={`Type to filter ${activeFilterMenuCol?.label}...`}
+                    placeholderTextColor="#94a3b8"
+                    value={colSearchQuery}
+                    onChangeText={(text) => {
+                      setColSearchQuery(text);
+                      handleApplyFilter(activeFilterMenuCol!.key, text);
+                    }}
+                  />
+                  {colSearchQuery ? (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setColSearchQuery('');
+                        handleClearColumnFilter(activeFilterMenuCol!.key);
+                      }}
+                    >
+                      <Text style={{ color: '#94a3b8', padding: 4 }}>✕</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </View>
+
+              {/* Distinct Values / Quick Filter Presets */}
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>
+                  QUICK VALUES ({distinctValuesForActiveCol.length})
+                </Text>
+                <View style={styles.distinctValuesWrap}>
+                  <TouchableOpacity
+                    style={[
+                      styles.distinctChip,
+                      !columnFilters[activeFilterMenuCol?.key || ''] && styles.distinctChipActive,
+                    ]}
+                    onPress={() => {
+                      setColSearchQuery('');
+                      handleClearColumnFilter(activeFilterMenuCol!.key);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.distinctChipText,
+                        !columnFilters[activeFilterMenuCol?.key || ''] && styles.distinctChipTextActive,
+                      ]}
+                    >
+                      All ({distinctValuesForActiveCol.reduce((sum, item) => sum + item[1], 0)})
+                    </Text>
+                  </TouchableOpacity>
+
+                  {activeFilterMenuCol?.key === 'note' && (
+                    <>
+                      <TouchableOpacity
+                        style={[
+                          styles.distinctChip,
+                          columnFilters[activeFilterMenuCol.key] === '__has_note__' && styles.distinctChipActive,
+                        ]}
+                        onPress={() => {
+                          setColSearchQuery('Has Note');
+                          handleApplyFilter(activeFilterMenuCol.key, '__has_note__');
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.distinctChipText,
+                            columnFilters[activeFilterMenuCol.key] === '__has_note__' && styles.distinctChipTextActive,
+                          ]}
+                        >
+                          📝 Has Custom Note
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.distinctChip,
+                          columnFilters[activeFilterMenuCol.key] === '__no_note__' && styles.distinctChipActive,
+                        ]}
+                        onPress={() => {
+                          setColSearchQuery('No Note');
+                          handleApplyFilter(activeFilterMenuCol.key, '__no_note__');
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.distinctChipText,
+                            columnFilters[activeFilterMenuCol.key] === '__no_note__' && styles.distinctChipTextActive,
+                          ]}
+                        >
+                          ⬜ No Note / Blank
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+
+                  {distinctValuesForActiveCol.slice(0, 35).map(([val, count]) => {
+                    const currentFilter = columnFilters[activeFilterMenuCol?.key || ''];
+                    const isSelected =
+                      val === '(Blank)'
+                        ? currentFilter === '__blank__'
+                        : currentFilter?.toLowerCase() === val.toLowerCase();
+
+                    return (
+                      <TouchableOpacity
+                        key={`val_${val}`}
+                        style={[styles.distinctChip, isSelected && styles.distinctChipActive]}
+                        onPress={() => {
+                          const nextVal = val === '(Blank)' ? '__blank__' : val;
+                          setColSearchQuery(val === '(Blank)' ? '' : val);
+                          handleApplyFilter(activeFilterMenuCol!.key, nextVal);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.distinctChipText,
+                            isSelected && styles.distinctChipTextActive,
+                          ]}
+                        >
+                          {val} ({count})
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Modal Actions */}
+            <View style={styles.filterModalFooter}>
+              {columnFilters[activeFilterMenuCol?.key || ''] ? (
+                <TouchableOpacity
+                  style={styles.clearFilterModalBtn}
+                  onPress={() => {
+                    setColSearchQuery('');
+                    handleClearColumnFilter(activeFilterMenuCol!.key);
+                  }}
+                >
+                  <Text style={styles.clearFilterModalBtnText}>✕ Clear Filter</Text>
+                </TouchableOpacity>
+              ) : (
+                <View />
+              )}
+
+              <TouchableOpacity
+                style={styles.applyFilterModalBtn}
+                onPress={() => setActiveFilterMenuCol(null)}
+              >
+                <Text style={styles.applyFilterModalBtnText}>Done</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2518,6 +3002,288 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRightWidth: 1,
     borderRightColor: '#93c5fd',
+    cursor: 'pointer' as any,
+  },
+  thInnerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  thBadgeWrap: {
+    marginLeft: 4,
+    width: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  thBadgeWrapActive: {
+    backgroundColor: '#fef08a',
+    borderRadius: 4,
+    paddingHorizontal: 2,
+  },
+  filterIndicator: {
+    color: 'rgba(15, 23, 42, 0.65)',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  filterIndicatorActive: {
+    color: '#0f172a',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  sortIndicator: {
+    color: '#b45309',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  pThFiltered: {
+    backgroundColor: '#38bdf8',
+  },
+  pThFilteredStudent: {
+    backgroundColor: '#86efac',
+  },
+  pThSorted: {
+    backgroundColor: '#7dd3fc',
+  },
+  pThSortedStudent: {
+    backgroundColor: '#bbf7d0',
+  },
+  pThTextHighlighted: {
+    color: '#0f172a',
+    fontWeight: '900',
+  },
+  activeFiltersBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 8,
+    marginBottom: 8,
+    flexWrap: 'wrap',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  activeFiltersLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  activeFiltersLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e0f2fe',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+  },
+  filterChipText: {
+    fontSize: 12,
+    color: '#0369a1',
+    fontWeight: '600',
+  },
+  filterChipRemoveBtn: {
+    marginLeft: 6,
+    padding: 2,
+  },
+  filterChipRemove: {
+    fontSize: 11,
+    color: '#0284c7',
+    fontWeight: '800',
+  },
+  clearAllFiltersBtn: {
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+  },
+  clearAllFiltersBtnText: {
+    fontSize: 12,
+    color: '#b91c1c',
+    fontWeight: '700',
+  },
+  filteredCountText: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  filterModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  filterModalCard: {
+    width: '100%',
+    maxWidth: 460,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  filterModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  filterModalTitle: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  filterModalCloseBtn: {
+    padding: 4,
+  },
+  filterModalCloseText: {
+    color: '#94a3b8',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  modalSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  modalSectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
+  sortButtonsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  sortBtn: {
+    flex: 1,
+    minWidth: 180,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+  },
+  sortBtnActive: {
+    backgroundColor: '#e0f2fe',
+    borderColor: '#0284c7',
+  },
+  sortBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  sortBtnTextActive: {
+    color: '#0284c7',
+    fontWeight: '700',
+  },
+  clearSortBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    alignSelf: 'flex-start',
+  },
+  clearSortBtnText: {
+    fontSize: 11,
+    color: '#ef4444',
+    fontWeight: '600',
+  },
+  modalSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  modalSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0f172a',
+    outlineStyle: 'none' as any,
+  },
+  distinctValuesWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    maxHeight: 160,
+  },
+  distinctChip: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  distinctChipActive: {
+    backgroundColor: '#0284c7',
+    borderColor: '#0284c7',
+  },
+  distinctChipText: {
+    fontSize: 12,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  distinctChipTextActive: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  filterModalFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#f8fafc',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  clearFilterModalBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  clearFilterModalBtnText: {
+    color: '#ef4444',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  applyFilterModalBtn: {
+    backgroundColor: '#0284c7',
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  applyFilterModalBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
   },
   pThStudentDivider: {
     borderLeftWidth: 3,
