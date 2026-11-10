@@ -1047,6 +1047,7 @@ export default function BankStatementMatcherScreen() {
             style={[styles.modeToggleTab, pageMode === 'register' && styles.modeToggleTabActive]}
             onPress={() => {
               setPageMode('register');
+              setExpandedDates({});
               void loadRegister();
             }}
           >
@@ -1269,16 +1270,16 @@ export default function BankStatementMatcherScreen() {
               <TouchableOpacity
                 style={styles.expandAllBtn}
                 onPress={() => {
-                  const allExpanded = Object.values(expandedDates).every(Boolean);
+                  const anyExp = registerDates.some((d) => Boolean(expandedDates[d.id]));
                   const next: Record<number, boolean> = {};
                   registerDates.forEach((d) => {
-                    next[d.id] = !allExpanded;
+                    next[d.id] = !anyExp;
                   });
                   setExpandedDates(next);
                 }}
               >
                 <Text style={styles.expandAllBtnText}>
-                  {Object.values(expandedDates).every(Boolean) ? '▴ Collapse All' : '▾ Expand All'}
+                  {registerDates.some((d) => Boolean(expandedDates[d.id])) ? '▴ Collapse All' : '▾ Expand All'}
                 </Text>
               </TouchableOpacity>
 
@@ -1333,7 +1334,13 @@ export default function BankStatementMatcherScreen() {
                   <TouchableOpacity
                     key={`chip_${d.id}`}
                     style={[styles.dateChip, isSelected && styles.dateChipActive]}
-                    onPress={() => setSelectedFilterDate(selectedFilterDate === String(d.id) ? 'all' : String(d.id))}
+                    onPress={() => {
+                      const nextFilter = selectedFilterDate === String(d.id) ? 'all' : String(d.id);
+                      setSelectedFilterDate(nextFilter);
+                      if (nextFilter !== 'all') {
+                        setExpandedDates((prev) => ({ ...prev, [d.id]: true }));
+                      }
+                    }}
                   >
                     <Text style={[styles.dateChipText, isSelected && styles.dateChipTextActive]}>
                       📅 {dateLabel} ({d.statement_rows?.length || 0})
@@ -1386,7 +1393,7 @@ export default function BankStatementMatcherScreen() {
           </View>
         ) : (
           filteredRegisterDates.map((dateItem) => {
-            const isExp = expandedDates[dateItem.id] !== false;
+            const isExp = Boolean(expandedDates[dateItem.id]);
             const dateLabel = `${formatDateDisplay(dateItem.from_date)}${
               dateItem.to_date && dateItem.to_date !== dateItem.from_date ? ' to ' + formatDateDisplay(dateItem.to_date) : ''
             }`;
