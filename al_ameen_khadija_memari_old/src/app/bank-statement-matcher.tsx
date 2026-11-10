@@ -140,87 +140,197 @@ export default function BankStatementMatcherScreen() {
   const [activeResultTab, setActiveResultTab] = useState<'all' | 'matched' | 'unmatched_statement' | 'mismatch_bills'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Saved History & Notes State
-  const [pageMode, setPageMode] = useState<'reconcile' | 'history'>('reconcile');
-  const [historySearchDate, setHistorySearchDate] = useState<string>('');
+  // Master Daily Register State
+  const [pageMode, setPageMode] = useState<'reconcile' | 'register'>('register');
+  const [registerDates, setRegisterDates] = useState<any[]>([]);
+  const [loadingRegister, setLoadingRegister] = useState<boolean>(false);
+  const [expandedDates, setExpandedDates] = useState<Record<number, boolean>>({});
+  const [selectedFilterDate, setSelectedFilterDate] = useState<string>('all');
+  const [registerSearchQuery, setRegisterSearchQuery] = useState<string>('');
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [noteStatus, setNoteStatus] = useState<Record<string, 'saving' | 'saved' | 'error'>>({});
-  const [savedHistory, setSavedHistory] = useState<any[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
   const [savingSession, setSavingSession] = useState<boolean>(false);
   const [currentSavedId, setCurrentSavedId] = useState<number | null>(null);
 
-  const filteredSavedHistory = useMemo(() => {
-    if (!historySearchDate.trim()) return savedHistory;
-    const q = historySearchDate.trim().toLowerCase();
-    return savedHistory.filter((item: any) => {
-      const title = String(item.batch_title || '').toLowerCase();
-      const fDate = String(item.from_date || '').toLowerCase();
-      const tDate = String(item.to_date || '').toLowerCase();
-      const filename = String(item.statement_filename || '').toLowerCase();
-      return title.includes(q) || fDate.includes(q) || tDate.includes(q) || filename.includes(q);
+  // Filtered dates and search across all dates in Master Register
+  const filteredRegisterDates = useMemo(() => {
+    let list = registerDates;
+    if (selectedFilterDate !== 'all') {
+      list = list.filter((d) => d.from_date === selectedFilterDate || d.to_date === selectedFilterDate);
+    }
+    if (!registerSearchQuery.trim()) return list;
+    const q = registerSearchQuery.toLowerCase().trim();
+    return list.map((d) => {
+      const matchingRows = (d.statement_rows || []).filter((r: any) => {
+        return (
+          String(r.reg_no || '').toLowerCase().includes(q) ||
+          String(r.student_name || '').toLowerCase().includes(q) ||
+          String(r.receipt_no || '').toLowerCase().includes(q) ||
+          String(r.class_name || '').toLowerCase().includes(q) ||
+          String(r.description || '').toLowerCase().includes(q) ||
+          String(r.ref_no || '').toLowerCase().includes(q) ||
+          String(r.note || '').toLowerCase().includes(q) ||
+          String(r.credit || '').includes(q)
+        );
+      });
+      return {
+        ...d,
+        statement_rows: matchingRows,
+      };
+    }).filter((d) => d.statement_rows.length > 0 || String(d.from_date).includes(q));
+  }, [registerDates, selectedFilterDate, registerSearchQuery]);
+
+  // Grand summary across all saved dates in register
+  const grandSummary = useMemo(() => {
+    let totalTxns = 0;
+    let totalMatched = 0;
+    let totalMatchedAmt = 0;
+    let totalUnmatched = 0;
+    registerDates.forEach((d) => {
+      totalTxns += d.statement_rows?.length || 0;
+      totalMatched += d.summary?.matched_count || 0;
+      totalMatchedAmt += Number(d.summary?.matched_amount || 0);
+      totalUnmatched += d.summary?.statement_unmatched_count || 0;
     });
-  }, [savedHistory, historySearchDate]);
+    return {
+      dateCount: registerDates.length,
+      totalTxns,
+      totalMatched,
+      totalMatchedAmt,
+      totalUnmatched,
+    };
+  }, [registerDates]);
 
   useEffect(() => {
     void loadMasterStatus();
-    void loadHistory();
+    void loadRegister();
   }, []);
 
-  const loadHistory = async () => {
+  const loadRegister = async () => {
     try {
-      setLoadingHistory(true);
-      const data = await api('/api/bank-matcher/history');
-      if (data?.success) {
-        setSavedHistory(data.history || []);
+      setLoadingRegister(true);
+      const data = await api('/api/bank-matcher/register');
+      if (data?.success && data.dates) {
+        setRegisterDates(data.dates);
+        // By default expand all loaded dates
+        const exp: Record<number, boolean> = {};
+        const notesObj: Record<string, string> = {};
+        data.dates.forEach((d: any) => {
+          exp[d.id] = true;
+          if (d.notes_map) {
+            Object.keys(d.notes_map).forEach((k) => {
+              notesObj[`${d.id}_${k}`] = d.notes_map[k];
+            });
+          }
+          if (Array.isArray(d.statement_rows)) {
+            d.statement_rows.forEach((r: any, idx: number) => {
+              const k = String(r.statement_row ?? (r.ref_no || idx));
+              if (r.note && notesObj[`${d.id}_${k}`] === undefined) {
+                notesObj[`${d.id}_${k}`] = r.note;
+              }
+            });
+          }
+        });
+        setExpandedDates(exp);
+        setNotes((prev) => ({ ...prev, ...notesObj }));
       }
     } catch (err: any) {
-      console.error('Failed to load history:', err);
+      console.error('Failed to load register:', err);
     } finally {
-      setLoadingHistory(false);
+      setLoadingRegister(false);
     }
   };
 
-  // Real-time note auto-save for individual transactions
-  const saveSingleNote = async (rowKey: string, noteText: string) => {
-    if (!currentSavedId) return;
+  // Real-time note auto-save for individual transactions in register
+  const saveSingleNote = async (recordId: number, rowKey: string, noteText: string) => {
+    if (!recordId) return;
+    const noteMapKey = `${recordId}_${rowKey}`;
     try {
-      setNoteStatus((prev) => ({ ...prev, [rowKey]: 'saving' }));
+      setNoteStatus((prev) => ({ ...prev, [noteMapKey]: 'saving' }));
       const res = await api('/api/bank-matcher/save-note', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: currentSavedId,
+          id: recordId,
           row_key: rowKey,
           note: noteText,
         }),
       });
       if (res?.success) {
-        setNoteStatus((prev) => ({ ...prev, [rowKey]: 'saved' }));
-        // Also update note inside statement_rows so it stays in sync
-        setResult((prev: any) => {
-          if (!prev?.statement_rows) return prev;
-          const updated = prev.statement_rows.map((r: any, idx: number) => {
-            const k = String(r.statement_row ?? (r.ref_no || idx));
-            if (k === String(rowKey)) {
-              return { ...r, note: noteText };
-            }
-            return r;
+        setNoteStatus((prev) => ({ ...prev, [noteMapKey]: 'saved' }));
+        // Update local registerDates state
+        setRegisterDates((prev) =>
+          prev.map((d) => {
+            if (d.id !== recordId) return d;
+            const updatedRows = (d.statement_rows || []).map((r: any, idx: number) => {
+              const k = String(r.statement_row ?? (r.ref_no || idx));
+              if (k === String(rowKey)) {
+                return { ...r, note: noteText };
+              }
+              return r;
+            });
+            const updatedMap = { ...(d.notes_map || {}), [rowKey]: noteText };
+            return { ...d, statement_rows: updatedRows, notes_map: updatedMap };
+          })
+        );
+        // Also update in result if loaded
+        if (currentSavedId === recordId) {
+          setResult((prev: any) => {
+            if (!prev?.statement_rows) return prev;
+            const updated = prev.statement_rows.map((r: any, idx: number) => {
+              const k = String(r.statement_row ?? (r.ref_no || idx));
+              if (k === String(rowKey)) {
+                return { ...r, note: noteText };
+              }
+              return r;
+            });
+            return { ...prev, statement_rows: updated };
           });
-          return { ...prev, statement_rows: updated };
-        });
+        }
         setTimeout(() => {
           setNoteStatus((prev) => {
             const copy = { ...prev };
-            delete copy[rowKey];
+            delete copy[noteMapKey];
             return copy;
           });
         }, 2200);
       } else {
-        setNoteStatus((prev) => ({ ...prev, [rowKey]: 'error' }));
+        setNoteStatus((prev) => ({ ...prev, [noteMapKey]: 'error' }));
       }
     } catch {
-      setNoteStatus((prev) => ({ ...prev, [rowKey]: 'error' }));
+      setNoteStatus((prev) => ({ ...prev, [noteMapKey]: 'error' }));
+    }
+  };
+
+  const handleDeleteDate = async (id: number, dateLabel: string) => {
+    if (Platform.OS === 'web') {
+      const ok = window.confirm(`Are you sure you want to delete all reconciliation records for date: ${dateLabel}?`);
+      if (!ok) return;
+    }
+    try {
+      const res = await api(`/api/bank-matcher/history/${id}`, { method: 'DELETE' });
+      if (res?.success) {
+        setRegisterDates((prev) => prev.filter((d) => d.id !== id));
+        if (currentSavedId === id) {
+          setCurrentSavedId(null);
+          setResult(null);
+        }
+      }
+    } catch (err: any) {
+      Alert.alert('Delete Error', err.message || 'Failed to delete record.');
+    }
+  };
+
+  const handleDownloadDateExcel = (token: string | null) => {
+    if (!token) {
+      Alert.alert('Download Error', 'No Excel file ready for download for this date.');
+      return;
+    }
+    const url = `${getApiBase()}/api/bank-matcher/download/${token}`;
+    if (Platform.OS === 'web') {
+      window.open(url, '_blank');
+    } else {
+      void Linking.openURL(url);
     }
   };
 
@@ -265,7 +375,7 @@ export default function BankStatementMatcherScreen() {
           'Saved Successfully',
           'Reconciled statement and all custom notes have been saved permanently to the database.\nYou can reopen this anytime from the Date-wise Saved Archive.'
         );
-        void loadHistory();
+        void loadRegister();
       } else {
         Alert.alert('Save Failed', res?.message || 'Could not save session.');
       }
@@ -273,71 +383,6 @@ export default function BankStatementMatcherScreen() {
       Alert.alert('Save Error', err.message || 'Failed to save session.');
     } finally {
       setSavingSession(false);
-    }
-  };
-
-  const handleOpenSavedRecord = async (id: number) => {
-    try {
-      setLoadingHistory(true);
-      const res = await api(`/api/bank-matcher/history/${id}`);
-      if (res?.success && res.record) {
-        const rec = res.record;
-
-        // Consolidate notes from both rec.notes_map and rec.statement_rows
-        const mergedNotes: Record<string, string> = {};
-        if (rec.notes_map && typeof rec.notes_map === 'object') {
-          Object.assign(mergedNotes, rec.notes_map);
-        }
-        if (Array.isArray(rec.statement_rows)) {
-          rec.statement_rows.forEach((r: any, idx: number) => {
-            const k = String(r.statement_row ?? (r.ref_no || idx));
-            if (r.note && mergedNotes[k] === undefined) {
-              mergedNotes[k] = r.note;
-            }
-          });
-        }
-
-        setResult({
-          summary: rec.summary,
-          statement_rows: rec.statement_rows,
-          matched_rows: rec.matched_rows,
-          mismatch_rows: rec.mismatch_rows,
-        });
-        setNotes(mergedNotes);
-        setCurrentSavedId(rec.id);
-        if (rec.from_date) setFromDate(rec.from_date);
-        if (rec.to_date) setToDate(rec.to_date);
-        if (rec.download_token) setDownloadToken(rec.download_token);
-
-        // Switch automatically to reconcile view so transactions & notes appear instantly
-        setPageMode('reconcile');
-
-        const filledCount = Object.values(mergedNotes).filter((v) => !!String(v).trim()).length;
-        Alert.alert(
-          'Record Loaded',
-          `Loaded ${rec.batch_title || 'saved reconciliation'}.\n${
-            filledCount > 0 ? `📝 ${filledCount} saved notes loaded into table.` : 'No custom notes previously saved.'
-          }`
-        );
-      }
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to load saved record.');
-    } finally {
-      setLoadingHistory(false);
-    }
-  };
-
-  const handleDeleteSavedRecord = async (id: number) => {
-    try {
-      const res = await api(`/api/bank-matcher/history/${id}`, { method: 'DELETE' });
-      if (res?.success) {
-        setSavedHistory((prev) => prev.filter((item) => item.id !== id));
-        if (currentSavedId === id) {
-          setCurrentSavedId(null);
-        }
-      }
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to delete record.');
     }
   };
 
@@ -444,7 +489,7 @@ export default function BankStatementMatcherScreen() {
         setDownloadToken(data.download_token);
         if (data.saved_record_id) {
           setCurrentSavedId(data.saved_record_id);
-          void loadHistory();
+          void loadRegister();
         } else {
           setCurrentSavedId(null);
         }
@@ -623,24 +668,24 @@ export default function BankStatementMatcherScreen() {
         {/* Mode Toggle Bar */}
         <View style={styles.modeToggleBar}>
           <TouchableOpacity
+            style={[styles.modeToggleTab, pageMode === 'register' && styles.modeToggleTabActive]}
+            onPress={() => {
+              setPageMode('register');
+              void loadRegister();
+            }}
+          >
+            <Text style={[styles.modeToggleTabText, pageMode === 'register' && styles.modeToggleTabTextActive]}>
+              📖 Master Daily Register (তারিখ অনুযায়ী খাতা)
+              {registerDates.length ? ` (${registerDates.length} দিন)` : ''}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.modeToggleTab, pageMode === 'reconcile' && styles.modeToggleTabActive]}
             onPress={() => setPageMode('reconcile')}
           >
             <Text style={[styles.modeToggleTabText, pageMode === 'reconcile' && styles.modeToggleTabTextActive]}>
               ⚡ Reconcile New Statement (নতুন ফাইল ম্যাচ)
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.modeToggleTab, pageMode === 'history' && styles.modeToggleTabActive]}
-            onPress={() => {
-              setPageMode('history');
-              void loadHistory();
-            }}
-          >
-            <Text style={[styles.modeToggleTabText, pageMode === 'history' && styles.modeToggleTabTextActive]}>
-              📅 Date-wise Saved Archive (সংরক্ষিত হিস্ট্রি)
-              {savedHistory.length ? ` (${savedHistory.length})` : ''}
             </Text>
           </TouchableOpacity>
         </View>
@@ -820,104 +865,400 @@ export default function BankStatementMatcherScreen() {
         </View>
       </>
     ) : (
-      <View style={styles.historyArchiveCard}>
-        <View style={styles.historyArchiveHeader}>
-          <View style={{ flex: 1, minWidth: 260 }}>
-            <Text style={styles.historyArchiveTitle}>
-              📅 Date-wise Reconciled Records Archive
-            </Text>
-            <Text style={styles.historyArchiveSubtitle}>
-              পূর্বে ম্যাচ ও সেভ করা সব স্টেটমেন্টের রেকর্ড। যেকোনো তারিখের রেকর্ডে ক্লিক করলেই ব্যাংক স্টেটমেন্ট ফাইল আপলোড ছাড়াই পুরো ডাটা ও নোট সরাসরি দেখতে পাবেন।
-            </Text>
+      <View style={styles.registerContainer}>
+        {/* Master Register Header Bar */}
+        <View style={styles.registerHeaderCard}>
+          <View style={styles.registerHeaderTop}>
+            <View style={{ flex: 1, minWidth: 260 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.registerTitle}>📖 Master Daily Bank Register</Text>
+                <View style={styles.liveCountBadge}>
+                  <Text style={styles.liveCountBadgeText}>{registerDates.length} দিন সংরক্ষিত</Text>
+                </View>
+              </View>
+              <Text style={styles.registerSubtitle}>
+                তারিখ অনুযায়ী ব্যাংকের সমস্ত স্টেটমেন্ট ট্রানজ্যাকশন ও ছাত্র-ছাত্রীদের ম্যাচ হওয়া ফি রিসিট এক মাস্টার খাতায় পর পর সাজানো রয়েছে।
+              </Text>
+            </View>
+
+            {/* Right Quick Actions */}
+            <View style={styles.registerTopActions}>
+              <TouchableOpacity
+                style={styles.expandAllBtn}
+                onPress={() => {
+                  const allExpanded = Object.values(expandedDates).every(Boolean);
+                  const next: Record<number, boolean> = {};
+                  registerDates.forEach((d) => {
+                    next[d.id] = !allExpanded;
+                  });
+                  setExpandedDates(next);
+                }}
+              >
+                <Text style={styles.expandAllBtnText}>
+                  {Object.values(expandedDates).every(Boolean) ? '▴ Collapse All' : '▾ Expand All'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.refreshRegBtn}
+                onPress={() => void loadRegister()}
+              >
+                <Text style={styles.refreshRegBtnText}>🔄 Refresh</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
-          <View style={styles.historySearchBox}>
-            <Text style={{ marginRight: 6 }}>🔍</Text>
-            <TextInput
-              style={styles.historySearchInput}
-              placeholder="Filter by date (e.g. 08-11-2026)..."
-              placeholderTextColor="#94a3b8"
-              value={historySearchDate}
-              onChangeText={setHistorySearchDate}
-            />
-            {historySearchDate ? (
-              <TouchableOpacity onPress={() => setHistorySearchDate('')}>
-                <Text style={{ color: '#94a3b8', padding: 4 }}>✕</Text>
+          {/* Grand Summary Across All Dates */}
+          <View style={styles.grandSummaryRow}>
+            <View style={[styles.grandStatCard, { borderLeftColor: '#3b82f6' }]}>
+              <Text style={styles.grandStatLabel}>RECORDED DATES</Text>
+              <Text style={[styles.grandStatVal, { color: '#1d4ed8' }]}>{grandSummary.dateCount} দিন</Text>
+            </View>
+            <View style={[styles.grandStatCard, { borderLeftColor: '#0284c7' }]}>
+              <Text style={styles.grandStatLabel}>TOTAL STATEMENT TXNS</Text>
+              <Text style={[styles.grandStatVal, { color: '#0369a1' }]}>{grandSummary.totalTxns}</Text>
+            </View>
+            <View style={[styles.grandStatCard, { borderLeftColor: '#22c55e' }]}>
+              <Text style={styles.grandStatLabel}>TOTAL MATCHED</Text>
+              <Text style={[styles.grandStatVal, { color: '#15803d' }]}>{grandSummary.totalMatched}</Text>
+              <Text style={styles.grandStatSub}>₹{formatCurrency(grandSummary.totalMatchedAmt)}</Text>
+            </View>
+            <View style={[styles.grandStatCard, { borderLeftColor: '#f59e0b' }]}>
+              <Text style={styles.grandStatLabel}>TOTAL STMT UNMATCHED</Text>
+              <Text style={[styles.grandStatVal, { color: '#b45309' }]}>{grandSummary.totalUnmatched}</Text>
+            </View>
+          </View>
+
+          {/* Filter Controls Row: Date Chips & Search Box */}
+          <View style={styles.registerFilterRow}>
+            {/* Date Chips */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateChipsScroll}>
+              <TouchableOpacity
+                style={[styles.dateChip, selectedFilterDate === 'all' && styles.dateChipActive]}
+                onPress={() => setSelectedFilterDate('all')}
+              >
+                <Text style={[styles.dateChipText, selectedFilterDate === 'all' && styles.dateChipTextActive]}>
+                  All Dates ({registerDates.length})
+                </Text>
               </TouchableOpacity>
-            ) : null}
+              {registerDates.map((d) => {
+                const isSelected = selectedFilterDate === d.from_date;
+                return (
+                  <TouchableOpacity
+                    key={`chip_${d.id}`}
+                    style={[styles.dateChip, isSelected && styles.dateChipActive]}
+                    onPress={() => setSelectedFilterDate(isSelected ? 'all' : d.from_date)}
+                  >
+                    <Text style={[styles.dateChipText, isSelected && styles.dateChipTextActive]}>
+                      📅 {formatDateDisplay(d.from_date)} ({d.statement_rows?.length || 0})
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Instant Search Bar */}
+            <View style={styles.registerSearchBox}>
+              <Text style={{ marginRight: 6 }}>🔍</Text>
+              <TextInput
+                style={styles.registerSearchInput}
+                placeholder="Search across all dates (student, reg, ref, desc, note)..."
+                placeholderTextColor="#94a3b8"
+                value={registerSearchQuery}
+                onChangeText={setRegisterSearchQuery}
+              />
+              {registerSearchQuery ? (
+                <TouchableOpacity onPress={() => setRegisterSearchQuery('')}>
+                  <Text style={{ color: '#94a3b8', padding: 4 }}>✕</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
           </View>
         </View>
 
-        {loadingHistory ? (
-          <View style={{ padding: 30, alignItems: 'center' }}>
+        {/* Date-wise Sections - Chronologically rendered one after another! */}
+        {loadingRegister ? (
+          <View style={{ padding: 40, alignItems: 'center' }}>
             <ActivityIndicator size="large" color="#0284c7" />
-            <Text style={{ marginTop: 10, color: '#64748b' }}>Loading saved records...</Text>
-          </View>
-        ) : filteredSavedHistory.length === 0 ? (
-          <View style={{ padding: 30, alignItems: 'center' }}>
-            <Text style={{ fontSize: 15, color: '#94a3b8', fontWeight: '700' }}>
-              কোনো সংরক্ষিত রেকর্ড পাওয়া যায়নি।
+            <Text style={{ marginTop: 12, color: '#64748b', fontWeight: '600' }}>
+              Loading Master Daily Register...
             </Text>
-            <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
-              'Reconcile New Statement' ট্যাবে গিয়ে স্টেটমেন্ট ম্যাচ করলেই তা স্বয়ংক্রিয়ভাবে এখানে তারিখ অনুযায়ী সেভ হয়ে যাবে।
+          </View>
+        ) : filteredRegisterDates.length === 0 ? (
+          <View style={styles.emptyRegisterCard}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: '#64748b' }}>
+              কোনো রেকর্ড পাওয়া যায়নি।
+            </Text>
+            <Text style={{ fontSize: 13, color: '#94a3b8', marginTop: 6 }}>
+              'Reconcile New Statement' ট্যাবে গিয়ে স্টেটমেন্ট মেলালেই তা স্বয়ংক্রিয়ভাবে এখানে তারিখ অনুযায়ী যোগ হয়ে যাবে।
             </Text>
           </View>
         ) : (
-          <View style={styles.historyGrid}>
-            {filteredSavedHistory.map((item: any) => {
-              const isSelected = currentSavedId === item.id;
-              return (
-                <View
-                  key={`archive_hist_${item.id}`}
-                  style={[styles.historyGridCard, isSelected && styles.historyGridCardSelected]}
-                >
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                      <Text style={styles.historyCardDateBadge}>
-                        📅 {item.from_date || 'N/A'}{item.to_date && item.to_date !== item.from_date ? ` to ${item.to_date}` : ''}
-                      </Text>
-                      {isSelected && (
-                        <Text style={styles.historyActiveBadge}>ACTIVE</Text>
+          filteredRegisterDates.map((dateItem) => {
+            const isExp = expandedDates[dateItem.id] !== false;
+            const dateLabel = `${formatDateDisplay(dateItem.from_date)}${
+              dateItem.to_date && dateItem.to_date !== dateItem.from_date ? ' to ' + formatDateDisplay(dateItem.to_date) : ''
+            }`;
+            return (
+              <View key={`date_sec_${dateItem.id}`} style={styles.dateSectionContainer}>
+                {/* Sticky Date Banner */}
+                <View style={styles.dateSectionBanner}>
+                  <View style={{ flex: 1, minWidth: 260 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                      <Text style={styles.dateSectionTitle}>📅 {dateLabel}</Text>
+                      <View style={styles.dateSectionBadgeTotal}>
+                        <Text style={styles.dateSectionBadgeTotalText}>
+                          {dateItem.statement_rows.length} Txns
+                        </Text>
+                      </View>
+                      <View style={styles.dateSectionBadgeMatched}>
+                        <Text style={styles.dateSectionBadgeMatchedText}>
+                          ✅ {dateItem.summary?.matched_count || 0} Matched (₹{formatCurrency(dateItem.summary?.matched_amount || 0)})
+                        </Text>
+                      </View>
+                      <View style={styles.dateSectionBadgeUnmatched}>
+                        <Text style={styles.dateSectionBadgeUnmatchedText}>
+                          ⚠️ {dateItem.summary?.statement_unmatched_count || 0} Stmt Unmatched
+                        </Text>
+                      </View>
+                      {dateItem.summary?.bill_unmatched_count > 0 && (
+                        <View style={styles.dateSectionBadgeBills}>
+                          <Text style={styles.dateSectionBadgeBillsText}>
+                            📑 {dateItem.summary?.bill_unmatched_count} Bill Unmatched
+                          </Text>
+                        </View>
                       )}
                     </View>
-                    <Text style={styles.historyGridTitle} numberOfLines={1}>
-                      {item.batch_title || 'Reconciliation Record'}
-                    </Text>
-                    <View style={styles.historyStatsRow}>
-                      <Text style={styles.historyBadgeMatched}>
-                        ✅ {item.summary?.matched_count || 0} Matched (₹{formatCurrency(item.summary?.matched_amount || 0)})
-                      </Text>
-                      <Text style={styles.historyBadgeUnmatched}>
-                        ⚠️ {item.summary?.statement_unmatched_count || 0} Stmt Unmatched
-                      </Text>
-                      <Text style={styles.historyBadgeBills}>
-                        📑 {item.summary?.bill_unmatched_count || 0} Bill Unmatched
-                      </Text>
-                    </View>
-                    <Text style={styles.historyMeta}>
-                      📁 {item.statement_filename || 'SBI'} • 👤 {item.created_by || 'Staff'} • 🕒 {formatDateDisplay(item.created_at)}
+                    <Text style={styles.dateSectionMeta}>
+                      📁 File: {dateItem.statement_filename || 'SBI'} • 👤 Reconciled by: {dateItem.created_by || 'Staff'} • 🕒 {formatDateDisplay(dateItem.created_at)}
                     </Text>
                   </View>
-                  <View style={styles.historyActions}>
+
+                  {/* Right Actions */}
+                  <View style={styles.dateSectionActions}>
+                    {dateItem.download_token ? (
+                      <TouchableOpacity
+                        style={styles.dateDownloadBtn}
+                        onPress={() => handleDownloadDateExcel(dateItem.download_token)}
+                      >
+                        <Text style={styles.dateDownloadBtnText}>📥 Download Excel</Text>
+                      </TouchableOpacity>
+                    ) : null}
+
                     <TouchableOpacity
-                      style={[styles.historyViewBtn, isSelected && { backgroundColor: '#15803d' }]}
-                      onPress={() => handleOpenSavedRecord(item.id)}
+                      style={styles.dateToggleBtn}
+                      onPress={() => {
+                        setExpandedDates((prev) => ({
+                          ...prev,
+                          [dateItem.id]: !isExp,
+                        }));
+                      }}
                     >
-                      <Text style={styles.historyViewBtnText}>
-                        {isSelected ? '✓ Loaded Below' : '👁 Open Record'}
+                      <Text style={styles.dateToggleBtnText}>
+                        {isExp ? '🔼 Collapse' : '🔽 Expand'}
                       </Text>
                     </TouchableOpacity>
+
                     <TouchableOpacity
-                      style={styles.historyDelBtn}
-                      onPress={() => handleDeleteSavedRecord(item.id)}
+                      style={styles.dateDeleteBtn}
+                      onPress={() => handleDeleteDate(dateItem.id, dateLabel)}
                     >
-                      <Text style={styles.historyDelBtnText}>🗑</Text>
+                      <Text style={styles.dateDeleteBtnText}>🗑</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
-              );
-            })}
-          </View>
+
+                {/* Table for this date */}
+                {isExp ? (
+                  <ScrollView horizontal style={styles.horizontalScroll}>
+                    <View style={styles.previewTable}>
+                      {/* Super Header */}
+                      <View style={styles.superHeaderRow}>
+                        <View style={[styles.superHeaderBank, { width: 1325 }]}>
+                          <Text style={styles.superHeaderTextBank}>
+                            🏦 ORIGINAL BANK STATEMENT (UNCHANGED COLUMNS)
+                          </Text>
+                        </View>
+                        <View style={[styles.superHeaderStudent, { width: 780 }]}>
+                          <Text style={styles.superHeaderTextStudent}>
+                            🎓 MATCHED STUDENT DETAILS & NOTES (ADDED BESIDE BALANCE)
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Column Headers */}
+                      <View style={styles.pHeadRow}>
+                        <View style={[styles.pTh, { width: 45 }]}>
+                          <Text style={styles.pThText}>#</Text>
+                        </View>
+                        <View style={[styles.pTh, { width: 95 }]}>
+                          <Text style={styles.pThText}>Txn Date</Text>
+                        </View>
+                        <View style={[styles.pTh, { width: 95 }]}>
+                          <Text style={styles.pThText}>Value Date</Text>
+                        </View>
+                        <View style={[styles.pTh, { width: 500, alignItems: 'flex-start' }]}>
+                          <Text style={styles.pThText}>Description</Text>
+                        </View>
+                        <View style={[styles.pTh, { width: 240 }]}>
+                          <Text style={styles.pThText}>Ref No./Cheque No.</Text>
+                        </View>
+                        <View style={[styles.pTh, { width: 75 }]}>
+                          <Text style={styles.pThText}>Branch</Text>
+                        </View>
+                        <View style={[styles.pTh, { width: 85 }]}>
+                          <Text style={styles.pThText}>Debit</Text>
+                        </View>
+                        <View style={[styles.pTh, { width: 95 }]}>
+                          <Text style={styles.pThText}>Credit</Text>
+                        </View>
+                        <View style={[styles.pTh, { width: 95 }]}>
+                          <Text style={styles.pThText}>Balance</Text>
+                        </View>
+
+                        <View style={[styles.pTh, styles.pThStudentDivider, { width: 90 }]}>
+                          <Text style={styles.pThTextStudent}>Reg. No.</Text>
+                        </View>
+                        <View style={[styles.pTh, styles.pThStudent, { width: 180, alignItems: 'flex-start' }]}>
+                          <Text style={styles.pThTextStudent}>Student Name</Text>
+                        </View>
+                        <View style={[styles.pTh, styles.pThStudent, { width: 100 }]}>
+                          <Text style={styles.pThTextStudent}>Class</Text>
+                        </View>
+                        <View style={[styles.pTh, styles.pThStudent, { width: 90 }]}>
+                          <Text style={styles.pThTextStudent}>Recpt. No.</Text>
+                        </View>
+                        <View style={[styles.pTh, styles.pThStudent, { width: 100 }]}>
+                          <Text style={styles.pThTextStudent}>Amount</Text>
+                        </View>
+                        <View style={[styles.pTh, styles.pThStudent, { width: 220, borderRightWidth: 0 }]}>
+                          <Text style={styles.pThTextStudent}>Note</Text>
+                        </View>
+                      </View>
+
+                      {/* Rows */}
+                      {dateItem.statement_rows.map((row: any, idx: number) => {
+                        const rowKey = String(row.statement_row ?? (row.ref_no ? row.ref_no : idx));
+                        const noteMapKey = `${dateItem.id}_${rowKey}`;
+                        const rowNote = notes[noteMapKey] !== undefined ? notes[noteMapKey] : (row.note || '');
+                        const status = noteStatus[noteMapKey];
+                        return (
+                          <View
+                            key={`d_${dateItem.id}_r_${rowKey}_${idx}`}
+                            style={[styles.pTr, idx % 2 === 0 ? styles.pTrEven : styles.pTrOdd]}
+                          >
+                            <View style={[styles.pTd, { width: 45 }]}>
+                              <Text style={styles.pTdTextMuted}>{idx + 1}</Text>
+                            </View>
+                            <View style={[styles.pTd, { width: 95 }]}>
+                              <Text style={styles.pTdTextMuted}>{formatDateDisplay(row.date)}</Text>
+                            </View>
+                            <View style={[styles.pTd, { width: 95 }]}>
+                              <Text style={styles.pTdTextMuted}>{formatDateDisplay(row.value_date || row.date)}</Text>
+                            </View>
+                            <View
+                              style={[
+                                styles.pTd,
+                                { width: 500, alignItems: 'flex-start' },
+                                row.is_matched && styles.pTdMatchedHighlight,
+                              ]}
+                              {...(Platform.OS === 'web' ? ({ title: row.description || '' } as any) : {})}
+                            >
+                              <Text
+                                style={[styles.pTdDesc, row.is_matched && styles.pTdMatchedDescText]}
+                                numberOfLines={1}
+                                selectable
+                              >
+                                {row.description}
+                              </Text>
+                            </View>
+                            <View
+                              style={[styles.pTd, { width: 240 }]}
+                              {...(Platform.OS === 'web' ? ({ title: row.ref_no || '' } as any) : {})}
+                            >
+                              <Text style={styles.pTdRef} numberOfLines={1} selectable>
+                                {row.ref_no || '-'}
+                              </Text>
+                            </View>
+                            <View style={[styles.pTd, { width: 75 }]}>
+                              <Text style={styles.pTdTextMuted}>{row.branch_code || '-'}</Text>
+                            </View>
+                            <View style={[styles.pTd, { width: 85 }]}>
+                              <Text style={styles.pTdAmount}>
+                                {row.debit ? `₹${formatCurrency(row.debit)}` : '-'}
+                              </Text>
+                            </View>
+                            <View style={[styles.pTd, { width: 95 }]}>
+                              <Text style={styles.pTdAmount}>
+                                {row.credit ? `₹${formatCurrency(row.credit)}` : '-'}
+                              </Text>
+                            </View>
+                            <View style={[styles.pTd, { width: 95 }]}>
+                              <Text style={styles.pTdAmount}>
+                                {row.balance !== null ? `₹${formatCurrency(row.balance)}` : '-'}
+                              </Text>
+                            </View>
+
+                            {/* Matched Student Details */}
+                            <View style={[styles.pTd, styles.pTdStudentDivider, { width: 90 }]}>
+                              <Text style={row.is_matched ? styles.pTdTextBold : styles.pTdTextMuted}>
+                                {row.is_matched ? row.reg_no : '-'}
+                              </Text>
+                            </View>
+                            <View style={[styles.pTd, styles.pTdStudent, { width: 180, alignItems: 'flex-start' }]}>
+                              <Text style={row.is_matched ? styles.pTdName : styles.pTdTextMuted} numberOfLines={1}>
+                                {row.is_matched ? row.student_name : '-'}
+                              </Text>
+                            </View>
+                            <View style={[styles.pTd, styles.pTdStudent, { width: 100 }]}>
+                              <Text style={row.is_matched ? styles.pTdText : styles.pTdTextMuted}>
+                                {row.is_matched ? row.class_name : '-'}
+                              </Text>
+                            </View>
+                            <View style={[styles.pTd, styles.pTdStudent, { width: 90 }]}>
+                              <Text style={row.is_matched ? styles.pTdText : styles.pTdTextMuted}>
+                                {row.is_matched ? row.receipt_no : '-'}
+                              </Text>
+                            </View>
+                            <View style={[styles.pTd, styles.pTdStudent, { width: 100 }]}>
+                              <Text style={row.is_matched ? styles.pTdAmount : styles.pTdTextMuted}>
+                                {row.is_matched ? `₹${formatCurrency(row.amount)}` : '-'}
+                              </Text>
+                            </View>
+                            <View style={[styles.pTd, styles.pTdStudent, { width: 220, borderRightWidth: 0, paddingVertical: 4, paddingHorizontal: 6 }]}>
+                              <View style={styles.noteInputContainer}>
+                                <TextInput
+                                  style={styles.noteInput}
+                                  placeholder="Add note..."
+                                  placeholderTextColor="#94a3b8"
+                                  value={rowNote}
+                                  onChangeText={(val) => {
+                                    setNotes((prev) => ({
+                                      ...prev,
+                                      [noteMapKey]: val,
+                                    }));
+                                  }}
+                                  onBlur={() => {
+                                    void saveSingleNote(dateItem.id, rowKey, notes[noteMapKey] !== undefined ? notes[noteMapKey] : (row.note || ''));
+                                  }}
+                                />
+                                {status === 'saving' && (
+                                  <Text style={styles.noteStatusSaving}>💾 saving...</Text>
+                                )}
+                                {status === 'saved' && (
+                                  <Text style={styles.noteStatusSaved}>✓ saved</Text>
+                                )}
+                              </View>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </ScrollView>
+                ) : null}
+              </View>
+            );
+          })
         )}
       </View>
     )}
@@ -1287,7 +1628,7 @@ export default function BankStatementMatcherScreen() {
                               }}
                               onBlur={() => {
                                 if (currentSavedId) {
-                                  void saveSingleNote(rowKey, notes[rowKey] !== undefined ? notes[rowKey] : (row.note || ''));
+                                  void saveSingleNote(currentSavedId, rowKey, notes[rowKey] !== undefined ? notes[rowKey] : (row.note || ''));
                                 }
                               }}
                             />
@@ -1405,7 +1746,7 @@ export default function BankStatementMatcherScreen() {
                                 }}
                                 onBlur={() => {
                                   if (currentSavedId) {
-                                    void saveSingleNote(mismatchKey, notes[mismatchKey] !== undefined ? notes[mismatchKey] : (row.note || ''));
+                                    void saveSingleNote(currentSavedId, mismatchKey, notes[mismatchKey] !== undefined ? notes[mismatchKey] : (row.note || ''));
                                   }
                                 }}
                               />
@@ -2484,6 +2825,304 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#475569',
+  },
+  registerContainer: {
+    marginTop: 8,
+  },
+  registerHeaderCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  registerHeaderTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 14,
+  },
+  registerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  liveCountBadge: {
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  liveCountBadgeText: {
+    color: '#1d4ed8',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  registerSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  registerTopActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  expandAllBtn: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  expandAllBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  refreshRegBtn: {
+    backgroundColor: '#0284c7',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  refreshRegBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  grandSummaryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 14,
+  },
+  grandStatCard: {
+    flex: 1,
+    minWidth: 140,
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    padding: 10,
+    borderLeftWidth: 4,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  grandStatLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748b',
+    marginBottom: 2,
+    letterSpacing: 0.5,
+  },
+  grandStatVal: {
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  grandStatSub: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#16a34a',
+    marginTop: 2,
+  },
+  registerFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  dateChipsScroll: {
+    flexGrow: 0,
+    maxWidth: '100%',
+  },
+  dateChip: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  dateChipActive: {
+    backgroundColor: '#0284c7',
+    borderColor: '#0284c7',
+  },
+  dateChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  dateChipTextActive: {
+    color: '#ffffff',
+  },
+  registerSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    minWidth: 260,
+    flex: 1,
+    maxWidth: 420,
+  },
+  registerSearchInput: {
+    flex: 1,
+    fontSize: 12,
+    color: '#0f172a',
+    padding: 0,
+    outlineStyle: 'none' as any,
+  },
+  emptyRegisterCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  dateSectionContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  dateSectionBanner: {
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  dateSectionTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  dateSectionBadgeTotal: {
+    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  dateSectionBadgeTotalText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  dateSectionBadgeMatched: {
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  dateSectionBadgeMatchedText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803d',
+  },
+  dateSectionBadgeUnmatched: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  dateSectionBadgeUnmatchedText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#b45309',
+  },
+  dateSectionBadgeBills: {
+    backgroundColor: '#ede9fe',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  dateSectionBadgeBillsText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6d28d9',
+  },
+  dateSectionMeta: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 4,
+  },
+  dateSectionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dateDownloadBtn: {
+    backgroundColor: '#10b981',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  dateDownloadBtnText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  dateToggleBtn: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  dateToggleBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  dateDeleteBtn: {
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+  },
+  dateDeleteBtnText: {
+    fontSize: 12,
+  },
+  pTdMatchedHighlight: {
+    backgroundColor: '#fef08a',
+  },
+  pTdMatchedDescText: {
+    color: '#713f12',
+    fontWeight: '700',
   },
 });
 

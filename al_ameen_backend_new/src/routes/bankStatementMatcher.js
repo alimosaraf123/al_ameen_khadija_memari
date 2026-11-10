@@ -197,31 +197,71 @@ router.post(
         filename: `Matched_Bank_Statement_${dateLabel}.xlsx`,
       });
 
-      // Automatically save to database for Date-wise history records
+      // Automatically save or update database for this date in the Master Daily Register
       let savedRecordId = null;
       try {
         const username = req.user?.username || req.user?.name || req.user?.user_id || 'Staff';
         const title = `Reconciliation: ${fromDate || 'N/A'}${toDate && toDate !== fromDate ? ' to ' + toDate : ''} (${result.summary?.matched_count || 0} Matched)`;
-        const insertRes = await pool.query(
-          `INSERT INTO bank_reconciliation_records 
-           (batch_title, statement_filename, from_date, to_date, summary, statement_rows, matched_rows, mismatch_rows, notes_map, excel_buffer, created_by)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-           RETURNING id`,
-          [
-            title,
-            statementFile.originalname || 'SBI_Statement.xlsx',
-            fromDate || '',
-            toDate || '',
-            JSON.stringify(result.summary || {}),
-            JSON.stringify(result.statement_rows || []),
-            JSON.stringify(result.matched_rows || []),
-            JSON.stringify(result.mismatch_rows || []),
-            JSON.stringify({}),
-            result.output_buffer,
-            username,
-          ]
+        
+        // Check if a record already exists for this date range so we don't create duplicate cards
+        const existingRes = await pool.query(
+          `SELECT id, notes_map FROM bank_reconciliation_records WHERE from_date = $1 AND to_date = $2 ORDER BY id DESC LIMIT 1`,
+          [fromDate || '', toDate || '']
         );
-        savedRecordId = insertRes.rows[0]?.id || null;
+
+        if (existingRes.rows.length > 0) {
+          savedRecordId = existingRes.rows[0].id;
+          const mergedNotes = Object.assign({}, existingRes.rows[0].notes_map || {});
+          
+          // Attach previously saved notes so existing user notes are never lost!
+          const rowsWithPreservedNotes = (result.statement_rows || []).map((r, i) => {
+            const k = r.statement_row ? String(r.statement_row) : (r.ref_no ? String(r.ref_no) : String(i));
+            return {
+              ...r,
+              note: mergedNotes[k] ?? mergedNotes[String(r.statement_row)] ?? r.note ?? '',
+            };
+          });
+
+          await pool.query(
+            `UPDATE bank_reconciliation_records
+             SET batch_title = $1, statement_filename = $2, summary = $3, statement_rows = $4,
+                 matched_rows = $5, mismatch_rows = $6, notes_map = $7, excel_buffer = $8,
+                 updated_at = NOW()
+             WHERE id = $9`,
+            [
+              title,
+              statementFile.originalname || 'SBI_Statement.xlsx',
+              JSON.stringify(result.summary || {}),
+              JSON.stringify(rowsWithPreservedNotes),
+              JSON.stringify(result.matched_rows || []),
+              JSON.stringify(result.mismatch_rows || []),
+              JSON.stringify(mergedNotes),
+              result.output_buffer,
+              savedRecordId,
+            ]
+          );
+        } else {
+          const insertRes = await pool.query(
+            `INSERT INTO bank_reconciliation_records 
+             (batch_title, statement_filename, from_date, to_date, summary, statement_rows, matched_rows, mismatch_rows, notes_map, excel_buffer, created_by)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+             RETURNING id`,
+            [
+              title,
+              statementFile.originalname || 'SBI_Statement.xlsx',
+              fromDate || '',
+              toDate || '',
+              JSON.stringify(result.summary || {}),
+              JSON.stringify(result.statement_rows || []),
+              JSON.stringify(result.matched_rows || []),
+              JSON.stringify(result.mismatch_rows || []),
+              JSON.stringify({}),
+              result.output_buffer,
+              username,
+            ]
+          );
+          savedRecordId = insertRes.rows[0]?.id || null;
+        }
       } catch (saveErr) {
         console.error('Auto-save to history failed (non-fatal):', saveErr);
       }
@@ -312,6 +352,37 @@ router.post('/save-session', auth, allow('super_admin', 'admin', 'office'), asyn
     });
   }
 
+  // Check if existing record by date exists before inserting to prevent duplicate records
+  const checkExisting = await pool.query(
+    `SELECT id, notes_map FROM bank_reconciliation_records WHERE from_date = $1 AND to_date = $2 ORDER BY id DESC LIMIT 1`,
+    [from_date || '', to_date || '']
+  );
+
+  if (checkExisting.rows.length > 0) {
+    const existingId = checkExisting.rows[0].id;
+    const mergedNotes = Object.assign({}, checkExisting.rows[0].notes_map || {}, notes_map || {});
+
+    await pool.query(
+      `UPDATE bank_reconciliation_records
+       SET batch_title = $1, statement_filename = $2, summary = $3, statement_rows = $4,
+           matched_rows = $5, mismatch_rows = $6, notes_map = $7,
+           excel_buffer = COALESCE($8, excel_buffer), updated_at = NOW()
+       WHERE id = $9`,
+      [
+        title,
+        statement_filename || '',
+        summary ? JSON.stringify(summary) : null,
+        JSON.stringify(initialRows),
+        JSON.stringify(matched_rows || []),
+        JSON.stringify(mismatch_rows || []),
+        JSON.stringify(mergedNotes),
+        excelBuffer,
+        existingId,
+      ]
+    );
+    return res.json({ success: true, message: 'Existing date record updated successfully.', id: existingId });
+  }
+
   const insertRes = await pool.query(
     `INSERT INTO bank_reconciliation_records 
      (batch_title, statement_filename, from_date, to_date, summary, statement_rows, matched_rows, mismatch_rows, notes_map, excel_buffer, created_by)
@@ -369,6 +440,72 @@ router.post('/save-note', auth, allow('super_admin', 'admin', 'office'), asyncHa
     note: noteStr,
     notes_map: result.rows[0].notes_map,
   });
+}));
+
+// GET /api/bank-matcher/register - Get all date-wise statements & transactions for the unified Master Daily Register
+router.get('/register', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
+  await readyTable;
+  const { date, from_date, to_date, q } = req.query;
+  let query = `
+    SELECT id, batch_title, statement_filename, from_date, to_date, summary, statement_rows, mismatch_rows, notes_map, excel_buffer, created_at, updated_at, created_by
+    FROM bank_reconciliation_records
+  `;
+  const params = [];
+  if (date) {
+    params.push(date);
+    query += ` WHERE from_date = $1 OR to_date = $1 `;
+  } else if (from_date && to_date) {
+    params.push(from_date, to_date);
+    query += ` WHERE from_date >= $1 AND to_date <= $2 `;
+  } else if (q) {
+    params.push(`%${q}%`);
+    query += ` WHERE from_date ILIKE $1 OR to_date ILIKE $1 OR batch_title ILIKE $1 `;
+  }
+  query += ` ORDER BY from_date DESC, id DESC LIMIT 50`;
+
+  const dbRes = await pool.query(query, params);
+
+  const dates = dbRes.rows.map(record => {
+    let token = null;
+    if (record.excel_buffer) {
+      token = crypto.randomBytes(16).toString('hex');
+      const dateLabel = record.from_date && record.to_date && record.from_date !== record.to_date
+        ? `${record.from_date}_to_${record.to_date}`
+        : (record.from_date || 'reconciled');
+      downloadCache.set(token, {
+        buffer: record.excel_buffer,
+        createdAt: Date.now(),
+        filename: `Matched_Bank_Statement_${dateLabel}.xlsx`,
+      });
+    }
+
+    const nMap = record.notes_map || {};
+    const rows = Array.isArray(record.statement_rows) ? record.statement_rows.map((r, i) => {
+      const k = r.statement_row ? String(r.statement_row) : (r.ref_no ? String(r.ref_no) : String(i));
+      return {
+        ...r,
+        note: nMap[k] ?? nMap[String(r.statement_row)] ?? r.note ?? '',
+      };
+    }) : [];
+
+    return {
+      id: record.id,
+      from_date: record.from_date,
+      to_date: record.to_date,
+      batch_title: record.batch_title,
+      statement_filename: record.statement_filename,
+      summary: record.summary,
+      notes_map: nMap,
+      statement_rows: rows,
+      mismatch_rows: Array.isArray(record.mismatch_rows) ? record.mismatch_rows : [],
+      created_at: record.created_at,
+      updated_at: record.updated_at,
+      created_by: record.created_by,
+      download_token: token,
+    };
+  });
+
+  res.json({ success: true, dates });
 }));
 
 // GET /api/bank-matcher/history - List saved reconciliation records
