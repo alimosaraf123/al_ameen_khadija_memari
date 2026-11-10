@@ -235,7 +235,10 @@ export default function BankStatementMatcherScreen() {
         setNotes((prev) => ({ ...prev, ...notesObj }));
       }
     } catch (err: any) {
-      console.error('Failed to load register:', err);
+      if (String(err?.message || '').toLowerCase().includes('unauthorized') || String(err?.message || '').includes('login')) {
+        return;
+      }
+      console.warn('Could not load register:', err?.message || err);
     } finally {
       setLoadingRegister(false);
     }
@@ -420,7 +423,10 @@ export default function BankStatementMatcherScreen() {
         setMasterStatus(data);
       }
     } catch (err: any) {
-      console.error('Failed to load master status:', err);
+      if (String(err?.message || '').toLowerCase().includes('unauthorized') || String(err?.message || '').includes('login')) {
+        return;
+      }
+      console.warn('Could not load master status:', err?.message || err);
     }
   };
 

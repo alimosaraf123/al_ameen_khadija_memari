@@ -189,6 +189,53 @@ export default function Teachers() {
     }
   };
 
+  const [exportingGateman, setExportingGateman] = useState(false);
+
+  const downloadGatemanSheet = async () => {
+    try {
+      setExportingGateman(true);
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/teachers/gateman-sheet`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Could not download Gateman Sheet');
+
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Gateman_Sheet.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        const blob = await res.blob();
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = async () => {
+          const base64 = (reader.result as string)?.split(',')[1];
+          const filename = 'Gateman_Sheet.xlsx';
+          const uri = `${FileSystem.documentDirectory}${filename}`;
+          await FileSystem.writeAsStringAsync(uri, base64, { encoding: (FileSystem as any).EncodingType?.Base64 || 'base64' });
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(uri, {
+              mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              dialogTitle: 'Save Gateman Sheet Excel',
+            });
+          } else {
+            Alert.alert('Excel Downloaded', `Saved to ${filename}`);
+          }
+        };
+      }
+    } catch (e: any) {
+      Alert.alert('Download Error', e.message || 'Failed to download Gateman Sheet');
+    } finally {
+      setExportingGateman(false);
+    }
+  };
+
   const teacherPositions = useRef<Record<number, number>>({});
   const formRef = useRef(form);
   formRef.current = form;
@@ -1051,6 +1098,16 @@ export default function Teachers() {
                 >
                   <Text style={s.white}>
                     {exporting ? '⏳ Downloading...' : '📥 Download Staff Excel (.xlsx)'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={downloadGatemanSheet}
+                  disabled={exportingGateman}
+                  style={[s.downloadExcelBtn, { backgroundColor: '#15803d' }]}
+                  activeOpacity={0.8}
+                >
+                  <Text style={s.white}>
+                    {exportingGateman ? '⏳ Downloading...' : '📋 Gateman Sheet (.xlsx)'}
                   </Text>
                 </TouchableOpacity>
                 {mode === 'icard' && (

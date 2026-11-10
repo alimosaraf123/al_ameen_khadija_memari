@@ -266,6 +266,182 @@ router.get('/export', auth, allow('super_admin','admin'), asyncHandler(async (re
   res.end();
 }));
 
+router.get('/gateman-sheet', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
+  await teacherDetailsSchemaReady;
+
+  const staffRes = await pool.query(`
+    SELECT t.id, t.staff_id, t.name, t.designation, t.is_active,
+           COALESCE(t.profile_details->>'staff_type', '') as staff_type,
+           COALESCE(t.profile_details->>'type_of_staff', '') as type_of_staff
+    FROM teachers t
+    WHERE t.is_active = TRUE
+  `);
+
+  const allStaff = staffRes.rows;
+
+  const parseId = (sid) => {
+    const clean = String(sid || '').replace(/\D/g, '');
+    const num = parseInt(clean, 10);
+    return isNaN(num) ? 999999 : num;
+  };
+
+  const isSecurity = (s) => {
+    const des = String(s.designation || '').toLowerCase();
+    const st = String(s.staff_type || '').toLowerCase();
+    const sid = String(s.staff_id || '').toUpperCase();
+    const name = String(s.name || '').toLowerCase();
+    return des.includes('security') || des.includes('gate') || st.includes('security') || sid.startsWith('GATE') ||
+           name.includes('aparna mondal') || name.includes('akbar ali') || name.includes('abbas mirz') || name.includes('abbas mirj');
+  };
+
+  const isOtherStaff = (s) => {
+    if (isSecurity(s)) return false;
+    const des = String(s.designation || '').toLowerCase();
+    return des.includes('non');
+  };
+
+  const isTeacher = (s) => {
+    return !isSecurity(s) && !isOtherStaff(s);
+  };
+
+  // Group 1: Others Staff (sorted by employee ID ascending)
+  const othersStaff = allStaff.filter(isOtherStaff).sort((a, b) => parseId(a.staff_id) - parseId(b.staff_id));
+
+  // Group 2: Gatemen (Security Guards)
+  const securityStaff = allStaff.filter(isSecurity).sort((a, b) => parseId(a.staff_id) - parseId(b.staff_id));
+
+  // Group 3: Teachers (sorted by employee ID ascending)
+  const teachers = allStaff.filter(isTeacher).sort((a, b) => parseId(a.staff_id) - parseId(b.staff_id));
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Gateman sheet', {
+    pageSetup: { orientation: 'landscape', paperSize: 9 }
+  });
+
+  // Setup column widths
+  sheet.columns = [
+    { key: 'sl', width: 6 },
+    { key: 'id', width: 12 },
+    { key: 'name', width: 28 },
+    { key: 'd1_in', width: 8.5 }, { key: 'd1_out', width: 8.5 },
+    { key: 'd2_in', width: 8.5 }, { key: 'd2_out', width: 8.5 },
+    { key: 'd3_in', width: 8.5 }, { key: 'd3_out', width: 8.5 },
+    { key: 'd4_in', width: 8.5 }, { key: 'd4_out', width: 8.5 },
+    { key: 'd5_in', width: 8.5 }, { key: 'd5_out', width: 8.5 },
+    { key: 'd6_in', width: 8.5 }, { key: 'd6_out', width: 8.5 },
+    { key: 'd7_in', width: 8.5 }, { key: 'd7_out', width: 8.5 },
+  ];
+
+  // Header Row 1
+  sheet.mergeCells('A1:A2');
+  sheet.getCell('A1').value = 'Sl';
+  sheet.mergeCells('B1:B2');
+  sheet.getCell('B1').value = 'ID';
+  sheet.mergeCells('C1:C2');
+  sheet.getCell('C1').value = 'Name';
+
+  const dayColPairs = [
+    ['D1:E1', 'D', 'E'],
+    ['F1:G1', 'F', 'G'],
+    ['H1:I1', 'H', 'I'],
+    ['J1:K1', 'J', 'K'],
+    ['L1:M1', 'L', 'M'],
+    ['N1:O1', 'N', 'O'],
+    ['P1:Q1', 'P', 'Q'],
+  ];
+
+  dayColPairs.forEach(([range]) => {
+    sheet.mergeCells(range);
+    sheet.getCell(range.split(':')[0]).value = 'Date';
+  });
+
+  // Header Row 2: In / Out
+  dayColPairs.forEach(([, inCol, outCol]) => {
+    sheet.getCell(`${inCol}2`).value = 'In';
+    sheet.getCell(`${outCol}2`).value = 'Out';
+  });
+
+  // Style Header Rows 1 and 2
+  [1, 2].forEach(rNum => {
+    const row = sheet.getRow(rNum);
+    row.height = 22;
+    row.eachCell({ includeEmpty: true }, (cell) => {
+      cell.font = { bold: true, size: 10, name: 'Calibri' };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFEBF1DE' }
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF808080' } },
+        bottom: { style: 'thin', color: { argb: 'FF808080' } },
+        left: { style: 'thin', color: { argb: 'FF808080' } },
+        right: { style: 'thin', color: { argb: 'FF808080' } }
+      };
+    });
+  });
+
+  let curRow = 3;
+
+  function addStaffRow(slVal, idVal, nameVal, isZebra) {
+    const row = sheet.getRow(curRow);
+    row.height = 21;
+    row.getCell(1).value = slVal !== '' && slVal !== undefined ? slVal : null;
+    row.getCell(2).value = idVal ? (String(idVal).match(/^\d+$/) ? Number(idVal) : String(idVal)) : null;
+    row.getCell(3).value = nameVal || null;
+
+    for (let c = 1; c <= 17; c++) {
+      const cell = row.getCell(c);
+      cell.font = { size: 10, name: 'Calibri' };
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: c === 3 ? 'left' : 'center'
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFB2B2B2' } },
+        bottom: { style: 'thin', color: { argb: 'FFB2B2B2' } },
+        left: { style: 'thin', color: { argb: 'FFB2B2B2' } },
+        right: { style: 'thin', color: { argb: 'FFB2B2B2' } }
+      };
+      if (isZebra) {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFF2F8EE' }
+        };
+      }
+    }
+    curRow++;
+  }
+
+  // 1. Others Staff (Non-teaching)
+  othersStaff.forEach((s, idx) => {
+    addStaffRow(idx + 1, s.staff_id, s.name, idx % 2 === 0);
+  });
+
+  // 2. Gatemen (Security Guards) right below others staff
+  securityStaff.forEach((s, idx) => {
+    const cleanId = String(s.staff_id).startsWith('GATE') ? '' : s.staff_id;
+    addStaffRow('', cleanId, s.name, (othersStaff.length + idx) % 2 === 0);
+  });
+
+  // Empty separator row
+  addStaffRow('', '', '', false);
+
+  // 3. Teachers (Sl resets to 1)
+  teachers.forEach((s, idx) => {
+    addStaffRow(idx + 1, s.staff_id, s.name, idx % 2 === 0);
+  });
+
+  sheet.autoFilter = 'A2:Q2';
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="Gateman_Sheet.xlsx"');
+  await workbook.xlsx.write(res);
+  res.end();
+}));
+
 router.get('/', auth, allow('super_admin','admin'), asyncHandler(async (req,res)=>{
   await teacherDetailsSchemaReady;
   const result = await pool.query(`
