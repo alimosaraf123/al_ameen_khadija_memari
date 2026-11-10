@@ -119,7 +119,7 @@ function EditableSelect({ placeholder, value, onChange, options, onSubmitEditing
 }
 
 export default function Teachers() {
-  const { mode, teacherId } = useLocalSearchParams<{ mode?: string; teacherId?: string }>();
+  const { mode, teacherId, action } = useLocalSearchParams<{ mode?: string; teacherId?: string; action?: string }>();
   const scrollRef = useRef<any>(null);
 
   const [list, setList] = useState<any[]>([]);
@@ -314,6 +314,12 @@ export default function Teachers() {
   useEffect(() => {
     void load();
   }, [mode, teacherId]);
+
+  useEffect(() => {
+    if (action === 'gateman_sheet') {
+      void downloadGatemanSheet();
+    }
+  }, [action]);
 
   const set = (key: string, value: any) => {
     setForm((x: any) => {

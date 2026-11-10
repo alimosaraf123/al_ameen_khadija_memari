@@ -296,19 +296,28 @@ router.get('/gateman-sheet', auth, allow('super_admin', 'admin', 'office'), asyn
 
   const isOtherStaff = (s) => {
     if (isSecurity(s)) return false;
+    if (String(s.staff_id || '').trim() === '1268') return false; // Mosaraf Ali is in Teachers group per paper sheet
+    if (String(s.staff_id || '').trim() === '786') return false;  // Sk Hasibul Alam (In-charge) excluded
     const des = String(s.designation || '').toLowerCase();
     return des.includes('non');
   };
 
   const isTeacher = (s) => {
+    if (String(s.staff_id || '').trim() === '786') return false;  // Sk Hasibul Alam (In-charge) excluded
     return !isSecurity(s) && !isOtherStaff(s);
   };
 
   // Group 1: Others Staff (sorted by employee ID ascending)
   const othersStaff = allStaff.filter(isOtherStaff).sort((a, b) => parseId(a.staff_id) - parseId(b.staff_id));
 
-  // Group 2: Gatemen (Security Guards)
-  const securityStaff = allStaff.filter(isSecurity).sort((a, b) => parseId(a.staff_id) - parseId(b.staff_id));
+  // Group 2: Gatemen (Security Guards: Aparna Mondal, Akbar Ali, Abbas Mirja)
+  const gatemenOrder = ['aparna', 'akbar', 'abbas'];
+  const securityStaff = allStaff.filter(isSecurity).sort((a, b) => {
+    const aIdx = gatemenOrder.findIndex(k => a.name.toLowerCase().includes(k));
+    const bIdx = gatemenOrder.findIndex(k => b.name.toLowerCase().includes(k));
+    if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+    return parseId(a.staff_id) - parseId(b.staff_id);
+  });
 
   // Group 3: Teachers (sorted by employee ID ascending)
   const teachers = allStaff.filter(isTeacher).sort((a, b) => parseId(a.staff_id) - parseId(b.staff_id));
@@ -420,10 +429,9 @@ router.get('/gateman-sheet', auth, allow('super_admin', 'admin', 'office'), asyn
     addStaffRow(idx + 1, s.staff_id, s.name, idx % 2 === 0);
   });
 
-  // 2. Gatemen (Security Guards) right below others staff
+  // 2. Gatemen (Security Guards) right below others staff with blank Sl and blank ID
   securityStaff.forEach((s, idx) => {
-    const cleanId = String(s.staff_id).startsWith('GATE') ? '' : s.staff_id;
-    addStaffRow('', cleanId, s.name, (othersStaff.length + idx) % 2 === 0);
+    addStaffRow('', '', s.name, (othersStaff.length + idx) % 2 === 0);
   });
 
   // Empty separator row
