@@ -156,7 +156,7 @@ export default function BankStatementMatcherScreen() {
   const filteredRegisterDates = useMemo(() => {
     let list = registerDates;
     if (selectedFilterDate !== 'all') {
-      list = list.filter((d) => d.from_date === selectedFilterDate || d.to_date === selectedFilterDate);
+      list = list.filter((d) => String(d.id) === selectedFilterDate || d.from_date === selectedFilterDate || d.to_date === selectedFilterDate);
     }
     if (!registerSearchQuery.trim()) return list;
     const q = registerSearchQuery.toLowerCase().trim();
@@ -984,15 +984,18 @@ export default function BankStatementMatcherScreen() {
                 </Text>
               </TouchableOpacity>
               {registerDates.map((d) => {
-                const isSelected = selectedFilterDate === d.from_date;
+                const isSelected = selectedFilterDate === String(d.id) || selectedFilterDate === d.from_date;
+                const dateLabel = d.to_date && d.to_date !== d.from_date
+                  ? `${formatDateDisplay(d.from_date)} → ${formatDateDisplay(d.to_date)}`
+                  : formatDateDisplay(d.from_date);
                 return (
                   <TouchableOpacity
                     key={`chip_${d.id}`}
                     style={[styles.dateChip, isSelected && styles.dateChipActive]}
-                    onPress={() => setSelectedFilterDate(isSelected ? 'all' : d.from_date)}
+                    onPress={() => setSelectedFilterDate(selectedFilterDate === String(d.id) ? 'all' : String(d.id))}
                   >
                     <Text style={[styles.dateChipText, isSelected && styles.dateChipTextActive]}>
-                      📅 {formatDateDisplay(d.from_date)} ({d.statement_rows?.length || 0})
+                      📅 {dateLabel} ({d.statement_rows?.length || 0})
                     </Text>
                   </TouchableOpacity>
                 );

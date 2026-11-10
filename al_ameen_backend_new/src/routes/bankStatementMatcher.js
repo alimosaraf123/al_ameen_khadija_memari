@@ -352,10 +352,13 @@ router.post('/save-session', auth, allow('super_admin', 'admin', 'office'), asyn
     });
   }
 
-  // Check if existing record by date exists before inserting to prevent duplicate records
+  // Check if existing record exists by statement filename OR exact dates to prevent duplicate records
   const checkExisting = await pool.query(
-    `SELECT id, notes_map FROM bank_reconciliation_records WHERE from_date = $1 AND to_date = $2 ORDER BY id DESC LIMIT 1`,
-    [from_date || '', to_date || '']
+    `SELECT id, notes_map FROM bank_reconciliation_records 
+     WHERE (statement_filename = $1 AND statement_filename != '') 
+        OR (from_date = $2 AND to_date = $3) 
+     ORDER BY id DESC LIMIT 1`,
+    [statement_filename || '', from_date || '', to_date || '']
   );
 
   if (checkExisting.rows.length > 0) {
@@ -364,13 +367,15 @@ router.post('/save-session', auth, allow('super_admin', 'admin', 'office'), asyn
 
     await pool.query(
       `UPDATE bank_reconciliation_records
-       SET batch_title = $1, statement_filename = $2, summary = $3, statement_rows = $4,
-           matched_rows = $5, mismatch_rows = $6, notes_map = $7,
-           excel_buffer = COALESCE($8, excel_buffer), updated_at = NOW()
-       WHERE id = $9`,
+       SET batch_title = $1, statement_filename = $2, from_date = $3, to_date = $4, summary = $5, statement_rows = $6,
+           matched_rows = $7, mismatch_rows = $8, notes_map = $9,
+           excel_buffer = COALESCE($10, excel_buffer), updated_at = NOW()
+       WHERE id = $11`,
       [
         title,
         statement_filename || '',
+        from_date || '',
+        to_date || '',
         summary ? JSON.stringify(summary) : null,
         JSON.stringify(initialRows),
         JSON.stringify(matched_rows || []),
