@@ -493,68 +493,17 @@ export default function Dashboard() {
           </View>
         </View>
 
-        {/* VIEW TOGGLE ROW */}
-        <View style={s.viewToggleRow}>
-          <TouchableOpacity
-            style={[s.viewToggleBtn, activeTab === 'cards' && s.viewToggleBtnActive]}
-            onPress={() => setActiveTab('cards')}
-          >
-            <Text style={[s.viewToggleText, activeTab === 'cards' && s.viewToggleTextActive]}>
-              📋 {restricted || userRole !== 'super_admin' ? (dashboardName ? `${dashboardName} Dashboard` : 'Office Dashboard') : 'Office & Quick Menus Dashboard'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[s.viewToggleBtn, activeTab === 'overview' && s.viewToggleBtnActive]}
-            onPress={() => setActiveTab('overview')}
-          >
-            <Text style={[s.viewToggleText, activeTab === 'overview' && s.viewToggleTextActive]}>
-              📊 Institutional Overview (Demographics & Attendance)
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {activeTab === 'cards' ? (
-          <View style={s.cardsSection}>
-            <View style={s.cardsHeader}>
-              <Text style={s.cardsHeaderTitle}>
-                {restricted || userRole !== 'super_admin'
-                  ? (dashboardName ? `${dashboardName} Dashboard` : 'Office Dashboard')
-                  : 'Super Admin Dashboard'}
-              </Text>
-            </View>
-
-            <View style={s.cardGrid}>
-              {dashboardCards
-                .filter(([_, path]) => canAccess(path) || path === '/fees' || path === '/teachers' || path === '/students' || path === '/hostel-menu' || path === '/academy-menu')
-                .map(([title, path]) => (
-                  <AdminLink
-                    key={title}
-                    path={path}
-                    style={s.dashboardCard}
-                    onPress={() => openMenu(title, path)}
-                  >
-                    <Text style={s.dashboardCardText}>{title}</Text>
-                  </AdminLink>
-                ))}
-            </View>
-
-            <TouchableOpacity style={s.dashboardLogoutBtn} onPress={logout}>
-              <Text style={s.dashboardLogoutText}>Logout</Text>
-            </TouchableOpacity>
+        {overviewLoading ? (
+          <View style={s.loadingBox}>
+            <ActivityIndicator size="large" color="#166534" />
+            <Text style={s.loadingText}>Loading live institution records...</Text>
           </View>
         ) : (
-          overviewLoading ? (
-            <View style={s.loadingBox}>
-              <ActivityIndicator size="large" color="#166534" />
-              <Text style={s.loadingText}>Loading live institution records...</Text>
-            </View>
-          ) : (
-            <>
-              {/* ============================================================== */}
-              {/* TWO-COLUMN INSTITUTIONAL DASHBOARD GRID (MATCHING IMAGE 2)     */}
-              {/* ============================================================== */}
-              <View style={s.dashboardGrid}>
+          <>
+            {/* ============================================================== */}
+            {/* TWO-COLUMN INSTITUTIONAL DASHBOARD GRID (MATCHING IMAGE 2)     */}
+            {/* ============================================================== */}
+            <View style={s.dashboardGrid}>
             {/* ------------------------------------------------------------ */}
             {/* LEFT COLUMN: Student Demographics & Gate Pass                */}
             {/* ------------------------------------------------------------ */}
@@ -871,7 +820,6 @@ export default function Dashboard() {
             </View>
           </View>
           </>
-          )
         )}
       </ScrollView>
 
