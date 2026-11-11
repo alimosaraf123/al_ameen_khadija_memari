@@ -12,6 +12,30 @@ const GROUPS=['v_x','xi_xii','coaching'];
 const validDate=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''));
 const xml=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const short=(v,n=24)=>{const s=String(v||'-');return s.length>n?s.slice(0,n-1)+'…':s};
+
+const ROUTINE_BLOCKED_USERS = new Set([
+  'office_noorsaba',
+  'office_masema',
+  'noorsaba',
+  'masema'
+]);
+const ROUTINE_BLOCKED_USER_IDS = new Set(['381', '382', '58', '34']);
+
+function isRoutineBlockedUser(loginId, userId) {
+  const clean = String(loginId || '').toLowerCase().trim();
+  const uid = String(userId || '');
+  return ROUTINE_BLOCKED_USERS.has(clean) || ROUTINE_BLOCKED_USER_IDS.has(uid);
+}
+
+function disallowRoutineModifiers(req, res, next) {
+  if (isRoutineBlockedUser(req.user?.loginId, req.user?.userId)) {
+    return res.status(403).json({
+      success: false,
+      message: 'You have view-only access to routines. You cannot modify routines, but you can submit Class Review Notes.'
+    });
+  }
+  next();
+}
 async function teacherOnlyGridData(data){
  const rows=await pool.query(`SELECT t.id FROM teachers t LEFT JOIN users u ON u.id=t.user_id
   WHERE t.is_active=TRUE AND COALESCE(u.is_active,TRUE)=TRUE AND (
@@ -65,7 +89,7 @@ router.get('/',auth,allow('super_admin','admin','teacher'),asyncHandler(async(re
  ) recent WHERE ${teacher?'routine_rank<=7':'TRUE'} ORDER BY published_at DESC NULLS LAST,id DESC`);
  res.json({success:true,routines:r.rows});
 }));
-router.post('/',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+router.post('/',auth,allow('super_admin','admin'),disallowRoutineModifiers,asyncHandler(async(req,res)=>{
  const b=req.body||{},r=await pool.query('INSERT INTO routines(title,routine_date,routine_text,file_url,published_by) VALUES($1,$2,$3,$4,$5) RETURNING *',[b.title||null,b.routine_date||null,b.routine_text||null,b.file_url||null,req.user.userId]);
  res.status(201).json({success:true,routine:r.rows[0]});
 }));
@@ -77,18 +101,18 @@ router.get('/exams',auth,allow('super_admin','admin'),asyncHandler(async(req,res
  const counts=new Map();for(const e of r.rows){if(!e.duty_final)continue;(e.teacher_names||[]).forEach((name,i)=>{const id=String((e.teacher_ids||[])[i]||name),old=counts.get(id)||{teacher_id:id,teacher_name:name,duty_count:0};old.duty_count++;counts.set(id,old)})}
  res.json({success:true,exams:r.rows,duty_counts:[...counts.values()].sort((a,b)=>a.teacher_name.localeCompare(b.teacher_name))});
 }));
-router.post('/exams',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+router.post('/exams',auth,allow('super_admin','admin'),disallowRoutineModifiers,asyncHandler(async(req,res)=>{
  const b=req.body||{},classes=Array.isArray(b.class_names)?b.class_names.filter(Boolean):[],teacherIds=Array.isArray(b.teacher_ids)?b.teacher_ids.filter(Boolean):[],teacherNames=Array.isArray(b.teacher_names)?b.teacher_names.filter(Boolean):[];
  if(!['v_x','xi_xii'].includes(b.group_name)||!validDate(b.exam_date)||!classes.length||!b.subject||!/^\d{2}:\d{2}$/.test(String(b.start_time||''))||!/^\d{2}:\d{2}$/.test(String(b.end_time||''))||!teacherIds.length)return res.status(400).json({success:false,message:'Group, date, class, subject, time and duty teacher are required'});
  const r=await pool.query(`INSERT INTO routine_exam_entries(group_name,exam_date,end_date,class_names,subject,start_time,end_time,room,teacher_ids,teacher_names,suppress_regular,duty_final,created_by) VALUES($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11,$12,$13) RETURNING *`,[b.group_name,b.exam_date,b.end_date||null,JSON.stringify(classes),b.subject,b.start_time,b.end_time,b.room||null,JSON.stringify(teacherIds),JSON.stringify(teacherNames),b.suppress_regular!==false,!!b.duty_final,req.user.userId]);res.status(201).json({success:true,exam:r.rows[0]});
 }));
-router.put('/exams/:id',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+router.put('/exams/:id',auth,allow('super_admin','admin'),disallowRoutineModifiers,asyncHandler(async(req,res)=>{
  const b=req.body||{},classes=Array.isArray(b.class_names)?b.class_names.filter(Boolean):[],teacherIds=Array.isArray(b.teacher_ids)?b.teacher_ids.filter(Boolean):[],teacherNames=Array.isArray(b.teacher_names)?b.teacher_names.filter(Boolean):[];
  if(!['v_x','xi_xii'].includes(b.group_name)||!validDate(b.exam_date)||!classes.length||!b.subject||!teacherIds.length)return res.status(400).json({success:false,message:'Complete all required exam fields'});
  const r=await pool.query(`UPDATE routine_exam_entries SET group_name=$1,exam_date=$2,end_date=$3,class_names=$4::jsonb,subject=$5,start_time=$6,end_time=$7,room=$8,teacher_ids=$9::jsonb,teacher_names=$10::jsonb,suppress_regular=$11,duty_final=$12,updated_at=NOW() WHERE id=$13 RETURNING *`,[b.group_name,b.exam_date,b.end_date||null,JSON.stringify(classes),b.subject,b.start_time,b.end_time,b.room||null,JSON.stringify(teacherIds),JSON.stringify(teacherNames),b.suppress_regular!==false,!!b.duty_final,req.params.id]);if(!r.rowCount)return res.status(404).json({success:false,message:'Exam routine not found'});res.json({success:true,exam:r.rows[0]});
 }));
-router.patch('/exams/:id/final',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{const r=await pool.query('UPDATE routine_exam_entries SET duty_final=$1,updated_at=NOW() WHERE id=$2 RETURNING *',[req.body?.duty_final!==false,req.params.id]);if(!r.rowCount)return res.status(404).json({success:false,message:'Exam routine not found'});res.json({success:true,exam:r.rows[0]});}));
-router.delete('/exams/:id',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{const r=await pool.query('DELETE FROM routine_exam_entries WHERE id=$1 RETURNING id',[req.params.id]);if(!r.rowCount)return res.status(404).json({success:false,message:'Exam routine not found'});res.json({success:true});}));
+router.patch('/exams/:id/final',auth,allow('super_admin','admin'),disallowRoutineModifiers,asyncHandler(async(req,res)=>{const r=await pool.query('UPDATE routine_exam_entries SET duty_final=$1,updated_at=NOW() WHERE id=$2 RETURNING *',[req.body?.duty_final!==false,req.params.id]);if(!r.rowCount)return res.status(404).json({success:false,message:'Exam routine not found'});res.json({success:true,exam:r.rows[0]});}));
+router.delete('/exams/:id',auth,allow('super_admin','admin'),disallowRoutineModifiers,asyncHandler(async(req,res)=>{const r=await pool.query('DELETE FROM routine_exam_entries WHERE id=$1 RETURNING id',[req.params.id]);if(!r.rowCount)return res.status(404).json({success:false,message:'Exam routine not found'});res.json({success:true});}));
 router.get('/manager',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
  const group=String(req.query.group||'v_x'),date=String(req.query.date||new Date().toISOString().slice(0,10));
  if(!GROUPS.includes(group)||!validDate(date))return res.status(400).json({success:false,message:'Valid group and date are required'});
@@ -103,7 +127,8 @@ router.get('/manager',auth,allow('super_admin','admin'),asyncHandler(async(req,r
            g.updated_at DESC LIMIT 1`,[group,date]);
  const routine=r.rows[0]||null;
  if(routine)routine.grid_data=await teacherOnlyGridData(routine.grid_data);
- res.json({success:true,routine});
+ const canEdit=!isRoutineBlockedUser(req.user?.loginId, req.user?.userId);
+ res.json({success:true,routine,can_edit:canEdit});
 }));
 
 router.get('/manager/master',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
@@ -112,7 +137,8 @@ router.get('/manager/master',auth,allow('super_admin','admin'),asyncHandler(asyn
  const r=await pool.query(`SELECT g.*,u.full_name updated_by_name,'master' source FROM routine_manager_grids g LEFT JOIN users u ON u.id=g.created_by WHERE g.group_name=$1 AND g.routine_kind='master' AND g.is_master=TRUE AND EXTRACT(DOW FROM g.routine_date)=$2 ORDER BY g.updated_at DESC LIMIT 1`,[group,day]);
  const routine=r.rows[0]||null;
  if(routine)routine.grid_data=await teacherOnlyGridData(routine.grid_data);
- res.json({success:true,routine});
+ const canEdit=!isRoutineBlockedUser(req.user?.loginId, req.user?.userId);
+ res.json({success:true,routine,can_edit:canEdit});
 }));
 
 router.get('/manager/backup',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
@@ -125,7 +151,7 @@ router.get('/manager/backup',auth,allow('super_admin','admin'),asyncHandler(asyn
 
 // Restore is intentionally non-destructive: entries that already exist for the
 // same group/date/kind are skipped and are never overwritten.
-router.post('/manager/backup/restore',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+router.post('/manager/backup/restore',auth,allow('super_admin','admin'),disallowRoutineModifiers,asyncHandler(async(req,res)=>{
  const payload=req.body||{},items=Array.isArray(payload.routines)?payload.routines:[];
  if(payload.version!==undefined&&Number(payload.version)!==1)return res.status(400).json({success:false,message:'Unsupported routine backup version.'});
  if(!items.length||items.length>2000)return res.status(400).json({success:false,message:'Backup must contain between 1 and 2000 routines.'});
@@ -763,7 +789,7 @@ router.get('/manager/report/teacher-excel',auth,allow('super_admin','admin'),asy
  res.end();
 }));
 
-router.post('/manager',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+router.post('/manager',auth,allow('super_admin','admin'),disallowRoutineModifiers,asyncHandler(async(req,res)=>{
  const b=req.body||{},saveMode=['master','draft','final','record'].includes(b.save_mode)?b.save_mode:'final';
  if(!GROUPS.includes(b.group_name)||!validDate(b.routine_date))return res.status(400).json({success:false,message:'Valid group and date are required'});
  let rawGrid=b.grid_data||{};
@@ -791,7 +817,7 @@ router.post('/manager',auth,allow('super_admin','admin'),asyncHandler(async(req,
 
 // Update only the coaching time labels across coaching routines (masters, drafts, daily).
 // Existing room/teacher assignments are remapped by their time-slot index.
-router.post('/manager/coaching-times',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+router.post('/manager/coaching-times',auth,allow('super_admin','admin'),disallowRoutineModifiers,asyncHandler(async(req,res)=>{
  const times=Array.isArray(req.body?.times)?req.body.times.map((x)=>String(x||'').replace(/[–—]/g,'-').trim()).filter(Boolean):[];
  if(!times.length)return res.status(400).json({success:false,message:'At least one coaching time is required'});
  const rows=(await pool.query(`SELECT id,grid_data FROM routine_manager_grids WHERE group_name='coaching'`)).rows;
@@ -809,7 +835,7 @@ router.post('/manager/coaching-times',auth,allow('super_admin','admin'),asyncHan
  res.json({success:true,updated:rows.length,message:`Coaching times updated in ${rows.length} coaching routines`});
 }));
 
-router.post('/manager/coaching-rooms',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+router.post('/manager/coaching-rooms',auth,allow('super_admin','admin'),disallowRoutineModifiers,asyncHandler(async(req,res)=>{
  const rooms=Array.isArray(req.body?.rooms)?req.body.rooms.map((x)=>String(x||'').trim()).filter(Boolean):[];
  if(!rooms.length)return res.status(400).json({success:false,message:'At least one coaching room is required'});
  const rows=(await pool.query(`SELECT id,grid_data FROM routine_manager_grids WHERE group_name='coaching'`)).rows;
@@ -820,7 +846,7 @@ router.post('/manager/coaching-rooms',auth,allow('super_admin','admin'),asyncHan
  res.json({success:true,updated:rows.length,message:`Coaching rooms updated in ${rows.length} coaching routines`});
 }));
 
-router.post('/manager/academic-periods',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+router.post('/manager/academic-periods',auth,allow('super_admin','admin'),disallowRoutineModifiers,asyncHandler(async(req,res)=>{
  const group=String(req.body?.group_name||''),periods=Array.isArray(req.body?.periods)?req.body.periods.filter((x)=>Array.isArray(x)&&x.length>=2).map((x)=>[String(x[0]).trim(),String(x[1]).trim()]):[];
  if(!['v_x','xi_xii'].includes(group)||!periods.length)return res.status(400).json({success:false,message:'Valid academic group and periods are required'});
  const masters=(await pool.query('SELECT id,grid_data FROM routine_manager_grids WHERE group_name=$1 AND routine_kind=\'master\'',[group])).rows;
@@ -835,7 +861,7 @@ router.post('/manager/academic-periods',auth,allow('super_admin','admin'),asyncH
  res.json({success:true,updated:masters.length,message:`Academic periods updated in ${masters.length} weekly masters`});
 }));
 
-router.delete('/manager/:id',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+router.delete('/manager/:id',auth,allow('super_admin','admin'),disallowRoutineModifiers,asyncHandler(async(req,res)=>{
  const existing=await pool.query('SELECT id,group_name,routine_date,routine_kind FROM routine_manager_grids WHERE id=$1',[req.params.id]);
  if(!existing.rowCount)return res.status(404).json({success:false,message:'Routine not found'});
  const item=existing.rows[0];
@@ -899,7 +925,7 @@ router.post('/review-notes', auth, allow('super_admin','admin','teacher'), async
   res.status(201).json({ success: true, note: q.rows[0] });
 }));
 
-router.patch('/review-notes/:id/resolve', auth, allow('super_admin','admin'), asyncHandler(async(req, res) => {
+router.patch('/review-notes/:id/resolve', auth, allow('super_admin','admin'), disallowRoutineModifiers, asyncHandler(async(req, res) => {
   await reviewNotesSchemaReady;
   const user = (await pool.query('SELECT full_name, login_id FROM users WHERE id=$1', [req.user.userId])).rows[0];
   const userName = user?.full_name || user?.login_id || 'Admin';
@@ -913,7 +939,7 @@ router.patch('/review-notes/:id/resolve', auth, allow('super_admin','admin'), as
   res.json({ success: true, note: q.rows[0] });
 }));
 
-router.delete('/review-notes/:id', auth, allow('super_admin','admin'), asyncHandler(async(req, res) => {
+router.delete('/review-notes/:id', auth, allow('super_admin','admin'), disallowRoutineModifiers, asyncHandler(async(req, res) => {
   await reviewNotesSchemaReady;
   await pool.query('DELETE FROM routine_review_notes WHERE id = $1', [req.params.id]);
   res.json({ success: true, message: 'Note deleted' });

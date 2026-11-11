@@ -5,7 +5,7 @@ async function auth(req,res,next){
  if(!token)return res.status(401).json({success:false,message:'Unauthorized'});
  try{
   const user=jwt.verify(token,process.env.JWT_SECRET);
-  const account=await pool.query('SELECT role,is_active,password_change_required FROM users WHERE id=$1',[user.userId]);
+  const account=await pool.query('SELECT role,is_active,password_change_required,login_id FROM users WHERE id=$1',[user.userId]);
   if(!account.rowCount||!account.rows[0].is_active||account.rows[0].role!==user.role)return res.status(401).json({success:false,message:'Please login again'});
   if(user.role==='guardian'){
    if(!user.jti)return res.status(401).json({success:false,message:'Please login again on this device'});
@@ -14,7 +14,7 @@ async function auth(req,res,next){
   }
   const bypass=['/me','/change-password','/logout','/login','/api/me','/api/change-password','/api/logout','/api/login'];
   if(!bypass.includes(req.path)&&account.rows[0].password_change_required)return res.status(428).json({success:false,message:'Password change required',password_change_required:true});
-  req.user=user;next();
+  req.user={...user, loginId: account.rows[0]?.login_id || user.loginId};next();
  }catch(e){return res.status(401).json({success:false,message:'Invalid or expired token'});}
 }
 function allow(...roles){return(req,res,next)=>{if(!req.user||!roles.includes(req.user.role))return res.status(403).json({success:false,message:'Forbidden'});next();};}
