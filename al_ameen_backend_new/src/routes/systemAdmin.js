@@ -10,4 +10,143 @@ router.get('/office-activity',auth,allow('super_admin','admin'),asyncHandler(asy
 router.get('/guardian-activity',auth,allow('super_admin'),asyncHandler(async(req,res)=>{const q=await pool.query(`SELECT gls.id,u.login_id,u.full_name,gls.device_id,gls.is_active,gls.last_login_at,gls.logged_out_at,gls.expires_at,COUNT(DISTINCT sg.student_id)::int AS student_count,COALESCE(json_agg(DISTINCT jsonb_build_object('student_name',st.student_name,'registration_no',st.registration_no,'class_name',st.class_name)) FILTER(WHERE st.id IS NOT NULL),'[]'::json) AS students FROM guardian_login_sessions gls JOIN users u ON u.id=gls.user_id LEFT JOIN guardian_profiles gp ON gp.user_id=u.id LEFT JOIN student_guardians sg ON sg.guardian_id=gp.id LEFT JOIN students st ON st.id=sg.student_id WHERE u.role='guardian' GROUP BY gls.id,u.login_id,u.full_name,gls.device_id,gls.is_active,gls.last_login_at,gls.logged_out_at,gls.expires_at ORDER BY gls.last_login_at DESC LIMIT 1000`);res.json({success:true,guardian_activity:q.rows})}));
 router.get('/backup',auth,allow('super_admin'),asyncHandler(async(req,res)=>{const names=(await pool.query(`SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename`)).rows.map(x=>x.tablename),data={version:1,created_at:new Date().toISOString(),tables:{}};for(const name of names)data.tables[name]=(await pool.query(`SELECT * FROM "${name.replace(/"/g,'')}"`)).rows;res.setHeader('Content-Disposition',`attachment; filename="al-ameen-backup-${new Date().toISOString().slice(0,10)}.json"`);res.json(data)}));
 router.post('/restore',auth,allow('super_admin'),asyncHandler(async(req,res)=>{if(req.body?.confirmation!=='RESTORE_DATABASE')return res.status(400).json({success:false,message:'Type RESTORE_DATABASE to confirm'});if(!req.body?.backup?.tables)return res.status(400).json({success:false,message:'Invalid backup'});res.status(501).json({success:false,message:'Restore requires maintenance mode. Backup validated; no data changed.'})}));
+router.get('/dashboard-overview',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+  const todayStr=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'});
+  const studentRows=(await pool.query(`
+    SELECT 
+      COALESCE(class_name,'Other') as class_name,
+      COUNT(*) FILTER (WHERE gender ILIKE 'male')::int as male,
+      COUNT(*) FILTER (WHERE gender ILIKE 'female')::int as female,
+      COUNT(*)::int as total,
+      COUNT(*) FILTER (WHERE is_orphan = true)::int as orphan,
+      COUNT(*) FILTER (WHERE is_handicapped = true)::int as d_able,
+      COUNT(*) FILTER (WHERE caste_name ILIKE '%general%')::int as general,
+      COUNT(*) FILTER (WHERE caste_name ILIKE '%obc%')::int as obc
+    FROM students
+    WHERE is_active = true
+    GROUP BY class_name
+    ORDER BY 
+      CASE class_name
+        WHEN 'V' THEN 1
+        WHEN 'VI' THEN 2
+        WHEN 'VII' THEN 3
+        WHEN 'VIII' THEN 4
+        WHEN 'IX' THEN 5
+        WHEN 'X' THEN 6
+        WHEN 'XI' THEN 7
+        WHEN 'XI-Sc.' THEN 7
+        WHEN 'XII' THEN 8
+        WHEN 'XII-Sc.' THEN 8
+        ELSE 9
+      END
+  `)).rows;
+
+  const exitRows=(await pool.query(`
+    SELECT 
+      COALESCE(class_name,'Other') as class_name,
+      COUNT(*) FILTER (WHERE tc_issued_at IS NOT NULL)::int as pass_out,
+      COUNT(*) FILTER (WHERE tc_issued_at IS NULL)::int as drop_out
+    FROM students s
+    LEFT JOIN student_exit_records e ON e.student_id = s.id
+    WHERE s.is_active = false
+    GROUP BY class_name
+  `)).rows;
+
+  const exitMap={};
+  exitRows.forEach(r=>{exitMap[r.class_name]=r;});
+  const demographics=studentRows.map(r=>({
+    ...r,
+    pass_out:exitMap[r.class_name]?.pass_out||0,
+    drop_out:exitMap[r.class_name]?.drop_out||0
+  }));
+
+  const staffRows=(await pool.query(`
+    SELECT 
+      CASE 
+        WHEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) IN ('teacher','teachers') THEN 'Teaching Staff'
+        WHEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) ILIKE '%management%' THEN 'Management Staff'
+        WHEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) ILIKE '%account%' THEN 'Account Staff'
+        WHEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) ILIKE '%office%' THEN 'Office Staff'
+        WHEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) ILIKE '%kitchen%' OR LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) ILIKE '%cook%' THEN 'Cook & Helper'
+        WHEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) ILIKE '%security%' THEN 'Security'
+        WHEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) IN ('nonteaching','non-teaching') THEN 'Non Teaching Staff'
+        ELSE 'Other Staff'
+      END as role,
+      COUNT(*) FILTER (WHERE gender ILIKE 'male')::int as male,
+      COUNT(*) FILTER (WHERE gender ILIKE 'female')::int as female,
+      COUNT(*)::int as total
+    FROM teachers t
+    WHERE is_active = true
+    GROUP BY 1
+    ORDER BY total DESC
+  `)).rows;
+
+  const gatePassRows=(await pool.query(`
+    SELECT 
+      COALESCE(s.class_name,'Other') as class_name,
+      COUNT(*)::int as issued,
+      COUNT(*) FILTER (WHERE gp.status IN ('pending','printed') AND gp.returned_at IS NULL)::int as active,
+      COUNT(*) FILTER (WHERE gp.status = 'returned' OR (gp.expected_return_at < NOW() AND gp.returned_at IS NULL))::int as expired
+    FROM student_gate_passes gp
+    JOIN students s ON s.id = gp.student_id
+    GROUP BY s.class_name
+    ORDER BY s.class_name
+  `)).rows;
+
+  const attendanceRows=(await pool.query(`
+    SELECT 
+      CASE 
+        WHEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) IN ('teacher','teachers') THEN 'Teaching'
+        WHEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) ILIKE '%management%' THEN 'Management'
+        WHEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) ILIKE '%account%' THEN 'Account'
+        WHEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) ILIKE '%office%' THEN 'Office'
+        WHEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) ILIKE '%kitchen%' OR LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) ILIKE '%cook%' THEN 'Cook & Helper'
+        WHEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) ILIKE '%security%' THEN 'Security'
+        ELSE 'Other'
+      END as role,
+      COUNT(*)::int as total,
+      COUNT(*) FILTER (WHERE COALESCE(a.status,'Present')='Present')::int as present,
+      COUNT(*) FILTER (WHERE a.status='Absent')::int as absent,
+      COUNT(*) FILTER (WHERE a.status='Leave')::int as leave
+    FROM teachers t
+    LEFT JOIN staff_attendance a ON a.teacher_id = t.id AND a.attendance_date = $1
+    WHERE t.is_active = true
+    GROUP BY 1
+    ORDER BY total DESC
+  `,[todayStr])).rows;
+
+  const missingStudentDocs=(await pool.query(`
+    SELECT id, registration_no, student_name, class_name,
+      ARRAY_REMOVE(ARRAY[
+        CASE WHEN photo_url IS NULL OR photo_url = '' THEN 'Photo' ELSE NULL END,
+        CASE WHEN aadhaar_no IS NULL OR aadhaar_no = '' THEN 'Aadhaar' ELSE NULL END
+      ], NULL) as missing
+    FROM students
+    WHERE is_active = true AND (photo_url IS NULL OR photo_url = '' OR aadhaar_no IS NULL OR aadhaar_no = '')
+    LIMIT 10
+  `)).rows;
+
+  const missingStaffDocs=(await pool.query(`
+    SELECT id, staff_id, name, designation,
+      ARRAY_REMOVE(ARRAY[
+        CASE WHEN photo_url IS NULL OR photo_url = '' THEN 'Photo' ELSE NULL END,
+        CASE WHEN mobile IS NULL OR mobile = '' THEN 'Mobile' ELSE NULL END
+      ], NULL) as missing
+    FROM teachers
+    WHERE is_active = true AND (photo_url IS NULL OR photo_url = '' OR mobile IS NULL OR mobile = '')
+    LIMIT 10
+  `)).rows;
+
+  res.json({
+    success:true,
+    today:todayStr,
+    studentDemographics:demographics,
+    staffDistribution:staffRows,
+    gatePassSummary:gatePassRows,
+    staffAttendance:attendanceRows,
+    missingStudentDocs,
+    missingStaffDocs
+  });
+}));
+
 module.exports=router;

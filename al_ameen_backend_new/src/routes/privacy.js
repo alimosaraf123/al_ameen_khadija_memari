@@ -153,3 +153,4 @@ router.get(['/', '/privacy', '/privacy-policy'], (req, res) => {
 });
 
 module.exports = router;
+
