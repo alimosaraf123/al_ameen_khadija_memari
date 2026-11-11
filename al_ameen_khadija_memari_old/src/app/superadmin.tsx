@@ -953,12 +953,18 @@ export default function Dashboard() {
             </View>
             <View style={s.modalGrid}>
               {[
-                ['Student Details', '/students'],
+                ['Student Details', '/students?screen=details'],
+                ['Student Entry', '/students?screen=entry'],
                 ['Daily Student Attendance', '/daily-attendance'],
-                ['Student Transfer', '/student-transfer'],
+                ['Student ID Cards & Form', '/id-cards'],
                 ['Document Upload', '/documents'],
-                ['Student Lifecycle', '/student-lifecycle'],
-                ['Student ID Cards', '/id-cards'],
+                ['Promotion / TC (Lifecycle)', '/student-lifecycle'],
+                ['Student Transfer & Bulk Data', '/student-transfer'],
+                ['Student Behavior', '/behavior'],
+                ['Student Gate Pass', '/gate-pass'],
+                ['Visit Permission', '/visits'],
+                ['Academic Marksheet', '/marks'],
+                ['Guardians & Passwords', '/guardians'],
               ].map(([label, path]) => (
                 <AdminLink
                   path={path}
@@ -1109,12 +1115,18 @@ export default function Dashboard() {
                 {
                   category: '🎓 Student Management',
                   items: [
-                    ['Student Details', '/students'],
+                    ['Student Details', '/students?screen=details'],
+                    ['Student Entry', '/students?screen=entry'],
                     ['Daily Student Attendance', '/daily-attendance'],
-                    ['Student Transfer', '/student-transfer'],
+                    ['Student ID Cards & Form', '/id-cards'],
                     ['Document Upload', '/documents'],
-                    ['Student Lifecycle', '/student-lifecycle'],
-                    ['Student ID Cards', '/id-cards'],
+                    ['Promotion / TC (Lifecycle)', '/student-lifecycle'],
+                    ['Student Transfer & Bulk Data', '/student-transfer'],
+                    ['Student Behavior', '/behavior'],
+                    ['Student Gate Pass', '/gate-pass'],
+                    ['Visit Permission', '/visits'],
+                    ['Academic Marksheet', '/marks'],
+                    ['Guardians & Passwords', '/guardians'],
                   ],
                 },
                 {

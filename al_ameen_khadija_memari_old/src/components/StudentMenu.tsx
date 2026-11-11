@@ -1,34 +1,139 @@
 import React from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-const options = [
-  ['entry', 'Entry'], ['details', 'Details'], ['summary', 'Student Summary'], ['forms', 'Form & I-Card'], ['behavior', 'Behavior'],
-  ['attendance', 'Attendance'], ['visit', 'Visit Permission'], ['gatepass', 'Gate Pass'], ['marks', 'Marksheet'], ['documents', 'Documents'], ['dues', 'Dues'],
-  ['lifecycle', 'Promotion / TC / Re-Activation'], ['verification', 'Verification'], ['passwords', 'Passwords'],
-  ['data', 'Excel & Bulk Photos'], ['tc', 'T.C'], ['reactivation', 'Re-Activation Request'], ['transfer', 'Transfer'],
+export const STUDENT_MENU_ITEMS: [string, string][] = [
+  ['Student Details', '/students?screen=details'],
+  ['Student Entry', '/students?screen=entry'],
+  ['Daily Student Attendance', '/daily-attendance'],
+  ['Student ID Cards & Form', '/id-cards'],
+  ['Document Upload', '/documents'],
+  ['Promotion / TC (Lifecycle)', '/student-lifecycle'],
+  ['Student Transfer & Bulk Data', '/student-transfer'],
+  ['Student Behavior', '/behavior'],
+  ['Student Gate Pass', '/gate-pass'],
+  ['Visit Permission', '/visits'],
+  ['Academic Marksheet', '/marks'],
+  ['Guardians & Passwords', '/guardians'],
 ];
-const enabled = new Set([
-  'entry', 'details', 'summary', 'forms', 'behavior', 'attendance', 'visit', 'gatepass', 'marks', 'documents', 'dues', 'lifecycle', 'passwords', 'data',
-]);
 
-export default function StudentMenu({ visible, onClose, onSelect }: { visible: boolean; onClose: () => void; onSelect: (key: string) => void }) {
-  return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-    <View style={s.overlay}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close student menu" />
-      <View style={s.panel}>
-      <View style={s.header}><Text style={s.title}>Student</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Close student menu" onPress={onClose}><Text style={s.close}>X</Text></TouchableOpacity></View>
-      <ScrollView contentContainerStyle={s.grid}>{options.map(([key, title]) => <TouchableOpacity key={key} accessibilityRole="button" accessibilityState={{ disabled: !enabled.has(key) }} disabled={!enabled.has(key)} style={[s.item, !enabled.has(key) && s.disabled]} onPress={() => onSelect(key)}>
-        <Text style={s.label}>-  {title}</Text>{!enabled.has(key) && <Text style={s.hint}>Coming soon</Text>}
-      </TouchableOpacity>)}</ScrollView>
-    </View></View>
-  </Modal>;
+export default function StudentMenu({
+  visible,
+  onClose,
+  onSelect,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSelect: (path: string) => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={s.modalBackdrop}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close student menu"
+        />
+        <View style={s.modalContainer}>
+          <View style={s.modalHeader}>
+            <Text style={s.modalTitle}>Student Management</Text>
+            <TouchableOpacity
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close student menu"
+            >
+              <Text style={s.closeText}>×</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={s.modalGrid} bounces={false}>
+            {STUDENT_MENU_ITEMS.map(([label, path]) => (
+              <TouchableOpacity
+                key={label}
+                style={s.modalItem}
+                onPress={() => onSelect(path)}
+                activeOpacity={0.7}
+              >
+                <Text style={s.arrow}>›</Text>
+                <Text style={s.modalItemText}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
 }
+
 const s = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 16 },
-  panel: { backgroundColor: '#fff', width: '100%', maxWidth: 510, maxHeight: '85%', borderRadius: 12, overflow: 'hidden' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#11101e', paddingHorizontal: 18, paddingVertical: 14 },
-  title: { color: '#fff', fontSize: 17, fontWeight: '700' }, close: { color: '#fff', fontSize: 26, paddingHorizontal: 8 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 16 },
-  item: { flexGrow: 1, flexBasis: '46%', minHeight: 48, justifyContent: 'center', padding: 12, backgroundColor: '#f8fafc', borderColor: '#d8dee7', borderWidth: 1, borderRadius: 6 },
-  label: { color: '#15334f', fontSize: 13 }, disabled: { opacity: 0.55 }, hint: { fontSize: 10, color: '#64748b', marginTop: 4 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+    zIndex: 9999,
+  },
+  modalContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 620,
+    maxHeight: '90%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    backgroundColor: '#111827',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  closeText: {
+    color: '#9ca3af',
+    fontSize: 22,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  modalGrid: {
+    padding: 16,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  modalItem: {
+    width: '48%',
+    minWidth: 230,
+    minHeight: 52,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  arrow: {
+    fontSize: 18,
+    color: '#0284c7',
+    fontWeight: '800',
+  },
+  modalItemText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1e293b',
+    flex: 1,
+  },
 });

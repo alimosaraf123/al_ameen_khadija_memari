@@ -15,7 +15,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Print from 'expo-print';
 import { File as ExpoFile } from 'expo-file-system';
 import { fetch as expoFetch } from 'expo/fetch';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import StudentDirectory, { Select } from '../components/StudentDirectory';
 import { STUDENT_CLASSES, isVisibleStudentClass } from '../lib/studentClasses';
 import StudentMenu from '../components/StudentMenu';
@@ -221,8 +221,18 @@ export default function Students() {
   const detailsScrollRef = useRef<any>(null);
   const entryScrollRef = useRef<any>(null);
   const [editingId, setEditingId] = useState<any>(null);
-  const [menuOpen, setMenuOpen] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [screen, setScreen] = useState<'details' | 'entry'>('details');
+  const params = useLocalSearchParams<{ screen?: string; mode?: string }>();
+
+  useEffect(() => {
+    if (params.screen === 'entry' || params.mode === 'entry' || params.mode === 'add') {
+      clearForm();
+      setScreen('entry');
+    } else if (params.screen === 'details' || params.mode === 'view') {
+      setScreen('details');
+    }
+  }, [params.screen, params.mode]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState('');
   const [entryDocuments, setEntryDocuments] = useState<Record<string, any>>({});
@@ -669,23 +679,21 @@ export default function Students() {
         <StudentDirectory students={students} loading={listLoading} error={listError} onRefresh={loadStudents} onEdit={startEdit} onDeactivate={deleteStudent} />
       </ScrollView>
       <ScrollNavigationButtons scrollRef={detailsScrollRef} />
-      <StudentMenu visible={menuOpen} onClose={() => setMenuOpen(false)} onSelect={key => {
-        setMenuOpen(false);
-        if (key === 'entry') { clearForm(); setScreen('entry'); }
-        if (key === 'details') setScreen('details');
-        if (key === 'forms') router.push('/id-cards');
-        if (key === 'summary') router.push('/student-summary');
-        if (key === 'behavior') router.push('/behavior');
-        if (key === 'attendance') router.push('/attendance');
-        if (key === 'gatepass') router.push('/gate-pass');
-        if (key === 'visit') router.push('/visits');
-        if (key === 'lifecycle') router.push('/student-lifecycle');
-        if (key === 'marks') router.push('/marks');
-        if (key === 'documents') router.push('/documents');
-        if (key === 'dues') router.push('/dues');
-        if (key === 'passwords') router.push('/guardians');
-        if (key === 'data') router.push('/student-transfer');
-      }} />
+      <StudentMenu
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onSelect={path => {
+          setMenuOpen(false);
+          if (path === '/students?screen=details' || path === '/students') {
+            setScreen('details');
+          } else if (path === '/students?screen=entry') {
+            clearForm();
+            setScreen('entry');
+          } else {
+            router.push(path as any);
+          }
+        }}
+      />
     </SafeAreaView>;
   }
 
