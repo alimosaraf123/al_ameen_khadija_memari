@@ -138,6 +138,11 @@ function formatAuditItem(row, index) {
     actionType = 'Student Management';
     icon = '🎒';
     desc = `Student Profile Updated by ${userName}`;
+  } else if (p.includes('/login')) {
+    actionType = 'User Login';
+    icon = '📱';
+    const platform = row.details?.platform || 'Mobile / Web';
+    desc = `Logged in via ${platform} by ${userName}`;
   }
 
   let timestamp = '-';

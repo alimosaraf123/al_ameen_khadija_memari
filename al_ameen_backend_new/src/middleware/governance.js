@@ -35,9 +35,10 @@ function getClientIp(req) {
   const forwarded = req.headers['x-forwarded-for'];
   if (forwarded) {
     const list = String(forwarded).split(',');
-    if (list[0]) return list[0].trim();
+    if (list[0]) return list[0].trim().replace(/^::ffff:/, '');
   }
-  return req.ip || req.socket?.remoteAddress || '127.0.0.1';
+  const raw = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.ip || req.socket?.remoteAddress || '127.0.0.1';
+  return String(raw).replace(/^::ffff:/, '').trim();
 }
 
 function resolveIpLocation(ip) {
@@ -115,4 +116,4 @@ function governance(req, res, next) {
   next();
 }
 
-module.exports = { governance, auditReady: ready };
+module.exports = { governance, auditReady: ready, getClientIp, resolveIpLocation };

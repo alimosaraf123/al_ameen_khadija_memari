@@ -158,6 +158,21 @@ router.post(
     // Success: clear failed attempts
     clearFailedLogin(req, login_id);
 
+    // Record login audit event
+    try {
+      const { getClientIp, resolveIpLocation } = require('../middleware/governance');
+      const clientIp = getClientIp(req);
+      resolveIpLocation(clientIp).then((loc) => {
+        const ua = String(req.headers['user-agent'] || '');
+        const isMobile = /mobile|android|iphone|ipad/i.test(ua);
+        const platform = isMobile ? 'Mobile App' : 'Web Browser';
+        return pool.query(
+          'INSERT INTO admin_audit_logs(user_id, method, path, status_code, details, ip_address, location) VALUES($1, $2, $3, $4, $5, $6, $7)',
+          [user.id, 'POST', '/api/auth/login', 200, JSON.stringify({ platform, user_agent: ua.slice(0, 100) }), clientIp, loc]
+        );
+      }).catch(() => {});
+    } catch {}
+
     const token = await issueToken(user, req.body?.device_id || req.headers['x-device-id']);
 
     res.json({
@@ -604,6 +619,21 @@ router.post(
 
     // Success: clear failed attempts
     clearFailedLogin(req, login_id);
+
+    // Record login audit event
+    try {
+      const { getClientIp, resolveIpLocation } = require('../middleware/governance');
+      const clientIp = getClientIp(req);
+      resolveIpLocation(clientIp).then((loc) => {
+        const ua = String(req.headers['user-agent'] || '');
+        const isMobile = /mobile|android|iphone|ipad/i.test(ua);
+        const platform = isMobile ? 'Mobile App' : 'Web Browser';
+        return pool.query(
+          'INSERT INTO admin_audit_logs(user_id, method, path, status_code, details, ip_address, location) VALUES($1, $2, $3, $4, $5, $6, $7)',
+          [user.id, 'POST', '/api/auth/login', 200, JSON.stringify({ platform, user_agent: ua.slice(0, 100) }), clientIp, loc]
+        );
+      }).catch(() => {});
+    } catch {}
 
     const token = await issueToken(user, req.body?.device_id || req.headers['x-device-id']);
 
