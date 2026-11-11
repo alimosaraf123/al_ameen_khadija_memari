@@ -108,6 +108,31 @@ export default function Dashboard() {
   const [userRole, setUserRole] = useState('');
   const [dashboardName, setDashboardName] = useState('');
   const [currentDateTime, setCurrentDateTime] = useState('');
+  const [activeTab, setActiveTab] = useState<'cards' | 'overview'>('cards');
+
+  const dashboardCards: [string, string][] = [
+    ['Students', '/students'],
+    ['Staff', '/teachers'],
+    ['Hostel', '/hostel-menu'],
+    ['Academy', '/academy-menu'],
+    ['Accounts', '/fees'],
+    ['Guardians', '/guardians'],
+    ['Student Gate Pass', '/gate-pass'],
+    ['Visiting Day Record / Permission', '/visits'],
+    ['Student Deposit Fund', '/deposit-fund'],
+    ['Asset Register', '/asset-register'],
+    ['Activity Audit Log', '/audit-log'],
+    ...(userRole === 'super_admin' ? [['System Administration', '/system-admin'] as [string, string]] : []),
+  ];
+
+  const openMenu = (title: string, path: string) => {
+    if (title === 'Staff') { setTeacherMenu(true); return; }
+    if (title === 'Students') { setStudentMenu(true); return; }
+    if (title === 'Hostel') { setHostelMenu(true); return; }
+    if (title === 'Academy') { setAcademyMenu(true); return; }
+    if (title === 'Accounts') { setAccountsMenu(true); return; }
+    router.push(path as any);
+  };
 
   // Institutional overview data
   const [overviewLoading, setOverviewLoading] = useState(true);
@@ -193,6 +218,11 @@ export default function Dashboard() {
         setPermissions(d.permissions || []);
         setUserRole(d.user?.role || '');
         setDashboardName(String(d.user?.full_name || d.user?.name || d.user?.login_id || '').trim());
+        if (d.user?.role === 'super_admin') {
+          setActiveTab('overview');
+        } else {
+          setActiveTab('cards');
+        }
       })
       .catch(() => {});
 
@@ -463,17 +493,68 @@ export default function Dashboard() {
           </View>
         </View>
 
-        {overviewLoading ? (
-          <View style={s.loadingBox}>
-            <ActivityIndicator size="large" color="#166534" />
-            <Text style={s.loadingText}>Loading live institution records...</Text>
+        {/* VIEW TOGGLE ROW */}
+        <View style={s.viewToggleRow}>
+          <TouchableOpacity
+            style={[s.viewToggleBtn, activeTab === 'cards' && s.viewToggleBtnActive]}
+            onPress={() => setActiveTab('cards')}
+          >
+            <Text style={[s.viewToggleText, activeTab === 'cards' && s.viewToggleTextActive]}>
+              📋 {restricted || userRole !== 'super_admin' ? (dashboardName ? `${dashboardName} Dashboard` : 'Office Dashboard') : 'Office & Quick Menus Dashboard'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[s.viewToggleBtn, activeTab === 'overview' && s.viewToggleBtnActive]}
+            onPress={() => setActiveTab('overview')}
+          >
+            <Text style={[s.viewToggleText, activeTab === 'overview' && s.viewToggleTextActive]}>
+              📊 Institutional Overview (Demographics & Attendance)
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {activeTab === 'cards' ? (
+          <View style={s.cardsSection}>
+            <View style={s.cardsHeader}>
+              <Text style={s.cardsHeaderTitle}>
+                {restricted || userRole !== 'super_admin'
+                  ? (dashboardName ? `${dashboardName} Dashboard` : 'Office Dashboard')
+                  : 'Super Admin Dashboard'}
+              </Text>
+            </View>
+
+            <View style={s.cardGrid}>
+              {dashboardCards
+                .filter(([_, path]) => canAccess(path) || path === '/fees' || path === '/teachers' || path === '/students' || path === '/hostel-menu' || path === '/academy-menu')
+                .map(([title, path]) => (
+                  <AdminLink
+                    key={title}
+                    path={path}
+                    style={s.dashboardCard}
+                    onPress={() => openMenu(title, path)}
+                  >
+                    <Text style={s.dashboardCardText}>{title}</Text>
+                  </AdminLink>
+                ))}
+            </View>
+
+            <TouchableOpacity style={s.dashboardLogoutBtn} onPress={logout}>
+              <Text style={s.dashboardLogoutText}>Logout</Text>
+            </TouchableOpacity>
           </View>
         ) : (
-          <>
-            {/* ============================================================== */}
-            {/* TWO-COLUMN INSTITUTIONAL DASHBOARD GRID (MATCHING IMAGE 2)     */}
-            {/* ============================================================== */}
-            <View style={s.dashboardGrid}>
+          overviewLoading ? (
+            <View style={s.loadingBox}>
+              <ActivityIndicator size="large" color="#166534" />
+              <Text style={s.loadingText}>Loading live institution records...</Text>
+            </View>
+          ) : (
+            <>
+              {/* ============================================================== */}
+              {/* TWO-COLUMN INSTITUTIONAL DASHBOARD GRID (MATCHING IMAGE 2)     */}
+              {/* ============================================================== */}
+              <View style={s.dashboardGrid}>
             {/* ------------------------------------------------------------ */}
             {/* LEFT COLUMN: Student Demographics & Gate Pass                */}
             {/* ------------------------------------------------------------ */}
@@ -790,6 +871,7 @@ export default function Dashboard() {
             </View>
           </View>
           </>
+          )
         )}
       </ScrollView>
 
@@ -1274,6 +1356,106 @@ const s = StyleSheet.create({
     color: '#475569',
     fontSize: 14,
     fontWeight: '600',
+  },
+
+  // View Toggle Tabs
+  viewToggleRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+    marginBottom: 14,
+    flexWrap: 'wrap',
+  },
+  viewToggleBtn: {
+    flex: 1,
+    minWidth: 220,
+    backgroundColor: '#ffffff',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  viewToggleBtnActive: {
+    backgroundColor: '#0f172a',
+    borderColor: '#0f172a',
+  },
+  viewToggleText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  viewToggleTextActive: {
+    color: '#ffffff',
+    fontWeight: '800',
+  },
+
+  // Office / Cards Dashboard
+  cardsSection: {
+    width: '100%',
+    paddingBottom: 24,
+  },
+  cardsHeader: {
+    marginBottom: 14,
+    marginTop: 4,
+  },
+  cardsHeaderTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0f3a61',
+  },
+  cardGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  dashboardCard: {
+    width: '48%',
+    backgroundColor: '#ffffff',
+    minHeight: 70,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 6,
+  },
+  dashboardCardText: {
+    width: '100%',
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f3a61',
+  },
+  dashboardLogoutBtn: {
+    backgroundColor: '#b91c1c',
+    paddingVertical: 14,
+    borderRadius: 10,
+    marginTop: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+  },
+  dashboardLogoutText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '800',
+    textAlign: 'center',
   },
 
   // ==========================================
