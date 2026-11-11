@@ -307,6 +307,17 @@ export default function Dashboard() {
   // Action History Audit list
   const auditList = stats.actionHistoryAudit || [];
 
+  // Helper for document badge colors matching institutional look
+  const getDocBadgeStyle = (name: string) => {
+    const n = String(name || '').toLowerCase();
+    if (n.includes('photo')) return { bg: '#fee2e2', color: '#b91c1c', border: '#fca5a5' };
+    if (n.includes('aadhaar') || n.includes('aadhar')) return { bg: '#fef3c7', color: '#b45309', border: '#fcd34d' };
+    if (n.includes('voter')) return { bg: '#ede9fe', color: '#6d28d9', border: '#c4b5fd' };
+    if (n.includes('pan')) return { bg: '#e0f2fe', color: '#0369a1', border: '#7dd3fc' };
+    if (n.includes('passbook') || n.includes('bank')) return { bg: '#dcfce7', color: '#15803d', border: '#86efac' };
+    return { bg: '#fef3c7', color: '#b45309', border: '#fcd34d' };
+  };
+
   return (
     <SafeAreaView style={s.page}>
       <AcademyHeader compact />
@@ -594,16 +605,19 @@ export default function Dashboard() {
                             #{st.registration_no} - {st.student_name} ({st.class_name})
                           </Text>
                           <View style={s.missingPillContainer}>
-                            {(st.missing || []).map((m: string) => (
-                              <View key={m} style={s.missingPill}>
-                                <Text style={s.missingPillText}>{m}</Text>
-                              </View>
-                            ))}
+                            {(st.missing || []).map((m: string) => {
+                              const bStyle = getDocBadgeStyle(m);
+                              return (
+                                <View key={m} style={[s.missingPill, { backgroundColor: bStyle.bg, borderColor: bStyle.border, borderWidth: 1 }]}>
+                                  <Text style={[s.missingPillText, { color: bStyle.color, fontWeight: '700' }]}>{m}</Text>
+                                </View>
+                              );
+                            })}
                           </View>
                         </View>
                         <TouchableOpacity
                           style={s.docActionBtn}
-                          onPress={() => router.push('/students' as any)}
+                          onPress={() => router.push(`/students` as any)}
                         >
                           <Text style={s.docActionBtnText}>Upload</Text>
                         </TouchableOpacity>
@@ -745,16 +759,19 @@ export default function Dashboard() {
                             #{st.staff_id} - {st.name} ({st.designation || 'Staff'})
                           </Text>
                           <View style={s.missingPillContainer}>
-                            {(st.missing || []).map((m: string) => (
-                              <View key={m} style={[s.missingPill, { backgroundColor: '#fee2e2' }]}>
-                                <Text style={[s.missingPillText, { color: '#991b1b' }]}>{m}</Text>
-                              </View>
-                            ))}
+                            {(st.missing || []).map((m: string) => {
+                              const bStyle = getDocBadgeStyle(m);
+                              return (
+                                <View key={m} style={[s.missingPill, { backgroundColor: bStyle.bg, borderColor: bStyle.border, borderWidth: 1 }]}>
+                                  <Text style={[s.missingPillText, { color: bStyle.color, fontWeight: '700' }]}>{m}</Text>
+                                </View>
+                              );
+                            })}
                           </View>
                         </View>
                         <TouchableOpacity
                           style={s.docActionBtn}
-                          onPress={() => router.push('/teachers?mode=view' as any)}
+                          onPress={() => router.push(`/teachers?mode=documents&teacherId=${st.id}` as any)}
                         >
                           <Text style={s.docActionBtnText}>Upload</Text>
                         </TouchableOpacity>

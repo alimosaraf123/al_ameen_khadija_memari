@@ -252,22 +252,73 @@ router.get('/dashboard-overview',auth,allow('super_admin','admin'),asyncHandler(
   const missingStudentDocs=(await pool.query(`
     SELECT id, registration_no, student_name, class_name,
       ARRAY_REMOVE(ARRAY[
-        CASE WHEN photo_url IS NULL OR photo_url = '' THEN 'Photo' ELSE NULL END,
-        CASE WHEN aadhaar_no IS NULL OR aadhaar_no = '' THEN 'Aadhaar' ELSE NULL END
+        CASE WHEN (photo_url IS NULL OR photo_url = '') 
+                  AND NOT EXISTS (SELECT 1 FROM student_documents sd WHERE sd.student_id = students.id AND sd.document_type = 'photo') 
+             THEN 'Photo' ELSE NULL END,
+        CASE WHEN (aadhaar_no IS NULL OR aadhaar_no = '' OR aadhaar_no = '0') 
+                  AND NOT EXISTS (SELECT 1 FROM student_documents sd WHERE sd.student_id = students.id AND sd.document_type = 'aadhaar') 
+             THEN 'Aadhaar' ELSE NULL END,
+        CASE WHEN (bank_account_no IS NULL OR bank_account_no = '' OR bank_account_no = '0') 
+                  AND NOT EXISTS (SELECT 1 FROM student_documents sd WHERE sd.student_id = students.id AND sd.document_type = 'bank_passbook') 
+             THEN 'Passbook' ELSE NULL END
       ], NULL) as missing
     FROM students
-    WHERE is_active = true AND (photo_url IS NULL OR photo_url = '' OR aadhaar_no IS NULL OR aadhaar_no = '')
+    WHERE is_active = true AND (
+      ((photo_url IS NULL OR photo_url = '') AND NOT EXISTS (SELECT 1 FROM student_documents sd WHERE sd.student_id = students.id AND sd.document_type = 'photo'))
+      OR ((aadhaar_no IS NULL OR aadhaar_no = '' OR aadhaar_no = '0') AND NOT EXISTS (SELECT 1 FROM student_documents sd WHERE sd.student_id = students.id AND sd.document_type = 'aadhaar'))
+      OR ((bank_account_no IS NULL OR bank_account_no = '' OR bank_account_no = '0') AND NOT EXISTS (SELECT 1 FROM student_documents sd WHERE sd.student_id = students.id AND sd.document_type = 'bank_passbook'))
+    )
+    ORDER BY registration_no
     LIMIT 10
   `)).rows;
 
   const missingStaffDocs=(await pool.query(`
-    SELECT id, staff_id, name, designation,
+    WITH staff_docs AS (
+      SELECT 
+        t.id,
+        t.staff_id,
+        t.name,
+        t.designation,
+        (CASE 
+          WHEN (t.photo_url IS NOT NULL AND t.photo_url != '') 
+               OR EXISTS (SELECT 1 FROM teacher_documents td WHERE td.teacher_id = t.id AND td.document_type IN ('photo', 'identity_proof'))
+          THEN true ELSE false 
+        END) AS has_photo,
+        (CASE 
+          WHEN (t.profile_details->>'aadhaar_no' IS NOT NULL AND t.profile_details->>'aadhaar_no' NOT IN ('', '0'))
+               OR EXISTS (SELECT 1 FROM teacher_documents td WHERE td.teacher_id = t.id AND td.document_type = 'aadhaar')
+          THEN true ELSE false 
+        END) AS has_aadhaar,
+        (CASE 
+          WHEN (t.profile_details->>'voter_no' IS NOT NULL AND t.profile_details->>'voter_no' NOT IN ('', '0'))
+               OR EXISTS (SELECT 1 FROM teacher_documents td WHERE td.teacher_id = t.id AND td.document_type = 'voter_id')
+          THEN true ELSE false 
+        END) AS has_voter,
+        (CASE 
+          WHEN (t.profile_details->>'account_no' IS NOT NULL AND t.profile_details->>'account_no' NOT IN ('', '0'))
+               OR EXISTS (SELECT 1 FROM teacher_documents td WHERE td.teacher_id = t.id AND td.document_type IN ('bank_passbook', 'passbook'))
+          THEN true ELSE false 
+        END) AS has_bank,
+        (CASE 
+          WHEN (t.profile_details->>'pan_no' IS NOT NULL AND t.profile_details->>'pan_no' NOT IN ('', '0'))
+               OR EXISTS (SELECT 1 FROM teacher_documents td WHERE td.teacher_id = t.id AND td.document_type = 'pan_card')
+          THEN true ELSE false 
+        END) AS has_pan
+      FROM teachers t
+      WHERE t.is_active = true
+    )
+    SELECT 
+      id, staff_id, name, designation,
       ARRAY_REMOVE(ARRAY[
-        CASE WHEN photo_url IS NULL OR photo_url = '' THEN 'Photo' ELSE NULL END,
-        CASE WHEN mobile IS NULL OR mobile = '' THEN 'Mobile' ELSE NULL END
+        CASE WHEN NOT has_photo THEN 'Photo' ELSE NULL END,
+        CASE WHEN NOT has_aadhaar THEN 'Aadhaar' ELSE NULL END,
+        CASE WHEN NOT has_voter THEN 'Voter ID' ELSE NULL END,
+        CASE WHEN NOT has_bank THEN 'Passbook' ELSE NULL END,
+        CASE WHEN NOT has_pan THEN 'PAN Card' ELSE NULL END
       ], NULL) as missing
-    FROM teachers
-    WHERE is_active = true AND (photo_url IS NULL OR photo_url = '' OR mobile IS NULL OR mobile = '')
+    FROM staff_docs
+    WHERE NOT (has_photo AND has_aadhaar AND has_voter AND has_bank AND has_pan)
+    ORDER BY id
     LIMIT 10
   `)).rows;
 
