@@ -118,7 +118,9 @@ export default function Dashboard() {
     staffAttendance: [],
     missingStudentDocs: [],
     missingStaffDocs: [],
+    actionHistoryAudit: [],
   });
+  const [refreshCountdown, setRefreshCountdown] = useState(10);
 
   // Check which menus the user is allowed to access
   const canAccess = (path: string) => {
@@ -186,9 +188,15 @@ export default function Dashboard() {
     void loadOverview();
 
     const timer = setInterval(() => {
-      void loadCounter();
-      void loadOverview();
-    }, 30000);
+      setRefreshCountdown((prev) => {
+        if (prev <= 1) {
+          void loadCounter();
+          void loadOverview();
+          return 10;
+        }
+        return prev - 1;
+      });
+    }, 1000);
     return () => {
       clearInterval(timer);
       clearInterval(clock);
@@ -295,6 +303,9 @@ export default function Dashboard() {
   const gatePassActiveTotal = useMemo(() => {
     return gatePassList.reduce((acc: number, row: any) => acc + Number(row.active || 0), 0);
   }, [gatePassList]);
+
+  // Action History Audit list
+  const auditList = stats.actionHistoryAudit || [];
 
   return (
     <SafeAreaView style={s.page}>
@@ -439,10 +450,11 @@ export default function Dashboard() {
             <Text style={s.loadingText}>Loading live institution records...</Text>
           </View>
         ) : (
-          /* ============================================================== */
-          /* TWO-COLUMN INSTITUTIONAL DASHBOARD GRID (MATCHING IMAGE 2)     */
-          /* ============================================================== */
-          <View style={s.dashboardGrid}>
+          <>
+            {/* ============================================================== */}
+            {/* TWO-COLUMN INSTITUTIONAL DASHBOARD GRID (MATCHING IMAGE 2)     */}
+            {/* ============================================================== */}
+            <View style={s.dashboardGrid}>
             {/* ------------------------------------------------------------ */}
             {/* LEFT COLUMN: Student Demographics & Gate Pass                */}
             {/* ------------------------------------------------------------ */}
@@ -753,6 +765,95 @@ export default function Dashboard() {
               </View>
             </View>
           </View>
+
+          {/* ============================================================== */}
+          {/* FULL-WIDTH CARD: Action History Audit (MATCHING IMAGE)         */}
+          {/* ============================================================== */}
+          <View style={[s.panelCard, s.auditCardFullWidth]}>
+            <View style={s.panelHeader}>
+              <View style={s.panelHeaderLeft}>
+                <Text style={s.panelHeaderIcon}>🕒</Text>
+                <Text style={s.panelTitle}>Action History Audit</Text>
+                <View style={[s.sessionBadge, { backgroundColor: '#e0f2fe' }]}>
+                  <Text style={[s.sessionBadgeText, { color: '#0369a1' }]}>Last 10 Activities</Text>
+                </View>
+              </View>
+
+              <View style={s.panelHeaderRightGroup}>
+                <View style={s.refreshBadge}>
+                  <Text style={s.refreshBadgeText}>
+                    Auto-refreshing in: <Text style={s.refreshSec}>{refreshCountdown} sec</Text>
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={s.refreshIconBtn}
+                  onPress={() => {
+                    setRefreshCountdown(10);
+                    void loadOverview();
+                  }}
+                >
+                  <Text style={s.refreshIconText}>🔄</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+              <View style={s.tableContainer}>
+                <View style={[s.tRow, s.tHeadRow]}>
+                  <Text style={[s.tHeadCell, { width: 50 }]}>S.L.</Text>
+                  <Text style={[s.tHeadCell, { width: 90 }]}>TOKEN</Text>
+                  <Text style={[s.tHeadCell, s.tLeftCell, { width: 180 }]}>INITIATOR</Text>
+                  <Text style={[s.tHeadCell, s.tLeftCell, { width: 170 }]}>ACTION TYPE</Text>
+                  <Text style={[s.tHeadCell, s.tLeftCell, { minWidth: 360, flex: 1 }]}>AUDIT DESCRIPTION</Text>
+                  <Text style={[s.tHeadCell, { width: 170 }]}>TIMESTAMP</Text>
+                </View>
+
+                {auditList.length === 0 ? (
+                  <View style={s.emptyRow}>
+                    <Text style={s.emptyText}>No recent activity logs recorded</Text>
+                  </View>
+                ) : (
+                  auditList.map((row: any, i: number) => (
+                    <View key={row.token + i} style={[s.tRow, i % 2 === 1 && s.tRowZebra]}>
+                      <Text style={[s.tCell, { width: 50 }]}>{row.sl || i + 1}</Text>
+                      <Text style={[s.tCell, s.tokenCell, { width: 90 }]}>{row.token}</Text>
+                      <View style={[s.tCellBox, { width: 180, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                        <View style={s.initiatorBadge}>
+                          <Text style={s.initiatorBadgeText}>{row.initiator_badge}</Text>
+                        </View>
+                        <Text style={s.initiatorName} numberOfLines={1}>
+                          {row.initiator_name}
+                        </Text>
+                      </View>
+                      <View style={[s.tCellBox, { width: 170, flexDirection: 'row', alignItems: 'center' }]}>
+                        <View style={s.actionTypePill}>
+                          <Text style={s.actionTypePillText}>
+                            {row.icon ? `${row.icon} ` : ''}{row.action_type}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={[s.tCellBox, { minWidth: 360, flex: 1, paddingVertical: 6 }]}>
+                        <Text style={s.auditDescriptionText}>
+                          {row.audit_description}
+                        </Text>
+                      </View>
+                      <Text style={[s.tCell, s.timestampCell, { width: 170 }]}>
+                        {row.timestamp}
+                      </Text>
+                    </View>
+                  ))
+                )}
+              </View>
+            </ScrollView>
+
+            <View style={s.auditFooterRow}>
+              <TouchableOpacity onPress={() => router.push('/audit-log' as any)}>
+                <Text style={s.viewAllAuditLink}>View Complete Audit Log History ›</Text>
+              </TouchableOpacity>
+              <Text style={s.auditFooterCopy}>© 2023-2026 All Rights Reserved By Al-Ameen Mission Memari</Text>
+            </View>
+          </View>
+          </>
         )}
       </ScrollView>
 
@@ -1406,5 +1507,119 @@ const s = StyleSheet.create({
     color: '#0f172a',
     fontSize: 15,
     fontWeight: '700',
+  },
+
+  // Action History Audit Styles
+  auditCardFullWidth: {
+    width: '100%',
+    marginTop: 14,
+  },
+  panelHeaderRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  refreshBadge: {
+    backgroundColor: '#dcfce7',
+    borderWidth: 1,
+    borderColor: '#86efac',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  refreshBadgeText: {
+    fontSize: 11,
+    color: '#166534',
+    fontWeight: '700',
+  },
+  refreshSec: {
+    fontWeight: '900',
+    color: '#15803d',
+  },
+  refreshIconBtn: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  refreshIconText: {
+    fontSize: 12,
+  },
+  tCellBox: {
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderRightWidth: 1,
+    borderRightColor: '#e2e8f0',
+  },
+  tokenCell: {
+    color: '#0369a1',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  initiatorBadge: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  initiatorBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  initiatorName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1e293b',
+    flexShrink: 1,
+  },
+  actionTypePill: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  actionTypePillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1e3a5f',
+  },
+  auditDescriptionText: {
+    fontSize: 12,
+    color: '#1e293b',
+    fontWeight: '600',
+  },
+  timestampCell: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '700',
+  },
+  auditFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#f8fafc',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  viewAllAuditLink: {
+    color: '#0284c7',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  auditFooterCopy: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '600',
   },
 });
