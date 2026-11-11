@@ -284,7 +284,7 @@ export default function Dashboard() {
     );
   }, [demoList]);
 
-  // Staff Distribution aggregates
+  // Staff Distribution & Attendance aggregates
   const staffList = stats.staffDistribution || [];
   const staffTotal = useMemo(() => {
     return staffList.reduce(
@@ -292,24 +292,13 @@ export default function Dashboard() {
         male: acc.male + Number(row.male || 0),
         female: acc.female + Number(row.female || 0),
         total: acc.total + Number(row.total || 0),
-      }),
-      { male: 0, female: 0, total: 0 }
-    );
-  }, [staffList]);
-
-  // Staff Attendance aggregates
-  const attendanceList = stats.staffAttendance || [];
-  const attendanceTotal = useMemo(() => {
-    return attendanceList.reduce(
-      (acc: any, row: any) => ({
         present: acc.present + Number(row.present || 0),
         absent: acc.absent + Number(row.absent || 0),
         leave: acc.leave + Number(row.leave || 0),
-        total: acc.total + Number(row.total || 0),
       }),
-      { present: 0, absent: 0, leave: 0, total: 0 }
+      { male: 0, female: 0, total: 0, present: 0, absent: 0, leave: 0 }
     );
-  }, [attendanceList]);
+  }, [staffList]);
 
   // Action History Audit list
   const auditList = stats.actionHistoryAudit || [];
@@ -589,12 +578,19 @@ export default function Dashboard() {
             {/* RIGHT COLUMN: Staff Distribution & Staff Attendance          */}
             {/* ------------------------------------------------------------ */}
             <View style={s.gridColumn}>
-              {/* Card 4: Staff Distribution */}
+              {/* Card: Staff Distribution & Attendance */}
               <View style={s.panelCard}>
                 <View style={s.panelHeader}>
                   <View style={s.panelHeaderLeft}>
-                    <Text style={s.panelHeaderIcon}>📊</Text>
-                    <Text style={s.panelTitle}>Staff Distribution</Text>
+                    <Text style={s.panelHeaderIcon}>👥</Text>
+                    <Text style={s.panelTitle}>Staff Distribution & Attendance</Text>
+                    {stats.attendanceDate && (
+                      <View style={[s.sessionBadge, { backgroundColor: '#e0e7ff' }]}>
+                        <Text style={[s.sessionBadgeText, { color: '#3730a3' }]}>
+                          {stats.attendanceDate}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                   <Text style={s.panelHeaderRight}>
                     Total: <Text style={s.boldNumber}>{staffTotal.total}</Text>
@@ -604,10 +600,13 @@ export default function Dashboard() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={true}>
                   <View style={s.tableContainer}>
                     <View style={[s.tRow, s.tHeadRow]}>
-                      <Text style={[s.tHeadCell, s.tLeftCell, { width: 170 }]}>STAFF ROLE</Text>
-                      <Text style={[s.tHeadCell, { width: 70 }]}>MALE</Text>
-                      <Text style={[s.tHeadCell, { width: 70 }]}>FEMALE</Text>
-                      <Text style={[s.tHeadCell, s.tHighlightHead, { width: 70 }]}>TOTAL</Text>
+                      <Text style={[s.tHeadCell, s.tLeftCell, { width: 140 }]}>STAFF ROLE</Text>
+                      <Text style={[s.tHeadCell, { width: 50 }]}>MALE</Text>
+                      <Text style={[s.tHeadCell, { width: 60 }]}>FEMALE</Text>
+                      <Text style={[s.tHeadCell, s.tHighlightHead, { width: 60 }]}>TOTAL</Text>
+                      <Text style={[s.tHeadCell, { width: 65 }]}>PRESENT</Text>
+                      <Text style={[s.tHeadCell, { width: 65 }]}>ABSENT</Text>
+                      <Text style={[s.tHeadCell, { width: 55 }]}>LEAVE</Text>
                     </View>
 
                     {staffList.length === 0 ? (
@@ -617,77 +616,28 @@ export default function Dashboard() {
                     ) : (
                       staffList.map((row: any, i: number) => (
                         <View key={row.role + i} style={[s.tRow, i % 2 === 1 && s.tRowZebra]}>
-                          <Text style={[s.tCell, s.tLeftCell, s.tRoleCell, { width: 170 }]}>{row.role}</Text>
-                          <Text style={[s.tCell, { width: 70 }]}>{row.male}</Text>
-                          <Text style={[s.tCell, { width: 70 }]}>{row.female}</Text>
-                          <Text style={[s.tCell, s.tHighlightCell, { width: 70 }]}>{row.total}</Text>
+                          <Text style={[s.tCell, s.tLeftCell, s.tRoleCell, { width: 140 }]}>{row.role}</Text>
+                          <Text style={[s.tCell, { width: 50 }]}>{row.male}</Text>
+                          <Text style={[s.tCell, { width: 60 }]}>{row.female}</Text>
+                          <Text style={[s.tCell, s.tHighlightCell, { width: 60 }]}>{row.total}</Text>
+                          <Text style={[s.tCell, { width: 65, color: '#15803d', fontWeight: '700' }]}>{row.present}</Text>
+                          <Text style={[s.tCell, { width: 65, color: row.absent > 0 ? '#b91c1c' : '#64748b' }]}>{row.absent}</Text>
+                          <Text style={[s.tCell, { width: 55 }]}>{row.leave}</Text>
                         </View>
                       ))
                     )}
 
                     {/* Total Row */}
                     <View style={[s.tRow, s.tTotalRow]}>
-                      <Text style={[s.tCell, s.tLeftCell, s.tTotalLabel, { width: 170 }]}>Total</Text>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 70 }]}>{staffTotal.male}</Text>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 70 }]}>{staffTotal.female}</Text>
-                      <Text style={[s.tCell, s.tTotalValHighlight, { width: 70 }]}>{staffTotal.total}</Text>
-                    </View>
-                  </View>
-                </ScrollView>
-              </View>
-
-              {/* Card 5: Staff Attendance */}
-              <View style={s.panelCard}>
-                <View style={s.panelHeader}>
-                  <View style={s.panelHeaderLeft}>
-                    <Text style={s.panelHeaderIcon}>📝</Text>
-                    <Text style={s.panelTitle}>Staff Attendance</Text>
-                    <View style={[s.sessionBadge, { backgroundColor: '#e0e7ff' }]}>
-                      <Text style={[s.sessionBadgeText, { color: '#3730a3' }]}>
-                        {stats.attendanceDate || (stats.today ? stats.today.split('-').reverse().join('/') : 'Today')}
+                      <Text style={[s.tCell, s.tLeftCell, s.tTotalLabel, { width: 140 }]}>Total</Text>
+                      <Text style={[s.tCell, s.tTotalVal, { width: 50 }]}>{staffTotal.male}</Text>
+                      <Text style={[s.tCell, s.tTotalVal, { width: 60 }]}>{staffTotal.female}</Text>
+                      <Text style={[s.tCell, s.tTotalValHighlight, { width: 60 }]}>{staffTotal.total}</Text>
+                      <Text style={[s.tCell, s.tTotalVal, { width: 65, color: '#15803d' }]}>{staffTotal.present}</Text>
+                      <Text style={[s.tCell, s.tTotalVal, { width: 65, color: staffTotal.absent > 0 ? '#b91c1c' : '#1e293b' }]}>
+                        {staffTotal.absent}
                       </Text>
-                    </View>
-                  </View>
-                  <Text style={s.panelHeaderRight}>
-                    Total: <Text style={s.boldNumber}>{attendanceTotal.total}</Text>
-                  </Text>
-                </View>
-
-                <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-                  <View style={s.tableContainer}>
-                    <View style={[s.tRow, s.tHeadRow]}>
-                      <Text style={[s.tHeadCell, s.tLeftCell, { width: 150 }]}>ROLE</Text>
-                      <Text style={[s.tHeadCell, { width: 70 }]}>PRESENT</Text>
-                      <Text style={[s.tHeadCell, { width: 70 }]}>ABSENT</Text>
-                      <Text style={[s.tHeadCell, { width: 60 }]}>LEAVE</Text>
-                      <Text style={[s.tHeadCell, s.tHighlightHead, { width: 70 }]}>TOTAL</Text>
-                    </View>
-
-                    {attendanceList.length === 0 ? (
-                      <View style={s.emptyRow}>
-                        <Text style={s.emptyText}>No staff attendance records today</Text>
-                      </View>
-                    ) : (
-                      attendanceList.map((row: any, i: number) => (
-                        <View key={row.role + i} style={[s.tRow, i % 2 === 1 && s.tRowZebra]}>
-                          <Text style={[s.tCell, s.tLeftCell, s.tRoleCell, { width: 150 }]}>{row.role}</Text>
-                          <Text style={[s.tCell, { width: 70, color: '#15803d', fontWeight: '700' }]}>{row.present}</Text>
-                          <Text style={[s.tCell, { width: 70, color: row.absent > 0 ? '#b91c1c' : '#64748b' }]}>{row.absent}</Text>
-                          <Text style={[s.tCell, { width: 60 }]}>{row.leave}</Text>
-                          <Text style={[s.tCell, s.tHighlightCell, { width: 70 }]}>{row.total}</Text>
-                        </View>
-                      ))
-                    )}
-
-                    {/* Total Row */}
-                    <View style={[s.tRow, s.tTotalRow]}>
-                      <Text style={[s.tCell, s.tLeftCell, s.tTotalLabel, { width: 150 }]}>Total</Text>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 70, color: '#15803d' }]}>{attendanceTotal.present}</Text>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 70, color: attendanceTotal.absent > 0 ? '#b91c1c' : '#1e293b' }]}>
-                        {attendanceTotal.absent}
-                      </Text>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 60 }]}>{attendanceTotal.leave}</Text>
-                      <Text style={[s.tCell, s.tTotalValHighlight, { width: 70 }]}>{attendanceTotal.total}</Text>
+                      <Text style={[s.tCell, s.tTotalVal, { width: 55 }]}>{staffTotal.leave}</Text>
                     </View>
                   </View>
                 </ScrollView>
