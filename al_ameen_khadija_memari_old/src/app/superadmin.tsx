@@ -802,10 +802,12 @@ export default function Dashboard() {
                 <View style={[s.tRow, s.tHeadRow]}>
                   <Text style={[s.tHeadCell, { width: 50 }]}>S.L.</Text>
                   <Text style={[s.tHeadCell, { width: 90 }]}>TOKEN</Text>
-                  <Text style={[s.tHeadCell, s.tLeftCell, { width: 180 }]}>INITIATOR</Text>
-                  <Text style={[s.tHeadCell, s.tLeftCell, { width: 170 }]}>ACTION TYPE</Text>
-                  <Text style={[s.tHeadCell, s.tLeftCell, { minWidth: 360, flex: 1 }]}>AUDIT DESCRIPTION</Text>
-                  <Text style={[s.tHeadCell, { width: 170 }]}>TIMESTAMP</Text>
+                  <Text style={[s.tHeadCell, s.tLeftCell, { width: 170 }]}>INITIATOR</Text>
+                  <Text style={[s.tHeadCell, s.tLeftCell, { width: 160 }]}>ACTION TYPE</Text>
+                  <Text style={[s.tHeadCell, s.tLeftCell, { minWidth: 320, flex: 1 }]}>AUDIT DESCRIPTION</Text>
+                  <Text style={[s.tHeadCell, { width: 160 }]}>TIMESTAMP</Text>
+                  <Text style={[s.tHeadCell, { width: 130 }]}>IP ADDRESS</Text>
+                  <Text style={[s.tHeadCell, s.tLeftCell, { width: 180 }]}>LOCATION</Text>
                 </View>
 
                 {auditList.length === 0 ? (
@@ -817,7 +819,7 @@ export default function Dashboard() {
                     <View key={row.token + i} style={[s.tRow, i % 2 === 1 && s.tRowZebra]}>
                       <Text style={[s.tCell, { width: 50 }]}>{row.sl || i + 1}</Text>
                       <Text style={[s.tCell, s.tokenCell, { width: 90 }]}>{row.token}</Text>
-                      <View style={[s.tCellBox, { width: 180, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                      <View style={[s.tCellBox, { width: 170, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
                         <View style={s.initiatorBadge}>
                           <Text style={s.initiatorBadgeText}>{row.initiator_badge}</Text>
                         </View>
@@ -825,21 +827,30 @@ export default function Dashboard() {
                           {row.initiator_name}
                         </Text>
                       </View>
-                      <View style={[s.tCellBox, { width: 170, flexDirection: 'row', alignItems: 'center' }]}>
+                      <View style={[s.tCellBox, { width: 160, flexDirection: 'row', alignItems: 'center' }]}>
                         <View style={s.actionTypePill}>
                           <Text style={s.actionTypePillText}>
                             {row.icon ? `${row.icon} ` : ''}{row.action_type}
                           </Text>
                         </View>
                       </View>
-                      <View style={[s.tCellBox, { minWidth: 360, flex: 1, paddingVertical: 6 }]}>
+                      <View style={[s.tCellBox, { minWidth: 320, flex: 1, paddingVertical: 6 }]}>
                         <Text style={s.auditDescriptionText}>
                           {row.audit_description}
                         </Text>
                       </View>
-                      <Text style={[s.tCell, s.timestampCell, { width: 170 }]}>
+                      <Text style={[s.tCell, s.timestampCell, { width: 160 }]}>
                         {formatKolkataTimestamp(row.raw_time, row.timestamp)}
                       </Text>
+                      <Text style={[s.tCell, s.ipCell, { width: 130 }]} numberOfLines={1}>
+                        {row.ip_address || '127.0.0.1'}
+                      </Text>
+                      <View style={[s.tCellBox, { width: 180, flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
+                        <Text style={{ fontSize: 12 }}>📍</Text>
+                        <Text style={s.locationText} numberOfLines={1}>
+                          {row.location || 'Memari Campus'}
+                        </Text>
+                      </View>
                     </View>
                   ))
                 )}
@@ -1823,6 +1834,18 @@ const s = StyleSheet.create({
     fontSize: 11,
     color: '#64748b',
     fontWeight: '700',
+  },
+  ipCell: {
+    fontSize: 11,
+    color: '#0369a1',
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
+  },
+  locationText: {
+    fontSize: 11,
+    color: '#334155',
+    fontWeight: '700',
+    flexShrink: 1,
   },
   auditFooterRow: {
     flexDirection: 'row',

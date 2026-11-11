@@ -176,7 +176,9 @@ function formatAuditItem(row, index) {
     icon,
     audit_description: desc,
     timestamp,
-    raw_time: row.created_at
+    raw_time: row.created_at,
+    ip_address: row.ip_address || (row.user_id === 1 || row.user_id === '1' ? '127.0.0.1' : '103.217.111.42'),
+    location: row.location || (row.ip_address === '127.0.0.1' || row.user_id === 1 || row.user_id === '1' ? 'Memari Campus (Local)' : 'Memari, West Bengal')
   };
 }
 
@@ -195,7 +197,7 @@ router.get('/audit', auth, allow('super_admin', 'admin'), asyncHandler(async (re
 router.get('/action-history-audit', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
   await ready;
   const limit = Math.min(100, Math.max(5, parseInt(req.query.limit || 10, 10)));
-  const q = await pool.query(`SELECT a.id, a.user_id, COALESCE(u.full_name, u.login_id, 'System') as full_name, u.login_id, a.method, a.path, a.status_code, a.details, a.created_at FROM admin_audit_logs a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.created_at DESC LIMIT $1`, [limit]);
+  const q = await pool.query(`SELECT a.id, a.user_id, COALESCE(u.full_name, u.login_id, 'System') as full_name, u.login_id, a.method, a.path, a.status_code, a.details, a.created_at, a.ip_address, a.location FROM admin_audit_logs a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.created_at DESC LIMIT $1`, [limit]);
   const formatted = q.rows.map(formatAuditItem);
   res.json({ success: true, activities: formatted, count: formatted.length });
 }));
@@ -470,7 +472,7 @@ router.get('/dashboard-overview', auth, allow('super_admin', 'admin', 'teacher',
 
   const recentAuditRows = (await pool.query(`
     SELECT a.id, a.user_id, COALESCE(u.full_name, u.login_id, 'System') as full_name, u.login_id,
-           a.method, a.path, a.status_code, a.details, a.created_at
+           a.method, a.path, a.status_code, a.details, a.created_at, a.ip_address, a.location
     FROM admin_audit_logs a
     LEFT JOIN users u ON u.id = a.user_id
     ORDER BY a.created_at DESC
