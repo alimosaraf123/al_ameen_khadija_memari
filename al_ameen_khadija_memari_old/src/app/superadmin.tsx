@@ -311,12 +311,6 @@ export default function Dashboard() {
     );
   }, [attendanceList]);
 
-  // Gate Pass active count
-  const gatePassList = stats.gatePassSummary || [];
-  const gatePassActiveTotal = useMemo(() => {
-    return gatePassList.reduce((acc: number, row: any) => acc + Number(row.active || 0), 0);
-  }, [gatePassList]);
-
   // Action History Audit list
   const auditList = stats.actionHistoryAudit || [];
 
@@ -545,51 +539,7 @@ export default function Dashboard() {
                 </ScrollView>
               </View>
 
-              {/* Card 2: Gate Pass */}
-              <View style={s.panelCard}>
-                <View style={s.panelHeader}>
-                  <View style={s.panelHeaderLeft}>
-                    <Text style={s.panelHeaderIcon}>🎫</Text>
-                    <Text style={s.panelTitle}>Gate Pass</Text>
-                    <View style={[s.sessionBadge, { backgroundColor: '#fef3c7' }]}>
-                      <Text style={[s.sessionBadgeText, { color: '#92400e' }]}>Session 2026</Text>
-                    </View>
-                  </View>
-                  <Text style={s.panelHeaderRight}>
-                    Active: <Text style={[s.boldNumber, { color: '#b45309' }]}>{gatePassActiveTotal}</Text>
-                  </Text>
-                </View>
-
-                <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-                  <View style={s.tableContainer}>
-                    <View style={[s.tRow, s.tHeadRow]}>
-                      <Text style={[s.tHeadCell, { width: 70 }]}>CLASS</Text>
-                      <Text style={[s.tHeadCell, { width: 100 }]}>ISSUED</Text>
-                      <Text style={[s.tHeadCell, s.tHighlightHead, { width: 100 }]}>ACTIVE</Text>
-                      <Text style={[s.tHeadCell, { width: 100 }]}>EXPIRED</Text>
-                    </View>
-
-                    {gatePassList.length === 0 ? (
-                      <View style={s.emptyRow}>
-                        <Text style={s.emptyText}>No gate passes recorded</Text>
-                      </View>
-                    ) : (
-                      gatePassList.map((row: any, i: number) => (
-                        <View key={row.class_name + i} style={[s.tRow, i % 2 === 1 && s.tRowZebra]}>
-                          <Text style={[s.tCell, s.tClassCell, { width: 70 }]}>{row.class_name}</Text>
-                          <Text style={[s.tCell, { width: 100 }]}>{row.issued}</Text>
-                          <Text style={[s.tCell, s.tHighlightCell, { width: 100, color: row.active > 0 ? '#b45309' : '#475569' }]}>
-                            {row.active}
-                          </Text>
-                          <Text style={[s.tCell, { width: 100 }]}>{row.expired}</Text>
-                        </View>
-                      ))
-                    )}
-                  </View>
-                </ScrollView>
-              </View>
-
-              {/* Card 3: Student Documents Required */}
+              {/* Card 2: Student Documents Required */}
               <View style={s.panelCard}>
                 <View style={s.panelHeader}>
                   <View style={s.panelHeaderLeft}>
