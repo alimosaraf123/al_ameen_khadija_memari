@@ -452,13 +452,6 @@ export default function Dashboard() {
             </TouchableOpacity>
           )}
 
-          {canAccess('/deposit-fund') && (
-            <TouchableOpacity style={s.navBtn} onPress={() => router.push('/deposit-fund' as any)}>
-              <Text style={s.navBtnIcon}>💰</Text>
-              <Text style={s.navBtnText}>Deposit Fund</Text>
-            </TouchableOpacity>
-          )}
-
           {canAccess('/asset-register') && (
             <TouchableOpacity style={s.navBtn} onPress={() => router.push('/asset-register' as any)}>
               <Text style={s.navBtnIcon}>🏷️</Text>
