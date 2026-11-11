@@ -155,6 +155,39 @@ export default function Dashboard() {
     return `${m}m ${s < 10 ? '0' : ''}${s}s`;
   };
 
+  // Format timestamp into Asia/Kolkata (IST) time
+  const formatKolkataTimestamp = (rawVal: any, fallback?: string): string => {
+    if (rawVal) {
+      try {
+        const d = new Date(rawVal);
+        if (!isNaN(d.getTime())) {
+          const formatter = new Intl.DateTimeFormat('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+          });
+          const parts = formatter.formatToParts(d);
+          const getPart = (t: string) => parts.find((p) => p.type === t)?.value || '';
+          const day = getPart('day');
+          const month = getPart('month');
+          const year = getPart('year');
+          const hour = getPart('hour');
+          const minute = getPart('minute');
+          const dayPeriod = (getPart('dayPeriod') || '').toUpperCase();
+          if (day && month && year && hour && minute) {
+            return `${day}/${month}/${year} ${hour}:${minute} ${dayPeriod}`.trim();
+          }
+          return formatter.format(d);
+        }
+      } catch {}
+    }
+    return fallback || String(rawVal || '-');
+  };
+
   // Check which menus the user is allowed to access
   const canAccess = (path: string) => {
     if (userRole === 'super_admin') return true;
@@ -804,7 +837,7 @@ export default function Dashboard() {
                         </Text>
                       </View>
                       <Text style={[s.tCell, s.timestampCell, { width: 170 }]}>
-                        {row.timestamp}
+                        {formatKolkataTimestamp(row.raw_time, row.timestamp)}
                       </Text>
                     </View>
                   ))

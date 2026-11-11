@@ -140,16 +140,32 @@ function formatAuditItem(row, index) {
     desc = `Student Profile Updated by ${userName}`;
   }
 
-  const d = new Date(row.created_at);
-  const pad = (n) => String(n).padStart(2, '0');
-  const day = pad(d.getDate());
-  const month = pad(d.getMonth() + 1);
-  const year = d.getFullYear();
-  let hours = d.getHours();
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12 || 12;
-  const mins = pad(d.getMinutes());
-  const timestamp = `${day}/${month}/${year} ${pad(hours)}:${mins} ${ampm}`;
+  let timestamp = '-';
+  try {
+    const d = new Date(row.created_at);
+    if (!isNaN(d.getTime())) {
+      const formatter = new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+      const parts = formatter.formatToParts(d);
+      const getPart = (t) => parts.find((p) => p.type === t)?.value || '';
+      const day = getPart('day');
+      const month = getPart('month');
+      const year = getPart('year');
+      const hour = getPart('hour');
+      const minute = getPart('minute');
+      const dayPeriod = (getPart('dayPeriod') || '').toUpperCase();
+      timestamp = `${day}/${month}/${year} ${hour}:${minute} ${dayPeriod}`.trim();
+    }
+  } catch {
+    timestamp = String(row.created_at || '-');
+  }
 
   return {
     sl: index + 1,
@@ -183,7 +199,13 @@ router.get('/action-history-audit', auth, allow('super_admin', 'admin'), asyncHa
   const formatted = q.rows.map(formatAuditItem);
   res.json({ success: true, activities: formatted, count: formatted.length });
 }));
-router.get('/office-activity', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => { await ready; const date = String(req.query.date || new Date().toISOString().slice(0, 10)); if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ success: false, message: 'Valid date is required' }); const q = await pool.query(`SELECT a.*,u.login_id,u.full_name FROM office_activity_logs a LEFT JOIN users u ON u.id=a.user_id WHERE a.created_at::date=$1 ORDER BY a.created_at DESC LIMIT 1000`, [date]); res.json({ success: true, date, logs: q.rows }) }));
+router.get('/office-activity', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
+  await ready;
+  const date = String(req.query.date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ success: false, message: 'Valid date is required' });
+  const q = await pool.query(`SELECT a.*,u.login_id,u.full_name FROM office_activity_logs a LEFT JOIN users u ON u.id=a.user_id WHERE (a.created_at AT TIME ZONE 'Asia/Kolkata')::date=$1 ORDER BY a.created_at DESC LIMIT 1000`, [date]);
+  res.json({ success: true, date, logs: q.rows });
+}));
 router.get('/guardian-activity', auth, allow('super_admin'), asyncHandler(async (req, res) => { const q = await pool.query(`SELECT gls.id,u.login_id,u.full_name,gls.device_id,gls.is_active,gls.last_login_at,gls.logged_out_at,gls.expires_at,COUNT(DISTINCT sg.student_id)::int AS student_count,COALESCE(json_agg(DISTINCT jsonb_build_object('student_name',st.student_name,'registration_no',st.registration_no,'class_name',st.class_name)) FILTER(WHERE st.id IS NOT NULL),'[]'::json) AS students FROM guardian_login_sessions gls JOIN users u ON u.id=gls.user_id LEFT JOIN guardian_profiles gp ON gp.user_id=u.id LEFT JOIN student_guardians sg ON sg.guardian_id=gp.id LEFT JOIN students st ON st.id=sg.student_id WHERE u.role='guardian' GROUP BY gls.id,u.login_id,u.full_name,gls.device_id,gls.is_active,gls.last_login_at,gls.logged_out_at,gls.expires_at ORDER BY gls.last_login_at DESC LIMIT 1000`); res.json({ success: true, guardian_activity: q.rows }) }));
 router.get('/backup', auth, allow('super_admin'), asyncHandler(async (req, res) => { const names = (await pool.query(`SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename`)).rows.map(x => x.tablename), data = { version: 1, created_at: new Date().toISOString(), tables: {} }; for (const name of names) data.tables[name] = (await pool.query(`SELECT * FROM "${name.replace(/"/g, '')}"`)).rows; res.setHeader('Content-Disposition', `attachment; filename="al-ameen-backup-${new Date().toISOString().slice(0, 10)}.json"`); res.json(data) }));
 router.post('/restore', auth, allow('super_admin'), asyncHandler(async (req, res) => { if (req.body?.confirmation !== 'RESTORE_DATABASE') return res.status(400).json({ success: false, message: 'Type RESTORE_DATABASE to confirm' }); if (!req.body?.backup?.tables) return res.status(400).json({ success: false, message: 'Invalid backup' }); res.status(501).json({ success: false, message: 'Restore requires maintenance mode. Backup validated; no data changed.' }) }));
