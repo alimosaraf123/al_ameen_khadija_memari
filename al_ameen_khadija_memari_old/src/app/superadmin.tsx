@@ -327,6 +327,11 @@ export default function Dashboard() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.topNavScroll}
         >
+          <TouchableOpacity style={[s.navBtn, { backgroundColor: '#0f172a', borderColor: '#334155' }]} onPress={() => setAllMenusDrawer(true)}>
+            <Text style={s.navBtnIcon}>☰</Text>
+            <Text style={[s.navBtnText, { color: '#ffffff', fontWeight: '800' }]}>All Menus</Text>
+          </TouchableOpacity>
+
           {canAccessGroup(['/students', '/daily-attendance', '/student-summary']) && (
             <TouchableOpacity style={s.navBtn} onPress={() => setStudentMenu(true)}>
               <Text style={s.navBtnIcon}>🎓</Text>
@@ -433,6 +438,13 @@ export default function Dashboard() {
           </View>
 
           <View style={s.welcomeRight}>
+            <TouchableOpacity
+              onPress={() => setAllMenusDrawer(true)}
+              style={[s.searchPill, { backgroundColor: '#1e3a5f' }]}
+            >
+              <Text style={s.searchPillText}>☰ All Menus</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity
               onPress={() => router.push('/students' as any)}
               style={s.searchPill}
@@ -805,6 +817,7 @@ export default function Dashboard() {
                 ['Staff Summary', '/staff-summary'],
                 ['Gateman Sheet (Excel)', '/teachers?action=gateman_sheet'],
                 ['Gateman & Service Staff', '/service-staff'],
+                ['Gateman Portal', '/gateman'],
               ].map(([label, path]) => (
                 <AdminLink
                   path={path}
@@ -842,6 +855,9 @@ export default function Dashboard() {
                 ['Student Summary', '/student-summary'],
                 ['Student Transfer', '/student-transfer'],
                 ['Student Lifecycle', '/student-lifecycle'],
+                ['Document Upload', '/documents'],
+                ['Student ID Cards', '/id-cards'],
+                ['Student Dues', '/dues'],
               ].map(([label, path]) => (
                 <AdminLink
                   path={path}
@@ -953,11 +969,12 @@ export default function Dashboard() {
             <View style={s.modalGrid}>
               {[
                 ['Fee Collection', '/fees?tab=fees_collection'],
-                ['Due Fees', '/due-fees'],
+                ['Due Fees Tracker', '/due-fees'],
                 ['Receipt & Payment', '/fees?tab=receipt_payment'],
                 ['Bank Matcher', '/bank-statement-matcher'],
                 ['Student Deposit Fund', '/deposit-fund'],
                 ['Deposit Fund Report', '/deposit-fund-report'],
+                ['Student Dues', '/dues'],
               ].map(([label, path]) => (
                 <AdminLink
                   path={path}
@@ -973,6 +990,125 @@ export default function Dashboard() {
                 </AdminLink>
               ))}
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* All Menus Overview Modal */}
+      <Modal visible={allMenusDrawer} transparent animationType="fade" onRequestClose={() => setAllMenusDrawer(false)}>
+        <View style={s.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setAllMenusDrawer(false)} />
+          <View style={[s.teacherModal, { maxWidth: 960, maxHeight: '90%' }]}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>All Institution Menus & Portals</Text>
+              <TouchableOpacity onPress={() => setAllMenusDrawer(false)}>
+                <Text style={s.closeText}>×</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={{ padding: 18, gap: 16 }}>
+              {[
+                {
+                  category: '🎓 Student Management',
+                  items: [
+                    ['Student Details', '/students'],
+                    ['Daily Student Attendance', '/daily-attendance'],
+                    ['Student Summary', '/student-summary'],
+                    ['Student Transfer', '/student-transfer'],
+                    ['Student Lifecycle', '/student-lifecycle'],
+                    ['Document Upload', '/documents'],
+                    ['Student ID Cards', '/id-cards'],
+                    ['Student Dues', '/dues'],
+                  ],
+                },
+                {
+                  category: '👥 Staff & Administration',
+                  items: [
+                    ['View Staff', '/teachers?mode=view'],
+                    ['Add Staff', '/teachers?mode=add'],
+                    ['I-Card & Form', '/teachers?mode=icard'],
+                    ['Staff Attendance', '/teacher-attendance'],
+                    ['Staff Summary', '/staff-summary'],
+                    ['Gateman Sheet (Excel)', '/teachers?action=gateman_sheet'],
+                    ['Gateman & Service Staff', '/service-staff'],
+                    ['Gateman Portal', '/gateman'],
+                  ],
+                },
+                {
+                  category: '📚 Academic & Examination',
+                  items: [
+                    ['Weekly Marks', '/marks'],
+                    ['OMR Exam & Evaluation', '/omr-evaluation'],
+                    ['Terminal Exam', '/terminal-exams'],
+                    ['Print Terminal Result', '/class-results'],
+                    ['Teacher Routine', '/routines'],
+                    ['Notice Board', '/notices'],
+                    ['Library Portal', '/library'],
+                    ['Student Behaviour', '/behavior'],
+                    ['Student Illness', '/illness'],
+                    ['Room Problems', '/problems'],
+                  ],
+                },
+                {
+                  category: '🏢 Hostel & Mess',
+                  items: [
+                    ['Rooms List', '/rooms'],
+                    ['Teacher Room Assignment', '/room-assignments'],
+                    ['Evening Room Attendance', '/attendance'],
+                    ['Dining Stock Inventory', '/dining-stock'],
+                  ],
+                },
+                {
+                  category: '💳 Accounts & Finance',
+                  items: [
+                    ['Fee Collection', '/fees?tab=fees_collection'],
+                    ['Due Fees Tracker', '/due-fees'],
+                    ['Receipt & Payment', '/fees?tab=receipt_payment'],
+                    ['Bank Matcher', '/bank-statement-matcher'],
+                    ['Student Deposit Fund', '/deposit-fund'],
+                    ['Deposit Fund Report', '/deposit-fund-report'],
+                    ['Student Dues', '/dues'],
+                  ],
+                },
+                {
+                  category: '🚪 Gate Pass & Visitors',
+                  items: [
+                    ['Student Gate Pass', '/gate-pass'],
+                    ['Visiting Day Record / Permission', '/visits'],
+                    ['Guardians Directory', '/guardians'],
+                  ],
+                },
+                {
+                  category: '⚙️ Governance & System',
+                  items: [
+                    ['Asset Register', '/asset-register'],
+                    ['Activity Audit Log', '/audit-log'],
+                    ...(userRole === 'super_admin' ? [['System Administration', '/system-admin']] : []),
+                  ],
+                },
+              ].map((grp) => (
+                <View key={grp.category} style={{ gap: 8 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#0f172a', borderBottomWidth: 1, borderBottomColor: '#e2e8f0', paddingBottom: 4 }}>
+                    {grp.category}
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {grp.items.map(([label, path]) => (
+                      <AdminLink
+                        path={path}
+                        key={label}
+                        style={[s.modalItem, { minWidth: 200, width: '31%', minHeight: 48, paddingVertical: 8 }]}
+                        onPress={() => {
+                          setAllMenusDrawer(false);
+                          router.push(path as any);
+                        }}
+                      >
+                        <Text style={s.arrow}>›</Text>
+                        <Text style={[s.modalItemText, { fontSize: 13 }]}>{label}</Text>
+                      </AdminLink>
+                    ))}
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
           </View>
         </View>
       </Modal>
