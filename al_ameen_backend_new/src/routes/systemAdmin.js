@@ -5,7 +5,141 @@ router.patch('/admins/:id',auth,allow('super_admin'),asyncHandler(async(req,res)
 router.put('/admins/:id/permissions',auth,allow('super_admin'),asyncHandler(async(req,res)=>{const keys=[...new Set((req.body?.permissions||[]).map(String))],c=await pool.connect();try{await c.query('BEGIN');if(!(await c.query("SELECT 1 FROM users WHERE id=$1 AND role='admin'",[req.params.id])).rowCount)throw new Error('Admin not found');await c.query('DELETE FROM user_module_permissions WHERE user_id=$1',[req.params.id]);for(const k of keys)await c.query('INSERT INTO user_module_permissions(user_id,module_key) VALUES($1,$2)',[req.params.id,k]);await c.query('COMMIT');res.json({success:true,permissions:keys})}catch(e){await c.query('ROLLBACK');res.status(400).json({success:false,message:e.message})}finally{c.release()}}));
 router.get('/settings',auth,allow('super_admin'),asyncHandler(async(req,res)=>{const q=await pool.query('SELECT setting_key,setting_value,updated_at FROM app_settings ORDER BY setting_key');res.json({success:true,settings:q.rows})}));
 router.put('/settings/:key',auth,allow('super_admin'),asyncHandler(async(req,res)=>{const q=await pool.query(`INSERT INTO app_settings(setting_key,setting_value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW() RETURNING *`,[req.params.key,String(req.body?.value||'')]);res.json({success:true,setting:q.rows[0]})}));
-router.get('/audit',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{await ready;const vals=[],where=[];if(req.user.role==='admin'){vals.push(req.user.userId);where.push(`a.user_id=$${vals.length}`)}const q=await pool.query(`SELECT a.*,u.login_id,u.full_name FROM admin_audit_logs a LEFT JOIN users u ON u.id=a.user_id ${where.length?'WHERE '+where.join(' AND '):''} ORDER BY a.created_at DESC LIMIT 1000`,vals);res.json({success:true,logs:q.rows})}));
+function formatAuditItem(row, index) {
+  const p = String(row.path || '').toLowerCase();
+  const m = String(row.method || 'POST').toUpperCase();
+  const userName = row.full_name || row.login_id || 'System';
+  let actionType = 'System Action';
+  let icon = '⚙️';
+  let desc = `${m} ${row.path} by ${userName}`;
+
+  if (p.includes('/routines/review-notes')) {
+    actionType = 'Routine Review';
+    icon = '📝';
+    desc = `Routine Review Note ${m === 'POST' ? 'Submitted' : m === 'PATCH' ? 'Resolved' : 'Updated'} by ${userName}`;
+  } else if (p.includes('/routines')) {
+    actionType = 'Routine Manager';
+    icon = '📅';
+    const grp = row.details?.group || row.details?.group_name || '';
+    const dt = row.details?.date || row.details?.routine_date || '';
+    desc = `Routine ${grp ? `[${grp}] ` : ''}${dt ? `(${dt}) ` : ''}Saved by ${userName}`.trim();
+  } else if (p.includes('/teachers/attendance')) {
+    actionType = 'Staff Attendance';
+    icon = '📋';
+    desc = `Staff Attendance Marked by ${userName}`;
+  } else if (p.includes('/attendance')) {
+    actionType = 'Student Attendance';
+    icon = '📋';
+    desc = `Student Attendance Submitted by ${userName}`;
+  } else if (p.includes('/gate-passes')) {
+    actionType = 'Gate Pass';
+    icon = '🎫';
+    const sid = row.details?.student_id ? `for Student #${row.details.student_id}` : '';
+    desc = `Gate Pass ${m === 'DELETE' ? 'Cancelled' : 'Issued'} ${sid} by ${userName}`.trim();
+  } else if (p.includes('/service-panels/dining') || p.includes('/dining')) {
+    actionType = 'Dining Stock In';
+    icon = '🍲';
+    const dt = row.details?.date || row.details?.stock_date || '';
+    desc = `Dining Stock In ${dt ? `(${dt}) ` : ''}Submitted by ${userName}`.trim();
+  } else if (p.includes('/service-panels/library') || p.includes('/library')) {
+    actionType = 'Library Activity';
+    icon = '📚';
+    desc = `Library Book Activity Updated by ${userName}`;
+  } else if (p.includes('/rooms')) {
+    actionType = 'Hostel Room';
+    icon = '🏢';
+    const sid = row.details?.student_id ? `for Student #${row.details.student_id}` : '';
+    desc = `Hostel Room Assigned ${sid} by ${userName}`.trim();
+  } else if (p.includes('/terminal-exams') || p.includes('/marks')) {
+    actionType = 'Exam & Marks';
+    icon = '🎓';
+    desc = `Exam Marks / Records Submitted by ${userName}`;
+  } else if (p.includes('/deposit-fund')) {
+    actionType = 'Deposit Fund';
+    icon = '💰';
+    desc = `Deposit Fund Transaction Recorded by ${userName}`;
+  } else if (p.includes('/dues') || p.includes('/fees')) {
+    actionType = 'Student Fees / Dues';
+    icon = '💳';
+    desc = `Fees / Dues Record Updated by ${userName}`;
+  } else if (p.includes('/bank-matcher')) {
+    actionType = 'Bank Statement';
+    icon = '🏦';
+    desc = `Bank Statement Reconciled by ${userName}`;
+  } else if (p.includes('/visits')) {
+    actionType = 'Guardian Visit';
+    icon = '👥';
+    desc = `Guardian Visit Permission Recorded by ${userName}`;
+  } else if (p.includes('/notices')) {
+    actionType = 'Notice Board';
+    icon = '📢';
+    desc = `Notice Published / Updated by ${userName}`;
+  } else if (p.includes('/system-admin/admins') && p.includes('/permissions')) {
+    actionType = 'Admin Permissions';
+    icon = '🔑';
+    desc = `Admin Permissions Updated by ${userName}`;
+  } else if (p.includes('/system-admin/admins')) {
+    actionType = 'Admin Management';
+    icon = '👤';
+    const target = row.details?.full_name || row.details?.login_id ? `(${row.details.full_name || row.details.login_id})` : '';
+    desc = `Admin User ${m === 'POST' ? 'Created' : 'Updated'} ${target} by ${userName}`.trim();
+  } else if (p.includes('/change-password') || p.includes('/password-reset') || p.includes('/set-mpin')) {
+    actionType = 'Security / MPIN';
+    icon = '🔒';
+    desc = `Security / Password Updated by ${userName}`;
+  } else if (p.includes('/teachers')) {
+    actionType = 'Staff Management';
+    icon = '👨‍🏫';
+    desc = `Staff Profile / Record Updated by ${userName}`;
+  } else if (p.includes('/students')) {
+    actionType = 'Student Management';
+    icon = '🎒';
+    desc = `Student Profile Updated by ${userName}`;
+  }
+
+  const d = new Date(row.created_at);
+  const pad = (n) => String(n).padStart(2, '0');
+  const day = pad(d.getDate());
+  const month = pad(d.getMonth() + 1);
+  const year = d.getFullYear();
+  let hours = d.getHours();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
+  const mins = pad(d.getMinutes());
+  const timestamp = `${day}/${month}/${year} ${pad(hours)}:${mins} ${ampm}`;
+
+  return {
+    sl: index + 1,
+    token: `#${row.id}`,
+    initiator_badge: `#${row.user_id || '0000'}`,
+    initiator_name: userName,
+    action_type: actionType,
+    icon,
+    audit_description: desc,
+    timestamp,
+    raw_time: row.created_at
+  };
+}
+
+router.get('/audit',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+  await ready;
+  const vals=[],where=[];
+  if(req.query.user_id){
+    vals.push(req.query.user_id);
+    where.push(`a.user_id=$${vals.length}`);
+  }
+  const q=await pool.query(`SELECT a.*,u.login_id,u.full_name FROM admin_audit_logs a LEFT JOIN users u ON u.id=a.user_id ${where.length?'WHERE '+where.join(' AND '):''} ORDER BY a.created_at DESC LIMIT 100`,vals);
+  const formatted = q.rows.map(formatAuditItem);
+  res.json({success:true,logs:q.rows,formattedLogs:formatted});
+}));
+
+router.get('/action-history-audit',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+  await ready;
+  const limit=Math.min(100,Math.max(5,parseInt(req.query.limit||10,10)));
+  const q=await pool.query(`SELECT a.id, a.user_id, COALESCE(u.full_name, u.login_id, 'System') as full_name, u.login_id, a.method, a.path, a.status_code, a.details, a.created_at FROM admin_audit_logs a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.created_at DESC LIMIT $1`,[limit]);
+  const formatted = q.rows.map(formatAuditItem);
+  res.json({success:true,activities:formatted,count:formatted.length});
+}));
 router.get('/office-activity',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{await ready;const date=String(req.query.date||new Date().toISOString().slice(0,10));if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return res.status(400).json({success:false,message:'Valid date is required'});const q=await pool.query(`SELECT a.*,u.login_id,u.full_name FROM office_activity_logs a LEFT JOIN users u ON u.id=a.user_id WHERE a.created_at::date=$1 ORDER BY a.created_at DESC LIMIT 1000`,[date]);res.json({success:true,date,logs:q.rows})}));
 router.get('/guardian-activity',auth,allow('super_admin'),asyncHandler(async(req,res)=>{const q=await pool.query(`SELECT gls.id,u.login_id,u.full_name,gls.device_id,gls.is_active,gls.last_login_at,gls.logged_out_at,gls.expires_at,COUNT(DISTINCT sg.student_id)::int AS student_count,COALESCE(json_agg(DISTINCT jsonb_build_object('student_name',st.student_name,'registration_no',st.registration_no,'class_name',st.class_name)) FILTER(WHERE st.id IS NOT NULL),'[]'::json) AS students FROM guardian_login_sessions gls JOIN users u ON u.id=gls.user_id LEFT JOIN guardian_profiles gp ON gp.user_id=u.id LEFT JOIN student_guardians sg ON sg.guardian_id=gp.id LEFT JOIN students st ON st.id=sg.student_id WHERE u.role='guardian' GROUP BY gls.id,u.login_id,u.full_name,gls.device_id,gls.is_active,gls.last_login_at,gls.logged_out_at,gls.expires_at ORDER BY gls.last_login_at DESC LIMIT 1000`);res.json({success:true,guardian_activity:q.rows})}));
 router.get('/backup',auth,allow('super_admin'),asyncHandler(async(req,res)=>{const names=(await pool.query(`SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename`)).rows.map(x=>x.tablename),data={version:1,created_at:new Date().toISOString(),tables:{}};for(const name of names)data.tables[name]=(await pool.query(`SELECT * FROM "${name.replace(/"/g,'')}"`)).rows;res.setHeader('Content-Disposition',`attachment; filename="al-ameen-backup-${new Date().toISOString().slice(0,10)}.json"`);res.json(data)}));
@@ -137,6 +271,16 @@ router.get('/dashboard-overview',auth,allow('super_admin','admin'),asyncHandler(
     LIMIT 10
   `)).rows;
 
+  const recentAuditRows = (await pool.query(`
+    SELECT a.id, a.user_id, COALESCE(u.full_name, u.login_id, 'System') as full_name, u.login_id,
+           a.method, a.path, a.status_code, a.details, a.created_at
+    FROM admin_audit_logs a
+    LEFT JOIN users u ON u.id = a.user_id
+    ORDER BY a.created_at DESC
+    LIMIT 10
+  `)).rows;
+  const actionHistoryAudit = recentAuditRows.map(formatAuditItem);
+
   res.json({
     success:true,
     today:todayStr,
@@ -145,7 +289,8 @@ router.get('/dashboard-overview',auth,allow('super_admin','admin'),asyncHandler(
     gatePassSummary:gatePassRows,
     staffAttendance:attendanceRows,
     missingStudentDocs,
-    missingStaffDocs
+    missingStaffDocs,
+    actionHistoryAudit
   });
 }));
 
