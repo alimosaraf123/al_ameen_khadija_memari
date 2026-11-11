@@ -915,7 +915,7 @@ export default function Dashboard() {
               {[
                 ['View Staff', '/teachers?mode=view'],
                 ['Add Staff', '/teachers?mode=add'],
-                ['I-Card & Form', '/teachers?mode=icard'],
+                ['I-Card, Form & Download', '/teachers?mode=icard'],
                 ['Staff Attendance', '/teacher-attendance'],
                 ['Staff Summary', '/staff-summary'],
                 ['Gateman Sheet (Excel)', '/teachers?action=gateman_sheet'],
@@ -1122,7 +1122,7 @@ export default function Dashboard() {
                   items: [
                     ['View Staff', '/teachers?mode=view'],
                     ['Add Staff', '/teachers?mode=add'],
-                    ['I-Card & Form', '/teachers?mode=icard'],
+                    ['I-Card, Form & Download', '/teachers?mode=icard'],
                     ['Staff Attendance', '/teacher-attendance'],
                     ['Staff Summary', '/staff-summary'],
                     ['Gateman Sheet (Excel)', '/teachers?action=gateman_sheet'],
