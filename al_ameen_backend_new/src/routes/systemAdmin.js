@@ -253,9 +253,27 @@ router.get('/dashboard-overview', auth, allow('super_admin', 'admin', 'teacher',
 
   const exitMap = {};
   exitRows.forEach(r => { exitMap[r.class_name] = r; });
+
+  const gatePassCounts = (await pool.query(`
+    SELECT 
+      CASE 
+        WHEN s.class_name IN ('XI','XI-Sc.') THEN 'XI-Sc.'
+        WHEN s.class_name IN ('XII','XII-Sc.') THEN 'XII-Sc.'
+        ELSE COALESCE(s.class_name, 'Other')
+      END as class_name,
+      COUNT(gp.id)::int as gate_pass
+    FROM student_gate_passes gp
+    JOIN students s ON s.id = gp.student_id
+    GROUP BY 1
+  `)).rows;
+
+  const gatePassMap = {};
+  gatePassCounts.forEach(r => { gatePassMap[r.class_name] = r.gate_pass; });
+
   const demographics = studentRows.map(r => ({
     ...r,
-    pass_out: exitMap[r.class_name]?.pass_out || 0,
+    gate_pass: gatePassMap[r.class_name] || 0,
+    pass_out: gatePassMap[r.class_name] || 0,
     drop_out: exitMap[r.class_name]?.drop_out || 0
   }));
 

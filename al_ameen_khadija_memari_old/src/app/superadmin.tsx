@@ -340,10 +340,11 @@ export default function Dashboard() {
         d_able: acc.d_able + Number(row.d_able || 0),
         general: acc.general + Number(row.general || 0),
         obc: acc.obc + Number(row.obc || 0),
-        pass_out: acc.pass_out + Number(row.pass_out || 0),
+        gate_pass: acc.gate_pass + Number(row.gate_pass ?? row.pass_out ?? 0),
+        pass_out: acc.pass_out + Number(row.gate_pass ?? row.pass_out ?? 0),
         drop_out: acc.drop_out + Number(row.drop_out || 0),
       }),
-      { male: 0, female: 0, total: 0, orphan: 0, d_able: 0, general: 0, obc: 0, pass_out: 0, drop_out: 0 }
+      { male: 0, female: 0, total: 0, orphan: 0, d_able: 0, general: 0, obc: 0, gate_pass: 0, pass_out: 0, drop_out: 0 }
     );
   }, [demoList]);
 
@@ -565,7 +566,7 @@ export default function Dashboard() {
                       <Text style={[s.tHeadCell, s.tHighlightHead, { width: 65 }]}>TOTAL</Text>
                       <Text style={[s.tHeadCell, { width: 65 }]}>ORPHAN</Text>
                       <Text style={[s.tHeadCell, { width: 65 }]}>D.ABLE</Text>
-                      <Text style={[s.tHeadCell, { width: 75 }]}>PASS OUT</Text>
+                      <Text style={[s.tHeadCell, { width: 75 }]}>GATE PASS</Text>
                       <Text style={[s.tHeadCell, { width: 75 }]}>DROP OUT</Text>
                     </View>
 
@@ -582,7 +583,7 @@ export default function Dashboard() {
                           <Text style={[s.tCell, s.tHighlightCell, { width: 65 }]}>{row.total}</Text>
                           <Text style={[s.tCell, { width: 65 }]}>{row.orphan}</Text>
                           <Text style={[s.tCell, { width: 65 }]}>{row.d_able}</Text>
-                          <Text style={[s.tCell, { width: 75 }]}>{row.pass_out}</Text>
+                          <Text style={[s.tCell, { width: 75 }]}>{row.gate_pass ?? row.pass_out ?? 0}</Text>
                           <Text style={[s.tCell, { width: 75 }]}>{row.drop_out}</Text>
                         </View>
                       ))
@@ -596,7 +597,7 @@ export default function Dashboard() {
                       <Text style={[s.tCell, s.tTotalValHighlight, { width: 65 }]}>{demoTotal.total}</Text>
                       <Text style={[s.tCell, s.tTotalVal, { width: 65 }]}>{demoTotal.orphan}</Text>
                       <Text style={[s.tCell, s.tTotalVal, { width: 65 }]}>{demoTotal.d_able}</Text>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 75 }]}>{demoTotal.pass_out}</Text>
+                      <Text style={[s.tCell, s.tTotalVal, { width: 75 }]}>{demoTotal.gate_pass ?? demoTotal.pass_out ?? 0}</Text>
                       <Text style={[s.tCell, s.tTotalVal, { width: 75 }]}>{demoTotal.drop_out}</Text>
                     </View>
                   </View>
