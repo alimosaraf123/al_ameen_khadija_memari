@@ -120,7 +120,15 @@ export default function Dashboard() {
     missingStaffDocs: [],
     actionHistoryAudit: [],
   });
-  const [refreshCountdown, setRefreshCountdown] = useState(10);
+  const [refreshCountdown, setRefreshCountdown] = useState(15 * 60); // 15 minutes auto-refresh
+
+  // Format countdown seconds into MMm SSs (e.g. 15m 00s)
+  const formatCountdown = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    if (m === 0) return `${s} sec`;
+    return `${m}m ${s < 10 ? '0' : ''}${s}s`;
+  };
 
   // Check which menus the user is allowed to access
   const canAccess = (path: string) => {
@@ -140,9 +148,11 @@ export default function Dashboard() {
     } catch {}
   };
 
-  const loadOverview = async () => {
+  const loadOverview = async (silent = false) => {
     try {
-      setOverviewLoading(true);
+      if (!silent) {
+        setOverviewLoading(true);
+      }
       const data = await api('/api/system-admin/dashboard-overview');
       if (data && data.success) {
         setStats(data);
@@ -150,7 +160,9 @@ export default function Dashboard() {
     } catch {
       // Graceful fallback to default demo numbers if offline or loading
     } finally {
-      setOverviewLoading(false);
+      if (!silent) {
+        setOverviewLoading(false);
+      }
     }
   };
 
@@ -185,14 +197,15 @@ export default function Dashboard() {
       .catch(() => {});
 
     void loadCounter();
-    void loadOverview();
+    void loadOverview(false);
 
+    // Auto-refresh every 15 minutes (900 seconds) silently in background
     const timer = setInterval(() => {
       setRefreshCountdown((prev) => {
         if (prev <= 1) {
           void loadCounter();
-          void loadOverview();
-          return 10;
+          void loadOverview(true);
+          return 15 * 60;
         }
         return prev - 1;
       });
@@ -799,14 +812,14 @@ export default function Dashboard() {
               <View style={s.panelHeaderRightGroup}>
                 <View style={s.refreshBadge}>
                   <Text style={s.refreshBadgeText}>
-                    Auto-refreshing in: <Text style={s.refreshSec}>{refreshCountdown} sec</Text>
+                    Auto-refreshing in: <Text style={s.refreshSec}>{formatCountdown(refreshCountdown)}</Text>
                   </Text>
                 </View>
                 <TouchableOpacity
                   style={s.refreshIconBtn}
                   onPress={() => {
-                    setRefreshCountdown(10);
-                    void loadOverview();
+                    setRefreshCountdown(15 * 60);
+                    void loadOverview(true);
                   }}
                 >
                   <Text style={s.refreshIconText}>🔄</Text>
