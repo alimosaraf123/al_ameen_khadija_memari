@@ -26,6 +26,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import {
   API_BASE,
   api,
+  getApiBase,
 } from '../lib/api';
 
 import {
@@ -254,7 +255,7 @@ export default function Login() {
 
         const response =
           await fetch(
-            `${API_BASE}/api/login`,
+            `${getApiBase()}/api/login`,
             {
               method: 'POST',
 
@@ -455,7 +456,7 @@ export default function Login() {
 
         const response =
           await fetch(
-            `${API_BASE}/api/mpin-login`,
+            `${getApiBase()}/api/mpin-login`,
             {
               method: 'POST',
 
@@ -655,7 +656,7 @@ export default function Login() {
 
         const response =
           await fetch(
-            `${API_BASE}/api/biometric-login`,
+            `${getApiBase()}/api/biometric-login`,
             {
               method: 'POST',
 
