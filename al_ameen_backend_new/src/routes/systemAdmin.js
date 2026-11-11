@@ -57,9 +57,9 @@ function formatAuditItem(row, index) {
   let desc = `${m} ${row.path} by ${userName}`;
 
   if (p.includes('/routines/review-notes')) {
-    actionType = 'Routine Review';
+    actionType = 'Class Review Note';
     icon = '📝';
-    desc = `Routine Review Note ${m === 'POST' ? 'Submitted' : m === 'PATCH' ? 'Resolved' : 'Updated'} by ${userName}`;
+    desc = `Class Review Note ${m === 'POST' ? 'Submitted' : m === 'PATCH' ? 'Resolved' : 'Updated'} by ${userName}`;
   } else if (p.includes('/routines')) {
     actionType = 'Routine Manager';
     icon = '📅';
