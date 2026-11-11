@@ -576,7 +576,24 @@ export default function Dashboard() {
                           <Text style={[s.tCell, s.tHighlightCell, { width: 65 }]}>{row.total}</Text>
                           <Text style={[s.tCell, { width: 65 }]}>{row.orphan}</Text>
                           <Text style={[s.tCell, { width: 65 }]}>{row.d_able}</Text>
-                          <Text style={[s.tCell, { width: 75 }]}>{row.gate_pass ?? row.pass_out ?? 0}</Text>
+                          <TouchableOpacity
+                            style={{ width: 75, justifyContent: 'center', alignItems: 'center' }}
+                            onPress={() => router.push('/gate-pass' as any)}
+                            disabled={!Number(row.gate_pass ?? row.pass_out ?? 0)}
+                          >
+                            <Text
+                              style={[
+                                s.tCell,
+                                {
+                                  width: 75,
+                                  color: Number(row.gate_pass ?? row.pass_out ?? 0) > 0 ? '#b45309' : '#334155',
+                                  fontWeight: Number(row.gate_pass ?? row.pass_out ?? 0) > 0 ? '800' : '500',
+                                },
+                              ]}
+                            >
+                              {row.gate_pass ?? row.pass_out ?? 0}
+                            </Text>
+                          </TouchableOpacity>
                           <Text style={[s.tCell, { width: 75 }]}>{row.drop_out}</Text>
                         </View>
                       ))
@@ -590,7 +607,25 @@ export default function Dashboard() {
                       <Text style={[s.tCell, s.tTotalValHighlight, { width: 65 }]}>{demoTotal.total}</Text>
                       <Text style={[s.tCell, s.tTotalVal, { width: 65 }]}>{demoTotal.orphan}</Text>
                       <Text style={[s.tCell, s.tTotalVal, { width: 65 }]}>{demoTotal.d_able}</Text>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 75 }]}>{demoTotal.gate_pass ?? demoTotal.pass_out ?? 0}</Text>
+                      <TouchableOpacity
+                        style={{ width: 75, justifyContent: 'center', alignItems: 'center' }}
+                        onPress={() => router.push('/gate-pass' as any)}
+                        disabled={!Number(demoTotal.gate_pass ?? demoTotal.pass_out ?? 0)}
+                      >
+                        <Text
+                          style={[
+                            s.tCell,
+                            s.tTotalVal,
+                            {
+                              width: 75,
+                              color: Number(demoTotal.gate_pass ?? demoTotal.pass_out ?? 0) > 0 ? '#b45309' : undefined,
+                              fontWeight: '800',
+                            },
+                          ]}
+                        >
+                          {demoTotal.gate_pass ?? demoTotal.pass_out ?? 0}
+                        </Text>
+                      </TouchableOpacity>
                       <Text style={[s.tCell, s.tTotalVal, { width: 75 }]}>{demoTotal.drop_out}</Text>
                     </View>
                   </View>

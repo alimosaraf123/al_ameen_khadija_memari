@@ -271,11 +271,18 @@ router.get('/dashboard-overview', auth, allow('super_admin', 'admin', 'teacher',
       COUNT(gp.id)::int as gate_pass
     FROM student_gate_passes gp
     JOIN students s ON s.id = gp.student_id
+    WHERE gp.status = 'pending' AND gp.returned_at IS NULL
     GROUP BY 1
   `)).rows;
 
   const gatePassMap = {};
-  gatePassCounts.forEach(r => { gatePassMap[r.class_name] = r.gate_pass; });
+  gatePassCounts.forEach(r => {
+    gatePassMap[r.class_name] = r.gate_pass;
+    if (r.class_name === 'XI-Sc.') gatePassMap['XI'] = r.gate_pass;
+    if (r.class_name === 'XI') gatePassMap['XI-Sc.'] = r.gate_pass;
+    if (r.class_name === 'XII-Sc.') gatePassMap['XII'] = r.gate_pass;
+    if (r.class_name === 'XII') gatePassMap['XII-Sc.'] = r.gate_pass;
+  });
 
   const demographics = studentRows.map(r => ({
     ...r,
