@@ -1048,8 +1048,6 @@ export default function Dashboard() {
                 ['Receipt & Payment', '/fees?tab=receipt_payment'],
                 ['Bank Matcher', '/bank-statement-matcher'],
                 ['Student Deposit Fund', '/deposit-fund'],
-                ['Deposit Fund Report', '/deposit-fund-report'],
-                ['Student Dues', '/dues'],
               ].map(([label, path]) => (
                 <AdminLink
                   path={path}
@@ -1140,8 +1138,6 @@ export default function Dashboard() {
                     ['Receipt & Payment', '/fees?tab=receipt_payment'],
                     ['Bank Matcher', '/bank-statement-matcher'],
                     ['Student Deposit Fund', '/deposit-fund'],
-                    ['Deposit Fund Report', '/deposit-fund-report'],
-                    ['Student Dues', '/dues'],
                   ],
                 },
                 {
