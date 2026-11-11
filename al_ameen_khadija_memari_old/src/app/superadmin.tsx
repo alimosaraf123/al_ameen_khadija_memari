@@ -507,8 +507,6 @@ export default function Dashboard() {
                       <Text style={[s.tHeadCell, s.tHighlightHead, { width: 65 }]}>TOTAL</Text>
                       <Text style={[s.tHeadCell, { width: 65 }]}>ORPHAN</Text>
                       <Text style={[s.tHeadCell, { width: 65 }]}>D.ABLE</Text>
-                      <Text style={[s.tHeadCell, { width: 75 }]}>GENERAL</Text>
-                      <Text style={[s.tHeadCell, { width: 55 }]}>OBC</Text>
                       <Text style={[s.tHeadCell, { width: 75 }]}>PASS OUT</Text>
                       <Text style={[s.tHeadCell, { width: 75 }]}>DROP OUT</Text>
                     </View>
@@ -526,8 +524,6 @@ export default function Dashboard() {
                           <Text style={[s.tCell, s.tHighlightCell, { width: 65 }]}>{row.total}</Text>
                           <Text style={[s.tCell, { width: 65 }]}>{row.orphan}</Text>
                           <Text style={[s.tCell, { width: 65 }]}>{row.d_able}</Text>
-                          <Text style={[s.tCell, { width: 75 }]}>{row.general}</Text>
-                          <Text style={[s.tCell, { width: 55 }]}>{row.obc}</Text>
                           <Text style={[s.tCell, { width: 75 }]}>{row.pass_out}</Text>
                           <Text style={[s.tCell, { width: 75 }]}>{row.drop_out}</Text>
                         </View>
@@ -542,8 +538,6 @@ export default function Dashboard() {
                       <Text style={[s.tCell, s.tTotalValHighlight, { width: 65 }]}>{demoTotal.total}</Text>
                       <Text style={[s.tCell, s.tTotalVal, { width: 65 }]}>{demoTotal.orphan}</Text>
                       <Text style={[s.tCell, s.tTotalVal, { width: 65 }]}>{demoTotal.d_able}</Text>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 75 }]}>{demoTotal.general}</Text>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 55 }]}>{demoTotal.obc}</Text>
                       <Text style={[s.tCell, s.tTotalVal, { width: 75 }]}>{demoTotal.pass_out}</Text>
                       <Text style={[s.tCell, s.tTotalVal, { width: 75 }]}>{demoTotal.drop_out}</Text>
                     </View>
@@ -700,7 +694,7 @@ export default function Dashboard() {
                     <Text style={s.panelTitle}>Staff Attendance</Text>
                     <View style={[s.sessionBadge, { backgroundColor: '#e0e7ff' }]}>
                       <Text style={[s.sessionBadgeText, { color: '#3730a3' }]}>
-                        {stats.today ? stats.today.split('-').reverse().join('/') : 'Today'}
+                        {stats.attendanceDate || (stats.today ? stats.today.split('-').reverse().join('/') : 'Today')}
                       </Text>
                     </View>
                   </View>

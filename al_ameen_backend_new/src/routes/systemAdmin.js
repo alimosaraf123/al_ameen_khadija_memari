@@ -216,18 +216,46 @@ router.get('/dashboard-overview',auth,allow('super_admin','admin','teacher','sta
   `)).rows;
 
   const gatePassRows=(await pool.query(`
+    WITH class_list AS (
+      SELECT unnest(ARRAY['V','VI','VII','VIII','IX','X','XI-Sc.','XII-Sc.']) AS class_name
+    ),
+    gate_counts AS (
+      SELECT 
+        s.class_name,
+        COUNT(*) FILTER (WHERE gp.created_at::date = $1 OR gp.departure_at::date = $1)::int as issued,
+        COUNT(*) FILTER (WHERE gp.status = 'pending' AND gp.returned_at IS NULL)::int as active,
+        COUNT(*) FILTER (WHERE gp.status = 'pending' AND gp.returned_at IS NULL AND gp.expected_return_at < NOW())::int as expired
+      FROM student_gate_passes gp
+      JOIN students s ON s.id = gp.student_id
+      GROUP BY s.class_name
+    )
     SELECT 
-      COALESCE(s.class_name,'Other') as class_name,
-      COUNT(*)::int as issued,
-      COUNT(*) FILTER (WHERE gp.status IN ('pending','printed') AND gp.returned_at IS NULL)::int as active,
-      COUNT(*) FILTER (WHERE gp.status = 'returned' OR (gp.expected_return_at < NOW() AND gp.returned_at IS NULL))::int as expired
-    FROM student_gate_passes gp
-    JOIN students s ON s.id = gp.student_id
-    GROUP BY s.class_name
-    ORDER BY s.class_name
-  `)).rows;
+      c.class_name,
+      COALESCE(g.issued, 0) as issued,
+      COALESCE(g.active, 0) as active,
+      COALESCE(g.expired, 0) as expired
+    FROM class_list c
+    LEFT JOIN gate_counts g ON (g.class_name = c.class_name OR (c.class_name = 'XI-Sc.' AND g.class_name IN ('XI','XI-Sc.')) OR (c.class_name = 'XII-Sc.' AND g.class_name IN ('XII','XII-Sc.')))
+    ORDER BY 
+      CASE c.class_name
+        WHEN 'V' THEN 1
+        WHEN 'VI' THEN 2
+        WHEN 'VII' THEN 3
+        WHEN 'VIII' THEN 4
+        WHEN 'IX' THEN 5
+        WHEN 'X' THEN 6
+        WHEN 'XI-Sc.' THEN 7
+        WHEN 'XII-Sc.' THEN 8
+      END
+  `, [todayStr])).rows;
 
   const attendanceRows=(await pool.query(`
+    WITH target_date AS (
+      SELECT COALESCE(
+        (SELECT MAX(attendance_date) FROM staff_attendance WHERE attendance_date = $1),
+        (SELECT MAX(attendance_date) FROM staff_attendance)
+      ) as d
+    )
     SELECT 
       CASE 
         WHEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) IN ('teacher','teachers') THEN 'Teaching'
@@ -238,16 +266,17 @@ router.get('/dashboard-overview',auth,allow('super_admin','admin','teacher','sta
         WHEN LOWER(TRIM(COALESCE(t.profile_details->>'staff_type',''))) ILIKE '%security%' THEN 'Security'
         ELSE 'Other'
       END as role,
-      COUNT(*)::int as total,
-      COUNT(*) FILTER (WHERE COALESCE(a.status,'Present')='Present')::int as present,
-      COUNT(*) FILTER (WHERE a.status='Absent')::int as absent,
-      COUNT(*) FILTER (WHERE a.status='Leave')::int as leave
+      COUNT(a.teacher_id)::int as total,
+      COUNT(*) FILTER (WHERE a.status = 'Present')::int as present,
+      COUNT(*) FILTER (WHERE a.status = 'Absent')::int as absent,
+      COUNT(*) FILTER (WHERE a.status IN ('Leave', 'Late'))::int as leave,
+      (SELECT to_char(d, 'DD/MM/YYYY') FROM target_date) as att_date
     FROM teachers t
-    LEFT JOIN staff_attendance a ON a.teacher_id = t.id AND a.attendance_date = $1
+    JOIN staff_attendance a ON a.teacher_id = t.id AND a.attendance_date = (SELECT d FROM target_date)
     WHERE t.is_active = true
     GROUP BY 1
     ORDER BY total DESC
-  `,[todayStr])).rows;
+  `, [todayStr])).rows;
 
   const missingStudentDocs=(await pool.query(`
     SELECT id, registration_no, student_name, class_name,
@@ -335,6 +364,7 @@ router.get('/dashboard-overview',auth,allow('super_admin','admin','teacher','sta
   res.json({
     success:true,
     today:todayStr,
+    attendanceDate: attendanceRows[0]?.att_date || todayStr,
     studentDemographics:demographics,
     staffDistribution:staffRows,
     gatePassSummary:gatePassRows,
