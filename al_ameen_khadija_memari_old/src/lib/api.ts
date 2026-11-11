@@ -106,6 +106,11 @@ export async function api(
       );
     }
 
+    const raw = String(error?.message || '');
+    if (/network|fetch failed|unknownhost|unable to resolve host|no address associated|failed to connect/i.test(raw)) {
+      throw new Error('Your internet connection is off');
+    }
+
     throw error;
 
   } finally {

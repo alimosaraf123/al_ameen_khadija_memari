@@ -2,7 +2,7 @@
   "expo": {
     "name": "Al-Ameen Mission Academy Memari",
     "slug": "al_ameen_khadija_memari",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "alameenkhadijamemari",
@@ -11,7 +11,7 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
-      "versionCode": 6,
+      "versionCode": 8,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/icon.png",
@@ -19,7 +19,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.alameenmission.memari",
+      "package": "com.alameenmission.academy",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",

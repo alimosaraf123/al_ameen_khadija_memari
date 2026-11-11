@@ -1,44 +1,229 @@
-import React,{useEffect,useRef,useState} from 'react';
-import {ActivityIndicator,Animated,Image,Modal,PanResponder,Platform,Pressable,ScrollView,StyleSheet,Text,TouchableOpacity,View} from 'react-native';
-import {PanGestureHandler,PinchGestureHandler,State} from 'react-native-gesture-handler';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Animated,
+  Image,
+  Modal,
+  PanResponder,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AcademyHeader from './AcademyHeader';
-import {API_BASE,api} from '../lib/api';
+import { API_BASE, api } from '../lib/api';
 
-function date(value:any){return String(value||'').slice(0,10);}
-function routineDate(item:any){return date(item.routine_date||item.published_at||item.created_at);}
-export function newestRoutineFirst(a:any,b:any){return routineDate(b).localeCompare(routineDate(a))||String(b.published_at||b.created_at||'').localeCompare(String(a.published_at||a.created_at||''));}
-function RoutineImage({url}:{url:string}){
- const [aspectRatio,setAspectRatio]=useState(2);
- useEffect(()=>{
-  let active=true;
-  Image.getSize(url,(width,height)=>{if(active&&Number.isFinite(width)&&Number.isFinite(height)&&width>0&&height>0)setAspectRatio(width/height);},()=>{});
-  return ()=>{active=false;};
- },[url]);
- return <Image source={{uri:url}} resizeMode="contain" style={[s.routineImage,{aspectRatio}]}/>;
+function date(value: any) { return String(value || '').slice(0, 10); }
+function routineDate(item: any) { return date(item.routine_date || item.published_at || item.created_at); }
+export function newestRoutineFirst(a: any, b: any) {
+  return routineDate(b).localeCompare(routineDate(a)) || String(b.published_at || b.created_at || '').localeCompare(String(a.published_at || a.created_at || ''));
 }
-export function RoutineCard({item}:{item:any}){
- const url=/^https?:/.test(item.file_url)?item.file_url:`${API_BASE}${item.file_url}`;
- const [expanded,setExpanded]=useState(false);
- const [aspectRatio,setAspectRatio]=useState(2);
- const [zoom,setZoom]=useState(1);
- const pinchScale=useRef(new Animated.Value(1)).current;
- const panX=useRef(new Animated.Value(0)).current,panY=useRef(new Animated.Value(0)).current;
- const [panOffset,setPanOffset]=useState({x:0,y:0});
- const baseZoom=useRef(1);
- const webPanResponder=useRef(PanResponder.create({
-  onStartShouldSetPanResponder:()=>Platform.OS==='web'&&baseZoom.current>1,
-  onMoveShouldSetPanResponder:()=>Platform.OS==='web'&&baseZoom.current>1,
-  onPanResponderMove:(_,gesture)=>{panX.setValue(gesture.dx);panY.setValue(gesture.dy)},
-  onPanResponderRelease:(_,gesture)=>{setPanOffset(current=>({x:current.x+Number(gesture.dx||0),y:current.y+Number(gesture.dy||0)}));panX.setValue(0);panY.setValue(0)},
-  onPanResponderTerminate:()=>{panX.setValue(0);panY.setValue(0)},
- })).current;
- useEffect(()=>{Image.getSize(url,(width,height)=>{if(width>0&&height>0)setAspectRatio(width/height);},()=>{});},[url]);
- const openPreview=()=>{baseZoom.current=1;setZoom(1);pinchScale.setValue(1);panX.setValue(0);panY.setValue(0);setPanOffset({x:0,y:0});setExpanded(true)};
- const onPinchStateChange=(event:any)=>{if(event.nativeEvent.oldState===State.ACTIVE){const next=Math.min(4,Math.max(1,baseZoom.current*Number(event.nativeEvent.scale||1)));baseZoom.current=next;setZoom(next);pinchScale.setValue(1)}};
- const onPanStateChange=(event:any)=>{if(event.nativeEvent.oldState!==State.ACTIVE)return;const dx=Number(event.nativeEvent.translationX||0),dy=Number(event.nativeEvent.translationY||0);setPanOffset(current=>({x:current.x+dx,y:current.y+dy}));panX.setValue(0);panY.setValue(0)};
- if(expanded)return <View style={s.routineItem}><Modal visible transparent animationType="fade" onRequestClose={()=>setExpanded(false)}><Pressable style={s.imageBackdrop} onPress={()=>setExpanded(false)}><View style={s.imageModal} onStartShouldSetResponder={()=>true}><View style={s.imageModalHeader}><Text style={s.imageModalTitle}>{item.title||'Published Routine'}</Text><Text style={s.zoomHint}>Pinch to zoom / Drag to move / {Math.round(zoom*100)}%</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Close routine image" onPress={()=>setExpanded(false)} style={s.closeButton}><Text style={s.closeText}>X</Text></TouchableOpacity></View><PanGestureHandler enabled={Platform.OS!=='web'&&zoom>1} onGestureEvent={Animated.event([{nativeEvent:{translationX:panX,translationY:panY}}],{useNativeDriver:true})} onHandlerStateChange={onPanStateChange}><Animated.View style={s.zoomArea} {...(Platform.OS==='web'?webPanResponder.panHandlers:{})}><PinchGestureHandler onGestureEvent={Animated.event([{nativeEvent:{scale:pinchScale}}],{useNativeDriver:true})} onHandlerStateChange={onPinchStateChange}><Animated.View style={s.zoomContent}><Animated.Image source={{uri:url}} resizeMode="contain" style={[s.expandedImage,{transform:[{scale:Animated.multiply(pinchScale,zoom)},{translateX:panOffset.x},{translateY:panOffset.y},{translateX:panX},{translateY:panY}]}]}/></Animated.View></PinchGestureHandler></Animated.View></PanGestureHandler></View></Pressable></Modal></View>;
- return <View style={s.routineItem}><Text style={s.routineTitle}>{item.title||'Published Routine'}</Text><Text style={s.routineMeta}>{routineDate(item)}</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Open routine image" onPress={openPreview}><RoutineImage url={url}/></TouchableOpacity><TouchableOpacity accessibilityRole="button" style={s.openButton} onPress={openPreview}><Text style={s.routineOpen}>Open</Text></TouchableOpacity><Modal visible={expanded} transparent animationType="fade" onRequestClose={()=>setExpanded(false)}><Pressable style={s.imageBackdrop} onPress={()=>setExpanded(false)}><View style={s.imageModal} onStartShouldSetResponder={()=>true}><View style={s.imageModalHeader}><Text style={s.imageModalTitle}>{item.title||'Published Routine'}</Text><Text style={s.zoomHint}>Pinch to zoom · {Math.round(zoom*100)}%</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Close routine image" onPress={()=>setExpanded(false)} style={s.closeButton}><Text style={s.closeText}>X</Text></TouchableOpacity></View><PinchGestureHandler onGestureEvent={Animated.event([{nativeEvent:{scale:pinchScale}}],{useNativeDriver:true})} onHandlerStateChange={onPinchStateChange}><Animated.View style={s.zoomArea}><Animated.Image source={{uri:url}} resizeMode="contain" style={[s.expandedImage,{aspectRatio,transform:[{scale:Animated.multiply(pinchScale,zoom)}]}]}/></Animated.View></PinchGestureHandler></View></Pressable></Modal></View>;
+
+function RoutineImage({ url }: { url: string }) {
+  const [aspectRatio, setAspectRatio] = useState(2);
+  useEffect(() => {
+    let active = true;
+    Image.getSize(url, (width, height) => {
+      if (active && Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) setAspectRatio(width / height);
+    }, () => {});
+    return () => { active = false; };
+  }, [url]);
+  return <Image source={{ uri: url }} resizeMode="contain" style={[s.routineImage, { aspectRatio }]} />;
+}
+
+export function RoutineCard({ item }: { item: any }) {
+  const url = /^https?:/.test(item.file_url) ? item.file_url : `${API_BASE}${item.file_url}`;
+  const [expanded, setExpanded] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [rotation, setRotation] = useState(0);
+
+  const zoomRef = useRef(1);
+  const panRef = useRef({ x: 0, y: 0 });
+  const initialTouchDistance = useRef<number | null>(null);
+  const initialTouchZoom = useRef(1);
+  const dragStart = useRef({ x: 0, y: 0 });
+  const lastTapTime = useRef(0);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        const touches = evt.nativeEvent.touches;
+        if (touches.length >= 2) {
+          const dx = touches[0].pageX - touches[1].pageX;
+          const dy = touches[0].pageY - touches[1].pageY;
+          initialTouchDistance.current = Math.hypot(dx, dy) || 1;
+          initialTouchZoom.current = zoomRef.current;
+        } else if (touches.length === 1) {
+          const now = Date.now();
+          if (now - lastTapTime.current < 300) {
+            // Double-tap to zoom or reset
+            if (zoomRef.current > 1.2) {
+              zoomRef.current = 1;
+              panRef.current = { x: 0, y: 0 };
+            } else {
+              zoomRef.current = 2.2;
+            }
+            setZoom(zoomRef.current);
+            setPan({ ...panRef.current });
+            lastTapTime.current = 0;
+            return;
+          }
+          lastTapTime.current = now;
+          dragStart.current = { x: panRef.current.x, y: panRef.current.y };
+        }
+      },
+      onPanResponderMove: (evt, gesture) => {
+        const touches = evt.nativeEvent.touches;
+        if (touches.length >= 2 && initialTouchDistance.current) {
+          // Multi-touch Pinch to zoom
+          const dx = touches[0].pageX - touches[1].pageX;
+          const dy = touches[0].pageY - touches[1].pageY;
+          const dist = Math.hypot(dx, dy);
+          const factor = dist / initialTouchDistance.current;
+          const next = Math.min(5, Math.max(1, Number((initialTouchZoom.current * factor).toFixed(2))));
+          zoomRef.current = next;
+          setZoom(next);
+        } else if (touches.length === 1) {
+          // 1-finger drag/pan
+          if (zoomRef.current > 1 || rotation !== 0) {
+            const nextX = Math.round(dragStart.current.x + gesture.dx);
+            const nextY = Math.round(dragStart.current.y + gesture.dy);
+            panRef.current = { x: nextX, y: nextY };
+            setPan({ x: nextX, y: nextY });
+          }
+        }
+      },
+      onPanResponderRelease: () => {
+        initialTouchDistance.current = null;
+        if (zoomRef.current <= 1 && rotation === 0) {
+          panRef.current = { x: 0, y: 0 };
+          setPan({ x: 0, y: 0 });
+        }
+      },
+    })
+  ).current;
+
+  const openPreview = () => {
+    zoomRef.current = 1;
+    panRef.current = { x: 0, y: 0 };
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    setRotation(0);
+    setExpanded(true);
+  };
+
+  const zoomIn = () => {
+    const next = Math.min(5, Number((zoomRef.current + 0.35).toFixed(2)));
+    zoomRef.current = next;
+    setZoom(next);
+  };
+
+  const zoomOut = () => {
+    const next = Math.max(1, Number((zoomRef.current - 0.35).toFixed(2)));
+    zoomRef.current = next;
+    if (next === 1 && rotation === 0) {
+      panRef.current = { x: 0, y: 0 };
+      setPan({ x: 0, y: 0 });
+    }
+    setZoom(next);
+  };
+
+  const resetZoom = () => {
+    zoomRef.current = 1;
+    panRef.current = { x: 0, y: 0 };
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    setRotation(0);
+  };
+
+  const toggleRotate = () => {
+    setRotation((r) => (r === 0 ? 90 : 0));
+    panRef.current = { x: 0, y: 0 };
+    setPan({ x: 0, y: 0 });
+  };
+
+  return (
+    <View style={s.routineItem}>
+      <Text style={s.routineTitle}>{item.title || 'Published Routine'}</Text>
+      <Text style={s.routineMeta}>{routineDate(item)}</Text>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open routine image" onPress={openPreview}>
+        <RoutineImage url={url} />
+      </TouchableOpacity>
+      <TouchableOpacity accessibilityRole="button" style={s.openButton} onPress={openPreview}>
+        <Text style={s.routineOpen}>Open Routine</Text>
+      </TouchableOpacity>
+
+      <Modal visible={expanded} transparent animationType="fade" onRequestClose={() => setExpanded(false)}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <View style={s.imageBackdrop}>
+            <View style={s.imageModal}>
+              <View style={s.imageModalHeader}>
+                <Text style={s.imageModalTitle} numberOfLines={1}>{item.title || 'Published Routine'}</Text>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Close routine image"
+                  onPress={() => setExpanded(false)}
+                  style={s.closeButton}
+                >
+                  <Text style={s.closeText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Interactive Zoom & Rotate Toolbar */}
+              <View style={s.toolbar}>
+                <View style={s.zoomControls}>
+                  <TouchableOpacity style={s.toolBtn} onPress={zoomOut} accessibilityLabel="Zoom Out">
+                    <Text style={s.toolBtnText}>－</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={s.resetBtn} onPress={resetZoom} accessibilityLabel="Reset Zoom">
+                    <Text style={s.resetBtnText}>{Math.round(zoom * 100)}% ↺</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={s.toolBtn} onPress={zoomIn} accessibilityLabel="Zoom In">
+                    <Text style={s.toolBtnText}>＋</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity style={s.rotateBtn} onPress={toggleRotate} accessibilityLabel="Rotate routine orientation">
+                  <Text style={s.rotateBtnText}>🔄 {rotation === 0 ? 'Full Screen' : 'Portrait'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={s.gestureNotice}>
+                💡 2 fingers to zoom • Drag to move • Double-tap to expand
+              </Text>
+
+              {/* Viewport Area with PanResponder */}
+              <View style={s.zoomArea} {...panResponder.panHandlers}>
+                <Image
+                  source={{ uri: url }}
+                  resizeMode="contain"
+                  style={[
+                    s.expandedImage,
+                    {
+                      transform: [
+                        { translateX: pan.x },
+                        { translateY: pan.y },
+                        { rotate: `${rotation}deg` },
+                        { scale: zoom * (rotation === 90 ? 1.6 : 1) },
+                      ],
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          </View>
+        </GestureHandlerRootView>
+      </Modal>
+    </View>
+  );
 }
 
 export default function TeacherRoutineHistory(){
@@ -80,5 +265,14 @@ const s=StyleSheet.create({
  closeText:{color:'#fff',fontWeight:'900',fontSize:16},
  zoomArea:{width:'100%',height:'100%',flex:1,position:'relative',overflow:'hidden',backgroundColor:'#f3f4f6',borderRadius:7},
  zoomContent:{width:'100%',height:'100%',flex:1,position:'absolute',top:0,left:0},
- expandedImage:{width:'100%',height:'100%',backgroundColor:'#f3f4f6',borderRadius:7,transformOrigin:'center center' as any}
+ expandedImage:{width:'100%',height:'100%',backgroundColor:'#f3f4f6',borderRadius:7},
+ toolbar:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginVertical:6,gap:8,flexWrap:'wrap'},
+ zoomControls:{flexDirection:'row',alignItems:'center',gap:6},
+ toolBtn:{backgroundColor:'#e2e8f0',borderRadius:6,width:38,height:34,justifyContent:'center',alignItems:'center',borderWidth:1,borderColor:'#cbd5e1'},
+ toolBtnText:{fontSize:18,fontWeight:'900',color:'#1e293b'},
+ resetBtn:{backgroundColor:'#e0f2fe',borderRadius:6,paddingHorizontal:10,height:34,justifyContent:'center',alignItems:'center',borderWidth:1,borderColor:'#7dd3fc'},
+ resetBtnText:{fontSize:13,fontWeight:'800',color:'#0369a1'},
+ rotateBtn:{backgroundColor:'#174f75',borderRadius:6,paddingHorizontal:12,height:34,justifyContent:'center',alignItems:'center'},
+ rotateBtnText:{color:'#fff',fontSize:12,fontWeight:'800'},
+ gestureNotice:{fontSize:11,color:'#64748b',textAlign:'center',marginBottom:4}
 });

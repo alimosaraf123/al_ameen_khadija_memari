@@ -52,7 +52,17 @@ import {
 
 
 const panelForRole=(role:string)=>role==='guardian'?'/guardian':role==='teacher'?'/teacher':role==='gateman'?'/gateman':role==='office'?'/office':role==='library'?'/library':'/';
-const offlineMessage=(e:any)=>{const m=String(e?.message||'');return /network|fetch failed|unknownhost|unable to resolve host|internet|timeout|aborted/i.test(m)?'Please connect internet and try again.':(m||'Unable to login');};
+const isOfflineError = (e: any) => {
+  const m = String(e?.message || '');
+  return /network|fetch failed|unknownhost|unable to resolve host|internet|timeout|aborted|no address associated|failed to connect/i.test(m);
+};
+
+const offlineMessage = (e: any) => {
+  const m = String(e?.message || '');
+  return isOfflineError(e)
+    ? 'Your internet connection is off'
+    : (m || 'Unable to login');
+};
 
 export default function Login() {
 
@@ -390,7 +400,7 @@ export default function Login() {
 
       } catch (e: any) {
 
-        const message = `${e?.message || 'Error'} [URL: ${API_BASE}/api/login]`;
+        const message = offlineMessage(e);
 
         setLoginError(message);
 
