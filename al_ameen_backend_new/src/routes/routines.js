@@ -846,6 +846,78 @@ router.delete('/manager/:id',auth,allow('super_admin','admin'),asyncHandler(asyn
  }
  res.json({success:true,message:item.routine_kind==='daily'?'Published routine deleted':item.routine_kind==='draft'?'Draft routine deleted':'Master routine deleted'});
 }));
+
+const reviewNotesSchemaReady = pool.query(`
+  CREATE TABLE IF NOT EXISTS routine_review_notes (
+    id BIGSERIAL PRIMARY KEY,
+    group_name VARCHAR(50) NOT NULL,
+    routine_date DATE NOT NULL,
+    note_text TEXT NOT NULL,
+    target_class VARCHAR(50),
+    target_period VARCHAR(50),
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    created_by_name VARCHAR(120),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    resolved_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    resolved_by_name VARCHAR(120),
+    resolved_at TIMESTAMPTZ
+  )
+`);
+
+router.get('/review-notes', auth, allow('super_admin','admin','teacher'), asyncHandler(async(req, res) => {
+  await reviewNotesSchemaReady;
+  const { date, group } = req.query;
+  const where = [];
+  const args = [];
+  if (date) {
+    args.push(date);
+    where.push(`routine_date = $${args.length}`);
+  }
+  if (group) {
+    args.push(group);
+    where.push(`group_name = $${args.length}`);
+  }
+  const sql = `SELECT * FROM routine_review_notes ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY created_at DESC`;
+  const q = await pool.query(sql, args);
+  res.json({ success: true, notes: q.rows });
+}));
+
+router.post('/review-notes', auth, allow('super_admin','admin','teacher'), asyncHandler(async(req, res) => {
+  await reviewNotesSchemaReady;
+  const b = req.body || {};
+  if (!b.routine_date || !b.note_text || !b.group_name) {
+    return res.status(400).json({ success: false, message: 'Date, group and note text are required' });
+  }
+  const user = (await pool.query('SELECT full_name, login_id FROM users WHERE id=$1', [req.user.userId])).rows[0];
+  const userName = user?.full_name || user?.login_id || 'Checker';
+  const q = await pool.query(`
+    INSERT INTO routine_review_notes(group_name, routine_date, note_text, target_class, target_period, created_by, created_by_name)
+    VALUES($1, $2, $3, $4, $5, $6, $7)
+    RETURNING *
+  `, [b.group_name, b.routine_date, String(b.note_text).trim(), b.target_class || null, b.target_period || null, req.user.userId, userName]);
+  res.status(201).json({ success: true, note: q.rows[0] });
+}));
+
+router.patch('/review-notes/:id/resolve', auth, allow('super_admin','admin'), asyncHandler(async(req, res) => {
+  await reviewNotesSchemaReady;
+  const user = (await pool.query('SELECT full_name, login_id FROM users WHERE id=$1', [req.user.userId])).rows[0];
+  const userName = user?.full_name || user?.login_id || 'Admin';
+  const q = await pool.query(`
+    UPDATE routine_review_notes 
+    SET status = 'resolved', resolved_by = $1, resolved_by_name = $2, resolved_at = NOW()
+    WHERE id = $3
+    RETURNING *
+  `, [req.user.userId, userName, req.params.id]);
+  if (!q.rowCount) return res.status(404).json({ success: false, message: 'Note not found' });
+  res.json({ success: true, note: q.rows[0] });
+}));
+
+router.delete('/review-notes/:id', auth, allow('super_admin','admin'), asyncHandler(async(req, res) => {
+  await reviewNotesSchemaReady;
+  await pool.query('DELETE FROM routine_review_notes WHERE id = $1', [req.params.id]);
+  res.json({ success: true, message: 'Note deleted' });
+}));
 // Upload disks may be empty after deployment. Rebuild only published routine images.
 router.servePublishedImage=asyncHandler(async(req,res,next)=>{
  const match=/^routine-(v_x|xi_xii|coaching)-(\d{4}-\d{2}-\d{2})\.jpg$/.exec(req.params.filename||'');
