@@ -2,6 +2,27 @@ const express = require('express'), bcrypt = require('bcryptjs'), pool = require
 router.get('/admins', auth, allow('super_admin'), asyncHandler(async (req, res) => { await ready; const q = await pool.query(`SELECT u.id,u.login_id,u.full_name,u.is_active,u.created_at,COALESCE(json_agg(p.module_key) FILTER(WHERE p.module_key IS NOT NULL),'[]') permissions FROM users u LEFT JOIN user_module_permissions p ON p.user_id=u.id WHERE u.role='admin' GROUP BY u.id ORDER BY u.full_name`); res.json({ success: true, admins: q.rows }) }));
 router.post('/admins', auth, allow('super_admin'), asyncHandler(async (req, res) => { const b = req.body || {}; if (!b.login_id || !b.full_name || String(b.password || '').length < 6 || b.password !== b.confirm_password) return res.status(400).json({ success: false, message: 'Name, user ID, minimum 6 character password and matching confirmation are required' }); const q = await pool.query(`INSERT INTO users(login_id,password_hash,full_name,role) VALUES($1,$2,$3,'admin') RETURNING id,login_id,full_name,role,is_active`, [String(b.login_id).trim().toLowerCase(), await bcrypt.hash(String(b.password), 12), String(b.full_name).trim()]); res.status(201).json({ success: true, admin: q.rows[0] }) }));
 router.patch('/admins/:id', auth, allow('super_admin'), asyncHandler(async (req, res) => { const b = req.body || {}; if (b.password && (String(b.password).length < 6 || b.password !== b.confirm_password)) return res.status(400).json({ success: false, message: 'Password must be at least 6 characters and confirmation must match' }); const hash = b.password ? await bcrypt.hash(String(b.password), 12) : null, q = await pool.query(`UPDATE users SET full_name=COALESCE($1,full_name),is_active=COALESCE($2,is_active),password_hash=COALESCE($3,password_hash),password_change_required=CASE WHEN $3 IS NULL THEN password_change_required ELSE TRUE END,updated_at=NOW() WHERE id=$4 AND role='admin' RETURNING id,login_id,full_name,is_active`, [b.full_name || null, b.is_active, hash, req.params.id]); if (!q.rowCount) return res.status(404).json({ success: false, message: 'Admin not found' }); res.json({ success: true, admin: q.rows[0] }) }));
+router.delete('/admins/:id', auth, allow('super_admin'), asyncHandler(async (req, res) => {
+  const adminId = req.params.id;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const chk = await client.query("SELECT id, login_id, full_name, role FROM users WHERE id=$1 AND role='admin'", [adminId]);
+    if (!chk.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Admin not found' });
+    }
+    await client.query('DELETE FROM user_module_permissions WHERE user_id=$1', [adminId]);
+    await client.query("DELETE FROM users WHERE id=$1 AND role='admin'", [adminId]);
+    await client.query('COMMIT');
+    res.json({ success: true, message: 'Office Admin deleted successfully' });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    res.status(400).json({ success: false, message: 'Cannot delete admin account: ' + (e.detail || e.message) });
+  } finally {
+    client.release();
+  }
+}));
 router.put('/admins/:id/permissions', auth, allow('super_admin'), asyncHandler(async (req, res) => { const keys = [...new Set((req.body?.permissions || []).map(String))], c = await pool.connect(); try { await c.query('BEGIN'); if (!(await c.query("SELECT 1 FROM users WHERE id=$1 AND role='admin'", [req.params.id])).rowCount) throw new Error('Admin not found'); await c.query('DELETE FROM user_module_permissions WHERE user_id=$1', [req.params.id]); for (const k of keys) await c.query('INSERT INTO user_module_permissions(user_id,module_key) VALUES($1,$2)', [req.params.id, k]); await c.query('COMMIT'); res.json({ success: true, permissions: keys }) } catch (e) { await c.query('ROLLBACK'); res.status(400).json({ success: false, message: e.message }) } finally { c.release() } }));
 
 // Super Admin Management (Separated from Office Admins)

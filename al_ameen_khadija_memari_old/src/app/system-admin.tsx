@@ -237,6 +237,29 @@ export default function SystemAdmin() {
     }
   };
 
+  const deleteAdmin = async (x: any) => {
+    const message = `Are you sure you want to delete Office Admin "${x.full_name}" (${x.login_id})?`;
+    const ok = Platform.OS === 'web' && typeof window !== 'undefined'
+      ? window.confirm(message)
+      : await new Promise<boolean>((resolve) =>
+          Alert.alert('Delete Office Admin', message, [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Delete', style: 'destructive', onPress: () => resolve(true) },
+          ])
+        );
+    if (!ok) return;
+    try {
+      await api('/api/system-admin/admins/' + x.id, {
+        method: 'DELETE',
+      });
+      await load();
+      if (selected?.id === x.id) setSelected(null);
+      Alert.alert('Office Admin', 'Office Admin deleted successfully.');
+    } catch (e: any) {
+      Alert.alert('Delete Failed', e.message);
+    }
+  };
+
   const saveSetting = async () => {
     try {
       await api('/api/system-admin/settings/' + encodeURIComponent(key), {
@@ -393,6 +416,12 @@ export default function SystemAdmin() {
                   onPress={() => updateAdmin(x, { is_active: !x.is_active })}
                 >
                   <Text style={s.white}>{x.is_active ? 'Disable' : 'Enable'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.danger, { backgroundColor: '#b91c1c' }]}
+                  onPress={() => deleteAdmin(x)}
+                >
+                  <Text style={s.white}>Delete</Text>
                 </TouchableOpacity>
               </View>
             ))}
