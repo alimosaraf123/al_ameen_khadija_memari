@@ -396,7 +396,7 @@ export default function Dashboard() {
             <Text style={[s.navBtnText, { color: '#ffffff', fontWeight: '800' }]}>All Menus</Text>
           </TouchableOpacity>
 
-          {canAccessGroup(['/students', '/daily-attendance', '/student-summary']) && (
+          {canAccessGroup(['/students', '/daily-attendance', '/student-lifecycle', '/student-transfer']) && (
             <TouchableOpacity style={s.navBtn} onPress={() => setStudentMenu(true)}>
               <Text style={s.navBtnIcon}>🎓</Text>
               <Text style={s.navBtnText}>Students ▾</Text>
@@ -920,12 +920,10 @@ export default function Dashboard() {
               {[
                 ['Student Details', '/students'],
                 ['Daily Student Attendance', '/daily-attendance'],
-                ['Student Summary', '/student-summary'],
                 ['Student Transfer', '/student-transfer'],
-                ['Student Lifecycle', '/student-lifecycle'],
                 ['Document Upload', '/documents'],
+                ['Student Lifecycle', '/student-lifecycle'],
                 ['Student ID Cards', '/id-cards'],
-                ['Student Dues', '/dues'],
               ].map(([label, path]) => (
                 <AdminLink
                   path={path}
@@ -1078,12 +1076,10 @@ export default function Dashboard() {
                   items: [
                     ['Student Details', '/students'],
                     ['Daily Student Attendance', '/daily-attendance'],
-                    ['Student Summary', '/student-summary'],
                     ['Student Transfer', '/student-transfer'],
-                    ['Student Lifecycle', '/student-lifecycle'],
                     ['Document Upload', '/documents'],
+                    ['Student Lifecycle', '/student-lifecycle'],
                     ['Student ID Cards', '/id-cards'],
-                    ['Student Dues', '/dues'],
                   ],
                 },
                 {
