@@ -2,8 +2,8 @@ import React from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export const STUDENT_MENU_ITEMS: [string, string][] = [
-  ['Student Details', '/students?screen=details'],
-  ['Student Entry', '/students?screen=entry'],
+  ['Student Details', '/students'],
+  ['Student Entry', '/student-entry'],
   ['Daily Student Attendance', '/daily-attendance'],
   ['Student ID Cards & Form', '/id-cards'],
   ['Document Upload', '/documents'],

@@ -215,10 +215,11 @@ const asText = (value: any) =>
 const asDate = (value: any) =>
   value ? String(value).slice(0, 10) : '';
 
-export default function Students() {
+export default function Students({ initialScreen }: { initialScreen?: 'details' | 'entry' } = {}) {
   const params = useLocalSearchParams<{ screen?: string; mode?: string }>();
 
   const getInitialScreen = (): 'details' | 'entry' => {
+    if (initialScreen) return initialScreen;
     if (params?.screen === 'entry' || params?.mode === 'entry' || params?.mode === 'add') {
       return 'entry';
     }
@@ -264,6 +265,11 @@ export default function Students() {
   };
 
   useEffect(() => {
+    if (initialScreen) {
+      setScreen(initialScreen);
+      if (initialScreen === 'entry') clearForm();
+      return;
+    }
     let target = params?.screen || params?.mode;
     if (!target && typeof window !== 'undefined' && window.location?.search) {
       const sp = new URLSearchParams(window.location.search);
@@ -276,7 +282,7 @@ export default function Students() {
     } else if (target === 'details' || target === 'view') {
       setScreen('details');
     }
-  }, [params?.screen, params?.mode]);
+  }, [params?.screen, params?.mode, initialScreen]);
 
   const update = (key: string, value: any) => {
     setForm((old: any) => ({ ...old, [key]: value }));
@@ -507,7 +513,11 @@ export default function Students() {
       );
 
       clearForm();
-      setScreen('details');
+      if (initialScreen === 'entry') {
+        router.push('/students' as any);
+      } else {
+        setScreen('details');
+      }
       await loadStudents();
     } catch (e: any) {
       Alert.alert(
@@ -721,8 +731,12 @@ export default function Students() {
         onSelect={path => {
           setMenuOpen(false);
           if (path === '/students?screen=details' || path === '/students') {
-            setScreen('details');
-          } else if (path === '/students?screen=entry') {
+            if (initialScreen === 'entry') {
+              router.push('/students' as any);
+            } else {
+              setScreen('details');
+            }
+          } else if (path === '/student-entry' || path === '/students?screen=entry') {
             clearForm();
             setScreen('entry');
           } else {
@@ -742,7 +756,17 @@ export default function Students() {
         keyboardShouldPersistTaps="handled"
       >
         <AcademyHeader />
-        <Button title="Back to Student Details" onPress={() => { clearForm(); setScreen('details'); }} />
+        <Button
+          title="Back to Student Details"
+          onPress={() => {
+            clearForm();
+            if (initialScreen === 'entry') {
+              router.push('/students' as any);
+            } else {
+              setScreen('details');
+            }
+          }}
+        />
         <H1>{editingId !== null ? 'Edit Student' : 'Student Entry'}</H1>
 
         {editingId !== null && (
@@ -986,7 +1010,14 @@ export default function Students() {
           {editingId !== null && (
             <TouchableOpacity
               style={styles.cancel}
-              onPress={() => { clearForm(); setScreen('details'); }}
+              onPress={() => {
+                clearForm();
+                if (initialScreen === 'entry') {
+                  router.push('/students' as any);
+                } else {
+                  setScreen('details');
+                }
+              }}
             >
               <Text style={styles.cancelText}>Cancel Edit</Text>
             </TouchableOpacity>

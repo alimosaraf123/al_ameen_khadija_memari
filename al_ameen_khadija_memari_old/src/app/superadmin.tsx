@@ -19,6 +19,7 @@ import { api } from '../lib/api';
 
 const menuPermission: Record<string, string> = {
   '/students': 'students',
+  '/student-entry': 'students',
   '/teachers': 'teachers',
   '/hostel-menu': 'rooms',
   '/academy-menu': 'marks',
@@ -1070,8 +1071,8 @@ export default function Dashboard() {
             </View>
             <View style={s.modalGrid}>
               {[
-                ['Student Details', '/students?screen=details'],
-                ['Student Entry', '/students?screen=entry'],
+                ['Student Details', '/students'],
+                ['Student Entry', '/student-entry'],
                 ['Daily Student Attendance', '/daily-attendance'],
                 ['Student ID Cards & Form', '/id-cards'],
                 ['Document Upload', '/documents'],
@@ -1232,8 +1233,8 @@ export default function Dashboard() {
                 {
                   category: '🎓 Student Management',
                   items: [
-                    ['Student Details', '/students?screen=details'],
-                    ['Student Entry', '/students?screen=entry'],
+                    ['Student Details', '/students'],
+                    ['Student Entry', '/student-entry'],
                     ['Daily Student Attendance', '/daily-attendance'],
                     ['Student ID Cards & Form', '/id-cards'],
                     ['Document Upload', '/documents'],
