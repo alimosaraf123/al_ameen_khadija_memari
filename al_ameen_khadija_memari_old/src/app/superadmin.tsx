@@ -126,13 +126,27 @@ export default function Dashboard() {
     ...(userRole === 'super_admin' ? [['System Administration', '/system-admin'] as [string, string]] : []),
   ];
 
+  const navigateToPath = (path: string) => {
+    if (path.includes('?')) {
+      const [pathname, queryString] = path.split('?');
+      const searchParams: Record<string, string> = {};
+      const sp = new URLSearchParams(queryString);
+      sp.forEach((val, key) => {
+        searchParams[key] = val;
+      });
+      router.push({ pathname: pathname as any, params: searchParams });
+    } else {
+      router.push(path as any);
+    }
+  };
+
   const openMenu = (title: string, path: string) => {
     if (title === 'Staff') { setTeacherMenu(true); return; }
     if (title === 'Students') { setStudentMenu(true); return; }
     if (title === 'Hostel') { setHostelMenu(true); return; }
     if (title === 'Academy') { setAcademyMenu(true); return; }
     if (title === 'Accounts') { setAccountsMenu(true); return; }
-    router.push(path as any);
+    navigateToPath(path);
   };
 
   // Institutional overview data
@@ -1031,7 +1045,7 @@ export default function Dashboard() {
                   style={s.modalItem}
                   onPress={() => {
                     setTeacherMenu(false);
-                    router.push(path as any);
+                    navigateToPath(path);
                   }}
                 >
                   <Text style={s.arrow}>›</Text>
@@ -1075,7 +1089,7 @@ export default function Dashboard() {
                   style={s.modalItem}
                   onPress={() => {
                     setStudentMenu(false);
-                    router.push(path as any);
+                    navigateToPath(path);
                   }}
                 >
                   <Text style={s.arrow}>›</Text>
@@ -1117,7 +1131,7 @@ export default function Dashboard() {
                   style={s.modalItem}
                   onPress={() => {
                     setAcademyMenu(false);
-                    router.push(path as any);
+                    navigateToPath(path);
                   }}
                 >
                   <Text style={s.arrow}>›</Text>
@@ -1153,7 +1167,7 @@ export default function Dashboard() {
                   style={s.modalItem}
                   onPress={() => {
                     setHostelMenu(false);
-                    router.push(path as any);
+                    navigateToPath(path);
                   }}
                 >
                   <Text style={s.arrow}>›</Text>
@@ -1190,7 +1204,7 @@ export default function Dashboard() {
                   style={s.modalItem}
                   onPress={() => {
                     setAccountsMenu(false);
-                    router.push(path as any);
+                    navigateToPath(path);
                   }}
                 >
                   <Text style={s.arrow}>›</Text>
@@ -1308,7 +1322,7 @@ export default function Dashboard() {
                         style={[s.modalItem, { minWidth: 200, width: '31%', minHeight: 48, paddingVertical: 8 }]}
                         onPress={() => {
                           setAllMenusDrawer(false);
-                          router.push(path as any);
+                          navigateToPath(path);
                         }}
                       >
                         <Text style={s.arrow}>›</Text>

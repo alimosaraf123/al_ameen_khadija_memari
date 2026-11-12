@@ -216,37 +216,67 @@ const asDate = (value: any) =>
   value ? String(value).slice(0, 10) : '';
 
 export default function Students() {
+  const params = useLocalSearchParams<{ screen?: string; mode?: string }>();
+
+  const getInitialScreen = (): 'details' | 'entry' => {
+    if (params?.screen === 'entry' || params?.mode === 'entry' || params?.mode === 'add') {
+      return 'entry';
+    }
+    if (typeof window !== 'undefined' && window.location?.search) {
+      const sp = new URLSearchParams(window.location.search);
+      const s = sp.get('screen') || sp.get('mode');
+      if (s === 'entry' || s === 'add') return 'entry';
+    }
+    return 'details';
+  };
+
   const [students, setStudents] = useState<any[]>([]);
   const [rooms, setRooms] = useState<any[]>([]);
   const detailsScrollRef = useRef<any>(null);
   const entryScrollRef = useRef<any>(null);
   const [editingId, setEditingId] = useState<any>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [screen, setScreen] = useState<'details' | 'entry'>('details');
-  const params = useLocalSearchParams<{ screen?: string; mode?: string }>();
-
-  useEffect(() => {
-    if (params.screen === 'entry' || params.mode === 'entry' || params.mode === 'add') {
-      clearForm();
-      setScreen('entry');
-    } else if (params.screen === 'details' || params.mode === 'view') {
-      setScreen('details');
-    }
-  }, [params.screen, params.mode]);
+  const [screen, setScreen] = useState<'details' | 'entry'>(getInitialScreen);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState('');
   const [entryDocuments, setEntryDocuments] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState(false);
-  const [exitForm,setExitForm]=useState({dropout_date:new Date().toISOString().slice(0,10),dropout_reason:''});
-  const [exitClearance,setExitClearance]=useState<any>(null);
-  const [exitBusy,setExitBusy]=useState(false);
+  const [exitForm, setExitForm] = useState({ dropout_date: new Date().toISOString().slice(0, 10), dropout_reason: '' });
+  const [exitClearance, setExitClearance] = useState<any>(null);
+  const [exitBusy, setExitBusy] = useState(false);
   const [sameAsPresent, setSameAsPresent] = useState(false);
   const [ifscMessage, setIfscMessage] = useState('');
-
 
   const [form, setForm] = useState<any>({ ...EMPTY_FORM });
   const [visitor1, setVisitor1] = useState<any>({ ...EMPTY_VISITOR });
   const [visitor2, setVisitor2] = useState<any>({ ...EMPTY_VISITOR });
+
+  const clearForm = () => {
+    setEditingId(null);
+    setForm({ ...EMPTY_FORM });
+    setVisitor1({ ...EMPTY_VISITOR });
+    setVisitor2({ ...EMPTY_VISITOR });
+    setEntryDocuments({});
+    setExitClearance(null);
+    setSameAsPresent(false);
+    setIfscMessage('');
+    setExitForm({ dropout_date: new Date().toISOString().slice(0, 10), dropout_reason: '' });
+  };
+
+  useEffect(() => {
+    let target = params?.screen || params?.mode;
+    if (!target && typeof window !== 'undefined' && window.location?.search) {
+      const sp = new URLSearchParams(window.location.search);
+      target = sp.get('screen') || sp.get('mode') || undefined;
+    }
+
+    if (target === 'entry' || target === 'add') {
+      clearForm();
+      setScreen('entry');
+    } else if (target === 'details' || target === 'view') {
+      setScreen('details');
+    }
+  }, [params?.screen, params?.mode]);
 
   const update = (key: string, value: any) => {
     setForm((old: any) => ({ ...old, [key]: value }));
@@ -308,18 +338,6 @@ export default function Students() {
     }, 450);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [form.bank_ifsc_code]);
-
-  const clearForm = () => {
-    setEditingId(null);
-    setForm({ ...EMPTY_FORM });
-    setVisitor1({ ...EMPTY_VISITOR });
-    setVisitor2({ ...EMPTY_VISITOR });
-    setEntryDocuments({});
-    setExitClearance(null);
-    setSameAsPresent(false);
-    setIfscMessage('');
-    setExitForm({dropout_date:new Date().toISOString().slice(0,10),dropout_reason:''});
-  };
 
   const chooseEntryDocument = async (documentType: string) => {
     const picked = await DocumentPicker.getDocumentAsync({
@@ -672,9 +690,27 @@ export default function Students() {
     return <SafeAreaView style={styles.container}>
       <ScrollView ref={detailsScrollRef} contentContainerStyle={styles.content}>
         <AcademyHeader />
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
           <H1>Students</H1>
-          <Button title="Student Menu" onPress={() => setMenuOpen(true)} />
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            <TouchableOpacity
+              onPress={() => {
+                clearForm();
+                setScreen('entry');
+              }}
+              style={{
+                backgroundColor: '#16a34a',
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: 6,
+              }}
+            >
+              <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 13 }}>
+                + Student Entry
+              </Text>
+            </TouchableOpacity>
+            <Button title="Student Menu" onPress={() => setMenuOpen(true)} />
+          </View>
         </View>
         <StudentDirectory students={students} loading={listLoading} error={listError} onRefresh={loadStudents} onEdit={startEdit} onDeactivate={deleteStudent} />
       </ScrollView>
