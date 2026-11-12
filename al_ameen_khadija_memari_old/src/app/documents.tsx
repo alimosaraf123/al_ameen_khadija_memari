@@ -1,4 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import {
   Animated,
   ScrollView,
@@ -251,6 +252,7 @@ function InfoSection({
 }
 
 export default function Documents() {
+  const params = useLocalSearchParams<{ search?: string; studentId?: string }>();
   const [students, setStudents] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
@@ -303,6 +305,25 @@ export default function Documents() {
   useEffect(() => {
     loadStudents();
   }, []);
+
+  useEffect(() => {
+    if (params.search && !search) {
+      setSearch(String(params.search));
+    }
+  }, [params.search]);
+
+  useEffect(() => {
+    if ((params.studentId || params.search) && students.length > 0 && !selectedStudent) {
+      const target = String(params.studentId || params.search).trim().toLowerCase();
+      const found = students.find((s: any) =>
+        String(s.id) === target ||
+        String(s.registration_no).toLowerCase() === target
+      );
+      if (found) {
+        selectStudent(found);
+      }
+    }
+  }, [params.studentId, params.search, students, selectedStudent]);
 
   const filteredStudents = useMemo(() => {
     const q = search.trim().toLowerCase();

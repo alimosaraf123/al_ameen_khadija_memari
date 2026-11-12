@@ -301,8 +301,8 @@ export default function Teachers() {
   const load = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const data = await api(mode === 'documents' ? '/api/teachers/me' : '/api/teachers');
-      const teachers = data.teachers || [];
+      const data = await api(mode === 'documents' && !teacherId ? '/api/teachers/me' : '/api/teachers');
+      const teachers = data.teachers || (data.teacher ? [data.teacher] : []);
       setList(mode === 'documents' ? (teacherId ? teachers.filter((t: any) => String(t.id) === String(teacherId)) : (data.teacher ? [data.teacher] : [])) : teachers);
     } catch (e: any) {
       Alert.alert('Error', e.message);
@@ -1235,7 +1235,7 @@ export default function Teachers() {
                         <Text style={s.noPreview}>No photo</Text>
                       )}
                     </View>
-                    <TouchableOpacity onPress={pickStaffPhoto} style={[s.chooseButton, mode === 'documents' && { display: 'none' }]}>
+                    <TouchableOpacity onPress={pickStaffPhoto} style={[s.chooseButton, mode === 'documents' && !teacherId && { display: 'none' }]}>
                       <Text numberOfLines={1} style={s.chooseText}>{pendingPhoto?.name || 'Choose File'}</Text>
                     </TouchableOpacity>
                     <View style={s.docActions}>
@@ -1266,7 +1266,7 @@ export default function Teachers() {
                             <Text style={s.noPreview}>{preview ? 'PDF / Document' : 'No document'}</Text>
                           )}
                         </View>
-                        <TouchableOpacity onPress={() => pickStaffFile(type)} style={[s.chooseButton, mode === 'documents' && { display: 'none' }]}>
+                        <TouchableOpacity onPress={() => pickStaffFile(type)} style={[s.chooseButton, mode === 'documents' && !teacherId && { display: 'none' }]}>
                           <Text numberOfLines={1} style={s.chooseText}>{f?.name || 'Choose File'}</Text>
                         </TouchableOpacity>
                         <View style={s.docActions}>
@@ -1290,7 +1290,7 @@ export default function Teachers() {
                 </>
               )}
             </ScrollView>
-            <TouchableOpacity disabled={documentsSaving} onPress={uploadSelectedDocuments} style={[s.uploadButton, documentsSaving && { opacity: 0.55 }, mode === 'documents' && { display: 'none' }]}>
+            <TouchableOpacity disabled={documentsSaving} onPress={uploadSelectedDocuments} style={[s.uploadButton, documentsSaving && { opacity: 0.55 }, mode === 'documents' && !teacherId && { display: 'none' }]}>
               <Text style={s.white}>{documentsSaving ? 'Uploading...' : 'Upload Selected Documents'}</Text>
             </TouchableOpacity>
           </View>

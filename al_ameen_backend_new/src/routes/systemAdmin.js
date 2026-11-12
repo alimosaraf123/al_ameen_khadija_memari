@@ -284,6 +284,98 @@ router.get('/office-activity', auth, allow('super_admin', 'admin'), asyncHandler
 router.get('/guardian-activity', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => { const q = await pool.query(`SELECT gls.id,u.login_id,u.full_name,gls.device_id,gls.is_active,gls.last_login_at,gls.logged_out_at,gls.expires_at,COUNT(DISTINCT sg.student_id)::int AS student_count,COALESCE(json_agg(DISTINCT jsonb_build_object('student_name',st.student_name,'registration_no',st.registration_no,'class_name',st.class_name)) FILTER(WHERE st.id IS NOT NULL),'[]'::json) AS students FROM guardian_login_sessions gls JOIN users u ON u.id=gls.user_id LEFT JOIN guardian_profiles gp ON gp.user_id=u.id LEFT JOIN student_guardians sg ON sg.guardian_id=gp.id LEFT JOIN students st ON st.id=sg.student_id WHERE u.role='guardian' GROUP BY gls.id,u.login_id,u.full_name,gls.device_id,gls.is_active,gls.last_login_at,gls.logged_out_at,gls.expires_at ORDER BY gls.last_login_at DESC LIMIT 1000`); res.json({ success: true, guardian_activity: q.rows }) }));
 router.get('/backup', auth, allow('super_admin'), asyncHandler(async (req, res) => { const names = (await pool.query(`SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename`)).rows.map(x => x.tablename), data = { version: 1, created_at: new Date().toISOString(), tables: {} }; for (const name of names) data.tables[name] = (await pool.query(`SELECT * FROM "${name.replace(/"/g, '')}"`)).rows; res.setHeader('Content-Disposition', `attachment; filename="al-ameen-backup-${new Date().toISOString().slice(0, 10)}.json"`); res.json(data) }));
 router.post('/restore', auth, allow('super_admin'), asyncHandler(async (req, res) => { if (req.body?.confirmation !== 'RESTORE_DATABASE') return res.status(400).json({ success: false, message: 'Type RESTORE_DATABASE to confirm' }); if (!req.body?.backup?.tables) return res.status(400).json({ success: false, message: 'Invalid backup' }); res.status(501).json({ success: false, message: 'Restore requires maintenance mode. Backup validated; no data changed.' }) }));
+
+// Detailed Missing Documents endpoint for students & staff
+router.get('/missing-documents', auth, allow('super_admin', 'admin', 'teacher', 'staff', 'office'), asyncHandler(async (req, res) => {
+  const type = String(req.query.type || 'all').toLowerCase();
+  let students = [];
+  let staff = [];
+
+  if (type === 'student' || type === 'all') {
+    students = (await pool.query(`
+      SELECT id, registration_no, student_name, class_name,
+        ARRAY_REMOVE(ARRAY[
+          CASE WHEN (photo_url IS NULL OR photo_url = '') 
+                    AND NOT EXISTS (SELECT 1 FROM student_documents sd WHERE sd.student_id = students.id AND sd.document_type = 'photo') 
+               THEN 'Photo' ELSE NULL END,
+          CASE WHEN (aadhaar_no IS NULL OR aadhaar_no = '' OR aadhaar_no = '0') 
+                    AND NOT EXISTS (SELECT 1 FROM student_documents sd WHERE sd.student_id = students.id AND sd.document_type = 'aadhaar') 
+               THEN 'Aadhaar' ELSE NULL END,
+          CASE WHEN (bank_account_no IS NULL OR bank_account_no = '' OR bank_account_no = '0') 
+                    AND NOT EXISTS (SELECT 1 FROM student_documents sd WHERE sd.student_id = students.id AND sd.document_type = 'bank_passbook') 
+               THEN 'Passbook' ELSE NULL END
+        ], NULL) as missing
+      FROM students
+      WHERE is_active = true AND (
+        ((photo_url IS NULL OR photo_url = '') AND NOT EXISTS (SELECT 1 FROM student_documents sd WHERE sd.student_id = students.id AND sd.document_type = 'photo'))
+        OR ((aadhaar_no IS NULL OR aadhaar_no = '' OR aadhaar_no = '0') AND NOT EXISTS (SELECT 1 FROM student_documents sd WHERE sd.student_id = students.id AND sd.document_type = 'aadhaar'))
+        OR ((bank_account_no IS NULL OR bank_account_no = '' OR bank_account_no = '0') AND NOT EXISTS (SELECT 1 FROM student_documents sd WHERE sd.student_id = students.id AND sd.document_type = 'bank_passbook'))
+      )
+      ORDER BY registration_no ASC
+    `)).rows;
+  }
+
+  if (type === 'staff' || type === 'all') {
+    staff = (await pool.query(`
+      WITH staff_docs AS (
+        SELECT 
+          t.id,
+          t.staff_id,
+          t.name,
+          t.designation,
+          (CASE 
+            WHEN (t.photo_url IS NOT NULL AND t.photo_url != '') 
+                 OR EXISTS (SELECT 1 FROM teacher_documents td WHERE td.teacher_id = t.id AND td.document_type IN ('photo', 'identity_proof'))
+            THEN true ELSE false 
+          END) AS has_photo,
+          (CASE 
+            WHEN (t.profile_details->>'aadhaar_no' IS NOT NULL AND t.profile_details->>'aadhaar_no' NOT IN ('', '0'))
+                 OR EXISTS (SELECT 1 FROM teacher_documents td WHERE td.teacher_id = t.id AND td.document_type = 'aadhaar')
+            THEN true ELSE false 
+          END) AS has_aadhaar,
+          (CASE 
+            WHEN (t.profile_details->>'voter_no' IS NOT NULL AND t.profile_details->>'voter_no' NOT IN ('', '0'))
+                 OR EXISTS (SELECT 1 FROM teacher_documents td WHERE td.teacher_id = t.id AND td.document_type = 'voter_id')
+            THEN true ELSE false 
+          END) AS has_voter,
+          (CASE 
+            WHEN (t.profile_details->>'account_no' IS NOT NULL AND t.profile_details->>'account_no' NOT IN ('', '0'))
+                 OR EXISTS (SELECT 1 FROM teacher_documents td WHERE td.teacher_id = t.id AND td.document_type IN ('bank_passbook', 'passbook'))
+            THEN true ELSE false 
+          END) AS has_bank,
+          (CASE 
+            WHEN (t.profile_details->>'pan_no' IS NOT NULL AND t.profile_details->>'pan_no' NOT IN ('', '0'))
+                 OR EXISTS (SELECT 1 FROM teacher_documents td WHERE td.teacher_id = t.id AND td.document_type = 'pan_card')
+            THEN true ELSE false 
+          END) AS has_pan
+        FROM teachers t
+        WHERE t.is_active = true
+      )
+      SELECT 
+        id, staff_id, name, designation,
+        ARRAY_REMOVE(ARRAY[
+          CASE WHEN NOT has_photo THEN 'Photo' ELSE NULL END,
+          CASE WHEN NOT has_aadhaar THEN 'Aadhaar' ELSE NULL END,
+          CASE WHEN NOT has_voter THEN 'Voter ID' ELSE NULL END,
+          CASE WHEN NOT has_bank THEN 'Passbook' ELSE NULL END,
+          CASE WHEN NOT has_pan THEN 'PAN Card' ELSE NULL END
+        ], NULL) as missing
+      FROM staff_docs
+      WHERE NOT (has_photo AND has_aadhaar AND has_voter AND has_bank AND has_pan)
+      ORDER BY staff_id ASC, id ASC
+    `)).rows;
+  }
+
+  res.json({
+    success: true,
+    type,
+    studentCount: students.length,
+    staffCount: staff.length,
+    students,
+    staff
+  });
+}));
+
 router.get('/dashboard-overview', auth, allow('super_admin', 'admin', 'teacher', 'staff', 'office'), asyncHandler(async (req, res) => {
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const studentRows = (await pool.query(`
@@ -496,8 +588,7 @@ router.get('/dashboard-overview', auth, allow('super_admin', 'admin', 'teacher',
       OR ((aadhaar_no IS NULL OR aadhaar_no = '' OR aadhaar_no = '0') AND NOT EXISTS (SELECT 1 FROM student_documents sd WHERE sd.student_id = students.id AND sd.document_type = 'aadhaar'))
       OR ((bank_account_no IS NULL OR bank_account_no = '' OR bank_account_no = '0') AND NOT EXISTS (SELECT 1 FROM student_documents sd WHERE sd.student_id = students.id AND sd.document_type = 'bank_passbook'))
     )
-    ORDER BY registration_no
-    LIMIT 10
+    ORDER BY registration_no ASC
   `)).rows;
 
   const missingStaffDocs = (await pool.query(`
@@ -546,8 +637,7 @@ router.get('/dashboard-overview', auth, allow('super_admin', 'admin', 'teacher',
       ], NULL) as missing
     FROM staff_docs
     WHERE NOT (has_photo AND has_aadhaar AND has_voter AND has_bank AND has_pan)
-    ORDER BY id
-    LIMIT 10
+    ORDER BY staff_id ASC, id ASC
   `)).rows;
 
   const recentAuditRows = (await pool.query(`

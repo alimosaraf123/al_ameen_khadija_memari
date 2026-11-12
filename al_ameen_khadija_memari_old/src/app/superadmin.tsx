@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -378,6 +379,90 @@ export default function Dashboard() {
     return { bg: '#fef3c7', color: '#b45309', border: '#fcd34d' };
   };
 
+  // Missing Documents Modal State & Handlers
+  const [missingDocsModal, setMissingDocsModal] = useState<'student' | 'staff' | null>(null);
+  const [missingDocsSearch, setMissingDocsSearch] = useState('');
+  const [missingDocsFilter, setMissingDocsFilter] = useState('All');
+  const [missingDocsLoading, setMissingDocsLoading] = useState(false);
+  const [missingDocsCache, setMissingDocsCache] = useState<{ student?: any[]; staff?: any[] }>({});
+
+  const openMissingDocsModal = async (type: 'student' | 'staff') => {
+    setMissingDocsModal(type);
+    setMissingDocsSearch('');
+    setMissingDocsFilter('All');
+
+    const currentList = type === 'student' ? stats.missingStudentDocs : stats.missingStaffDocs;
+    if (!currentList || currentList.length === 0) {
+      setMissingDocsLoading(true);
+    }
+
+    try {
+      const res = await api(`/api/system-admin/missing-documents?type=${type}`);
+      if (res && res.success) {
+        if (type === 'student' && Array.isArray(res.students)) {
+          setMissingDocsCache((prev) => ({ ...prev, student: res.students }));
+          setStats((prev: any) => ({ ...prev, missingStudentDocs: res.students }));
+        } else if (type === 'staff' && Array.isArray(res.staff)) {
+          setMissingDocsCache((prev) => ({ ...prev, staff: res.staff }));
+          setStats((prev: any) => ({ ...prev, missingStaffDocs: res.staff }));
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch full missing documents:', err);
+    } finally {
+      setMissingDocsLoading(false);
+    }
+  };
+
+  const closeMissingDocsModal = () => {
+    setMissingDocsModal(null);
+    setMissingDocsSearch('');
+    setMissingDocsFilter('All');
+  };
+
+  const currentMissingItems = useMemo(() => {
+    if (!missingDocsModal) return [];
+    const sourceList = missingDocsModal === 'student'
+      ? (missingDocsCache.student || stats.missingStudentDocs || [])
+      : (missingDocsCache.staff || stats.missingStaffDocs || []);
+
+    const q = missingDocsSearch.trim().toLowerCase();
+    const filter = missingDocsFilter;
+
+    return sourceList.filter((item: any) => {
+      if (filter !== 'All') {
+        const match = (item.missing || []).some(
+          (m: string) => String(m).toLowerCase() === filter.toLowerCase()
+        );
+        if (!match) return false;
+      }
+
+      if (q) {
+        if (missingDocsModal === 'student') {
+          const str = `${item.registration_no || ''} ${item.student_name || ''} ${item.class_name || ''} ${(item.missing || []).join(' ')}`.toLowerCase();
+          if (!str.includes(q)) return false;
+        } else {
+          const str = `${item.staff_id || ''} ${item.name || ''} ${item.designation || ''} ${(item.missing || []).join(' ')}`.toLowerCase();
+          if (!str.includes(q)) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [missingDocsModal, missingDocsCache, stats.missingStudentDocs, stats.missingStaffDocs, missingDocsSearch, missingDocsFilter]);
+
+  const getMissingFilterCount = (filterName: string) => {
+    if (!missingDocsModal) return 0;
+    const sourceList = missingDocsModal === 'student'
+      ? (missingDocsCache.student || stats.missingStudentDocs || [])
+      : (missingDocsCache.staff || stats.missingStaffDocs || []);
+
+    if (filterName === 'All') return sourceList.length;
+    return sourceList.filter((it: any) =>
+      (it.missing || []).some((m: string) => String(m).toLowerCase() === filterName.toLowerCase())
+    ).length;
+  };
+
   return (
     <SafeAreaView style={s.page}>
       <AcademyHeader compact />
@@ -638,9 +723,18 @@ export default function Dashboard() {
                   <View style={s.panelHeaderLeft}>
                     <Text style={s.panelHeaderIcon}>📁</Text>
                     <Text style={s.panelTitle}>Student Documents Required</Text>
+                    {(stats.missingStudentDocs || []).length > 0 && (
+                      <View style={[s.sessionBadge, { backgroundColor: '#fee2e2' }]}>
+                        <Text style={[s.sessionBadgeText, { color: '#991b1b', fontWeight: '800' }]}>
+                          {(stats.missingStudentDocs || []).length} Due
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                  <TouchableOpacity onPress={() => router.push('/students' as any)}>
-                    <Text style={s.viewAllLink}>View All ›</Text>
+                  <TouchableOpacity onPress={() => openMissingDocsModal('student')}>
+                    <Text style={s.viewAllLink}>
+                      View All ({(stats.missingStudentDocs || []).length}) ›
+                    </Text>
                   </TouchableOpacity>
                 </View>
 
@@ -667,7 +761,7 @@ export default function Dashboard() {
                         </View>
                         <TouchableOpacity
                           style={s.docActionBtn}
-                          onPress={() => router.push(`/students` as any)}
+                          onPress={() => router.push(`/documents?search=${st.registration_no}` as any)}
                         >
                           <Text style={s.docActionBtnText}>Upload</Text>
                         </TouchableOpacity>
@@ -753,9 +847,18 @@ export default function Dashboard() {
                   <View style={s.panelHeaderLeft}>
                     <Text style={s.panelHeaderIcon}>📁</Text>
                     <Text style={s.panelTitle}>Staff Documents Required</Text>
+                    {(stats.missingStaffDocs || []).length > 0 && (
+                      <View style={[s.sessionBadge, { backgroundColor: '#fee2e2' }]}>
+                        <Text style={[s.sessionBadgeText, { color: '#991b1b', fontWeight: '800' }]}>
+                          {(stats.missingStaffDocs || []).length} Due
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                  <TouchableOpacity onPress={() => router.push('/teachers?mode=view' as any)}>
-                    <Text style={s.viewAllLink}>View All ›</Text>
+                  <TouchableOpacity onPress={() => openMissingDocsModal('staff')}>
+                    <Text style={s.viewAllLink}>
+                      View All ({(stats.missingStaffDocs || []).length}) ›
+                    </Text>
                   </TouchableOpacity>
                 </View>
 
@@ -1216,6 +1319,189 @@ export default function Dashboard() {
                 </View>
               ))}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ============================================================== */}
+      {/* MISSING DOCUMENTS DETAILS MODAL (Students & Staff)              */}
+      {/* ============================================================== */}
+      <Modal
+        visible={!!missingDocsModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeMissingDocsModal}
+      >
+        <View style={s.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeMissingDocsModal} />
+          <View style={[s.teacherModal, { maxWidth: 840, maxHeight: '90%', display: 'flex', flexDirection: 'column' }]}>
+            {/* Modal Header */}
+            <View style={s.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, paddingRight: 8 }}>
+                <Text style={{ fontSize: 20 }}>📁</Text>
+                <Text style={s.modalTitle} numberOfLines={1}>
+                  {missingDocsModal === 'student' ? 'Student Documents Required' : 'Staff Documents Required'}
+                </Text>
+                <View style={[s.sessionBadge, { backgroundColor: '#fee2e2' }]}>
+                  <Text style={[s.sessionBadgeText, { color: '#991b1b', fontWeight: '800' }]}>
+                    {getMissingFilterCount('All')} Pending
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={closeMissingDocsModal} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={s.closeText}>×</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal Controls: Search & Filter Chips */}
+            <View style={s.missingDocsControls}>
+              {/* Search Field */}
+              <View style={s.missingDocsSearchBox}>
+                <Text style={s.searchIcon}>🔍</Text>
+                <TextInput
+                  style={s.missingDocsSearchInput}
+                  placeholder={missingDocsModal === 'student' 
+                    ? "Search student name, Reg ID, class, or missing doc..."
+                    : "Search staff name, Staff ID, designation, or missing doc..."}
+                  placeholderTextColor="#94a3b8"
+                  value={missingDocsSearch}
+                  onChangeText={setMissingDocsSearch}
+                  autoCapitalize="none"
+                />
+                {!!missingDocsSearch && (
+                  <TouchableOpacity onPress={() => setMissingDocsSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={s.searchClearText}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Filter Pills */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.missingDocsChipsScroll}>
+                {(missingDocsModal === 'student'
+                  ? ['All', 'Photo', 'Aadhaar', 'Passbook']
+                  : ['All', 'Photo', 'Aadhaar', 'Voter ID', 'Passbook', 'PAN Card']
+                ).map((filterName) => {
+                  const count = getMissingFilterCount(filterName);
+                  const isSelected = missingDocsFilter === filterName;
+                  return (
+                    <TouchableOpacity
+                      key={filterName}
+                      onPress={() => setMissingDocsFilter(filterName)}
+                      style={[
+                        s.missingDocsChip,
+                        isSelected && s.missingDocsChipActive,
+                      ]}
+                    >
+                      <Text style={[
+                        s.missingDocsChipText,
+                        isSelected && s.missingDocsChipTextActive,
+                      ]}>
+                        {filterName} {count > 0 ? `(${count})` : ''}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* Modal List of Missing Documents */}
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
+              {missingDocsLoading && currentMissingItems.length === 0 ? (
+                <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                  <ActivityIndicator size="large" color="#0284c7" />
+                  <Text style={{ marginTop: 12, color: '#64748b', fontSize: 13 }}>Loading documents list...</Text>
+                </View>
+              ) : currentMissingItems.length === 0 ? (
+                <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 32, marginBottom: 8 }}>✓</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#15803d' }}>
+                    {missingDocsSearch || missingDocsFilter !== 'All' 
+                      ? 'No matching pending documents found' 
+                      : 'All documents are complete!'}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+                    {missingDocsSearch || missingDocsFilter !== 'All' 
+                      ? 'Try adjusting your search query or document filter.' 
+                      : 'No pending or missing items in this category.'}
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ gap: 8 }}>
+                  {currentMissingItems.map((item: any, idx: number) => {
+                    const isStudent = missingDocsModal === 'student';
+                    const itemId = isStudent ? item.registration_no : item.staff_id;
+                    const itemName = isStudent ? item.student_name : item.name;
+                    const itemSub = isStudent ? item.class_name : (item.designation || 'Staff');
+                    return (
+                      <View key={`${item.id}-${idx}`} style={[s.docItemRow, { paddingVertical: 12, paddingHorizontal: 14, backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc', borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0' }]}>
+                        <View style={{ flex: 1, marginRight: 12 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                            <Text style={[s.docItemName, { fontSize: 13.5, color: '#0f172a' }]}>
+                              #{itemId} - {itemName}
+                            </Text>
+                            <View style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#cbd5e1' }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>
+                                {itemSub}
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={[s.missingPillContainer, { marginTop: 6 }]}>
+                            {(item.missing || []).map((m: string) => {
+                              const bStyle = getDocBadgeStyle(m);
+                              return (
+                                <View
+                                  key={m}
+                                  style={[
+                                    s.missingPill,
+                                    {
+                                      backgroundColor: bStyle.bg,
+                                      borderColor: bStyle.border,
+                                      borderWidth: 1,
+                                      paddingVertical: 3,
+                                      paddingHorizontal: 8,
+                                    },
+                                  ]}
+                                >
+                                  <Text style={[s.missingPillText, { color: bStyle.color, fontWeight: '800', fontSize: 11 }]}>
+                                    {m}
+                                  </Text>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        </View>
+                        <TouchableOpacity
+                          style={[s.docActionBtn, { paddingVertical: 7, paddingHorizontal: 14 }]}
+                          onPress={() => {
+                            closeMissingDocsModal();
+                            if (isStudent) {
+                              router.push(`/documents?search=${item.registration_no}` as any);
+                            } else {
+                              router.push(`/teachers?mode=documents&teacherId=${item.id}` as any);
+                            }
+                          }}
+                        >
+                          <Text style={[s.docActionBtnText, { fontSize: 12 }]}>Upload</Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Modal Footer */}
+            <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: '#e2e8f0', backgroundColor: '#f8fafc', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomLeftRadius: 14, borderBottomRightRadius: 14 }}>
+              <Text style={{ fontSize: 12, color: '#64748b' }}>
+                Showing {currentMissingItems.length} of {getMissingFilterCount('All')} total records
+              </Text>
+              <TouchableOpacity
+                onPress={closeMissingDocsModal}
+                style={{ paddingVertical: 6, paddingHorizontal: 14, backgroundColor: '#e2e8f0', borderRadius: 6 }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Close</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1900,5 +2186,68 @@ const s = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 11,
     fontWeight: '600',
+  },
+
+  // Missing Documents Modal Styles
+  missingDocsControls: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
+    backgroundColor: '#f8fafc',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    gap: 10,
+  },
+  missingDocsSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  searchIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  missingDocsSearchInput: {
+    flex: 1,
+    height: 36,
+    fontSize: 13,
+    color: '#0f172a',
+    padding: 0,
+  },
+  searchClearText: {
+    fontSize: 13,
+    color: '#94a3b8',
+    paddingHorizontal: 4,
+    fontWeight: '700',
+  },
+  missingDocsChipsScroll: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 2,
+  },
+  missingDocsChip: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    backgroundColor: '#e2e8f0',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  missingDocsChipActive: {
+    backgroundColor: '#0284c7',
+    borderColor: '#0284c7',
+  },
+  missingDocsChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  missingDocsChipTextActive: {
+    color: '#ffffff',
   },
 });
