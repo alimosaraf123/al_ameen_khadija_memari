@@ -229,10 +229,49 @@ router.get('/audit', auth, allow('super_admin', 'admin'), asyncHandler(async (re
 
 router.get('/action-history-audit', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
   await ready;
-  const limit = Math.min(100, Math.max(5, parseInt(req.query.limit || 10, 10)));
-  const q = await pool.query(`SELECT a.id, a.user_id, COALESCE(u.full_name, u.login_id, 'System') as full_name, u.login_id, a.method, a.path, a.status_code, a.details, a.created_at, a.ip_address, a.location FROM admin_audit_logs a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.created_at DESC LIMIT $1`, [limit]);
+  const limit = Math.min(500, Math.max(5, parseInt(req.query.limit || 50, 10)));
+  const vals = [];
+  const where = [];
+
+  if (req.query.user_id) {
+    vals.push(req.query.user_id);
+    where.push(`a.user_id = $${vals.length}`);
+  }
+  if (req.query.date && /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date))) {
+    vals.push(req.query.date);
+    where.push(`(a.created_at AT TIME ZONE 'Asia/Kolkata')::date = $${vals.length}`);
+  }
+  if (req.query.search) {
+    vals.push(`%${String(req.query.search).trim()}%`);
+    const idx = vals.length;
+    where.push(`(
+      COALESCE(u.full_name, '') ILIKE $${idx} OR
+      COALESCE(u.login_id, '') ILIKE $${idx} OR
+      a.path ILIKE $${idx} OR
+      COALESCE(a.ip_address, '') ILIKE $${idx} OR
+      COALESCE(a.location, '') ILIKE $${idx}
+    )`);
+  }
+
+  const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
+  const totalCountQ = await pool.query(
+    `SELECT COUNT(*)::int as total FROM admin_audit_logs a LEFT JOIN users u ON u.id=a.user_id ${whereClause}`,
+    vals
+  );
+  const total = totalCountQ.rows[0]?.total || 0;
+
+  vals.push(limit);
+  const q = await pool.query(
+    `SELECT a.id, a.user_id, COALESCE(u.full_name, u.login_id, 'System') as full_name, u.login_id, a.method, a.path, a.status_code, a.details, a.created_at, a.ip_address, a.location
+     FROM admin_audit_logs a
+     LEFT JOIN users u ON u.id=a.user_id
+     ${whereClause}
+     ORDER BY a.created_at DESC
+     LIMIT $${vals.length}`,
+    vals
+  );
   const formatted = q.rows.map(formatAuditItem);
-  res.json({ success: true, activities: formatted, count: formatted.length });
+  res.json({ success: true, activities: formatted, count: formatted.length, total });
 }));
 router.get('/office-activity', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
   await ready;
@@ -242,7 +281,7 @@ router.get('/office-activity', auth, allow('super_admin', 'admin'), asyncHandler
   const logs = q.rows.map((r) => ({ ...r, location: formatKnownLocation(r.ip_address, r.location) || r.location }));
   res.json({ success: true, date, logs });
 }));
-router.get('/guardian-activity', auth, allow('super_admin'), asyncHandler(async (req, res) => { const q = await pool.query(`SELECT gls.id,u.login_id,u.full_name,gls.device_id,gls.is_active,gls.last_login_at,gls.logged_out_at,gls.expires_at,COUNT(DISTINCT sg.student_id)::int AS student_count,COALESCE(json_agg(DISTINCT jsonb_build_object('student_name',st.student_name,'registration_no',st.registration_no,'class_name',st.class_name)) FILTER(WHERE st.id IS NOT NULL),'[]'::json) AS students FROM guardian_login_sessions gls JOIN users u ON u.id=gls.user_id LEFT JOIN guardian_profiles gp ON gp.user_id=u.id LEFT JOIN student_guardians sg ON sg.guardian_id=gp.id LEFT JOIN students st ON st.id=sg.student_id WHERE u.role='guardian' GROUP BY gls.id,u.login_id,u.full_name,gls.device_id,gls.is_active,gls.last_login_at,gls.logged_out_at,gls.expires_at ORDER BY gls.last_login_at DESC LIMIT 1000`); res.json({ success: true, guardian_activity: q.rows }) }));
+router.get('/guardian-activity', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => { const q = await pool.query(`SELECT gls.id,u.login_id,u.full_name,gls.device_id,gls.is_active,gls.last_login_at,gls.logged_out_at,gls.expires_at,COUNT(DISTINCT sg.student_id)::int AS student_count,COALESCE(json_agg(DISTINCT jsonb_build_object('student_name',st.student_name,'registration_no',st.registration_no,'class_name',st.class_name)) FILTER(WHERE st.id IS NOT NULL),'[]'::json) AS students FROM guardian_login_sessions gls JOIN users u ON u.id=gls.user_id LEFT JOIN guardian_profiles gp ON gp.user_id=u.id LEFT JOIN student_guardians sg ON sg.guardian_id=gp.id LEFT JOIN students st ON st.id=sg.student_id WHERE u.role='guardian' GROUP BY gls.id,u.login_id,u.full_name,gls.device_id,gls.is_active,gls.last_login_at,gls.logged_out_at,gls.expires_at ORDER BY gls.last_login_at DESC LIMIT 1000`); res.json({ success: true, guardian_activity: q.rows }) }));
 router.get('/backup', auth, allow('super_admin'), asyncHandler(async (req, res) => { const names = (await pool.query(`SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename`)).rows.map(x => x.tablename), data = { version: 1, created_at: new Date().toISOString(), tables: {} }; for (const name of names) data.tables[name] = (await pool.query(`SELECT * FROM "${name.replace(/"/g, '')}"`)).rows; res.setHeader('Content-Disposition', `attachment; filename="al-ameen-backup-${new Date().toISOString().slice(0, 10)}.json"`); res.json(data) }));
 router.post('/restore', auth, allow('super_admin'), asyncHandler(async (req, res) => { if (req.body?.confirmation !== 'RESTORE_DATABASE') return res.status(400).json({ success: false, message: 'Type RESTORE_DATABASE to confirm' }); if (!req.body?.backup?.tables) return res.status(400).json({ success: false, message: 'Invalid backup' }); res.status(501).json({ success: false, message: 'Restore requires maintenance mode. Backup validated; no data changed.' }) }));
 router.get('/dashboard-overview', auth, allow('super_admin', 'admin', 'teacher', 'staff', 'office'), asyncHandler(async (req, res) => {
