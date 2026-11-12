@@ -31,21 +31,65 @@ const ready = pool.query(`
 
 const ipLocationCache = new Map();
 
+const CAMPUS_PUBLIC_IPS = new Set([
+  '103.70.209.155',
+  ...String(process.env.CAMPUS_PUBLIC_IPS || '')
+    .split(',')
+    .map((s) => s.trim().replace(/^::ffff:/, ''))
+    .filter(Boolean),
+]);
+
+function normalizeIp(ip) {
+  return String(ip || '').split(',')[0].trim().replace(/^::ffff:/, '');
+}
+
+function isLocalIp(ip) {
+  const cleanIp = normalizeIp(ip);
+  if (!cleanIp) return false;
+  return (
+    cleanIp === '127.0.0.1' ||
+    cleanIp === '::1' ||
+    cleanIp.includes('localhost') ||
+    cleanIp.startsWith('192.168.') ||
+    cleanIp.startsWith('10.') ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(cleanIp)
+  );
+}
+
+function isCampusPublicIp(ip) {
+  const cleanIp = normalizeIp(ip);
+  return Boolean(cleanIp && CAMPUS_PUBLIC_IPS.has(cleanIp));
+}
+
+function formatKnownLocation(ip, existingLocation) {
+  const cleanIp = normalizeIp(ip);
+  if (!cleanIp) return existingLocation || null;
+  if (isLocalIp(cleanIp)) return 'Memari Campus (Local)';
+  if (isCampusPublicIp(cleanIp)) return 'Memari Campus, West Bengal';
+  return existingLocation || null;
+}
+
 function getClientIp(req) {
+  const cfIp = req.headers['cf-connecting-ip'] || req.headers['true-client-ip'];
+  if (cfIp) return normalizeIp(cfIp);
   const forwarded = req.headers['x-forwarded-for'];
   if (forwarded) {
-    const list = String(forwarded).split(',');
-    if (list[0]) return list[0].trim().replace(/^::ffff:/, '');
+    const clean = normalizeIp(forwarded);
+    if (clean) return clean;
   }
-  const raw = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.ip || req.socket?.remoteAddress || '127.0.0.1';
-  return String(raw).replace(/^::ffff:/, '').trim();
+  const raw = req.headers['x-real-ip'] || req.ip || req.socket?.remoteAddress || '127.0.0.1';
+  return normalizeIp(raw) || '127.0.0.1';
 }
 
 function resolveIpLocation(ip) {
-  if (!ip || ip === '127.0.0.1' || ip === '::1' || ip.includes('localhost') || ip.startsWith('192.168.') || ip.startsWith('10.')) {
+  const cleanIp = normalizeIp(ip);
+  if (!cleanIp) {
     return Promise.resolve('Memari Campus (Local)');
   }
-  const cleanIp = ip.replace(/^::ffff:/, '');
+  const known = formatKnownLocation(cleanIp, null);
+  if (known) {
+    return Promise.resolve(known);
+  }
   if (ipLocationCache.has(cleanIp)) {
     return Promise.resolve(ipLocationCache.get(cleanIp));
   }
@@ -116,4 +160,12 @@ function governance(req, res, next) {
   next();
 }
 
-module.exports = { governance, auditReady: ready, getClientIp, resolveIpLocation };
+module.exports = {
+  governance,
+  auditReady: ready,
+  getClientIp,
+  resolveIpLocation,
+  isLocalIp,
+  isCampusPublicIp,
+  formatKnownLocation,
+};

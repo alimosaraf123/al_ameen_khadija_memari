@@ -1,4 +1,4 @@
-const express = require('express'), bcrypt = require('bcryptjs'), pool = require('../db'); const { auth, allow } = require('../middleware/auth'); const { auditReady: ready } = require('../middleware/governance'); const asyncHandler = require('../utils/asyncHandler'); const router = express.Router();
+const express = require('express'), bcrypt = require('bcryptjs'), pool = require('../db'); const { auth, allow } = require('../middleware/auth'); const { auditReady: ready, formatKnownLocation } = require('../middleware/governance'); const asyncHandler = require('../utils/asyncHandler'); const router = express.Router();
 router.get('/admins', auth, allow('super_admin'), asyncHandler(async (req, res) => { await ready; const q = await pool.query(`SELECT u.id,u.login_id,u.full_name,u.is_active,u.created_at,COALESCE(json_agg(p.module_key) FILTER(WHERE p.module_key IS NOT NULL),'[]') permissions FROM users u LEFT JOIN user_module_permissions p ON p.user_id=u.id WHERE u.role='admin' GROUP BY u.id ORDER BY u.full_name`); res.json({ success: true, admins: q.rows }) }));
 router.post('/admins', auth, allow('super_admin'), asyncHandler(async (req, res) => { const b = req.body || {}; if (!b.login_id || !b.full_name || String(b.password || '').length < 6 || b.password !== b.confirm_password) return res.status(400).json({ success: false, message: 'Name, user ID, minimum 6 character password and matching confirmation are required' }); const q = await pool.query(`INSERT INTO users(login_id,password_hash,full_name,role) VALUES($1,$2,$3,'admin') RETURNING id,login_id,full_name,role,is_active`, [String(b.login_id).trim().toLowerCase(), await bcrypt.hash(String(b.password), 12), String(b.full_name).trim()]); res.status(201).json({ success: true, admin: q.rows[0] }) }));
 router.patch('/admins/:id', auth, allow('super_admin'), asyncHandler(async (req, res) => { const b = req.body || {}; if (b.password && (String(b.password).length < 6 || b.password !== b.confirm_password)) return res.status(400).json({ success: false, message: 'Password must be at least 6 characters and confirmation must match' }); const hash = b.password ? await bcrypt.hash(String(b.password), 12) : null, q = await pool.query(`UPDATE users SET full_name=COALESCE($1,full_name),is_active=COALESCE($2,is_active),password_hash=COALESCE($3,password_hash),password_change_required=CASE WHEN $3 IS NULL THEN password_change_required ELSE TRUE END,updated_at=NOW() WHERE id=$4 AND role='admin' RETURNING id,login_id,full_name,is_active`, [b.full_name || null, b.is_active, hash, req.params.id]); if (!q.rowCount) return res.status(404).json({ success: false, message: 'Admin not found' }); res.json({ success: true, admin: q.rows[0] }) }));
@@ -193,6 +193,12 @@ function formatAuditItem(row, index) {
     timestamp = String(row.created_at || '-');
   }
 
+  const resolvedIp = row.ip_address || (row.user_id === 1 || row.user_id === '1' ? '127.0.0.1' : '-');
+  const resolvedLocation = formatKnownLocation(
+    resolvedIp,
+    row.location || (row.user_id === 1 || row.user_id === '1' ? 'Memari Campus (Local)' : 'Memari, West Bengal')
+  );
+
   return {
     sl: index + 1,
     token: `#${row.id}`,
@@ -203,8 +209,8 @@ function formatAuditItem(row, index) {
     audit_description: desc,
     timestamp,
     raw_time: row.created_at,
-    ip_address: row.ip_address || (row.user_id === 1 || row.user_id === '1' ? '127.0.0.1' : '103.217.111.42'),
-    location: row.location || (row.ip_address === '127.0.0.1' || row.user_id === 1 || row.user_id === '1' ? 'Memari Campus (Local)' : 'Memari, West Bengal')
+    ip_address: resolvedIp,
+    location: resolvedLocation
   };
 }
 
@@ -216,8 +222,9 @@ router.get('/audit', auth, allow('super_admin', 'admin'), asyncHandler(async (re
     where.push(`a.user_id=$${vals.length}`);
   }
   const q = await pool.query(`SELECT a.*,u.login_id,u.full_name FROM admin_audit_logs a LEFT JOIN users u ON u.id=a.user_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY a.created_at DESC LIMIT 100`, vals);
-  const formatted = q.rows.map(formatAuditItem);
-  res.json({ success: true, logs: q.rows, formattedLogs: formatted });
+  const logs = q.rows.map((r) => ({ ...r, location: formatKnownLocation(r.ip_address, r.location) || r.location }));
+  const formatted = logs.map(formatAuditItem);
+  res.json({ success: true, logs, formattedLogs: formatted });
 }));
 
 router.get('/action-history-audit', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
@@ -232,7 +239,8 @@ router.get('/office-activity', auth, allow('super_admin', 'admin'), asyncHandler
   const date = String(req.query.date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ success: false, message: 'Valid date is required' });
   const q = await pool.query(`SELECT a.*,u.login_id,u.full_name FROM office_activity_logs a LEFT JOIN users u ON u.id=a.user_id WHERE (a.created_at AT TIME ZONE 'Asia/Kolkata')::date=$1 ORDER BY a.created_at DESC LIMIT 1000`, [date]);
-  res.json({ success: true, date, logs: q.rows });
+  const logs = q.rows.map((r) => ({ ...r, location: formatKnownLocation(r.ip_address, r.location) || r.location }));
+  res.json({ success: true, date, logs });
 }));
 router.get('/guardian-activity', auth, allow('super_admin'), asyncHandler(async (req, res) => { const q = await pool.query(`SELECT gls.id,u.login_id,u.full_name,gls.device_id,gls.is_active,gls.last_login_at,gls.logged_out_at,gls.expires_at,COUNT(DISTINCT sg.student_id)::int AS student_count,COALESCE(json_agg(DISTINCT jsonb_build_object('student_name',st.student_name,'registration_no',st.registration_no,'class_name',st.class_name)) FILTER(WHERE st.id IS NOT NULL),'[]'::json) AS students FROM guardian_login_sessions gls JOIN users u ON u.id=gls.user_id LEFT JOIN guardian_profiles gp ON gp.user_id=u.id LEFT JOIN student_guardians sg ON sg.guardian_id=gp.id LEFT JOIN students st ON st.id=sg.student_id WHERE u.role='guardian' GROUP BY gls.id,u.login_id,u.full_name,gls.device_id,gls.is_active,gls.last_login_at,gls.logged_out_at,gls.expires_at ORDER BY gls.last_login_at DESC LIMIT 1000`); res.json({ success: true, guardian_activity: q.rows }) }));
 router.get('/backup', auth, allow('super_admin'), asyncHandler(async (req, res) => { const names = (await pool.query(`SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename`)).rows.map(x => x.tablename), data = { version: 1, created_at: new Date().toISOString(), tables: {} }; for (const name of names) data.tables[name] = (await pool.query(`SELECT * FROM "${name.replace(/"/g, '')}"`)).rows; res.setHeader('Content-Disposition', `attachment; filename="al-ameen-backup-${new Date().toISOString().slice(0, 10)}.json"`); res.json(data) }));
