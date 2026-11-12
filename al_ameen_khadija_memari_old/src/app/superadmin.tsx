@@ -1081,7 +1081,6 @@ export default function Dashboard() {
                 ['Student Behavior', '/behavior'],
                 ['Student Gate Pass', '/gate-pass'],
                 ['Visit Permission', '/visits'],
-                ['Academic Marksheet', '/marks'],
                 ['Guardians & Passwords', '/guardians'],
               ].map(([label, path]) => (
                 <AdminLink
@@ -1243,7 +1242,6 @@ export default function Dashboard() {
                     ['Student Behavior', '/behavior'],
                     ['Student Gate Pass', '/gate-pass'],
                     ['Visit Permission', '/visits'],
-                    ['Academic Marksheet', '/marks'],
                     ['Guardians & Passwords', '/guardians'],
                   ],
                 },

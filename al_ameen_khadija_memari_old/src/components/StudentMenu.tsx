@@ -12,7 +12,6 @@ export const STUDENT_MENU_ITEMS: [string, string][] = [
   ['Student Behavior', '/behavior'],
   ['Student Gate Pass', '/gate-pass'],
   ['Visit Permission', '/visits'],
-  ['Academic Marksheet', '/marks'],
   ['Guardians & Passwords', '/guardians'],
 ];
 
