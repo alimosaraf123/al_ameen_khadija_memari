@@ -62,7 +62,7 @@ export default function ClassResults() {
         (x: any, i: number) =>
           `<tr><td>${i + 1}</td><td>${x.registration_no}</td><td class="name">${x.student_name}</td>${
             selected.kind === 'terminal'
-              ? subjects.map(y => `<td>${x.marks?.[y.id] ?? 'Absent'}</td>`).join('') + `<td><b>${rankMap[x.student_id || x.registration_no] ?? '-'}</b></td>`
+              ? subjects.map(y => `<td>${x.marks?.[y.id] ?? 'Absent'}</td>`).join('') + `<td><b>${rankMap[x.student_id || x.registration_no] ?? '-'} / ${students.length}</b></td>`
               : `<td>${x.obtained_marks === null ? 'Absent' : Number(x.obtained_marks)}</td>`
           }</tr>`
       )
