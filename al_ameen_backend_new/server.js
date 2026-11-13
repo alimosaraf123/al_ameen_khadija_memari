@@ -93,6 +93,7 @@ app.use('/api/behavior',...moduleAccess(['behavior','rooms']),require('./src/rou
 app.use('/api/illness',...moduleAccess(['illness','students']),require('./src/routes/illness'));
 app.use('/api/problems',...moduleAccess(['problems','rooms']),require('./src/routes/problems'));
 app.use('/api/notices',...moduleAccess('notices'),require('./src/routes/notices'));
+app.use('/api/display-board',require('./src/routes/displayBoard'));
 app.use('/api/push',require('./src/routes/push'));
 app.use('/api/routines',...moduleAccess('routines'),require('./src/routes/routines'));
 app.use('/api/gate-passes',...moduleAccess('gate_passes'),require('./src/routes/gatePasses'));
