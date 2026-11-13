@@ -524,7 +524,7 @@ export default function Dashboard() {
             </TouchableOpacity>
           )}
 
-          {canAccess('/gate-pass') && (
+          {false && canAccess('/gate-pass') && (
             <TouchableOpacity style={s.navBtn} onPress={() => router.push('/gate-pass' as any)}>
               <Text style={s.navBtnIcon}>🎫</Text>
               <Text style={s.navBtnText}>Gate Pass</Text>
@@ -538,14 +538,14 @@ export default function Dashboard() {
             </TouchableOpacity>
           )}
 
-          {canAccess('/guardians') && (
+          {false && canAccess('/guardians') && (
             <TouchableOpacity style={s.navBtn} onPress={() => router.push('/guardians' as any)}>
               <Text style={s.navBtnIcon}>👨‍👩‍👧</Text>
               <Text style={s.navBtnText}>Guardians</Text>
             </TouchableOpacity>
           )}
 
-          {canAccess('/visits') && (
+          {false && canAccess('/visits') && (
             <TouchableOpacity style={s.navBtn} onPress={() => router.push('/visits' as any)}>
               <Text style={s.navBtnIcon}>🤝</Text>
               <Text style={s.navBtnText}>Visiting Day</Text>
