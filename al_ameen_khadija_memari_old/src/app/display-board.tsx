@@ -26,7 +26,7 @@ export default function DisplayBoard() {
   const enterFullscreen = () => { if (Platform.OS === 'web' && typeof document !== 'undefined') void document.documentElement.requestFullscreen?.(); };
   const content = useMemo(() => {
     if (!data) return <ActivityIndicator size="large" color="#fff" />;
-    if (data.mode === 'routine') return <Routine data={data.routine?.grid_data} date={data.date} group={data.config?.routine_group} />;
+    if (data.mode === 'routine') return <Routine routine={data.routine} routines={data.routines} date={data.date} group={data.config?.routine_group} />;
     if (data.mode === 'notice') return <Notice notice={(data.notices || [])[noticeIndex]} count={(data.notices || []).length} index={noticeIndex} />;
     if (data.mode === 'weekly_exam') return <WeeklyExam items={data.weekly_exam_items || []} />;
     if (data.mode === 'result') return <Result result={data.result} page={resultPage} />;
@@ -39,10 +39,13 @@ export default function DisplayBoard() {
   </View>;
 }
 
-function Routine({ data, date, group }: any) {
+function Routine({ routine, routines, date, group }: any) {
+  const choices = Array.isArray(routines) ? routines.filter((item: any) => item.routine) : [];
+  const active = choices.length ? choices[Math.floor(Date.now() / 20_000) % choices.length] : { group, routine };
+  const data = active?.routine?.grid_data, activeGroup = active?.group || group;
   if (!data) return <Text style={s.empty}>আজকের routine পাওয়া যায়নি।</Text>;
-  const academic = group !== 'coaching', columns = academic ? data.periods || [] : data.rooms || [], rows = academic ? data.classes || [] : data.times || [];
-  return <View style={{ flex: 1 }}><Text style={s.modeTitle}>{academic ? 'TODAY’S CLASS ROUTINE' : 'TODAY’S COACHING ROUTINE'} • {String(date || '').split('-').reverse().join('-')}</Text><ScrollView horizontal contentContainerStyle={{ flexGrow: 1 }}><View style={s.table}><View style={s.tableRow}><Text style={[s.cell, s.head, s.first]}>{academic ? 'CLASS / PERIOD' : 'TIME / ROOM'}</Text>{columns.map((col: any, i: number) => <Text key={i} style={[s.cell, s.head]}>{academic ? `${col[0]}\n${col[1]}` : col}</Text>)}</View>{rows.map((row: string, r: number) => <View key={row} style={s.tableRow}><Text style={[s.cell, s.first, s.rowHead]}>{row}</Text>{columns.map((col: any, c: number) => { const tiffin = academic && String(col[0]).toLowerCase() === 'tiffin', cell = data.cells?.[academic ? `${row}|${c}` : `${row}|${col}`] || {}; return <View key={c} style={[s.cell, r % 2 && s.alt, tiffin && s.tiffin]}>{tiffin ? <Text style={s.tiffinText}>TIFFIN</Text> : <><Text style={s.subject}>{cell.subject || '—'}</Text><Text style={s.teacher}>{cell.teacher_name || ''}</Text></>}</View>; })}</View>)}</View></ScrollView></View>;
+  const academic = activeGroup !== 'coaching', columns = academic ? data.periods || [] : data.rooms || [], rows = academic ? data.classes || [] : data.times || [], groupTitle = activeGroup === 'v_x' ? 'CLASS V–X ROUTINE' : activeGroup === 'xi_xii' ? 'CLASS XI–XII ROUTINE' : 'COACHING ROUTINE';
+  return <View style={{ flex: 1 }}><Text style={s.modeTitle}>{groupTitle} • {String(date || '').split('-').reverse().join('-')}{choices.length ? ` • ${Math.floor(Date.now() / 20_000) % choices.length + 1}/${choices.length}` : ''}</Text><ScrollView horizontal contentContainerStyle={{ flexGrow: 1 }}><View style={s.table}><View style={s.tableRow}><Text style={[s.cell, s.head, s.first]}>{academic ? 'CLASS / PERIOD' : 'TIME / ROOM'}</Text>{columns.map((col: any, i: number) => <Text key={i} style={[s.cell, s.head]}>{academic ? `${col[0]}\n${col[1]}` : col}</Text>)}</View>{rows.map((row: string, r: number) => <View key={row} style={s.tableRow}><Text style={[s.cell, s.first, s.rowHead]}>{row}</Text>{columns.map((col: any, c: number) => { const tiffin = academic && String(col[0]).toLowerCase() === 'tiffin', cell = data.cells?.[academic ? `${row}|${c}` : `${row}|${col}`] || {}; return <View key={c} style={[s.cell, r % 2 && s.alt, tiffin && s.tiffin]}>{tiffin ? <Text style={s.tiffinText}>TIFFIN</Text> : <><Text style={s.subject}>{cell.subject || '—'}</Text><Text style={s.teacher}>{cell.teacher_name || ''}</Text></>}</View>; })}</View>)}</View></ScrollView></View>;
 }
 
 function Notice({ notice, count, index }: any) {

@@ -5,23 +5,25 @@ const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
 const MODES = new Set(['auto', 'routine', 'notice', 'result', 'weekly_exam']);
-const GROUPS = new Set(['v_x', 'xi_xii', 'coaching']);
-const DEFAULTS = { mode: 'auto', routine_group: 'v_x', class_end_time: '15:00', result_exam_id: null, weekly_exam_items: [] };
+const GROUPS = new Set(['all', 'v_x', 'xi_xii', 'coaching']);
+const DEFAULTS = { mode: 'auto', routine_group: 'all', class_end_time: '15:00', coaching_start_time: '18:00', coaching_end_time: '21:15', result_exam_id: null, weekly_exam_items: [] };
 
 const ready = pool.query(`
   CREATE TABLE IF NOT EXISTS display_board_settings (
     id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
     mode TEXT NOT NULL DEFAULT 'auto',
-    routine_group TEXT NOT NULL DEFAULT 'v_x',
+    routine_group TEXT NOT NULL DEFAULT 'all',
     class_end_time TEXT NOT NULL DEFAULT '15:00',
+    coaching_start_time TEXT NOT NULL DEFAULT '18:00',
+    coaching_end_time TEXT NOT NULL DEFAULT '21:15',
     result_exam_id INTEGER NULL,
     weekly_exam_items JSONB NOT NULL DEFAULT '[]'::jsonb,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_by INTEGER NULL
   )
-`).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS weekly_exam_items JSONB NOT NULL DEFAULT '[]'::jsonb`)).then(() => pool.query(`
+`).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS weekly_exam_items JSONB NOT NULL DEFAULT '[]'::jsonb`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS coaching_start_time TEXT NOT NULL DEFAULT '18:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS coaching_end_time TEXT NOT NULL DEFAULT '21:15'`)).then(() => pool.query(`
   INSERT INTO display_board_settings (id, mode, routine_group, class_end_time)
-  VALUES (1, 'auto', 'v_x', '15:00') ON CONFLICT (id) DO NOTHING
+  VALUES (1, 'auto', 'all', '15:00') ON CONFLICT (id) DO NOTHING
 `));
 
 const istDate = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -31,7 +33,7 @@ const istTime = () => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata
 
 async function settings() {
   await ready;
-  const row = (await pool.query('SELECT mode,routine_group,class_end_time,result_exam_id,weekly_exam_items,updated_at FROM display_board_settings WHERE id=1')).rows[0];
+  const row = (await pool.query('SELECT mode,routine_group,class_end_time,coaching_start_time,coaching_end_time,result_exam_id,weekly_exam_items,updated_at FROM display_board_settings WHERE id=1')).rows[0];
   return { ...DEFAULTS, ...(row || {}) };
 }
 
@@ -73,9 +75,19 @@ async function result(examId) {
 router.get('/public', asyncHandler(async (req, res) => {
   const config = await settings();
   const date = today();
-  const effectiveMode = config.mode === 'auto' ? (istTime() < config.class_end_time ? 'routine' : 'notice') : config.mode;
-  const payload = { success: true, mode: effectiveMode, config: { routine_group: config.routine_group, class_end_time: config.class_end_time }, date, server_time: istTime() };
-  if (effectiveMode === 'routine') payload.routine = await routine(config.routine_group, date);
+  const now = istTime();
+  let effectiveMode = config.mode, routineGroup = config.routine_group;
+  if (config.mode === 'auto') {
+    if (now >= config.coaching_start_time && now <= config.coaching_end_time) { effectiveMode = 'routine'; routineGroup = 'coaching'; }
+    else if (now < config.class_end_time) { effectiveMode = 'routine'; routineGroup = 'academic'; }
+    else effectiveMode = 'notice';
+  }
+  const payload = { success: true, mode: effectiveMode, config: { routine_group: routineGroup, class_end_time: config.class_end_time, coaching_start_time: config.coaching_start_time, coaching_end_time: config.coaching_end_time }, date, server_time: now };
+  if (effectiveMode === 'routine') {
+    const groups = routineGroup === 'academic' ? ['v_x', 'xi_xii'] : routineGroup === 'all' ? ['v_x', 'xi_xii', 'coaching'] : [routineGroup];
+    if (groups.length > 1) payload.routines = await Promise.all(groups.map(async group => ({ group, routine: await routine(group, date) })));
+    else payload.routine = await routine(groups[0], date);
+  }
   if (effectiveMode === 'notice') payload.notices = (await pool.query(`
     SELECT id,title,notice_text,notice_type,attachment_url,published_at
     FROM notices WHERE is_active=TRUE ORDER BY published_at DESC LIMIT 20
@@ -95,6 +107,8 @@ router.put('/control', auth, allow('super_admin', 'admin'), asyncHandler(async (
   const mode = String(body.mode || 'auto');
   const group = String(body.routine_group || 'v_x');
   const endTime = String(body.class_end_time || '15:00');
+  const coachingStart = String(body.coaching_start_time || '18:00');
+  const coachingEnd = String(body.coaching_end_time || '21:15');
   const resultId = body.result_exam_id === null || body.result_exam_id === '' ? null : Number(body.result_exam_id);
   const weeklyItems = Array.isArray(body.weekly_exam_items) ? body.weekly_exam_items.map(item => ({
     class_name: String(item?.class_name || '').trim(),
@@ -102,7 +116,7 @@ router.put('/control', auth, allow('super_admin', 'admin'), asyncHandler(async (
     time: String(item?.time || '').trim(),
     syllabus: String(item?.syllabus || '').trim(),
   })).filter(item => item.class_name || item.subject || item.time || item.syllabus) : [];
-  if (!MODES.has(mode) || !GROUPS.has(group) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime) || (resultId !== null && (!Number.isInteger(resultId) || resultId < 1))) {
+  if (!MODES.has(mode) || !GROUPS.has(group) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(coachingStart) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(coachingEnd) || coachingStart >= coachingEnd || (resultId !== null && (!Number.isInteger(resultId) || resultId < 1))) {
     return res.status(400).json({ success: false, message: 'Invalid display-board settings.' });
   }
   if (mode === 'result' && !resultId) return res.status(400).json({ success: false, message: 'Choose a published result before enabling Result mode.' });
@@ -110,7 +124,7 @@ router.put('/control', auth, allow('super_admin', 'admin'), asyncHandler(async (
   if (mode === 'result' && !(await pool.query(`SELECT 1 FROM terminal_exams WHERE id=$1 AND status='published'`, [resultId])).rowCount) {
     return res.status(400).json({ success: false, message: 'Selected result is not published.' });
   }
-  await pool.query(`UPDATE display_board_settings SET mode=$1,routine_group=$2,class_end_time=$3,result_exam_id=$4,weekly_exam_items=$5::jsonb,updated_at=NOW(),updated_by=$6 WHERE id=1`, [mode, group, endTime, resultId, JSON.stringify(weeklyItems), req.user.userId]);
+  await pool.query(`UPDATE display_board_settings SET mode=$1,routine_group=$2,class_end_time=$3,coaching_start_time=$4,coaching_end_time=$5,result_exam_id=$6,weekly_exam_items=$7::jsonb,updated_at=NOW(),updated_by=$8 WHERE id=1`, [mode, group, endTime, coachingStart, coachingEnd, resultId, JSON.stringify(weeklyItems), req.user.userId]);
   res.json({ success: true, settings: await settings() });
 }));
 
