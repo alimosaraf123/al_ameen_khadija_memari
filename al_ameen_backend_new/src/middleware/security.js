@@ -27,7 +27,8 @@ function checkLoginLockout(req, res, next) {
 
   // 1. For superadmin, allow password verification through so valid superadmin credentials
   // can log in and immediately clear the IP lockout.
-  if (loginId === 'superadmin') {
+  const adminLoginId = (process.env.ADMIN_LOGIN_ID || 'admin_super').trim().toLowerCase();
+  if (loginId === 'admin_super' || loginId === 'superadmin' || loginId === adminLoginId) {
     return next();
   }
 

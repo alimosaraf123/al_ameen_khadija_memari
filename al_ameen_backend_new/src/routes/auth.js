@@ -116,9 +116,7 @@ router.post(
       return res.status(401).json({
         success: false,
         remaining_attempts: lockInfo.remainingAttempts,
-        message: lockInfo.remainingAttempts > 0
-          ? `User ID or password is incorrect. (${lockInfo.remainingAttempts} attempt(s) remaining)`
-          : 'User ID or password is incorrect.'
+        message: 'This account does not exist.'
       });
     }
 
@@ -557,9 +555,7 @@ router.post(
       return res.status(401).json({
         success: false,
         remaining_attempts: lockInfo.remainingAttempts,
-        message: lockInfo.remainingAttempts > 0
-          ? `Invalid User ID or mPIN. (${lockInfo.remainingAttempts} attempt(s) remaining)`
-          : 'Invalid User ID or mPIN.'
+        message: 'This account does not exist.'
       });
     }
 
