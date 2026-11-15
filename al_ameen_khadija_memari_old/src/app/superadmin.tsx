@@ -16,6 +16,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { clearSession, getUser } from '../lib/auth';
 import AcademyHeader from '../components/AcademyHeader';
 import { api } from '../lib/api';
+import { initiateAudioCall } from '../lib/callManager';
 
 const menuPermission: Record<string, string> = {
   '/students': 'students',
@@ -104,6 +105,33 @@ export default function Dashboard() {
   const [accountsMenu, setAccountsMenu] = useState(false);
   const [allMenusDrawer, setAllMenusDrawer] = useState(false);
   const [genericMenu, setGenericMenu] = useState<{ title: string; path: string } | null>(null);
+
+  // Calling Modal States
+  const [callingModal, setCallingModal] = useState(false);
+  const [callingContacts, setCallingContacts] = useState<any[]>([]);
+  const [callingSearch, setCallingSearch] = useState('');
+  const [callingRoleFilter, setCallingRoleFilter] = useState('all');
+  const [callingLoading, setCallingLoading] = useState(false);
+
+  const openCallingModal = async (role = 'all', query = '') => {
+    setCallingModal(true);
+    setCallingRoleFilter(role);
+    setCallingSearch(query);
+    setCallingLoading(true);
+    try {
+      const q = new URLSearchParams();
+      if (role && role !== 'all') q.set('role', role);
+      if (query) q.set('q', query);
+      const res = await api(`/api/calls/contacts?${q.toString()}`);
+      if (res?.success && Array.isArray(res.contacts)) {
+        setCallingContacts(res.contacts);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch call contacts:', err);
+    } finally {
+      setCallingLoading(false);
+    }
+  };
 
   const [restricted, setRestricted] = useState(false);
   const [permissions, setPermissions] = useState<string[]>([]);
@@ -199,7 +227,7 @@ export default function Dashboard() {
           }
           return formatter.format(d);
         }
-      } catch {}
+      } catch { }
     }
     return fallback || String(rawVal || '-');
   };
@@ -219,7 +247,7 @@ export default function Dashboard() {
     try {
       const d = await api('/api/notices/admin-counter');
       setUnread(d.unread || 0);
-    } catch {}
+    } catch { }
   };
 
   const loadOverview = async (silent = false) => {
@@ -273,7 +301,7 @@ export default function Dashboard() {
           setActiveTab('cards');
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     void loadCounter();
     void loadOverview(false);
@@ -524,7 +552,7 @@ export default function Dashboard() {
             </TouchableOpacity>
           )}
 
-          {canAccess('/gate-pass') && (
+          {false && canAccess('/gate-pass') && (
             <TouchableOpacity style={s.navBtn} onPress={() => router.push('/gate-pass' as any)}>
               <Text style={s.navBtnIcon}>🎫</Text>
               <Text style={s.navBtnText}>Gate Pass</Text>
@@ -538,14 +566,14 @@ export default function Dashboard() {
             </TouchableOpacity>
           )}
 
-          {canAccess('/guardians') && (
+          {false && canAccess('/guardians') && (
             <TouchableOpacity style={s.navBtn} onPress={() => router.push('/guardians' as any)}>
               <Text style={s.navBtnIcon}>👨‍👩‍👧</Text>
               <Text style={s.navBtnText}>Guardians</Text>
             </TouchableOpacity>
           )}
 
-          {canAccess('/visits') && (
+          {false && canAccess('/visits') && (
             <TouchableOpacity style={s.navBtn} onPress={() => router.push('/visits' as any)}>
               <Text style={s.navBtnIcon}>🤝</Text>
               <Text style={s.navBtnText}>Visiting Day</Text>
@@ -565,6 +593,14 @@ export default function Dashboard() {
               <Text style={s.navBtnText}>Audit Log</Text>
             </TouchableOpacity>
           )}
+
+          <TouchableOpacity
+            style={[s.navBtn, { borderColor: '#10b981', backgroundColor: '#ecfdf5' }]}
+            onPress={() => openCallingModal('all', '')}
+          >
+            <Text style={s.navBtnIcon}>📞</Text>
+            <Text style={[s.navBtnText, { color: '#047857', fontWeight: '800' }]}>Calling</Text>
+          </TouchableOpacity>
 
           {userRole === 'super_admin' && (
             <TouchableOpacity style={[s.navBtn, s.navBtnAdmin]} onPress={() => router.push('/system-admin' as any)}>
@@ -631,385 +667,390 @@ export default function Dashboard() {
             {/* TWO-COLUMN INSTITUTIONAL DASHBOARD GRID (MATCHING IMAGE 2)     */}
             {/* ============================================================== */}
             <View style={s.dashboardGrid}>
-            {/* ------------------------------------------------------------ */}
-            {/* LEFT COLUMN: Student Demographics & Gate Pass                */}
-            {/* ------------------------------------------------------------ */}
-            <View style={s.gridColumn}>
-              {/* Card 1: Student Demographics */}
-              <View style={s.panelCard}>
-                <View style={s.panelHeader}>
-                  <View style={s.panelHeaderLeft}>
-                    <Text style={s.panelHeaderIcon}>👥</Text>
-                    <Text style={s.panelTitle}>Student Demographics</Text>
-                    <View style={s.sessionBadge}>
-                      <Text style={s.sessionBadgeText}>Session 2026</Text>
-                    </View>
-                  </View>
-                  <Text style={s.panelHeaderRight}>
-                    Total Active: <Text style={s.boldNumber}>{demoTotal.total}</Text>
-                  </Text>
-                </View>
-
-                <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-                  <View style={s.tableContainer}>
-                    <View style={[s.tRow, s.tHeadRow]}>
-                      <Text style={[s.tHeadCell, { width: 50 }]}>CLASS</Text>
-                      <Text style={[s.tHeadCell, { width: 55 }]}>MALE</Text>
-                      <Text style={[s.tHeadCell, { width: 65 }]}>FEMALE</Text>
-                      <Text style={[s.tHeadCell, s.tHighlightHead, { width: 65 }]}>TOTAL</Text>
-                      <Text style={[s.tHeadCell, { width: 65 }]}>ORPHAN</Text>
-                      <Text style={[s.tHeadCell, { width: 65 }]}>D.ABLE</Text>
-                      <Text style={[s.tHeadCell, { width: 75 }]}>GATE PASS</Text>
-                      <Text style={[s.tHeadCell, { width: 75 }]}>DROP OUT</Text>
-                    </View>
-
-                    {demoList.length === 0 ? (
-                      <View style={s.emptyRow}>
-                        <Text style={s.emptyText}>No student demographic records</Text>
+              {/* ------------------------------------------------------------ */}
+              {/* LEFT COLUMN: Student Demographics & Gate Pass                */}
+              {/* ------------------------------------------------------------ */}
+              <View style={s.gridColumn}>
+                {/* Card 1: Student Demographics */}
+                <View style={s.panelCard}>
+                  <View style={s.panelHeader}>
+                    <View style={s.panelHeaderLeft}>
+                      <Text style={s.panelHeaderIcon}>👥</Text>
+                      <Text style={s.panelTitle}>Student Demographics</Text>
+                      <View style={s.sessionBadge}>
+                        <Text style={s.sessionBadgeText}>Session 2026</Text>
                       </View>
-                    ) : (
-                      demoList.map((row: any, i: number) => (
-                        <View key={row.class_name + i} style={[s.tRow, i % 2 === 1 && s.tRowZebra]}>
-                          <Text style={[s.tCell, s.tClassCell, { width: 50 }]}>{row.class_name}</Text>
-                          <Text style={[s.tCell, { width: 55 }]}>{row.male}</Text>
-                          <Text style={[s.tCell, { width: 65 }]}>{row.female}</Text>
-                          <Text style={[s.tCell, s.tHighlightCell, { width: 65 }]}>{row.total}</Text>
-                          <Text style={[s.tCell, { width: 65 }]}>{row.orphan}</Text>
-                          <Text style={[s.tCell, { width: 65 }]}>{row.d_able}</Text>
-                          <TouchableOpacity
-                            style={{ width: 75, justifyContent: 'center', alignItems: 'center' }}
-                            onPress={() => router.push('/gate-pass' as any)}
-                            disabled={!Number(row.gate_pass ?? row.pass_out ?? 0)}
-                          >
-                            <Text
-                              style={[
-                                s.tCell,
-                                {
-                                  width: 75,
-                                  color: Number(row.gate_pass ?? row.pass_out ?? 0) > 0 ? '#b45309' : '#334155',
-                                  fontWeight: Number(row.gate_pass ?? row.pass_out ?? 0) > 0 ? '800' : '500',
-                                },
-                              ]}
+                    </View>
+                    <Text style={s.panelHeaderRight}>
+                      Total Active: <Text style={s.boldNumber}>{demoTotal.total}</Text>
+                    </Text>
+                  </View>
+
+                  <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+                    <View style={s.tableContainer}>
+                      <View style={[s.tRow, s.tHeadRow]}>
+                        <Text style={[s.tHeadCell, { width: 50 }]}>CLASS</Text>
+                        <Text style={[s.tHeadCell, { width: 55 }]}>MALE</Text>
+                        <Text style={[s.tHeadCell, { width: 65 }]}>FEMALE</Text>
+                        <Text style={[s.tHeadCell, s.tHighlightHead, { width: 65 }]}>TOTAL</Text>
+                        <Text style={[s.tHeadCell, { width: 65 }]}>ORPHAN</Text>
+                        <Text style={[s.tHeadCell, { width: 65 }]}>D.ABLE</Text>
+                        <TouchableOpacity
+                          style={{ width: 75, justifyContent: 'center', alignItems: 'center' }}
+                          onPress={() => router.push({ pathname: '/gate-pass', params: { tab: 'execute' } } as any)}
+                        >
+                          <Text style={[s.tHeadCell, { width: 75 }]}>GATE PASS</Text>
+                        </TouchableOpacity>
+                        <Text style={[s.tHeadCell, { width: 75 }]}>DROP OUT</Text>
+                      </View>
+
+                      {demoList.length === 0 ? (
+                        <View style={s.emptyRow}>
+                          <Text style={s.emptyText}>No student demographic records</Text>
+                        </View>
+                      ) : (
+                        demoList.map((row: any, i: number) => (
+                          <View key={row.class_name + i} style={[s.tRow, i % 2 === 1 && s.tRowZebra]}>
+                            <Text style={[s.tCell, s.tClassCell, { width: 50 }]}>{row.class_name}</Text>
+                            <Text style={[s.tCell, { width: 55 }]}>{row.male}</Text>
+                            <Text style={[s.tCell, { width: 65 }]}>{row.female}</Text>
+                            <Text style={[s.tCell, s.tHighlightCell, { width: 65 }]}>{row.total}</Text>
+                            <Text style={[s.tCell, { width: 65 }]}>{row.orphan}</Text>
+                            <Text style={[s.tCell, { width: 65 }]}>{row.d_able}</Text>
+                            <TouchableOpacity
+                              style={{ width: 75, justifyContent: 'center', alignItems: 'center' }}
+                              onPress={() => router.push({ pathname: '/gate-pass', params: { tab: 'execute', ...(row.class_name ? { class_name: row.class_name } : {}) } } as any)}
+                              disabled={!Number(row.gate_pass ?? row.pass_out ?? 0)}
                             >
-                              {row.gate_pass ?? row.pass_out ?? 0}
-                            </Text>
-                          </TouchableOpacity>
-                          <Text style={[s.tCell, { width: 75 }]}>{row.drop_out}</Text>
-                        </View>
-                      ))
-                    )}
-
-                    {/* Total Row */}
-                    <View style={[s.tRow, s.tTotalRow]}>
-                      <Text style={[s.tCell, s.tTotalLabel, { width: 50 }]}>Total</Text>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 55 }]}>{demoTotal.male}</Text>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 65 }]}>{demoTotal.female}</Text>
-                      <Text style={[s.tCell, s.tTotalValHighlight, { width: 65 }]}>{demoTotal.total}</Text>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 65 }]}>{demoTotal.orphan}</Text>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 65 }]}>{demoTotal.d_able}</Text>
-                      <TouchableOpacity
-                        style={{ width: 75, justifyContent: 'center', alignItems: 'center' }}
-                        onPress={() => router.push('/gate-pass' as any)}
-                        disabled={!Number(demoTotal.gate_pass ?? demoTotal.pass_out ?? 0)}
-                      >
-                        <Text
-                          style={[
-                            s.tCell,
-                            s.tTotalVal,
-                            {
-                              width: 75,
-                              color: Number(demoTotal.gate_pass ?? demoTotal.pass_out ?? 0) > 0 ? '#b45309' : undefined,
-                              fontWeight: '800',
-                            },
-                          ]}
-                        >
-                          {demoTotal.gate_pass ?? demoTotal.pass_out ?? 0}
-                        </Text>
-                      </TouchableOpacity>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 75 }]}>{demoTotal.drop_out}</Text>
-                    </View>
-                  </View>
-                </ScrollView>
-              </View>
-
-              {/* Card 2: Student Documents Required */}
-              <View style={s.panelCard}>
-                <View style={s.panelHeader}>
-                  <View style={s.panelHeaderLeft}>
-                    <Text style={s.panelHeaderIcon}>📁</Text>
-                    <Text style={s.panelTitle}>Student Documents Required</Text>
-                    {(stats.missingStudentDocs || []).length > 0 && (
-                      <View style={[s.sessionBadge, { backgroundColor: '#fee2e2' }]}>
-                        <Text style={[s.sessionBadgeText, { color: '#991b1b', fontWeight: '800' }]}>
-                          {(stats.missingStudentDocs || []).length} Due
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <TouchableOpacity onPress={() => openMissingDocsModal('student')}>
-                    <Text style={s.viewAllLink}>
-                      View All ({(stats.missingStudentDocs || []).length}) ›
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={s.docList}>
-                  {(stats.missingStudentDocs || []).length === 0 ? (
-                    <Text style={s.allClearText}>✓ All student documents are complete</Text>
-                  ) : (
-                    (stats.missingStudentDocs || []).slice(0, 5).map((st: any) => (
-                      <View key={st.id} style={s.docItemRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={s.docItemName}>
-                            #{st.registration_no} - {st.student_name} ({st.class_name})
-                          </Text>
-                          <View style={s.missingPillContainer}>
-                            {(st.missing || []).map((m: string) => {
-                              const bStyle = getDocBadgeStyle(m);
-                              return (
-                                <View key={m} style={[s.missingPill, { backgroundColor: bStyle.bg, borderColor: bStyle.border, borderWidth: 1 }]}>
-                                  <Text style={[s.missingPillText, { color: bStyle.color, fontWeight: '700' }]}>{m}</Text>
-                                </View>
-                              );
-                            })}
+                              <Text
+                                style={[
+                                  s.tCell,
+                                  {
+                                    width: 75,
+                                    color: Number(row.gate_pass ?? row.pass_out ?? 0) > 0 ? '#b45309' : '#334155',
+                                    fontWeight: Number(row.gate_pass ?? row.pass_out ?? 0) > 0 ? '800' : '500',
+                                  },
+                                ]}
+                              >
+                                {row.gate_pass ?? row.pass_out ?? 0}
+                              </Text>
+                            </TouchableOpacity>
+                            <Text style={[s.tCell, { width: 75 }]}>{row.drop_out}</Text>
                           </View>
-                        </View>
+                        ))
+                      )}
+
+                      {/* Total Row */}
+                      <View style={[s.tRow, s.tTotalRow]}>
+                        <Text style={[s.tCell, s.tTotalLabel, { width: 50 }]}>Total</Text>
+                        <Text style={[s.tCell, s.tTotalVal, { width: 55 }]}>{demoTotal.male}</Text>
+                        <Text style={[s.tCell, s.tTotalVal, { width: 65 }]}>{demoTotal.female}</Text>
+                        <Text style={[s.tCell, s.tTotalValHighlight, { width: 65 }]}>{demoTotal.total}</Text>
+                        <Text style={[s.tCell, s.tTotalVal, { width: 65 }]}>{demoTotal.orphan}</Text>
+                        <Text style={[s.tCell, s.tTotalVal, { width: 65 }]}>{demoTotal.d_able}</Text>
                         <TouchableOpacity
-                          style={s.docActionBtn}
-                          onPress={() => router.push(`/documents?search=${st.registration_no}` as any)}
+                          style={{ width: 75, justifyContent: 'center', alignItems: 'center' }}
+                          onPress={() => router.push({ pathname: '/gate-pass', params: { tab: 'execute' } } as any)}
+                          disabled={!Number(demoTotal.gate_pass ?? demoTotal.pass_out ?? 0)}
                         >
-                          <Text style={s.docActionBtnText}>Upload</Text>
+                          <Text
+                            style={[
+                              s.tCell,
+                              s.tTotalVal,
+                              {
+                                width: 75,
+                                color: Number(demoTotal.gate_pass ?? demoTotal.pass_out ?? 0) > 0 ? '#b45309' : undefined,
+                                fontWeight: '800',
+                              },
+                            ]}
+                          >
+                            {demoTotal.gate_pass ?? demoTotal.pass_out ?? 0}
+                          </Text>
                         </TouchableOpacity>
+                        <Text style={[s.tCell, s.tTotalVal, { width: 75 }]}>{demoTotal.drop_out}</Text>
                       </View>
-                    ))
-                  )}
-                </View>
-              </View>
-            </View>
-
-            {/* ------------------------------------------------------------ */}
-            {/* RIGHT COLUMN: Staff Distribution & Staff Attendance          */}
-            {/* ------------------------------------------------------------ */}
-            <View style={s.gridColumn}>
-              {/* Card: Staff Distribution & Attendance */}
-              <View style={s.panelCard}>
-                <View style={s.panelHeader}>
-                  <View style={s.panelHeaderLeft}>
-                    <Text style={s.panelHeaderIcon}>👥</Text>
-                    <Text style={s.panelTitle}>Staff Distribution & Attendance</Text>
-                    {stats.attendanceDate && (
-                      <View style={[s.sessionBadge, { backgroundColor: '#e0e7ff' }]}>
-                        <Text style={[s.sessionBadgeText, { color: '#3730a3' }]}>
-                          {stats.attendanceDate}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={s.panelHeaderRight}>
-                    Total: <Text style={s.boldNumber}>{staffTotal.total}</Text>
-                  </Text>
-                </View>
-
-                <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-                  <View style={s.tableContainer}>
-                    <View style={[s.tRow, s.tHeadRow]}>
-                      <Text style={[s.tHeadCell, s.tLeftCell, { width: 140 }]}>STAFF ROLE</Text>
-                      <Text style={[s.tHeadCell, { width: 50 }]}>MALE</Text>
-                      <Text style={[s.tHeadCell, { width: 60 }]}>FEMALE</Text>
-                      <Text style={[s.tHeadCell, s.tHighlightHead, { width: 60 }]}>TOTAL</Text>
-                      <Text style={[s.tHeadCell, { width: 65 }]}>PRESENT</Text>
-                      <Text style={[s.tHeadCell, { width: 65 }]}>ABSENT</Text>
-                      <Text style={[s.tHeadCell, { width: 55 }]}>LEAVE</Text>
                     </View>
+                  </ScrollView>
+                </View>
 
-                    {staffList.length === 0 ? (
-                      <View style={s.emptyRow}>
-                        <Text style={s.emptyText}>No staff records</Text>
-                      </View>
+                {/* Card 2: Student Documents Required */}
+                <View style={s.panelCard}>
+                  <View style={s.panelHeader}>
+                    <View style={s.panelHeaderLeft}>
+                      <Text style={s.panelHeaderIcon}>📁</Text>
+                      <Text style={s.panelTitle}>Student Documents Required</Text>
+                      {(stats.missingStudentDocs || []).length > 0 && (
+                        <View style={[s.sessionBadge, { backgroundColor: '#fee2e2' }]}>
+                          <Text style={[s.sessionBadgeText, { color: '#991b1b', fontWeight: '800' }]}>
+                            {(stats.missingStudentDocs || []).length} Due
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <TouchableOpacity onPress={() => openMissingDocsModal('student')}>
+                      <Text style={s.viewAllLink}>
+                        View All ({(stats.missingStudentDocs || []).length}) ›
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={s.docList}>
+                    {(stats.missingStudentDocs || []).length === 0 ? (
+                      <Text style={s.allClearText}>✓ All student documents are complete</Text>
                     ) : (
-                      staffList.map((row: any, i: number) => (
-                        <View key={row.role + i} style={[s.tRow, i % 2 === 1 && s.tRowZebra]}>
-                          <Text style={[s.tCell, s.tLeftCell, s.tRoleCell, { width: 140 }]}>{row.role}</Text>
-                          <Text style={[s.tCell, { width: 50 }]}>{row.male}</Text>
-                          <Text style={[s.tCell, { width: 60 }]}>{row.female}</Text>
-                          <Text style={[s.tCell, s.tHighlightCell, { width: 60 }]}>{row.total}</Text>
-                          <Text style={[s.tCell, { width: 65, color: '#15803d', fontWeight: '700' }]}>{row.present}</Text>
-                          <Text style={[s.tCell, { width: 65, color: row.absent > 0 ? '#b91c1c' : '#64748b' }]}>{row.absent}</Text>
-                          <Text style={[s.tCell, { width: 55 }]}>{row.leave}</Text>
+                      (stats.missingStudentDocs || []).slice(0, 5).map((st: any) => (
+                        <View key={st.id} style={s.docItemRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.docItemName}>
+                              #{st.registration_no} - {st.student_name} ({st.class_name})
+                            </Text>
+                            <View style={s.missingPillContainer}>
+                              {(st.missing || []).map((m: string) => {
+                                const bStyle = getDocBadgeStyle(m);
+                                return (
+                                  <View key={m} style={[s.missingPill, { backgroundColor: bStyle.bg, borderColor: bStyle.border, borderWidth: 1 }]}>
+                                    <Text style={[s.missingPillText, { color: bStyle.color, fontWeight: '700' }]}>{m}</Text>
+                                  </View>
+                                );
+                              })}
+                            </View>
+                          </View>
+                          <TouchableOpacity
+                            style={s.docActionBtn}
+                            onPress={() => router.push(`/documents?search=${st.registration_no}` as any)}
+                          >
+                            <Text style={s.docActionBtnText}>Upload</Text>
+                          </TouchableOpacity>
                         </View>
                       ))
                     )}
-
-                    {/* Total Row */}
-                    <View style={[s.tRow, s.tTotalRow]}>
-                      <Text style={[s.tCell, s.tLeftCell, s.tTotalLabel, { width: 140 }]}>Total</Text>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 50 }]}>{staffTotal.male}</Text>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 60 }]}>{staffTotal.female}</Text>
-                      <Text style={[s.tCell, s.tTotalValHighlight, { width: 60 }]}>{staffTotal.total}</Text>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 65, color: '#15803d' }]}>{staffTotal.present}</Text>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 65, color: staffTotal.absent > 0 ? '#b91c1c' : '#1e293b' }]}>
-                        {staffTotal.absent}
-                      </Text>
-                      <Text style={[s.tCell, s.tTotalVal, { width: 55 }]}>{staffTotal.leave}</Text>
-                    </View>
                   </View>
-                </ScrollView>
+                </View>
               </View>
 
-              {/* Card 6: Staff Documents Required */}
-              <View style={s.panelCard}>
-                <View style={s.panelHeader}>
-                  <View style={s.panelHeaderLeft}>
-                    <Text style={s.panelHeaderIcon}>📁</Text>
-                    <Text style={s.panelTitle}>Staff Documents Required</Text>
-                    {(stats.missingStaffDocs || []).length > 0 && (
-                      <View style={[s.sessionBadge, { backgroundColor: '#fee2e2' }]}>
-                        <Text style={[s.sessionBadgeText, { color: '#991b1b', fontWeight: '800' }]}>
-                          {(stats.missingStaffDocs || []).length} Due
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <TouchableOpacity onPress={() => openMissingDocsModal('staff')}>
-                    <Text style={s.viewAllLink}>
-                      View All ({(stats.missingStaffDocs || []).length}) ›
+              {/* ------------------------------------------------------------ */}
+              {/* RIGHT COLUMN: Staff Distribution & Staff Attendance          */}
+              {/* ------------------------------------------------------------ */}
+              <View style={s.gridColumn}>
+                {/* Card: Staff Distribution & Attendance */}
+                <View style={s.panelCard}>
+                  <View style={s.panelHeader}>
+                    <View style={s.panelHeaderLeft}>
+                      <Text style={s.panelHeaderIcon}>👥</Text>
+                      <Text style={s.panelTitle}>Staff Distribution & Attendance</Text>
+                      {stats.attendanceDate && (
+                        <View style={[s.sessionBadge, { backgroundColor: '#e0e7ff' }]}>
+                          <Text style={[s.sessionBadgeText, { color: '#3730a3' }]}>
+                            {stats.attendanceDate}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={s.panelHeaderRight}>
+                      Total: <Text style={s.boldNumber}>{staffTotal.total}</Text>
                     </Text>
-                  </TouchableOpacity>
+                  </View>
+
+                  <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+                    <View style={s.tableContainer}>
+                      <View style={[s.tRow, s.tHeadRow]}>
+                        <Text style={[s.tHeadCell, s.tLeftCell, { width: 140 }]}>STAFF ROLE</Text>
+                        <Text style={[s.tHeadCell, { width: 50 }]}>MALE</Text>
+                        <Text style={[s.tHeadCell, { width: 60 }]}>FEMALE</Text>
+                        <Text style={[s.tHeadCell, s.tHighlightHead, { width: 60 }]}>TOTAL</Text>
+                        <Text style={[s.tHeadCell, { width: 65 }]}>PRESENT</Text>
+                        <Text style={[s.tHeadCell, { width: 65 }]}>ABSENT</Text>
+                        <Text style={[s.tHeadCell, { width: 55 }]}>LEAVE</Text>
+                      </View>
+
+                      {staffList.length === 0 ? (
+                        <View style={s.emptyRow}>
+                          <Text style={s.emptyText}>No staff records</Text>
+                        </View>
+                      ) : (
+                        staffList.map((row: any, i: number) => (
+                          <View key={row.role + i} style={[s.tRow, i % 2 === 1 && s.tRowZebra]}>
+                            <Text style={[s.tCell, s.tLeftCell, s.tRoleCell, { width: 140 }]}>{row.role}</Text>
+                            <Text style={[s.tCell, { width: 50 }]}>{row.male}</Text>
+                            <Text style={[s.tCell, { width: 60 }]}>{row.female}</Text>
+                            <Text style={[s.tCell, s.tHighlightCell, { width: 60 }]}>{row.total}</Text>
+                            <Text style={[s.tCell, { width: 65, color: '#15803d', fontWeight: '700' }]}>{row.present}</Text>
+                            <Text style={[s.tCell, { width: 65, color: row.absent > 0 ? '#b91c1c' : '#64748b' }]}>{row.absent}</Text>
+                            <Text style={[s.tCell, { width: 55 }]}>{row.leave}</Text>
+                          </View>
+                        ))
+                      )}
+
+                      {/* Total Row */}
+                      <View style={[s.tRow, s.tTotalRow]}>
+                        <Text style={[s.tCell, s.tLeftCell, s.tTotalLabel, { width: 140 }]}>Total</Text>
+                        <Text style={[s.tCell, s.tTotalVal, { width: 50 }]}>{staffTotal.male}</Text>
+                        <Text style={[s.tCell, s.tTotalVal, { width: 60 }]}>{staffTotal.female}</Text>
+                        <Text style={[s.tCell, s.tTotalValHighlight, { width: 60 }]}>{staffTotal.total}</Text>
+                        <Text style={[s.tCell, s.tTotalVal, { width: 65, color: '#15803d' }]}>{staffTotal.present}</Text>
+                        <Text style={[s.tCell, s.tTotalVal, { width: 65, color: staffTotal.absent > 0 ? '#b91c1c' : '#1e293b' }]}>
+                          {staffTotal.absent}
+                        </Text>
+                        <Text style={[s.tCell, s.tTotalVal, { width: 55 }]}>{staffTotal.leave}</Text>
+                      </View>
+                    </View>
+                  </ScrollView>
                 </View>
 
-                <View style={s.docList}>
-                  {(stats.missingStaffDocs || []).length === 0 ? (
-                    <Text style={s.allClearText}>✓ All staff profiles and documents are complete</Text>
-                  ) : (
-                    (stats.missingStaffDocs || []).slice(0, 5).map((st: any) => (
-                      <View key={st.id} style={s.docItemRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={s.docItemName}>
-                            #{st.staff_id} - {st.name} ({st.designation || 'Staff'})
+                {/* Card 6: Staff Documents Required */}
+                <View style={s.panelCard}>
+                  <View style={s.panelHeader}>
+                    <View style={s.panelHeaderLeft}>
+                      <Text style={s.panelHeaderIcon}>📁</Text>
+                      <Text style={s.panelTitle}>Staff Documents Required</Text>
+                      {(stats.missingStaffDocs || []).length > 0 && (
+                        <View style={[s.sessionBadge, { backgroundColor: '#fee2e2' }]}>
+                          <Text style={[s.sessionBadgeText, { color: '#991b1b', fontWeight: '800' }]}>
+                            {(stats.missingStaffDocs || []).length} Due
                           </Text>
-                          <View style={s.missingPillContainer}>
-                            {(st.missing || []).map((m: string) => {
-                              const bStyle = getDocBadgeStyle(m);
-                              return (
-                                <View key={m} style={[s.missingPill, { backgroundColor: bStyle.bg, borderColor: bStyle.border, borderWidth: 1 }]}>
-                                  <Text style={[s.missingPillText, { color: bStyle.color, fontWeight: '700' }]}>{m}</Text>
-                                </View>
-                              );
-                            })}
+                        </View>
+                      )}
+                    </View>
+                    <TouchableOpacity onPress={() => openMissingDocsModal('staff')}>
+                      <Text style={s.viewAllLink}>
+                        View All ({(stats.missingStaffDocs || []).length}) ›
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={s.docList}>
+                    {(stats.missingStaffDocs || []).length === 0 ? (
+                      <Text style={s.allClearText}>✓ All staff profiles and documents are complete</Text>
+                    ) : (
+                      (stats.missingStaffDocs || []).slice(0, 5).map((st: any) => (
+                        <View key={st.id} style={s.docItemRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.docItemName}>
+                              #{st.staff_id} - {st.name} ({st.designation || 'Staff'})
+                            </Text>
+                            <View style={s.missingPillContainer}>
+                              {(st.missing || []).map((m: string) => {
+                                const bStyle = getDocBadgeStyle(m);
+                                return (
+                                  <View key={m} style={[s.missingPill, { backgroundColor: bStyle.bg, borderColor: bStyle.border, borderWidth: 1 }]}>
+                                    <Text style={[s.missingPillText, { color: bStyle.color, fontWeight: '700' }]}>{m}</Text>
+                                  </View>
+                                );
+                              })}
+                            </View>
+                          </View>
+                          <TouchableOpacity
+                            style={s.docActionBtn}
+                            onPress={() => router.push(`/teachers?mode=documents&teacherId=${st.id}` as any)}
+                          >
+                            <Text style={s.docActionBtnText}>Upload</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            {/* ============================================================== */}
+            {/* FULL-WIDTH CARD: Action History Audit (MATCHING IMAGE)         */}
+            {/* ============================================================== */}
+            <View style={[s.panelCard, s.auditCardFullWidth]}>
+              <View style={s.panelHeader}>
+                <View style={s.panelHeaderLeft}>
+                  <Text style={s.panelHeaderIcon}>🕒</Text>
+                  <Text style={s.panelTitle}>Action History Audit</Text>
+                  <View style={[s.sessionBadge, { backgroundColor: '#e0f2fe' }]}>
+                    <Text style={[s.sessionBadgeText, { color: '#0369a1' }]}>Last 10 Activities</Text>
+                  </View>
+                </View>
+
+                <View style={s.panelHeaderRightGroup}>
+                  <View style={s.refreshBadge}>
+                    <Text style={s.refreshBadgeText}>
+                      Auto-refreshing in: <Text style={s.refreshSec}>{formatCountdown(refreshCountdown)}</Text>
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={s.refreshIconBtn}
+                    onPress={() => {
+                      setRefreshCountdown(15 * 60);
+                      void loadOverview(true);
+                    }}
+                  >
+                    <Text style={s.refreshIconText}>🔄</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+                <View style={s.tableContainer}>
+                  <View style={[s.tRow, s.tHeadRow]}>
+                    <Text style={[s.tHeadCell, { width: 50 }]}>S.L.</Text>
+                    <Text style={[s.tHeadCell, { width: 90 }]}>TOKEN</Text>
+                    <Text style={[s.tHeadCell, s.tLeftCell, { width: 170 }]}>INITIATOR</Text>
+                    <Text style={[s.tHeadCell, s.tLeftCell, { width: 160 }]}>ACTION TYPE</Text>
+                    <Text style={[s.tHeadCell, s.tLeftCell, { minWidth: 320, flex: 1 }]}>AUDIT DESCRIPTION</Text>
+                    <Text style={[s.tHeadCell, { width: 160 }]}>TIMESTAMP</Text>
+                    <Text style={[s.tHeadCell, { width: 130 }]}>IP ADDRESS</Text>
+                    <Text style={[s.tHeadCell, s.tLeftCell, { width: 180 }]}>LOCATION</Text>
+                  </View>
+
+                  {auditList.length === 0 ? (
+                    <View style={s.emptyRow}>
+                      <Text style={s.emptyText}>No recent activity logs recorded</Text>
+                    </View>
+                  ) : (
+                    auditList.map((row: any, i: number) => (
+                      <View key={row.token + i} style={[s.tRow, i % 2 === 1 && s.tRowZebra]}>
+                        <Text style={[s.tCell, { width: 50 }]}>{row.sl || i + 1}</Text>
+                        <Text style={[s.tCell, s.tokenCell, { width: 90 }]}>{row.token}</Text>
+                        <View style={[s.tCellBox, { width: 170, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                          <View style={s.initiatorBadge}>
+                            <Text style={s.initiatorBadgeText}>{row.initiator_badge}</Text>
+                          </View>
+                          <Text style={s.initiatorName} numberOfLines={1}>
+                            {row.initiator_name}
+                          </Text>
+                        </View>
+                        <View style={[s.tCellBox, { width: 160, flexDirection: 'row', alignItems: 'center' }]}>
+                          <View style={s.actionTypePill}>
+                            <Text style={s.actionTypePillText}>
+                              {row.icon ? `${row.icon} ` : ''}{row.action_type}
+                            </Text>
                           </View>
                         </View>
-                        <TouchableOpacity
-                          style={s.docActionBtn}
-                          onPress={() => router.push(`/teachers?mode=documents&teacherId=${st.id}` as any)}
-                        >
-                          <Text style={s.docActionBtnText}>Upload</Text>
-                        </TouchableOpacity>
+                        <View style={[s.tCellBox, { minWidth: 320, flex: 1, paddingVertical: 6 }]}>
+                          <Text style={s.auditDescriptionText}>
+                            {row.audit_description}
+                          </Text>
+                        </View>
+                        <Text style={[s.tCell, s.timestampCell, { width: 160 }]}>
+                          {formatKolkataTimestamp(row.raw_time, row.timestamp)}
+                        </Text>
+                        <Text style={[s.tCell, s.ipCell, { width: 130 }]} numberOfLines={1}>
+                          {row.ip_address || '127.0.0.1'}
+                        </Text>
+                        <View style={[s.tCellBox, { width: 180, flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
+                          <Text style={{ fontSize: 12 }}>📍</Text>
+                          <Text style={s.locationText} numberOfLines={1}>
+                            {row.location || 'Memari Campus'}
+                          </Text>
+                        </View>
                       </View>
                     ))
                   )}
                 </View>
-              </View>
-            </View>
-          </View>
+              </ScrollView>
 
-          {/* ============================================================== */}
-          {/* FULL-WIDTH CARD: Action History Audit (MATCHING IMAGE)         */}
-          {/* ============================================================== */}
-          <View style={[s.panelCard, s.auditCardFullWidth]}>
-            <View style={s.panelHeader}>
-              <View style={s.panelHeaderLeft}>
-                <Text style={s.panelHeaderIcon}>🕒</Text>
-                <Text style={s.panelTitle}>Action History Audit</Text>
-                <View style={[s.sessionBadge, { backgroundColor: '#e0f2fe' }]}>
-                  <Text style={[s.sessionBadgeText, { color: '#0369a1' }]}>Last 10 Activities</Text>
-                </View>
-              </View>
-
-              <View style={s.panelHeaderRightGroup}>
-                <View style={s.refreshBadge}>
-                  <Text style={s.refreshBadgeText}>
-                    Auto-refreshing in: <Text style={s.refreshSec}>{formatCountdown(refreshCountdown)}</Text>
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={s.refreshIconBtn}
-                  onPress={() => {
-                    setRefreshCountdown(15 * 60);
-                    void loadOverview(true);
-                  }}
-                >
-                  <Text style={s.refreshIconText}>🔄</Text>
+              <View style={s.auditFooterRow}>
+                <TouchableOpacity onPress={() => router.push('/audit-log' as any)}>
+                  <Text style={s.viewAllAuditLink}>View Complete Audit Log History ›</Text>
                 </TouchableOpacity>
+                <Text style={s.auditFooterCopy}>© 2023-2026 All Rights Reserved By Al-Ameen Mission Memari</Text>
               </View>
             </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-              <View style={s.tableContainer}>
-                <View style={[s.tRow, s.tHeadRow]}>
-                  <Text style={[s.tHeadCell, { width: 50 }]}>S.L.</Text>
-                  <Text style={[s.tHeadCell, { width: 90 }]}>TOKEN</Text>
-                  <Text style={[s.tHeadCell, s.tLeftCell, { width: 170 }]}>INITIATOR</Text>
-                  <Text style={[s.tHeadCell, s.tLeftCell, { width: 160 }]}>ACTION TYPE</Text>
-                  <Text style={[s.tHeadCell, s.tLeftCell, { minWidth: 320, flex: 1 }]}>AUDIT DESCRIPTION</Text>
-                  <Text style={[s.tHeadCell, { width: 160 }]}>TIMESTAMP</Text>
-                  <Text style={[s.tHeadCell, { width: 130 }]}>IP ADDRESS</Text>
-                  <Text style={[s.tHeadCell, s.tLeftCell, { width: 180 }]}>LOCATION</Text>
-                </View>
-
-                {auditList.length === 0 ? (
-                  <View style={s.emptyRow}>
-                    <Text style={s.emptyText}>No recent activity logs recorded</Text>
-                  </View>
-                ) : (
-                  auditList.map((row: any, i: number) => (
-                    <View key={row.token + i} style={[s.tRow, i % 2 === 1 && s.tRowZebra]}>
-                      <Text style={[s.tCell, { width: 50 }]}>{row.sl || i + 1}</Text>
-                      <Text style={[s.tCell, s.tokenCell, { width: 90 }]}>{row.token}</Text>
-                      <View style={[s.tCellBox, { width: 170, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-                        <View style={s.initiatorBadge}>
-                          <Text style={s.initiatorBadgeText}>{row.initiator_badge}</Text>
-                        </View>
-                        <Text style={s.initiatorName} numberOfLines={1}>
-                          {row.initiator_name}
-                        </Text>
-                      </View>
-                      <View style={[s.tCellBox, { width: 160, flexDirection: 'row', alignItems: 'center' }]}>
-                        <View style={s.actionTypePill}>
-                          <Text style={s.actionTypePillText}>
-                            {row.icon ? `${row.icon} ` : ''}{row.action_type}
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={[s.tCellBox, { minWidth: 320, flex: 1, paddingVertical: 6 }]}>
-                        <Text style={s.auditDescriptionText}>
-                          {row.audit_description}
-                        </Text>
-                      </View>
-                      <Text style={[s.tCell, s.timestampCell, { width: 160 }]}>
-                        {formatKolkataTimestamp(row.raw_time, row.timestamp)}
-                      </Text>
-                      <Text style={[s.tCell, s.ipCell, { width: 130 }]} numberOfLines={1}>
-                        {row.ip_address || '127.0.0.1'}
-                      </Text>
-                      <View style={[s.tCellBox, { width: 180, flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
-                        <Text style={{ fontSize: 12 }}>📍</Text>
-                        <Text style={s.locationText} numberOfLines={1}>
-                          {row.location || 'Memari Campus'}
-                        </Text>
-                      </View>
-                    </View>
-                  ))
-                )}
-              </View>
-            </ScrollView>
-
-            <View style={s.auditFooterRow}>
-              <TouchableOpacity onPress={() => router.push('/audit-log' as any)}>
-                <Text style={s.viewAllAuditLink}>View Complete Audit Log History ›</Text>
-              </TouchableOpacity>
-              <Text style={s.auditFooterCopy}>© 2023-2026 All Rights Reserved By Al-Ameen Mission Memari</Text>
-            </View>
-          </View>
           </>
         )}
       </ScrollView>
@@ -1119,6 +1160,7 @@ export default function Dashboard() {
                 ['Terminal Exam', '/terminal-exams'],
                 ['Print Terminal Result', '/class-results'],
                 ['Teacher Routine', '/routines'],
+                ['Projector Display Control', '/display-control'],
                 ['Notice Board', '/notices'],
                 ['Library Portal', '/library'],
                 ['Student Behaviour', '/behavior'],
@@ -1266,6 +1308,7 @@ export default function Dashboard() {
                     ['Terminal Exam', '/terminal-exams'],
                     ['Print Terminal Result', '/class-results'],
                     ['Teacher Routine', '/routines'],
+                    ['Projector Display Control', '/display-control'],
                     ['Notice Board', '/notices'],
                     ['Library Portal', '/library'],
                     ['Student Behaviour', '/behavior'],
@@ -1373,7 +1416,7 @@ export default function Dashboard() {
                 <Text style={s.searchIcon}>🔍</Text>
                 <TextInput
                   style={s.missingDocsSearchInput}
-                  placeholder={missingDocsModal === 'student' 
+                  placeholder={missingDocsModal === 'student'
                     ? "Search student name, Reg ID, class, or missing doc..."
                     : "Search staff name, Staff ID, designation, or missing doc..."}
                   placeholderTextColor="#94a3b8"
@@ -1428,13 +1471,13 @@ export default function Dashboard() {
                 <View style={{ paddingVertical: 40, alignItems: 'center' }}>
                   <Text style={{ fontSize: 32, marginBottom: 8 }}>✓</Text>
                   <Text style={{ fontSize: 15, fontWeight: '700', color: '#15803d' }}>
-                    {missingDocsSearch || missingDocsFilter !== 'All' 
-                      ? 'No matching pending documents found' 
+                    {missingDocsSearch || missingDocsFilter !== 'All'
+                      ? 'No matching pending documents found'
                       : 'All documents are complete!'}
                   </Text>
                   <Text style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
-                    {missingDocsSearch || missingDocsFilter !== 'All' 
-                      ? 'Try adjusting your search query or document filter.' 
+                    {missingDocsSearch || missingDocsFilter !== 'All'
+                      ? 'Try adjusting your search query or document filter.'
                       : 'No pending or missing items in this category.'}
                   </Text>
                 </View>
@@ -1510,6 +1553,219 @@ export default function Dashboard() {
               </Text>
               <TouchableOpacity
                 onPress={closeMissingDocsModal}
+                style={{ paddingVertical: 6, paddingHorizontal: 14, backgroundColor: '#e2e8f0', borderRadius: 6 }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Voice Calling Directory Modal */}
+      <Modal
+        visible={callingModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCallingModal(false)}
+      >
+        <View style={s.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setCallingModal(false)} />
+          <View style={[s.teacherModal, { maxWidth: 640, maxHeight: '88%', display: 'flex', flexDirection: 'column' }]}>
+            {/* Header */}
+            <View style={s.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                <Text style={{ fontSize: 22 }}>📞</Text>
+                <View>
+                  <Text style={s.modalTitle}>Voice Calling (Agora HD)</Text>
+                  <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '600' }}>Direct encrypted voice calling across academy</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setCallingModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={s.closeText}>×</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Input */}
+            <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f1f5f9', borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1', paddingHorizontal: 10 }}>
+                <Text style={{ fontSize: 16, marginRight: 6 }}>🔍</Text>
+                <TextInput
+                  placeholder="Search by name, ID or role..."
+                  value={callingSearch}
+                  onChangeText={(text) => openCallingModal(callingRoleFilter, text)}
+                  style={{ flex: 1, height: 40, fontSize: 14, color: '#0f172a' }}
+                />
+                {callingSearch.length > 0 && (
+                  <TouchableOpacity onPress={() => openCallingModal(callingRoleFilter, '')}>
+                    <Text style={{ fontSize: 16, color: '#94a3b8', padding: 4 }}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Filter Pills */}
+            <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 16, paddingBottom: 10, flexWrap: 'wrap' }}>
+              {[
+                { key: 'all', label: 'All Users' },
+                { key: 'teacher', label: 'Teachers' },
+                { key: 'guardian', label: 'Guardians' },
+                { key: 'gateman', label: 'Gateman' },
+                { key: 'admin', label: 'Admins' },
+              ].map((pill) => {
+                const isActive = callingRoleFilter === pill.key;
+                return (
+                  <TouchableOpacity
+                    key={pill.key}
+                    onPress={() => openCallingModal(pill.key, callingSearch)}
+                    style={{
+                      paddingVertical: 5,
+                      paddingHorizontal: 12,
+                      borderRadius: 16,
+                      backgroundColor: isActive ? '#0284c7' : '#f1f5f9',
+                      borderWidth: 1,
+                      borderColor: isActive ? '#0284c7' : '#e2e8f0',
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: isActive ? '#ffffff' : '#475569' }}>
+                      {pill.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Contacts Scrollable List */}
+            <ScrollView style={{ flex: 1, paddingHorizontal: 16 }} contentContainerStyle={{ paddingBottom: 16 }}>
+              {callingLoading ? (
+                <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                  <ActivityIndicator size="large" color="#0284c7" />
+                  <Text style={{ marginTop: 10, fontSize: 13, color: '#64748b' }}>Loading directory...</Text>
+                </View>
+              ) : callingContacts.length === 0 ? (
+                <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 32, marginBottom: 8 }}>📭</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#475569' }}>No contacts found</Text>
+                  <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Try a different search term or filter.</Text>
+                </View>
+              ) : (
+                callingContacts.map((contact) => (
+                  <View
+                    key={contact.id}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      backgroundColor: '#ffffff',
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: '#e2e8f0',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, paddingRight: 8 }}>
+                      <View style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 20,
+                        backgroundColor: '#e0f2fe',
+                        borderWidth: 1,
+                        borderColor: '#7dd3fc',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}>
+                        <Text style={{ color: '#0369a1', fontWeight: '800', fontSize: 16 }}>
+                          {(contact.full_name || 'U').slice(0, 1).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        {contact.role === 'guardian' ? (
+                          <>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f172a' }} numberOfLines={1}>
+                                🎓 {contact.student_name || 'Student'}
+                              </Text>
+                              <View style={{ backgroundColor: '#e0f2fe', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#0284c7' }}>
+                                  Reg: #{contact.registration_no || contact.login_id}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#334155', marginTop: 2 }}>
+                              👤 Guardian: {contact.full_name}
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                              <Text style={{ fontSize: 11, color: '#64748b' }}>
+                                Class: {contact.class_name || 'N/A'} {contact.roll_no ? `• Roll: ${contact.roll_no}` : ''}
+                              </Text>
+                              {contact.is_logged_in ? (
+                                <Text style={{ fontSize: 11, color: '#16a34a', fontWeight: '700' }}>
+                                  • 🟢 App Active
+                                </Text>
+                              ) : (
+                                <Text style={{ fontSize: 11, color: '#94a3b8' }}>
+                                  • 📱 App Registered
+                                </Text>
+                              )}
+                            </View>
+                          </>
+                        ) : (
+                          <>
+                            <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f172a' }} numberOfLines={1}>
+                              {contact.full_name}
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                              <Text style={{ fontSize: 11, color: '#64748b', textTransform: 'capitalize' }}>
+                                {contact.role || 'User'}
+                              </Text>
+                              {contact.login_id && (
+                                <Text style={{ fontSize: 10, color: '#94a3b8' }}>
+                                  • ID: {contact.login_id}
+                                </Text>
+                              )}
+                            </View>
+                          </>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Green Call Action Button */}
+                    <TouchableOpacity
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        backgroundColor: '#10b981',
+                        paddingVertical: 8,
+                        paddingHorizontal: 14,
+                        borderRadius: 20,
+                        elevation: 2,
+                      }}
+                      onPress={() => {
+                        setCallingModal(false);
+                        const displayName = contact.role === 'guardian'
+                          ? `${contact.full_name} (${contact.student_name || 'Reg ' + (contact.registration_no || contact.login_id)})`
+                          : contact.full_name;
+                        void initiateAudioCall(contact.id, displayName);
+                      }}
+                    >
+                      <Text style={{ fontSize: 14, color: '#fff' }}>📞</Text>
+                      <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 12 }}>Call</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+            {/* Modal Footer */}
+            <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: '#e2e8f0', backgroundColor: '#f8fafc', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomLeftRadius: 14, borderBottomRightRadius: 14 }}>
+              <Text style={{ fontSize: 11, color: '#64748b' }}>
+                Powered by Agora RTC & CallKeep
+              </Text>
+              <TouchableOpacity
+                onPress={() => setCallingModal(false)}
                 style={{ paddingVertical: 6, paddingHorizontal: 14, backgroundColor: '#e2e8f0', borderRadius: 6 }}
               >
                 <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Close</Text>
