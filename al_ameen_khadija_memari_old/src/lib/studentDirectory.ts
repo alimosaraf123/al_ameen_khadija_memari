@@ -21,7 +21,7 @@ export function filterStudents(students: any[], filters: StudentFilters) {
     return (filters.year === 'all' || studentSession(student) === filters.year)
       && (filters.className === 'all' || normalizeStudentClass(student.class_name) === normalizeStudentClass(filters.className))
       && (filters.gender === 'all' || normalizedGender === filters.gender)
-      && (filters.status === 'all' || (filters.status === 'active' ? student.is_active === true : student.is_active === false))
+      && (filters.status === 'all' || (filters.year !== 'all' && filters.year !== '2026-2027' && filters.status === 'active') || (filters.status === 'active' ? student.is_active === true : student.is_active === false))
       && (!query || ['student_name', 'registration_no', 'mobile_number', 'guardian_mobile', 'whatsapp_number', 'room_name']
         .some(key => String(student[key] ?? '').toLowerCase().includes(query)));
   });

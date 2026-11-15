@@ -537,7 +537,7 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
       <Select label="Session" value={year} onChange={setYear} options={[{ value: 'all', label: 'All Sessions' }, ...sessions.map(session => ({ value: session, label: session }))]} />
       <Select label="Class" value={className} onChange={setClassName} options={[{ value: 'all', label: 'All Classes' }, ...classes.map(c => ({ value: c, label: c }))]} />
       <Select label="Gender" value={gender} onChange={setGender} options={[{ value: 'all', label: 'All Genders' }, { value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }]} />
-      <Select label="Status" value={status} onChange={setStatus} options={[{ value: 'active', label: 'Active' }, { value: 'dropout', label: 'Dropout' }, { value: 'all', label: 'All Statuses' }]} />
+      <Select label="Status" value={status} onChange={setStatus} options={[{ value: 'active', label: 'Active' }, { value: 'dropout', label: 'Dropout / Passout' }, { value: 'all', label: 'All Statuses' }]} />
     </View>
     <View style={s.toolbar}>
       <View style={s.inline}><Text>Show</Text><Select label="Entries per page" value={size} onChange={setSize} options={['10', '25', '50', '100', 'all'].map(value => ({ value, label: value === 'all' ? 'All' : value }))} /><Text>Entries</Text></View>
