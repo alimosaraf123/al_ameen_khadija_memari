@@ -659,7 +659,12 @@ export default function Dashboard() {
                       <Text style={[s.tHeadCell, s.tHighlightHead, { width: 65 }]}>TOTAL</Text>
                       <Text style={[s.tHeadCell, { width: 65 }]}>ORPHAN</Text>
                       <Text style={[s.tHeadCell, { width: 65 }]}>D.ABLE</Text>
-                      <Text style={[s.tHeadCell, { width: 75 }]}>GATE PASS</Text>
+                      <TouchableOpacity
+                        style={{ width: 75, justifyContent: 'center', alignItems: 'center' }}
+                        onPress={() => router.push({ pathname: '/gate-pass', params: { tab: 'execute' } } as any)}
+                      >
+                        <Text style={[s.tHeadCell, { width: 75 }]}>GATE PASS</Text>
+                      </TouchableOpacity>
                       <Text style={[s.tHeadCell, { width: 75 }]}>DROP OUT</Text>
                     </View>
 
@@ -678,7 +683,7 @@ export default function Dashboard() {
                           <Text style={[s.tCell, { width: 65 }]}>{row.d_able}</Text>
                           <TouchableOpacity
                             style={{ width: 75, justifyContent: 'center', alignItems: 'center' }}
-                            onPress={() => router.push('/gate-pass' as any)}
+                            onPress={() => router.push({ pathname: '/gate-pass', params: { tab: 'execute', ...(row.class_name ? { class_name: row.class_name } : {}) } } as any)}
                             disabled={!Number(row.gate_pass ?? row.pass_out ?? 0)}
                           >
                             <Text
@@ -709,7 +714,7 @@ export default function Dashboard() {
                       <Text style={[s.tCell, s.tTotalVal, { width: 65 }]}>{demoTotal.d_able}</Text>
                       <TouchableOpacity
                         style={{ width: 75, justifyContent: 'center', alignItems: 'center' }}
-                        onPress={() => router.push('/gate-pass' as any)}
+                        onPress={() => router.push({ pathname: '/gate-pass', params: { tab: 'execute' } } as any)}
                         disabled={!Number(demoTotal.gate_pass ?? demoTotal.pass_out ?? 0)}
                       >
                         <Text
