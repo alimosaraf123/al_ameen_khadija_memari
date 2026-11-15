@@ -4,7 +4,7 @@ const pool=require('./src/db');
 
 (async()=>{
   try{
-    const loginId=process.env.ADMIN_LOGIN_ID||'superadmin';
+    const loginId=process.env.ADMIN_LOGIN_ID||'admin_super';
     const password=process.env.ADMIN_PASSWORD;
     const fullName=process.env.ADMIN_NAME||'Super Admin';
     if(!password) throw new Error('ADMIN_PASSWORD missing in .env');
