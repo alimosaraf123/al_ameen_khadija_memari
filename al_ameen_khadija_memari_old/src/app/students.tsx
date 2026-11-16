@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
@@ -256,6 +257,24 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
   const [exitBusy, setExitBusy] = useState(false);
   const [sameAsPresent, setSameAsPresent] = useState(false);
   const [ifscMessage, setIfscMessage] = useState('');
+
+  const { width: windowWidth } = useWindowDimensions();
+  const isTwoCol = windowWidth >= 640;
+
+  const FormRow = ({ children, style }: any) => (
+    <View style={[styles.formRow, !isTwoCol && styles.formRowMobile, style]}>
+      {children}
+    </View>
+  );
+
+  const FormCol = ({ children, full = false, style }: any) => {
+    if (!children && !isTwoCol) return null;
+    return (
+      <View style={[full || !isTwoCol ? styles.colFull : styles.colHalf, style]}>
+        {children || null}
+      </View>
+    );
+  };
 
   const [form, setForm] = useState<any>({ ...EMPTY_FORM });
   const [visitor1, setVisitor1] = useState<any>({ ...EMPTY_VISITOR });
@@ -696,77 +715,122 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     <View>
       <SectionTitle>{title}</SectionTitle>
 
-      <LabeledField
-        label="Name"
-        value={visitor.visitor_name}
-        onChangeText={(v: string) => updateVisitor(no, 'visitor_name', v)}
-      />
-      <LabeledField
-        label="Relation"
-        value={visitor.relation}
-        onChangeText={(v: string) => updateVisitor(no, 'relation', v)}
-      />
-      <DigitField label="Mobile Number" value={visitor.mobile_number} length={10} onChangeText={(v: string) => updateVisitor(no, 'mobile_number', v)} />
-      <LabeledField
-        label="Email ID"
-        value={visitor.email}
-        onChangeText={(v: string) => updateVisitor(no, 'email', v)}
-      />
+      <FormRow>
+        <FormCol>
+          <LabeledField
+            label="Name"
+            value={visitor.visitor_name}
+            onChangeText={(v: string) => updateVisitor(no, 'visitor_name', v)}
+          />
+        </FormCol>
+        <FormCol>
+          <LabeledField
+            label="Relation"
+            value={visitor.relation}
+            onChangeText={(v: string) => updateVisitor(no, 'relation', v)}
+          />
+        </FormCol>
+      </FormRow>
 
-      <Text style={styles.label}>Address source</Text>
-      <View style={styles.options}>
-        {choice(
-          'Present Address',
-          visitor.address_source === 'present',
-          () => copyAddressToVisitor(no, 'present')
-        )}
-        {choice(
-          'Permanent Address',
-          visitor.address_source === 'permanent',
-          () => copyAddressToVisitor(no, 'permanent')
-        )}
-        {choice(
-          'Custom',
-          visitor.address_source === 'custom',
-          () => updateVisitor(no, 'address_source', 'custom')
-        )}
-      </View>
+      <FormRow>
+        <FormCol>
+          <DigitField label="Mobile Number" value={visitor.mobile_number} length={10} onChangeText={(v: string) => updateVisitor(no, 'mobile_number', v)} />
+        </FormCol>
+        <FormCol>
+          <LabeledField
+            label="Email ID"
+            value={visitor.email}
+            onChangeText={(v: string) => updateVisitor(no, 'email', v)}
+          />
+        </FormCol>
+      </FormRow>
 
-      <LabeledField
-        label="Village"
-        value={visitor.village}
-        onChangeText={(v: string) => updateVisitor(no, 'village', v)}
-      />
-      <LabeledField
-        label="Police Station"
-        value={visitor.police_station}
-        onChangeText={(v: string) => updateVisitor(no, 'police_station', v)}
-      />
-      <LabeledField
-        label="PIN Code"
-        value={visitor.pin_code}
-        onChangeText={(v: string) => updateVisitor(no, 'pin_code', v)}
-      />
-      <LabeledField
-        label="Post Office"
-        value={visitor.post_office}
-        onChangeText={(v: string) => updateVisitor(no, 'post_office', v)}
-      />
-      <LabeledField
-        label="Block"
-        value={visitor.block}
-        onChangeText={(v: string) => updateVisitor(no, 'block', v)}
-      />
-      <LabeledField
-        label="District"
-        value={visitor.district}
-        onChangeText={(v: string) => updateVisitor(no, 'district', v)}
-      />
-      <LabeledField
-        label="State"
-        value={visitor.state}
-        onChangeText={(v: string) => updateVisitor(no, 'state', v)}
-      />
+      <FormRow>
+        <FormCol full>
+          <View style={styles.fieldWrap}>
+            <Text style={styles.fieldLabel}>Address source</Text>
+            <View style={styles.options}>
+              {choice(
+                'Present Address',
+                visitor.address_source === 'present',
+                () => copyAddressToVisitor(no, 'present')
+              )}
+              {choice(
+                'Permanent Address',
+                visitor.address_source === 'permanent',
+                () => copyAddressToVisitor(no, 'permanent')
+              )}
+              {choice(
+                'Custom',
+                visitor.address_source === 'custom',
+                () => updateVisitor(no, 'address_source', 'custom')
+              )}
+            </View>
+          </View>
+        </FormCol>
+      </FormRow>
+
+      <FormRow>
+        <FormCol>
+          <LabeledField
+            label="Village"
+            value={visitor.village}
+            onChangeText={(v: string) => updateVisitor(no, 'village', v)}
+          />
+        </FormCol>
+        <FormCol>
+          <LabeledField
+            label="Police Station"
+            value={visitor.police_station}
+            onChangeText={(v: string) => updateVisitor(no, 'police_station', v)}
+          />
+        </FormCol>
+      </FormRow>
+
+      <FormRow>
+        <FormCol>
+          <LabeledField
+            label="PIN Code"
+            value={visitor.pin_code}
+            onChangeText={(v: string) => updateVisitor(no, 'pin_code', v)}
+          />
+        </FormCol>
+        <FormCol>
+          <LabeledField
+            label="Post Office"
+            value={visitor.post_office}
+            onChangeText={(v: string) => updateVisitor(no, 'post_office', v)}
+          />
+        </FormCol>
+      </FormRow>
+
+      <FormRow>
+        <FormCol>
+          <LabeledField
+            label="Block"
+            value={visitor.block}
+            onChangeText={(v: string) => updateVisitor(no, 'block', v)}
+          />
+        </FormCol>
+        <FormCol>
+          <LabeledField
+            label="District"
+            value={visitor.district}
+            onChangeText={(v: string) => updateVisitor(no, 'district', v)}
+          />
+        </FormCol>
+      </FormRow>
+
+      <FormRow>
+        <FormCol>
+          <LabeledField
+            label="State"
+            value={visitor.state}
+            onChangeText={(v: string) => updateVisitor(no, 'state', v)}
+          />
+        </FormCol>
+        <FormCol />
+      </FormRow>
     </View>
   );
 
@@ -857,184 +921,452 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
 
         <SectionTitle>Student Necessary Details</SectionTitle>
 
-        <LabeledField label="Registration No *" field="registration_no" />
-        <LabeledField label="Monthly Fees" field="monthly_fees" />
-        <LabeledField label="Student Name *" field="student_name" />
-        <DigitField label="Mobile Number" field="mobile_number" length={10} onChangeText={(value:string)=>setForm((old:any)=>({...old,mobile_number:value,whatsapp_number:value,father_mobile:value}))} />
-        <LabeledField label="Admission No" field="admission_no" />
-        <DatePickerField label="Admission Date *" value={form.admission_date} onChange={v=>update('admission_date',v)} />
-        <DigitField label="WhatsApp Number" field="whatsapp_number" length={10} />
-        <View style={styles.fieldWrap}>
-          <Text style={styles.fieldLabel}>Class Name *</Text>
-          <Select
-            label="Class Name"
-            value={normalizeStudentClass(form.class_name)}
-            onChange={value => update('class_name', value)}
-            options={[
-              { value: '', label: 'Select Class' },
-              ...[...new Set([...STUDENT_CLASSES, ...(form.class_name ? [normalizeStudentClass(form.class_name)] : [])])]
-                .filter(isVisibleStudentClass).map(value => ({ value, label: value })),
-            ]}
-          />
-        </View>
-        <LabeledField label="Roll No" field="roll_no" />
-        <LabeledField label="Email ID" field="email" />
-        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Admission Session *</Text><Select label="Select Admission Session" value={form.academic_session} onChange={value => update('academic_session', value)} options={[{value:'',label:'Select Session'}, ...SESSION_OPTIONS.map(value => ({value,label:value}))]} /></View>
+        <FormRow>
+          <FormCol>
+            <LabeledField label="Registration No *" field="registration_no" />
+          </FormCol>
+          <FormCol>
+            <LabeledField label="Monthly Fees" field="monthly_fees" />
+          </FormCol>
+        </FormRow>
 
-        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Room No</Text><Select label="Select Room" value={form.room_number} onChange={value => update('room_number', value)} searchable options={[{value:'',label:'Select Room'}, ...rooms.map(room => ({value:String(room.room_name),label:String(room.room_name)}))]} /></View>
+        <FormRow>
+          <FormCol>
+            <LabeledField label="Student Name *" field="student_name" />
+          </FormCol>
+          <FormCol>
+            <DigitField label="Mobile Number" field="mobile_number" length={10} onChangeText={(value:string)=>setForm((old:any)=>({...old,mobile_number:value,whatsapp_number:value,father_mobile:value}))} />
+          </FormCol>
+        </FormRow>
 
-        <Text style={styles.label}>Student Type</Text>
-        <View style={styles.options}>
-          {choice(
-            'Hostel',
-            form.student_type === 'hostel',
-            () => update('student_type', 'hostel')
-          )}
-          {choice(
-            'Day Scholar',
-            form.student_type === 'day_scholar',
-            () => update('student_type', 'day_scholar')
-          )}
-        </View>
+        <FormRow>
+          <FormCol>
+            <LabeledField label="Admission No" field="admission_no" />
+          </FormCol>
+          <FormCol>
+            <DatePickerField label="Admission Date *" value={form.admission_date} onChange={v=>update('admission_date',v)} />
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <DigitField label="WhatsApp Number" field="whatsapp_number" length={10} />
+          </FormCol>
+          <FormCol>
+            <View style={styles.fieldWrap}>
+              <Text style={styles.fieldLabel}>Class Name *</Text>
+              <Select
+                label="Class Name"
+                value={normalizeStudentClass(form.class_name)}
+                onChange={value => update('class_name', value)}
+                style={styles.selectInput}
+                options={[
+                  { value: '', label: 'Select Class' },
+                  ...[...new Set([...STUDENT_CLASSES, ...(form.class_name ? [normalizeStudentClass(form.class_name)] : [])])]
+                    .filter(isVisibleStudentClass).map(value => ({ value, label: value })),
+                ]}
+              />
+            </View>
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <LabeledField label="Roll No" field="roll_no" />
+          </FormCol>
+          <FormCol>
+            <LabeledField label="Email ID" field="email" />
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <View style={styles.fieldWrap}>
+              <Text style={styles.fieldLabel}>Admission Session *</Text>
+              <Select label="Select Admission Session" value={form.academic_session} onChange={value => update('academic_session', value)} style={styles.selectInput} options={[{value:'',label:'Select Session'}, ...SESSION_OPTIONS.map(value => ({value,label:value}))]} />
+            </View>
+          </FormCol>
+          <FormCol>
+            <View style={styles.fieldWrap}>
+              <Text style={styles.fieldLabel}>Room No</Text>
+              <Select label="Select Room" value={form.room_number} onChange={value => update('room_number', value)} style={styles.selectInput} searchable options={[{value:'',label:'Select Room'}, ...rooms.map(room => ({value:String(room.room_name),label:String(room.room_name)}))]} />
+            </View>
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <View style={styles.fieldWrap}>
+              <Text style={styles.fieldLabel}>Student Type</Text>
+              <View style={styles.options}>
+                {choice(
+                  'Hostel',
+                  form.student_type === 'hostel',
+                  () => update('student_type', 'hostel')
+                )}
+                {choice(
+                  'Day Scholar',
+                  form.student_type === 'day_scholar',
+                  () => update('student_type', 'day_scholar')
+                )}
+              </View>
+            </View>
+          </FormCol>
+          <FormCol />
+        </FormRow>
 
         <SectionTitle>Student Information</SectionTitle>
 
-        <DatePickerField label="Date of Birth *" value={form.date_of_birth} onChange={value => update('date_of_birth', value)} />
-        <Text style={styles.label}>Gender</Text>
-        <View style={styles.options}>
-          {['Male', 'Female', 'Other'].map((item) =>
-            choice(
-              item,
-              form.gender === item,
-              () => update('gender', item)
-            )
-          )}
-        </View>
+        <FormRow>
+          <FormCol>
+            <DatePickerField label="Date of Birth *" value={form.date_of_birth} onChange={value => update('date_of_birth', value)} />
+          </FormCol>
+          <FormCol>
+            <View style={styles.fieldWrap}>
+              <Text style={styles.fieldLabel}>Gender</Text>
+              <View style={styles.options}>
+                {['Male', 'Female', 'Other'].map((item) =>
+                  choice(
+                    item,
+                    form.gender === item,
+                    () => update('gender', item)
+                  )
+                )}
+              </View>
+            </View>
+          </FormCol>
+        </FormRow>
 
-        <DigitField label="Aadhaar No" field="aadhaar_no" length={12} />
-        <LabeledField label="Caste Name" field="caste_name" />
-        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Blood Group</Text><Select label="Select Blood Group" value={form.blood_group} onChange={value => update('blood_group', value)} options={BLOOD_GROUPS.map(value => ({value,label:value || 'Select Blood Group'}))} /></View>
-        <LabeledField label="Admitted School Name" field="admitted_school_name" />
-        {!!form.admitted_school_name && <View style={{flexDirection:'row',flexWrap:'wrap',gap:6,marginTop:-5,marginBottom:10}}>{[...new Set(students.map(item => String(item.admitted_school_name || '').trim()).filter(Boolean))].filter(name => name.toLowerCase().includes(String(form.admitted_school_name).toLowerCase()) && name !== form.admitted_school_name).slice(0,6).map(name => <TouchableOpacity key={name} onPress={() => update('admitted_school_name', name)} style={{paddingHorizontal:10,paddingVertical:7,backgroundColor:'#e8f1fb',borderRadius:15}}><Text>{name}</Text></TouchableOpacity>)}</View>}
-        <LabeledField label="Stream" field="stream" />
-        <LabeledField label="MP Reg No" field="mp_reg_no" placeholder="Enter MP Reg No" />
-        <LabeledField label="MP Roll No" field="mp_roll_no" placeholder="Enter MP Roll No" />
-        <LabeledField label="MP Marks" field="mp_marks" placeholder="Enter MP Marks" />
-        <LabeledField label="MP Board" field="mp_board" placeholder="Enter MP Board (e.g. WBBSE)" />
-        <LabeledField label="HS Reg No" field="hs_reg_no" placeholder="Enter HS Reg No" />
-        <LabeledField label="HS Roll No" field="hs_roll_no" placeholder="Enter HS Roll No" />
-        <LabeledField label="HS Marks" field="hs_marks" placeholder="Enter HS Marks" />
-        <LabeledField label="HS Board" field="hs_board" placeholder="Enter HS Board (e.g. WBCHSE)" />
+        <FormRow>
+          <FormCol>
+            <DigitField label="Aadhaar No" field="aadhaar_no" length={12} />
+          </FormCol>
+          <FormCol>
+            <LabeledField label="Caste Name" field="caste_name" />
+          </FormCol>
+        </FormRow>
 
-        <Text style={styles.label}>Handicapped</Text>
-        <View style={styles.options}>
-          {choice(
-            'Yes',
-            form.is_handicapped === true,
-            () => update('is_handicapped', true)
-          )}
-          {choice(
-            'No',
-            form.is_handicapped === false,
-            () => update('is_handicapped', false)
-          )}
-        </View>
+        <FormRow>
+          <FormCol>
+            <View style={styles.fieldWrap}>
+              <Text style={styles.fieldLabel}>Blood Group</Text>
+              <Select label="Select Blood Group" value={form.blood_group} onChange={value => update('blood_group', value)} style={styles.selectInput} options={BLOOD_GROUPS.map(value => ({value,label:value || 'Select Blood Group'}))} />
+            </View>
+          </FormCol>
+          <FormCol>
+            <LabeledField label="Admitted School Name" field="admitted_school_name" />
+            {!!form.admitted_school_name && <View style={{flexDirection:'row',flexWrap:'wrap',gap:6,marginTop:-5,marginBottom:10}}>{[...new Set(students.map(item => String(item.admitted_school_name || '').trim()).filter(Boolean))].filter(name => name.toLowerCase().includes(String(form.admitted_school_name).toLowerCase()) && name !== form.admitted_school_name).slice(0,6).map(name => <TouchableOpacity key={name} onPress={() => update('admitted_school_name', name)} style={{paddingHorizontal:10,paddingVertical:7,backgroundColor:'#e8f1fb',borderRadius:15}}><Text>{name}</Text></TouchableOpacity>)}</View>}
+          </FormCol>
+        </FormRow>
 
-        <Text style={styles.label}>Orphan</Text>
-        <View style={styles.options}>
-          {choice(
-            'Yes',
-            form.is_orphan === true,
-            () => update('is_orphan', true)
-          )}
-          {choice(
-            'No',
-            form.is_orphan === false,
-            () => update('is_orphan', false)
-          )}
-        </View>
+        <FormRow>
+          <FormCol>
+            <LabeledField label="Stream" field="stream" />
+          </FormCol>
+          <FormCol>
+            <LabeledField label="MP Reg No" field="mp_reg_no" placeholder="Enter MP Reg No" />
+          </FormCol>
+        </FormRow>
 
-        <LabeledField
-          label="Previous Branch Name"
-          field="previous_branch_name"
-        />
-        <LabeledField
-          label="Banglarshiksha ID"
-          field="banglarshiksha_id"
-        />
-        <LabeledField label="Kanyashree ID" field="kanyashree_id" />
-        <LabeledField label="Aikyashree ID" field="aikyashree_id" />
+        <FormRow>
+          <FormCol>
+            <LabeledField label="MP Roll No" field="mp_roll_no" placeholder="Enter MP Roll No" />
+          </FormCol>
+          <FormCol>
+            <LabeledField label="MP Marks" field="mp_marks" placeholder="Enter MP Marks" />
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <LabeledField label="MP Board" field="mp_board" placeholder="Enter MP Board (e.g. WBBSE)" />
+          </FormCol>
+          <FormCol>
+            <LabeledField label="HS Reg No" field="hs_reg_no" placeholder="Enter HS Reg No" />
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <LabeledField label="HS Roll No" field="hs_roll_no" placeholder="Enter HS Roll No" />
+          </FormCol>
+          <FormCol>
+            <LabeledField label="HS Marks" field="hs_marks" placeholder="Enter HS Marks" />
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <LabeledField label="HS Board" field="hs_board" placeholder="Enter HS Board (e.g. WBCHSE)" />
+          </FormCol>
+          <FormCol>
+            <View style={styles.fieldWrap}>
+              <Text style={styles.fieldLabel}>Handicapped</Text>
+              <View style={styles.options}>
+                {choice(
+                  'Yes',
+                  form.is_handicapped === true,
+                  () => update('is_handicapped', true)
+                )}
+                {choice(
+                  'No',
+                  form.is_handicapped === false,
+                  () => update('is_handicapped', false)
+                )}
+              </View>
+            </View>
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <View style={styles.fieldWrap}>
+              <Text style={styles.fieldLabel}>Orphan</Text>
+              <View style={styles.options}>
+                {choice(
+                  'Yes',
+                  form.is_orphan === true,
+                  () => update('is_orphan', true)
+                )}
+                {choice(
+                  'No',
+                  form.is_orphan === false,
+                  () => update('is_orphan', false)
+                )}
+              </View>
+            </View>
+          </FormCol>
+          <FormCol>
+            <LabeledField
+              label="Previous Branch Name"
+              field="previous_branch_name"
+            />
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <LabeledField
+              label="Banglarshiksha ID"
+              field="banglarshiksha_id"
+            />
+          </FormCol>
+          <FormCol>
+            <LabeledField label="Kanyashree ID" field="kanyashree_id" />
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <LabeledField label="Aikyashree ID" field="aikyashree_id" />
+          </FormCol>
+          <FormCol />
+        </FormRow>
 
         <SectionTitle>Parents Information</SectionTitle>
 
-        <LabeledField label="Father Name *" field="father_name" />
-        <DigitField label="Father Aadhaar No" field="father_aadhaar_no" length={12} />
-        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Father Qualification</Text><Select label="Select Qualification" value={form.father_qualification} onChange={value=>update('father_qualification',value)} options={PARENT_QUALIFICATIONS.map(value=>({value,label:value}))} searchable /></View>
-        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Father Occupation</Text><Select label="Select Occupation" value={form.father_occupation} onChange={value=>update('father_occupation',value)} options={PARENT_OCCUPATIONS.map(value=>({value,label:value}))} searchable /></View>
-        <LabeledField
-          label="Father Annual Income"
-          field="father_annual_income"
-        />
-        <DigitField label="Father Mobile No" field="father_mobile" length={10} />
+        <FormRow>
+          <FormCol>
+            <LabeledField label="Father Name *" field="father_name" />
+          </FormCol>
+          <FormCol>
+            <DigitField label="Father Aadhaar No" field="father_aadhaar_no" length={12} />
+          </FormCol>
+        </FormRow>
 
-        <LabeledField label="Mother Name *" field="mother_name" />
-        <DigitField label="Mother Aadhaar No" field="mother_aadhaar_no" length={12} />
-        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Mother Qualification</Text><Select label="Select Qualification" value={form.mother_qualification} onChange={value=>update('mother_qualification',value)} options={PARENT_QUALIFICATIONS.map(value=>({value,label:value}))} searchable /></View>
-        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Mother Occupation</Text><Select label="Select Occupation" value={form.mother_occupation} onChange={value=>update('mother_occupation',value)} options={PARENT_OCCUPATIONS.map(value=>({value,label:value}))} searchable /></View>
-        <LabeledField
-          label="Mother Annual Income"
-          field="mother_annual_income"
-        />
-        <DigitField label="Mother Mobile No" field="mother_mobile" length={10} />
+        <FormRow>
+          <FormCol>
+            <View style={styles.fieldWrap}>
+              <Text style={styles.fieldLabel}>Father Qualification</Text>
+              <Select label="Select Qualification" value={form.father_qualification} onChange={value=>update('father_qualification',value)} style={styles.selectInput} options={PARENT_QUALIFICATIONS.map(value=>({value,label:value}))} searchable />
+            </View>
+          </FormCol>
+          <FormCol>
+            <View style={styles.fieldWrap}>
+              <Text style={styles.fieldLabel}>Father Occupation</Text>
+              <Select label="Select Occupation" value={form.father_occupation} onChange={value=>update('father_occupation',value)} style={styles.selectInput} options={PARENT_OCCUPATIONS.map(value=>({value,label:value}))} searchable />
+            </View>
+          </FormCol>
+        </FormRow>
 
-        <LabeledField label="Guardian Name" field="guardian_name" />
-        <DigitField label="Guardian Mobile" field="guardian_mobile" length={10} />
-        <DigitField label="Alternate Mobile" field="alternate_mobile" length={10} />
+        <FormRow>
+          <FormCol>
+            <LabeledField
+              label="Father Annual Income"
+              field="father_annual_income"
+            />
+          </FormCol>
+          <FormCol>
+            <DigitField label="Father Mobile No" field="father_mobile" length={10} />
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <LabeledField label="Mother Name *" field="mother_name" />
+          </FormCol>
+          <FormCol>
+            <DigitField label="Mother Aadhaar No" field="mother_aadhaar_no" length={12} />
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <View style={styles.fieldWrap}>
+              <Text style={styles.fieldLabel}>Mother Qualification</Text>
+              <Select label="Select Qualification" value={form.mother_qualification} onChange={value=>update('mother_qualification',value)} style={styles.selectInput} options={PARENT_QUALIFICATIONS.map(value=>({value,label:value}))} searchable />
+            </View>
+          </FormCol>
+          <FormCol>
+            <View style={styles.fieldWrap}>
+              <Text style={styles.fieldLabel}>Mother Occupation</Text>
+              <Select label="Select Occupation" value={form.mother_occupation} onChange={value=>update('mother_occupation',value)} style={styles.selectInput} options={PARENT_OCCUPATIONS.map(value=>({value,label:value}))} searchable />
+            </View>
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <LabeledField
+              label="Mother Annual Income"
+              field="mother_annual_income"
+            />
+          </FormCol>
+          <FormCol>
+            <DigitField label="Mother Mobile No" field="mother_mobile" length={10} />
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <LabeledField label="Guardian Name" field="guardian_name" />
+          </FormCol>
+          <FormCol>
+            <DigitField label="Guardian Mobile" field="guardian_mobile" length={10} />
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <DigitField label="Alternate Mobile" field="alternate_mobile" length={10} />
+          </FormCol>
+          <FormCol />
+        </FormRow>
 
         <SectionTitle>Address Details</SectionTitle>
 
         <Text style={styles.subSection}>Present Address (All fields mandatory)</Text>
 
-        <LabeledField label="Village" field="present_village" />
-        <LabeledField
-          label="Police Station"
-          field="present_police_station"
-        />
-        <LabeledField label="PIN Code" field="present_pin_code" onChangeText={(value:string)=>lookupPin('present_pin_code',value)} keyboardType="number-pad" maxLength={6} />
-        <LabeledField label="Post Office" field="present_post_office" />
-        <LabeledField label="Block" field="present_block" />
-        <LabeledField label="District" field="present_district" />
-        <LabeledField label="State" field="present_state" />
+        <FormRow>
+          <FormCol>
+            <LabeledField label="Village" field="present_village" />
+          </FormCol>
+          <FormCol>
+            <LabeledField
+              label="Police Station"
+              field="present_police_station"
+            />
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <LabeledField label="PIN Code" field="present_pin_code" onChangeText={(value:string)=>lookupPin('present_pin_code',value)} keyboardType="number-pad" maxLength={6} />
+          </FormCol>
+          <FormCol>
+            <LabeledField label="Post Office" field="present_post_office" />
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <LabeledField label="Block" field="present_block" />
+          </FormCol>
+          <FormCol>
+            <LabeledField label="District" field="present_district" />
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <LabeledField label="State" field="present_state" />
+          </FormCol>
+          <FormCol />
+        </FormRow>
 
         <Text style={styles.subSection}>Permanent Address (All fields mandatory)</Text>
 
         <TouchableOpacity style={styles.copyButton} onPress={() => { const next=!sameAsPresent; setSameAsPresent(next); if(next) copyPresentToPermanent(); }}><Text style={styles.copyButtonText}>{sameAsPresent ? '[x]' : '[ ]'} Same as Present Address</Text></TouchableOpacity>
 
-        <LabeledField label="Village" field="permanent_village" />
-        <LabeledField
-          label="Police Station"
-          field="permanent_police_station"
-        />
-        <LabeledField label="PIN Code" field="permanent_pin_code" onChangeText={(value:string)=>lookupPin('permanent_pin_code',value)} keyboardType="number-pad" maxLength={6} />
-        <LabeledField
-          label="Post Office"
-          field="permanent_post_office"
-        />
-        <LabeledField label="Block" field="permanent_block" />
-        <LabeledField label="District" field="permanent_district" />
-        <LabeledField label="State" field="permanent_state" />
+        <FormRow>
+          <FormCol>
+            <LabeledField label="Village" field="permanent_village" />
+          </FormCol>
+          <FormCol>
+            <LabeledField
+              label="Police Station"
+              field="permanent_police_station"
+            />
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <LabeledField label="PIN Code" field="permanent_pin_code" onChangeText={(value:string)=>lookupPin('permanent_pin_code',value)} keyboardType="number-pad" maxLength={6} />
+          </FormCol>
+          <FormCol>
+            <LabeledField
+              label="Post Office"
+              field="permanent_post_office"
+            />
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <LabeledField label="Block" field="permanent_block" />
+          </FormCol>
+          <FormCol>
+            <LabeledField label="District" field="permanent_district" />
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <LabeledField label="State" field="permanent_state" />
+          </FormCol>
+          <FormCol />
+        </FormRow>
 
         <SectionTitle>Student Account Details</SectionTitle>
 
-        <LabeledField label="Account No" field="bank_account_no" keyboardType="numeric" />
-        <LabeledField label="IFSC Code" field="bank_ifsc_code" maxLength={11} autoCapitalize="characters" onChangeText={(value:string) => update('bank_ifsc_code', value.replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,11))} />
-        {!!ifscMessage && <Text style={{color:ifscMessage.startsWith('Bank details found')?'#16803a':'#b54708',fontWeight:'700',marginTop:-7,marginBottom:9}}>{ifscMessage}</Text>}
-        <LabeledField label="Bank Name (editable)" field="bank_name" />
-        <LabeledField label="Branch Name (editable)" field="bank_branch_name" />
-        <LabeledField
-          label="Branch Address"
-          field="bank_branch_address"
-        />
+        <FormRow>
+          <FormCol>
+            <LabeledField label="Account No" field="bank_account_no" keyboardType="numeric" />
+          </FormCol>
+          <FormCol>
+            <LabeledField label="IFSC Code" field="bank_ifsc_code" maxLength={11} autoCapitalize="characters" onChangeText={(value:string) => update('bank_ifsc_code', value.replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,11))} />
+            {!!ifscMessage && <Text style={{color:ifscMessage.startsWith('Bank details found')?'#16803a':'#b54708',fontWeight:'700',marginTop:-7,marginBottom:9}}>{ifscMessage}</Text>}
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol>
+            <LabeledField label="Bank Name (editable)" field="bank_name" />
+          </FormCol>
+          <FormCol>
+            <LabeledField label="Branch Name (editable)" field="bank_branch_name" />
+          </FormCol>
+        </FormRow>
+
+        <FormRow>
+          <FormCol full>
+            <LabeledField
+              label="Branch Address"
+              field="bank_branch_address"
+            />
+          </FormCol>
+        </FormRow>
 
         {renderVisitor(1, 'Visitor-1 Information', visitor1)}
         {renderVisitor(2, 'Visitor-2 Information', visitor2)}
@@ -1047,35 +1379,37 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
           {STUDENT_DOCUMENT_TYPES.map((item) => {
             const selected = entryDocuments[item.key];
             return (
-              <View key={item.key} style={styles.documentRow}>
-                <View style={styles.documentTextArea}>
-                  <Text style={styles.documentLabel}>{item.label}</Text>
-                  <Text numberOfLines={1} style={styles.documentFileName}>
-                    {selected ? selected.name : 'No file selected'}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.documentButton}
-                  onPress={() => chooseEntryDocument(item.key)}
-                  disabled={saving}
-                >
-                  <Text style={styles.documentButtonText}>
-                    {selected ? 'Change' : 'Choose'}
-                  </Text>
-                </TouchableOpacity>
-                {selected && (
+              <View key={item.key} style={[styles.documentCol, !isTwoCol && styles.documentColMobile]}>
+                <View style={styles.documentRow}>
+                  <View style={styles.documentTextArea}>
+                    <Text style={styles.documentLabel}>{item.label}</Text>
+                    <Text numberOfLines={1} style={styles.documentFileName}>
+                      {selected ? selected.name : 'No file selected'}
+                    </Text>
+                  </View>
                   <TouchableOpacity
-                    style={styles.documentRemove}
-                    onPress={() => setEntryDocuments((old) => {
-                      const next = { ...old };
-                      delete next[item.key];
-                      return next;
-                    })}
+                    style={styles.documentButton}
+                    onPress={() => chooseEntryDocument(item.key)}
                     disabled={saving}
                   >
-                    <Text style={styles.documentRemoveText}>Remove</Text>
+                    <Text style={styles.documentButtonText}>
+                      {selected ? 'Change' : 'Choose'}
+                    </Text>
                   </TouchableOpacity>
-                )}
+                  {selected && (
+                    <TouchableOpacity
+                      style={styles.documentRemove}
+                      onPress={() => setEntryDocuments((old) => {
+                        const next = { ...old };
+                        delete next[item.key];
+                        return next;
+                      })}
+                      disabled={saving}
+                    >
+                      <Text style={styles.documentRemoveText}>Remove</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             );
           })}
@@ -1258,13 +1592,52 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
 
+  formRow: {
+    flexDirection: 'row',
+    marginHorizontal: -8,
+  },
+  formRowMobile: {
+    flexDirection: 'column',
+    marginHorizontal: 0,
+  },
+  colHalf: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 8,
+  },
+  colFull: {
+    width: '100%',
+    paddingHorizontal: 8,
+  },
+  selectInput: {
+    borderWidth: 1,
+    borderColor: '#ccd3da',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    minHeight: 46,
+    marginBottom: 10,
+    justifyContent: 'center',
+  },
+  documentCol: {
+    width: '50%',
+    paddingHorizontal: 8,
+    marginBottom: 8,
+  },
+  documentColMobile: {
+    width: '100%',
+    paddingHorizontal: 0,
+    marginBottom: 8,
+  },
+
   documentHint: {
     color: '#546e7a',
     marginBottom: 10,
   },
 
   documentGrid: {
-    gap: 8,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -8,
   },
 
   documentRow: {
