@@ -115,7 +115,19 @@ router.post('/me/availability',auth,allow('teacher'),asyncHandler(async(req,res)
 
   res.json({ success: true, status, date, distance: Math.round(distance) });
 }));
-router.get('/availability',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{const date=String(req.query.date||new Date().toISOString().slice(0,10));await ensureStaffAvailability();const r=await pool.query(`SELECT t.id,t.name,COALESCE(a.status,'Present') status FROM teachers t LEFT JOIN staff_attendance a ON a.teacher_id=t.id AND a.attendance_date=$1 WHERE t.is_active=TRUE ORDER BY t.name,t.id`,[date]);res.json({success:true,date,staff:r.rows});}));
+router.get('/availability',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+  const date=String(req.query.date||new Date().toISOString().slice(0,10));
+  await ensureStaffAvailability();
+  const r=await pool.query(`
+    SELECT t.id, t.staff_id, t.name, t.subject, t.mobile, t.designation, t.profile_details,
+           COALESCE(a.status,'Present') status, a.punch_in, a.punch_out
+    FROM teachers t
+    LEFT JOIN staff_attendance a ON a.teacher_id=t.id AND a.attendance_date=$1
+    WHERE t.is_active=TRUE
+    ORDER BY t.name, t.id
+  `,[date]);
+  res.json({success:true,date,staff:r.rows});
+}));
 router.patch('/me', auth, allow('teacher'), asyncHandler(async(req,res)=>{
   await teacherDetailsSchemaReady;
   const b=req.body||{};

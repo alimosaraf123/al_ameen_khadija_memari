@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import AcademyHeader from '../components/AcademyHeader';
 import { api, API_BASE } from '../lib/api';
+import { getUser } from '../lib/auth';
 
 type DayCol = {
   date: string;
@@ -71,16 +72,20 @@ const STATUS_FILTER_OPTIONS = [
 const STATUS_CYCLE = ['Present', 'Absent', 'Late', 'Leave', ''];
 
 const getTodayDateStr = () => {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 };
 
 export default function TeacherAttendance() {
   const todayStr = useMemo(() => getTodayDateStr(), []);
   const todayObj = useMemo(() => new Date(), []);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  useEffect(() => {
+    void getUser<any>().then(u => {
+      const role = String(u?.role || '').toLowerCase();
+      setIsSuperAdmin(role === 'super_admin' || role === 'superadmin');
+    });
+  }, []);
 
   const [selectedMonth, setSelectedMonth] = useState(() =>
     String(todayObj.getMonth() + 1).padStart(2, '0')
@@ -263,8 +268,8 @@ export default function TeacherAttendance() {
       return;
     }
 
-    if (targetDate < todayStr) {
-      Alert.alert('Attendance Locked', 'Back-dated attendance is turned off. Attendance can only be marked for today.');
+    if (targetDate < todayStr && !isSuperAdmin) {
+      Alert.alert('Attendance Locked', 'শুধুমাত্র Super Admin পেছনের তারিখের (Back Date) স্টাফ হাজিরা দিতে বা পরিবর্তন করতে পারবেন।');
       return;
     }
 
@@ -312,8 +317,8 @@ export default function TeacherAttendance() {
 
   const cycleStatus = async (staffId: number, dateStr: string) => {
     if (dateStr > todayStr) return; // Future days are disabled
-    if (dateStr < todayStr) {
-      Alert.alert('Attendance Locked', 'Back-dated attendance is turned off. Only today’s attendance can be marked.');
+    if (dateStr < todayStr && !isSuperAdmin) {
+      Alert.alert('Attendance Locked', 'শুধুমাত্র Super Admin পেছনের তারিখের (Back Date) স্টাফ হাজিরা পরিবর্তন বা এন্ট্রি করতে পারবেন।');
       return;
     }
 
@@ -400,7 +405,14 @@ export default function TeacherAttendance() {
           >
             <Text style={s.backBtnText}>← Back to Staff</Text>
           </TouchableOpacity>
-          <Text style={s.pageTitle}>Staff Attendance</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <Text style={s.pageTitle}>Staff Attendance</Text>
+            {isSuperAdmin && (
+              <View style={s.superAdminBadge}>
+                <Text style={s.superAdminBadgeText}>👑 Super Admin (Back Date Enabled)</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {!!error && (
@@ -647,7 +659,29 @@ export default function TeacherAttendance() {
                   {/* Day Header Columns */}
                   {days.map(day => {
                     const isToday = day.date === todayStr;
+                    const isPast = day.date < todayStr;
                     if (!isToday) {
+                      if (isPast && isSuperAdmin) {
+                        return (
+                          <TouchableOpacity
+                            key={day.date}
+                            activeOpacity={0.7}
+                            onPress={() => markAllPresent(day.date)}
+                            accessibilityLabel={`Mark all present for ${day.date}`}
+                            style={[
+                              s.colDay,
+                              s.thCell,
+                              s.pastSuperAdminHeaderCell,
+                            ]}
+                          >
+                            <Text style={s.thDayName}>{day.day}</Text>
+                            <Text style={s.thDayNumber}>{day.number}</Text>
+                            <View style={s.thPastQuickAllBadge}>
+                              <Text style={s.thPastQuickAllBadgeText}>✓ All</Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      }
                       return (
                         <View
                           key={day.date}
@@ -767,9 +801,47 @@ export default function TeacherAttendance() {
                         }
 
                         if (isPast) {
+                          if (isSuperAdmin) {
+                            return (
+                              <TouchableOpacity
+                                key={dateKey}
+                                activeOpacity={0.65}
+                                onPress={() => cycleStatus(person.id, dateKey)}
+                                style={[
+                                  s.colDay,
+                                  s.tdCell,
+                                  s.activeDayCell,
+                                  s.pastEditableCell,
+                                ]}
+                              >
+                                {isSavingThis ? (
+                                  <ActivityIndicator size="small" color="#0d6efd" />
+                                ) : (
+                                  <Text
+                                    style={[
+                                      s.statusSymbolText,
+                                      symbol === 'A' && s.absentColor,
+                                      symbol === 'P' && s.presentColor,
+                                      (symbol === 'L' || symbol === 'LV') && s.lateColor,
+                                    ]}
+                                  >
+                                    {symbol}
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+                            );
+                          }
+
                           return (
-                            <View
+                            <TouchableOpacity
                               key={dateKey}
+                              activeOpacity={0.8}
+                              onPress={() => {
+                                Alert.alert(
+                                  'Attendance Locked',
+                                  'শুধুমাত্র Super Admin পেছনের তারিখের (Back Date) স্টাফ হাজিরা পরিবর্তন করতে পারবেন।'
+                                );
+                              }}
                               style={[s.colDay, s.tdCell, s.pastDayCell]}
                             >
                               <Text
@@ -783,7 +855,7 @@ export default function TeacherAttendance() {
                               >
                                 {symbol}
                               </Text>
-                            </View>
+                            </TouchableOpacity>
                           );
                         }
 
@@ -843,7 +915,9 @@ export default function TeacherAttendance() {
               <Text style={s.legendLabel}>Leave</Text>
             </View>
             <Text style={s.autoSaveHint}>
-              • Only today's attendance can be edited • Back dates and future dates are locked
+              {isSuperAdmin
+                ? '• Super Admin Access: You can edit attendance for both Today and Back Dates • Future dates are locked'
+                : "• Only today's attendance can be edited • Back dates are locked (Super Admin only) • Future dates are locked"}
             </Text>
           </View>
         </View>
@@ -1087,6 +1161,19 @@ const s = StyleSheet.create({
     fontSize: 22,
     fontWeight: '900',
     color: '#1e293b',
+  },
+  superAdminBadge: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  superAdminBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#065f46',
   },
   errorBox: {
     backgroundColor: '#fee2e2',
@@ -1523,6 +1610,23 @@ const s = StyleSheet.create({
     fontWeight: '900',
     textAlign: 'center',
   },
+  pastSuperAdminHeaderCell: {
+    backgroundColor: '#dbeafe', // Soft sky blue for super admin past day column
+    cursor: 'pointer' as any,
+  },
+  thPastQuickAllBadge: {
+    backgroundColor: '#1d4ed8',
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    marginTop: 2,
+  },
+  thPastQuickAllBadgeText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
 
   // Fixed Left TD Cells (Pastel blue background #b9d5f5 from Image 1)
   fixedTdCell: {
@@ -1600,6 +1704,10 @@ const s = StyleSheet.create({
   },
   pastDayCell: {
     backgroundColor: '#f8fafc',
+  },
+  pastEditableCell: {
+    backgroundColor: '#ffffff',
+    cursor: 'pointer' as any,
   },
   pastSymbolText: {
     color: '#1e293b',

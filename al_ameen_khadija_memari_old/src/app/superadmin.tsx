@@ -44,6 +44,7 @@ const menuPermission: Record<string, string> = {
   '/class-results': 'published_results',
   '/problems': 'problems',
   '/routines': 'routines',
+  '/display-control': 'routines',
   '/notices': 'notices',
   '/deposit-fund': 'deposit_fund',
   '/fees': 'fees',
@@ -124,6 +125,7 @@ export default function Dashboard() {
     ['Student Deposit Fund', '/deposit-fund'],
     ['Asset Register', '/asset-register'],
     ['Activity Audit Log', '/audit-log'],
+    ['Projector Display Control', '/display-control'],
     ...(userRole === 'super_admin' ? [['System Administration', '/system-admin'] as [string, string]] : []),
   ];
 
@@ -563,6 +565,13 @@ export default function Dashboard() {
             <TouchableOpacity style={s.navBtn} onPress={() => router.push('/audit-log' as any)}>
               <Text style={s.navBtnIcon}>📜</Text>
               <Text style={s.navBtnText}>Audit Log</Text>
+            </TouchableOpacity>
+          )}
+
+          {canAccess('/display-control') && (
+            <TouchableOpacity style={s.navBtn} onPress={() => router.push('/display-control' as any)}>
+              <Text style={s.navBtnIcon}>🖥️</Text>
+              <Text style={s.navBtnText}>Display Control</Text>
             </TouchableOpacity>
           )}
 
@@ -1124,6 +1133,7 @@ export default function Dashboard() {
                 ['Terminal Exam', '/terminal-exams'],
                 ['Print Terminal Result', '/class-results'],
                 ['Teacher Routine', '/routines'],
+                ['Projector Display Control', '/display-control'],
                 ['Notice Board', '/notices'],
                 ['Library Portal', '/library'],
                 ['Student Behaviour', '/behavior'],
@@ -1271,6 +1281,7 @@ export default function Dashboard() {
                     ['Terminal Exam', '/terminal-exams'],
                     ['Print Terminal Result', '/class-results'],
                     ['Teacher Routine', '/routines'],
+                    ['Projector Display Control', '/display-control'],
                     ['Notice Board', '/notices'],
                     ['Library Portal', '/library'],
                     ['Student Behaviour', '/behavior'],
@@ -1310,6 +1321,7 @@ export default function Dashboard() {
                   items: [
                     ['Asset Register', '/asset-register'],
                     ['Activity Audit Log', '/audit-log'],
+                    ['Projector Display Control', '/display-control'],
                     ...(userRole === 'super_admin' ? [['System Administration', '/system-admin']] : []),
                   ],
                 },
