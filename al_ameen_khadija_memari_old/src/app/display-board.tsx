@@ -35,7 +35,7 @@ export default function DisplayBoard() {
   return <View style={s.page}>
     <View style={s.top}><View><Text style={s.school}>AL-AMEEN MISSION ACADEMY MEMARI</Text><Text style={s.subtitle}>PROJECTOR DISPLAY BOARD</Text></View><Text style={s.clock}>{clock}</Text><TouchableOpacity onPress={enterFullscreen} style={s.full}><Text style={s.fullText}>FULL SCREEN</Text></TouchableOpacity></View>
     <View style={s.content}>{error ? <><Text style={s.error}>{error}</Text><TouchableOpacity onPress={() => void load()} style={s.retry}><Text style={s.retryText}>RETRY</Text></TouchableOpacity></> : content}</View>
-    <Text style={s.footer}>Updates automatically • Display Control: /display-control</Text>
+    <Text style={s.footer}>Updates automatically</Text>
   </View>;
 }
 
