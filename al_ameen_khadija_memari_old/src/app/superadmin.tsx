@@ -512,7 +512,7 @@ export default function Dashboard() {
             </TouchableOpacity>
           )}
 
-          {canAccessGroup(['/hostel-menu', '/rooms', '/room-assignments', '/dining-stock']) && (
+          {canAccessGroup(['/hostel-menu', '/rooms', '/room-assignments', '/dining-stock', '/asset-register']) && (
             <TouchableOpacity style={s.navBtn} onPress={() => setHostelMenu(true)}>
               <Text style={s.navBtnIcon}>🏢</Text>
               <Text style={s.navBtnText}>Hostel ▾</Text>
@@ -551,13 +551,6 @@ export default function Dashboard() {
             <TouchableOpacity style={s.navBtn} onPress={() => router.push('/visits' as any)}>
               <Text style={s.navBtnIcon}>🤝</Text>
               <Text style={s.navBtnText}>Visiting Day</Text>
-            </TouchableOpacity>
-          )}
-
-          {canAccess('/asset-register') && (
-            <TouchableOpacity style={s.navBtn} onPress={() => router.push('/asset-register' as any)}>
-              <Text style={s.navBtnIcon}>🏷️</Text>
-              <Text style={s.navBtnText}>Asset Register</Text>
             </TouchableOpacity>
           )}
 
@@ -1175,6 +1168,7 @@ export default function Dashboard() {
                 ['Teacher Room Assignment', '/room-assignments'],
                 ['Evening Room Attendance', '/attendance'],
                 ['Dining Stock Inventory', '/dining-stock'],
+                ['Asset Register', '/asset-register'],
               ].map(([label, path]) => (
                 <AdminLink
                   path={path}
@@ -1296,6 +1290,7 @@ export default function Dashboard() {
                     ['Teacher Room Assignment', '/room-assignments'],
                     ['Evening Room Attendance', '/attendance'],
                     ['Dining Stock Inventory', '/dining-stock'],
+                    ['Asset Register', '/asset-register'],
                   ],
                 },
                 {

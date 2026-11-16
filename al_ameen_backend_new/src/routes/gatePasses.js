@@ -13,7 +13,23 @@ router.get('/:id/monthly-fee-due',auth,roles,asyncHandler(async(req,res)=>{
  if(!student)return res.status(404).json({success:false,message:'Gate pass not found'});
  try{res.json(await getMonthlyFeeDue(student,{throughMonth:student.dues_through_month}));}catch(error){res.status(502).json({success:false,message:'Monthly fee due could not be checked. Please retry.'});}
 }));
-async function blockOffice001(req,res,next){try{const loginKey=String(req.user?.loginId||'').toLowerCase().replace(/[^a-z0-9]/g,'');const staff=await pool.query('SELECT staff_id FROM service_staff_profiles WHERE user_id=$1 LIMIT 1',[req.user?.userId]);const staffKey=String(staff.rows[0]?.staff_id||'').toLowerCase().replace(/[^a-z0-9]/g,'');if(loginKey==='office001'||staffKey==='office001')return res.status(403).json({success:false,message:'OFFICE-001 cannot generate gate passes'});next();}catch(error){next(error);}}
+async function blockOffice001(req,res,next){
+  try{
+    if(req.user?.role==='super_admin')return next();
+    const loginKey=String(req.user?.loginId||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+    const staff=await pool.query('SELECT staff_id FROM service_staff_profiles WHERE user_id=$1 LIMIT 1',[req.user?.userId]);
+    const staffKey=String(staff.rows[0]?.staff_id||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+    if(loginKey==='office001'||staffKey==='office001'||loginKey.includes('noorsaba')||loginKey.includes('masema')) {
+      return res.status(403).json({success:false,message:'এই আইডি থেকে গেট পাস তৈরি (Generate / Bulk Generate) করার অনুমতি নেই।'});
+    }
+    const perms=(await pool.query('SELECT module_key FROM user_module_permissions WHERE user_id=$1',[req.user?.userId])).rows.map(r=>r.module_key);
+    const reqPerm=req.path.includes('/bulk')?'gate_pass_bulk':'gate_pass_generate';
+    if(perms.length>0&&!perms.includes(reqPerm)&&!perms.includes('gate_passes')){
+      return res.status(403).json({success:false,message:'এই আইডি থেকে গেট পাস তৈরি করার অনুমতি নেই।'});
+    }
+    next();
+  }catch(error){next(error);}
+}
 const noticeDate=(value)=>{if(!value)return '-';const m=String(value).replace('T',' ').match(/^(\d{4})-(\d{2})-(\d{2})[ ](\d{2}):(\d{2})/);if(!m)return String(value).replace('T',' ');let h=Number(m[4]);const ap=h>=12?'pm':'am';h=h%12||12;return m[3]+'/'+m[2]+'/'+m[1]+' - '+String(h).padStart(2,'0')+':'+m[5]+ap};
 async function notifyGuardian(client,studentId,token,departure,arrival,userId){
  const notice=await client.query(`INSERT INTO notices(title,notice_text,notice_type,published_by,is_active,published_at) VALUES($1,$2,'gate_pass',$3,TRUE,NOW()) RETURNING id`,['Gate Pass Generated',`Gate pass ${token} has been prepared. Departure Date: ${noticeDate(departure)}. Return Date: ${noticeDate(arrival)}.`,userId]);
