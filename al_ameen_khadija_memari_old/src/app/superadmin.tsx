@@ -597,13 +597,6 @@ export default function Dashboard() {
             </TouchableOpacity>
           )}
 
-          {canAccess('/display-control') && (
-            <TouchableOpacity style={s.navBtn} onPress={() => router.push('/display-control' as any)}>
-              <Text style={s.navBtnIcon}>🖥️</Text>
-              <Text style={s.navBtnText}>Display Control</Text>
-            </TouchableOpacity>
-          )}
-
           {userRole === 'super_admin' && (
             <TouchableOpacity style={[s.navBtn, s.navBtnAdmin]} onPress={() => router.push('/system-admin' as any)}>
               <Text style={s.navBtnIcon}>⚙️</Text>
