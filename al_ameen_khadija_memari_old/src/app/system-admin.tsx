@@ -15,40 +15,149 @@ import AcademyHeader from '../components/AcademyHeader';
 import { api, API_BASE } from '../lib/api';
 import { getToken, getUser } from '../lib/auth';
 
-const modules = [
-  ['students', 'Students > Student List'],
-  ['documents', 'Students > Documents & Family Photos'],
-  ['dues', 'Students > Student Dues'],
-  ['student_transfer', 'Students > Student Transfer'],
-  ['student_lifecycle', 'Students > Promotion / TC / Re-Activation'],
-  ['illness', 'Students > Illness / Problem'],
-  ['teachers', 'Teachers > Teacher List'],
-  ['teachers_support', 'Teachers > Teacher Lookup'],
-  ['room_assignments', 'Teachers > Room Assignment'],
-  ['guardians', 'Guardians > Guardian Records'],
-  ['rooms', 'Rooms > Room List'],
-  ['rooms_support', 'Rooms > Room Lookup'],
-  ['attendance', 'Rooms > Evening Attendance'],
-  ['behavior', 'Rooms > Student Behaviour'],
-  ['problems', 'Rooms > Room Problems'],
-  ['gate_passes', 'Gate Pass > Generate & Records'],
-  ['visits', 'Visiting Day > Permission & Records'],
-  ['marks', 'Exams > Weekly Test'],
-  ['omr_evaluation', 'Exams > OMR Exam & Evaluation'],
-  ['terminal_exams', 'Exams > Terminal Exam'],
-  ['published_results', 'Exams > Published Results'],
-  ['routines', 'Routine'],
-  ['notices', 'Notice'],
-  ['deposit_fund', 'Student Deposit Fund'],
-  ['service_staff', 'Service Panels > Staff Accounts (ID / Password Reset)'],
-  ['gateman_panel', 'Service Panels > Gateman'],
-  ['office_panel', 'Service Panels > Office'],
-  ['library_panel', 'Service Panels > Library'],
-  ['dining_stock', 'Office > Dining Stock'],
-  ['fees', 'Fees & Accounts > Fee Collection, Due Fees & Bank Matcher'],
-  ['asset_register', 'Asset Register'],
-  ['audit_log', 'Activity Audit Log'],
+export interface PermissionItem {
+  key: string;
+  label: string;
+  route?: string;
+  desc?: string;
+}
+
+export interface MenuGroup {
+  id: string;
+  title: string;
+  icon: string;
+  color: string;
+  badgeBg: string;
+  badgeColor: string;
+  description?: string;
+  items: PermissionItem[];
+}
+
+export const MENU_PERMISSION_GROUPS: MenuGroup[] = [
+  {
+    id: 'students',
+    title: 'Students',
+    icon: '🎓',
+    color: '#0284c7',
+    badgeBg: '#e0f2fe',
+    badgeColor: '#0369a1',
+    items: [
+      { key: 'students', label: 'Student Details', route: '/students', desc: 'All student profiles and list' },
+      { key: 'student_entry', label: 'Student Entry', route: '/student-entry', desc: 'New admission entry form' },
+      { key: 'daily_attendance', label: 'Student Attendance', route: '/daily-attendance', desc: 'Daily classroom attendance' },
+      { key: 'id_cards', label: 'ID Cards & Form', route: '/id-cards', desc: 'ID card and application print' },
+      { key: 'documents', label: 'Document Upload', route: '/documents', desc: 'Documents and photo upload' },
+      { key: 'student_lifecycle', label: 'Promotion / TC', route: '/student-lifecycle', desc: 'Promotion, TC and reactivation' },
+      { key: 'student_transfer', label: 'Student Transfer', route: '/student-transfer', desc: 'Branch transfer and bulk data' },
+      { key: 'behavior', label: 'Student Behavior', route: '/behavior', desc: 'Discipline and conduct records' },
+      { key: 'gate_passes', label: 'Student Gate Pass', route: '/gate-pass', desc: 'Full gate pass access' },
+      { key: 'visits', label: 'Visit Permission', route: '/visits', desc: 'Visiting day permission and records' },
+      { key: 'guardians', label: 'Guardian & Password', route: '/guardians', desc: 'Guardian directory and passwords' },
+      { key: 'dues', label: 'Student Dues', route: '/dues', desc: 'Due fees tracking' },
+      { key: 'gate_pass_generate', label: 'Generate Gate Pass', route: 'Generate tab', desc: 'Create single gate pass' },
+      { key: 'gate_pass_bulk', label: 'Bulk Gate Pass', route: 'Bulk tab', desc: 'Generate bulk gate passes' },
+      { key: 'gate_pass_execute', label: 'Execute Return', route: 'Return tab', desc: 'Mark student return from leave' },
+      { key: 'gate_pass_ready', label: 'Ready to Print', route: 'Print tab', desc: 'Print pending gate passes' },
+      { key: 'gate_pass_records', label: 'Gate Pass Records', route: 'Records tab', desc: 'Gate pass history and search' },
+    ],
+  },
+  {
+    id: 'staff',
+    title: 'Staff',
+    icon: '👥',
+    color: '#0d9488',
+    badgeBg: '#ccfbf1',
+    badgeColor: '#0f766e',
+    items: [
+      { key: 'teachers', label: 'View Staff', route: '/teachers?mode=view', desc: 'Staff directory and profiles' },
+      { key: 'teachers_add', label: 'Add Staff', route: '/teachers?mode=add', desc: 'Register new teachers and staff' },
+      { key: 'teachers_icard', label: 'I-Card & Form', route: '/teachers?mode=icard', desc: 'Staff ID card and biodata form' },
+      { key: 'teacher_attendance', label: 'Staff Attendance', route: '/teacher-attendance', desc: 'Daily teacher & staff attendance' },
+      { key: 'staff_summary', label: 'Staff Summary', route: '/staff-summary', desc: 'Department and role breakdown' },
+      { key: 'gateman_sheet', label: 'Gateman Sheet', route: 'Excel Download', desc: 'Security gateman excel register' },
+      { key: 'service_staff', label: 'Staff Accounts', route: '/service-staff', desc: 'Gateman & service staff accounts' },
+      { key: 'gateman_panel', label: 'Gateman Portal', route: '/gateman', desc: 'Security entry/exit portal' },
+    ],
+  },
+  {
+    id: 'hostel',
+    title: 'Hostel',
+    icon: '🏢',
+    color: '#7c3aed',
+    badgeBg: '#ede9fe',
+    badgeColor: '#6d28d9',
+    items: [
+      { key: 'rooms', label: 'Rooms List', route: '/rooms', desc: 'Room list and bed capacities' },
+      { key: 'room_assignments', label: 'Room Assignment', route: '/room-assignments', desc: 'Room and floor allocations' },
+      { key: 'attendance', label: 'Evening Attendance', route: '/attendance', desc: 'Hostel evening rollcall attendance' },
+      { key: 'dining_stock', label: 'Dining Stock', route: '/dining-stock', desc: 'Mess and food ration inventory' },
+      { key: 'asset_register', label: 'Asset Register', route: '/asset-register', desc: 'Campus assets and equipment' },
+      { key: 'rooms_support', label: 'Room Lookup', route: 'Quick Lookup', desc: 'Student room lookup' },
+    ],
+  },
+  {
+    id: 'academic',
+    title: 'Academy',
+    icon: '📚',
+    color: '#2563eb',
+    badgeBg: '#dbeafe',
+    badgeColor: '#1d4ed8',
+    items: [
+      { key: 'marks', label: 'Weekly Marks', route: '/marks', desc: 'Weekly test score entry' },
+      { key: 'omr_evaluation', label: 'OMR Exam & Eval', route: '/omr-evaluation', desc: 'OMR sheets evaluation & results' },
+      { key: 'terminal_exams', label: 'Terminal Exam', route: '/terminal-exams', desc: 'Terminal exam marks entry' },
+      { key: 'published_results', label: 'Print Result', route: '/class-results', desc: 'Class-wise published exam results' },
+      { key: 'routines', label: 'Teacher Routine', route: '/routines', desc: 'Weekly school timetable' },
+      { key: 'notices', label: 'Notice Board', route: '/notices', desc: 'Notice publish and broadcast' },
+      { key: 'library_panel', label: 'Library Portal', route: '/library', desc: 'Library catalog and book issue' },
+      { key: 'illness', label: 'Student Illness', route: '/illness', desc: 'Medical and sickness logs' },
+      { key: 'problems', label: 'Room Problems', route: '/problems', desc: 'Infrastructure complaints' },
+    ],
+  },
+  {
+    id: 'accounts',
+    title: 'Accounts',
+    icon: '💳',
+    color: '#059669',
+    badgeBg: '#d1fae5',
+    badgeColor: '#047857',
+    items: [
+      { key: 'fees', label: 'Fee Collection', route: '/fees?tab=fees_collection', desc: 'Monthly tuition fee collection' },
+      { key: 'due_fees', label: 'Due Fees Tracker', route: '/due-fees', desc: 'Pending fee ledger & tracking' },
+      { key: 'receipt_payment', label: 'Receipt & Payment', route: '/fees?tab=receipt_payment', desc: 'Cash receipts and expenses' },
+      { key: 'bank_matcher', label: 'Bank Matcher', route: '/bank-statement-matcher', desc: 'Bank statement reconciliation' },
+      { key: 'deposit_fund', label: 'Deposit Fund', route: '/deposit-fund', desc: 'Student personal deposit fund' },
+    ],
+  },
+  {
+    id: 'audit_log',
+    title: 'Audit Log',
+    icon: '📜',
+    color: '#475569',
+    badgeBg: '#f1f5f9',
+    badgeColor: '#334155',
+    items: [
+      { key: 'audit_log', label: 'Activity Audit Log', route: '/audit-log', desc: 'GPS-enabled audit trails' },
+    ],
+  },
+  {
+    id: 'system_admin',
+    title: 'System Admin',
+    icon: '⚙️',
+    color: '#334155',
+    badgeBg: '#f1f5f9',
+    badgeColor: '#1e293b',
+    items: [
+      { key: 'office_panel', label: 'Office Service Panel', route: '/office', desc: 'Office operations helpdesk' },
+      { key: 'display_control', label: 'Display Control', route: '/display-control', desc: 'Projector display control' },
+    ],
+  },
 ];
+
+// Flat fallback mapping for legacy compatibility
+const modules: [string, string][] = MENU_PERMISSION_GROUPS.flatMap((g) =>
+  g.items.map((item) => [item.key, `${g.title} > ${item.label}`] as [string, string])
+);
 
 export default function SystemAdmin() {
   // Super Admin state
@@ -66,6 +175,9 @@ export default function SystemAdmin() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [selected, setSelected] = useState<any>(null);
   const [permissions, setPermissions] = useState<string[]>([]);
+  const [searchPerm, setSearchPerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [savingPerms, setSavingPerms] = useState(false);
 
   // Settings & System state
   const [settings, setSettings] = useState<any[]>([]);
@@ -129,6 +241,17 @@ export default function SystemAdmin() {
   };
 
   const resetSuperAdmin = async (x: any) => {
+    const warningMessage = `⚠️ WARNING:\n\nAre you sure you want to reset the password for Super Admin "${x.full_name || x.login_id}" (${x.login_id})?\n\nThis will invalidate the current password and generate a new temporary password.`;
+    const ok = Platform.OS === 'web' && typeof window !== 'undefined'
+      ? window.confirm(warningMessage)
+      : await new Promise<boolean>((resolve) =>
+          Alert.alert('Confirm Password Reset', warningMessage, [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Reset Password', style: 'destructive', onPress: () => resolve(true) },
+          ])
+        );
+    if (!ok) return;
+
     const temporaryPassword = 'Super@' + Math.floor(100000 + Math.random() * 900000);
     try {
       await api('/api/system-admin/super-admins/' + x.id, {
@@ -194,15 +317,24 @@ export default function SystemAdmin() {
   };
 
   const savePermissions = async () => {
+    if (!selected) return;
+    setSavingPerms(true);
     try {
       await api('/api/system-admin/admins/' + selected.id + '/permissions', {
         method: 'PUT',
         body: JSON.stringify({ permissions }),
       });
       await load();
-      Alert.alert('Permissions', 'Permissions saved successfully.');
+      const msg = `Permissions for ${selected.full_name} (${selected.login_id}) saved successfully! Total ${permissions.length} items active.`;
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert(msg);
+      } else {
+        Alert.alert('Permissions Saved', msg);
+      }
     } catch (e: any) {
       Alert.alert('Permissions', e.message);
+    } finally {
+      setSavingPerms(false);
     }
   };
 
@@ -219,6 +351,17 @@ export default function SystemAdmin() {
   };
 
   const resetAdmin = async (x: any) => {
+    const warningMessage = `⚠️ WARNING:\n\nAre you sure you want to reset the password for Office Admin "${x.full_name || x.login_id}" (${x.login_id})?\n\nThis will invalidate the current password and generate a new temporary password.`;
+    const ok = Platform.OS === 'web' && typeof window !== 'undefined'
+      ? window.confirm(warningMessage)
+      : await new Promise<boolean>((resolve) =>
+          Alert.alert('Confirm Password Reset', warningMessage, [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Reset Password', style: 'destructive', onPress: () => resolve(true) },
+          ])
+        );
+    if (!ok) return;
+
     const temporaryPassword = 'Temp@' + Math.floor(100000 + Math.random() * 900000);
     try {
       await api('/api/system-admin/admins/' + x.id, {
@@ -300,6 +443,29 @@ export default function SystemAdmin() {
   const toggle = (k: string) =>
     setPermissions((x) => (x.includes(k) ? x.filter((v) => v !== k) : [...x, k]));
 
+  const selectAllPermissions = () => {
+    const all = Array.from(new Set(MENU_PERMISSION_GROUPS.flatMap((g) => g.items.map((i) => i.key))));
+    setPermissions(all);
+  };
+
+  const clearAllPermissions = () => {
+    setPermissions([]);
+  };
+
+  const selectGroup = (groupId: string) => {
+    const group = MENU_PERMISSION_GROUPS.find((g) => g.id === groupId);
+    if (!group) return;
+    const groupKeys = group.items.map((i) => i.key);
+    setPermissions((prev) => Array.from(new Set([...prev, ...groupKeys])));
+  };
+
+  const clearGroup = (groupId: string) => {
+    const group = MENU_PERMISSION_GROUPS.find((g) => g.id === groupId);
+    if (!group) return;
+    const groupKeys = new Set(group.items.map((i) => i.key));
+    setPermissions((prev) => prev.filter((k) => !groupKeys.has(k)));
+  };
+
   return (
     <SafeAreaView style={s.page}>
       <ScrollView contentContainerStyle={s.body}>
@@ -320,7 +486,7 @@ export default function SystemAdmin() {
         <View style={[s.card, { borderColor: '#b91c1c', borderWidth: 2 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <View>
-              <Text style={[s.heading, { color: '#991b1b' }]}>👑 Super Admin Accounts (২টি Super Admin অ্যাকাউন্ট)</Text>
+              <Text style={[s.heading, { color: '#991b1b' }]}>👑 Super Admin Accounts</Text>
               <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
                 Super Admin accounts have master unrestricted access to all modules and system administration.
               </Text>
@@ -378,7 +544,7 @@ export default function SystemAdmin() {
         {/* ============================================================== */}
         <View style={s.card}>
           <View>
-            <Text style={s.heading}>🏢 Office Admin Accounts (Office Admin আইডিগুলি)</Text>
+            <Text style={s.heading}>🏢 Office Admin Accounts</Text>
             <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
               Manage office personnel accounts (Masema, Nasmin, Noorsaba, Office Admin, Hasibul, etc.) and their module permissions.
             </Text>
@@ -430,25 +596,241 @@ export default function SystemAdmin() {
 
         {/* Selected Office Admin Permissions */}
         {selected && (
-          <View style={s.card}>
-            <Text style={s.heading}>Permissions: {selected.full_name} ({selected.login_id})</Text>
-            <View style={s.permissionGrid}>
-              {modules.map(([k, l]) => (
+          <View style={[s.card, { borderColor: '#1d4ed8', borderWidth: 2, padding: 16, gap: 14 }]}>
+            {/* Header with Title and Save */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, borderBottomWidth: 1, borderColor: '#e2e8f0', paddingBottom: 12 }}>
+              <View>
+                <Text style={[s.heading, { color: '#0f172a', fontSize: 20 }]}>
+                  🔐 Permissions: <Text style={{ color: '#1d4ed8' }}>{selected.full_name}</Text> ({selected.login_id})
+                </Text>
+                <Text style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>
+                  Click any sub-menu item to toggle permission Active (Green) or Inactive (White).
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ backgroundColor: '#eff6ff', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: '#bfdbfe' }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#1e40af' }}>
+                    Active: {permissions.length} / {MENU_PERMISSION_GROUPS.reduce((acc, g) => acc + g.items.length, 0)}
+                  </Text>
+                </View>
                 <TouchableOpacity
-                  key={k}
-                  style={[s.permission, permissions.includes(k) && s.permissionOn]}
-                  onPress={() => toggle(k)}
+                  style={[s.primary, { paddingVertical: 10, paddingHorizontal: 18, backgroundColor: '#15803d' }, savingPerms && { opacity: 0.7 }]}
+                  onPress={savePermissions}
+                  disabled={savingPerms}
                 >
-                  <Text style={permissions.includes(k) ? s.white : undefined}>
-                    {permissions.includes(k) ? '[x] ' : ''}
-                    {l}
+                  <Text style={s.white}>{savingPerms ? 'Saving...' : '💾 Save Permissions'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Search Bar & Quick Toggles */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center', backgroundColor: '#f8fafc', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0' }}>
+              <TextInput
+                value={searchPerm}
+                onChangeText={setSearchPerm}
+                placeholder="🔍 Search permission, menu, route (e.g. student entry, gate pass, fees)..."
+                style={[s.input, { flex: 1, minWidth: 260, backgroundColor: '#fff' }]}
+              />
+
+              {/* Status Filter Pills */}
+              <View style={{ flexDirection: 'row', gap: 4 }}>
+                <TouchableOpacity
+                  style={[s.light, { paddingVertical: 8, paddingHorizontal: 11 }, filterStatus === 'all' && { backgroundColor: '#0f172a' }]}
+                  onPress={() => setFilterStatus('all')}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: filterStatus === 'all' ? '#fff' : '#475569' }}>All</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.light, { paddingVertical: 8, paddingHorizontal: 11 }, filterStatus === 'active' && { backgroundColor: '#15803d' }]}
+                  onPress={() => setFilterStatus('active')}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: filterStatus === 'active' ? '#fff' : '#15803d' }}>
+                    Active ({permissions.length})
                   </Text>
                 </TouchableOpacity>
-              ))}
+                <TouchableOpacity
+                  style={[s.light, { paddingVertical: 8, paddingHorizontal: 11 }, filterStatus === 'inactive' && { backgroundColor: '#dc2626' }]}
+                  onPress={() => setFilterStatus('inactive')}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: filterStatus === 'inactive' ? '#fff' : '#dc2626' }}>
+                    Inactive ({MENU_PERMISSION_GROUPS.reduce((acc, g) => acc + g.items.length, 0) - permissions.length})
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={[s.light, { backgroundColor: '#dbeafe', borderColor: '#bfdbfe', borderWidth: 1, paddingVertical: 8, paddingHorizontal: 12 }]}
+                onPress={selectAllPermissions}
+              >
+                <Text style={{ color: '#1e40af', fontWeight: '800', fontSize: 12 }}>✓ Enable All</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.light, { backgroundColor: '#fee2e2', borderColor: '#fecaca', borderWidth: 1, paddingVertical: 8, paddingHorizontal: 12 }]}
+                onPress={clearAllPermissions}
+              >
+                <Text style={{ color: '#991b1b', fontWeight: '800', fontSize: 12 }}>✗ Deselect All</Text>
+              </TouchableOpacity>
+              {searchPerm.trim() ? (
+                <TouchableOpacity
+                  style={[s.light, { paddingHorizontal: 10, paddingVertical: 8 }]}
+                  onPress={() => setSearchPerm('')}
+                >
+                  <Text style={{ color: '#64748b', fontWeight: '700', fontSize: 12 }}>✕ Clear</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
-            <TouchableOpacity style={s.primary} onPress={savePermissions}>
-              <Text style={s.white}>Save Permissions</Text>
-            </TouchableOpacity>
+
+            {/* Detailed Table Grid */}
+            <View style={s.tableScrollWrap}>
+              <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: 960, flexGrow: 1 }}>
+                <View style={{ flex: 1 }}>
+                  {/* Table Header */}
+                  <View style={s.tableHeaderRow}>
+                    <View style={s.tableColMenuHeader}>
+                      <Text style={s.tableHeaderTitle}>Main Menu</Text>
+                      <Text style={s.tableHeaderSubtitle}>Category & Status</Text>
+                    </View>
+                    <View style={s.tableColSubmenuHeader}>
+                      <Text style={s.tableHeaderTitle}>Sub Menus</Text>
+                      <Text style={s.tableHeaderSubtitle}>Click items to toggle Active or Inactive</Text>
+                    </View>
+                    <View style={s.tableColActionHeader}>
+                      <Text style={s.tableHeaderTitle}>Quick Actions</Text>
+                      <Text style={s.tableHeaderSubtitle}>One-click toggle</Text>
+                    </View>
+                  </View>
+
+                  {/* Table Rows */}
+                  {MENU_PERMISSION_GROUPS.map((group, index) => {
+                    const q = searchPerm.toLowerCase().trim();
+                    const filteredItems = group.items.filter((item) => {
+                      const isChecked = permissions.includes(item.key);
+                      if (filterStatus === 'active' && !isChecked) return false;
+                      if (filterStatus === 'inactive' && isChecked) return false;
+                      if (!q) return true;
+                      return (
+                        item.label.toLowerCase().includes(q) ||
+                        item.key.toLowerCase().includes(q) ||
+                        (item.desc && item.desc.toLowerCase().includes(q)) ||
+                        (item.route && item.route.toLowerCase().includes(q)) ||
+                        group.title.toLowerCase().includes(q)
+                      );
+                    });
+
+                    if ((q || filterStatus !== 'all') && filteredItems.length === 0) return null;
+
+                    const groupSelectedCount = group.items.filter((i) => permissions.includes(i.key)).length;
+                    const isAllSelected = groupSelectedCount === group.items.length;
+                    const isNoneSelected = groupSelectedCount === 0;
+
+                    return (
+                      <View
+                        key={group.id}
+                        style={[
+                          s.tableRow,
+                          index % 2 === 1 && s.tableRowAlt,
+                          groupSelectedCount > 0 && { borderLeftColor: group.color, borderLeftWidth: 4 },
+                        ]}
+                      >
+                        {/* Main Menu Col */}
+                        <View style={s.tableColMenu}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <View style={[s.menuIconCircle, { backgroundColor: group.badgeBg }]}>
+                              <Text style={{ fontSize: 18 }}>{group.icon}</Text>
+                            </View>
+                            <View>
+                              <Text style={[s.menuTitle, { color: '#0f172a' }]}>{group.title}</Text>
+                            </View>
+                          </View>
+                          <View style={[s.menuCountPill, { backgroundColor: groupSelectedCount > 0 ? group.badgeBg : '#f1f5f9' }]}>
+                            <Text style={[s.menuCountText, { color: groupSelectedCount > 0 ? group.badgeColor : '#64748b' }]}>
+                              {groupSelectedCount} / {group.items.length} Active
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Sub-Menus Col */}
+                        <View style={s.tableColSubmenus}>
+                          <View style={s.submenuGrid}>
+                            {filteredItems.map((item) => {
+                              const isChecked = permissions.includes(item.key);
+                              return (
+                                <TouchableOpacity
+                                  key={item.key}
+                                  activeOpacity={0.7}
+                                  onPress={() => toggle(item.key)}
+                                  style={[
+                                    s.subMenuItem,
+                                    isChecked ? s.subMenuItemActive : s.subMenuItemInactive,
+                                  ]}
+                                >
+                                  <View style={[s.subItemBadge, isChecked ? s.subItemBadgeActive : s.subItemBadgeInactive]}>
+                                    <Text style={[s.subItemBadgeText, isChecked && { color: '#fff' }]}>
+                                      {isChecked ? '✓' : '✕'}
+                                    </Text>
+                                  </View>
+                                  <View style={{ flexShrink: 1 }}>
+                                    <Text style={[s.subItemTitle, isChecked ? s.subItemTitleActive : s.subItemTitleInactive]}>
+                                      {item.label}
+                                    </Text>
+                                    {item.route && (
+                                      <Text style={[s.subItemRoute, isChecked ? s.subItemRouteActive : s.subItemRouteInactive]}>
+                                        {item.route}
+                                      </Text>
+                                    )}
+                                  </View>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        </View>
+
+                        {/* Quick Toggle Col */}
+                        <View style={s.tableColActions}>
+                          <TouchableOpacity
+                            style={[s.quickToggleBtn, isAllSelected ? s.quickToggleBtnActive : s.quickToggleBtnOutline]}
+                            onPress={() => selectGroup(group.id)}
+                          >
+                            <Text style={[s.quickToggleText, isAllSelected && { color: '#fff' }]}>
+                              {isAllSelected ? '✓ All On' : 'Enable All'}
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[s.quickToggleBtn, s.quickToggleBtnClear, isNoneSelected && { opacity: 0.5 }]}
+                            onPress={() => clearGroup(group.id)}
+                            disabled={isNoneSelected}
+                          >
+                            <Text style={s.quickToggleClearText}>✕ All Off</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            </View>
+
+            {/* Bottom Save Action */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, paddingTop: 12, borderTopWidth: 1, borderColor: '#e2e8f0' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 13, color: '#475569', fontWeight: '700' }}>
+                  Selected Admin: <Text style={{ color: '#1d4ed8', fontWeight: '900' }}>{selected.full_name}</Text> ({selected.login_id})
+                </Text>
+                <View style={{ backgroundColor: '#ecfdf5', paddingVertical: 4, paddingHorizontal: 9, borderRadius: 6, borderWidth: 1, borderColor: '#a7f3d0' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#047857' }}>
+                    Total Active: {permissions.length} permissions
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[s.primary, { paddingVertical: 12, paddingHorizontal: 26, backgroundColor: '#15803d', flexDirection: 'row', alignItems: 'center', gap: 8 }, savingPerms && { opacity: 0.7 }]}
+                onPress={savePermissions}
+                disabled={savingPerms}
+              >
+                <Text style={[s.white, { fontSize: 15 }]}>{savingPerms ? 'Saving Changes...' : '💾 Save All Permissions'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -501,7 +883,7 @@ const Field = ({ p, v, set, secure }: any) => (
 
 const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: '#eef3f7' },
-  body: { padding: 16, maxWidth: 1050, width: '100%', alignSelf: 'center', gap: 14 },
+  body: { padding: 16, maxWidth: 1250, width: '100%', alignSelf: 'center', gap: 14 },
   top: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   title: { fontSize: 25, fontWeight: '900' },
   light: { backgroundColor: '#e2ebf3', padding: 11, borderRadius: 7 },
@@ -521,4 +903,195 @@ const s = StyleSheet.create({
   permissionOn: { backgroundColor: '#1769aa' },
   setting: { padding: 8, borderBottomWidth: 1, borderColor: '#eee' },
   help: { color: '#64748b' },
+
+  // Table Matrix Styles
+  tableScrollWrap: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  tableHeaderRow: {
+    flexDirection: 'row',
+    backgroundColor: '#0f172a',
+    borderBottomWidth: 1,
+    borderColor: '#1e293b',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+  },
+  tableColMenuHeader: {
+    width: 210,
+    paddingRight: 10,
+  },
+  tableColSubmenuHeader: {
+    flex: 1,
+    paddingHorizontal: 10,
+  },
+  tableColActionHeader: {
+    width: 125,
+    alignItems: 'center',
+    paddingLeft: 6,
+  },
+  tableHeaderTitle: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.3,
+  },
+  tableHeaderSubtitle: {
+    color: '#94a3b8',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#ffffff',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    alignItems: 'flex-start',
+  },
+  tableRowAlt: {
+    backgroundColor: '#fbfcfd',
+  },
+  tableColMenu: {
+    width: 210,
+    paddingRight: 12,
+    gap: 8,
+  },
+  menuIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  menuBengali: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  menuCountPill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginTop: 2,
+  },
+  menuCountText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  tableColSubmenus: {
+    flex: 1,
+    paddingHorizontal: 8,
+  },
+  submenuGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  subMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 11,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    minWidth: 165,
+    maxWidth: '100%',
+  },
+  subMenuItemActive: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#10b981',
+  },
+  subMenuItemInactive: {
+    backgroundColor: '#ffffff',
+    borderColor: '#cbd5e1',
+  },
+  subItemBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subItemBadgeActive: {
+    backgroundColor: '#059669',
+  },
+  subItemBadgeInactive: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  subItemBadgeText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#94a3b8',
+  },
+  subItemTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  subItemTitleActive: {
+    color: '#064e3b',
+  },
+  subItemTitleInactive: {
+    color: '#475569',
+  },
+  subItemRoute: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  subItemRouteActive: {
+    color: '#059669',
+  },
+  subItemRouteInactive: {
+    color: '#94a3b8',
+  },
+  tableColActions: {
+    width: 125,
+    gap: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 8,
+  },
+  quickToggleBtn: {
+    width: '100%',
+    paddingVertical: 7,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  quickToggleBtnOutline: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  quickToggleBtnActive: {
+    backgroundColor: '#2563eb',
+  },
+  quickToggleBtnClear: {
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  quickToggleText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1d4ed8',
+  },
+  quickToggleClearText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#b91c1c',
+  },
 });

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Platform,
   Pressable,
@@ -17,39 +18,57 @@ import { clearSession, getUser } from '../lib/auth';
 import AcademyHeader from '../components/AcademyHeader';
 import { api } from '../lib/api';
 
-const menuPermission: Record<string, string> = {
+const menuPermission: Record<string, string | string[]> = {
+  // Student Management
   '/students': 'students',
-  '/student-entry': 'students',
-  '/teachers': 'teachers',
-  '/hostel-menu': 'rooms',
-  '/academy-menu': 'marks',
-  '/omr-evaluation': 'omr_evaluation',
+  '/student-entry': ['student_entry', 'students'],
+  '/daily-attendance': ['daily_attendance', 'attendance', 'students'],
+  '/id-cards': ['id_cards', 'students'],
+  '/documents': ['documents', 'students'],
+  '/student-lifecycle': ['student_lifecycle', 'students'],
+  '/student-transfer': ['student_transfer', 'students'],
+  '/behavior': ['behavior', 'students'],
+  '/gate-pass': ['gate_passes', 'gate_pass_generate', 'gate_pass_bulk', 'gate_pass_execute', 'gate_pass_ready', 'gate_pass_records'],
+  '/visits': ['visits', 'students'],
+  '/guardians': ['guardians', 'students'],
+
+  // Staff Management
+  '/teachers': ['teachers', 'teachers_view'],
+  '/teachers?mode=view': ['teachers', 'teachers_view'],
+  '/teachers?mode=add': ['teachers_add', 'teachers'],
+  '/teachers?mode=icard': ['teachers_icard', 'teachers'],
+  '/teachers?action=gateman_sheet': ['gateman_sheet', 'teachers'],
+  '/teacher-attendance': ['teacher_attendance', 'teachers'],
+  '/staff-summary': ['staff_summary', 'teachers'],
   '/service-staff': 'service_staff',
-  '/office': 'office_panel',
-  '/library': 'library_panel',
-  '/dining-stock': 'dining_stock',
-  '/guardians': 'guardians',
+  '/gateman': 'gateman_panel',
+
+  // Hostel Management
+  '/hostel-menu': ['rooms', 'asset_register', 'dining_stock'],
   '/rooms': 'rooms',
   '/room-assignments': 'room_assignments',
   '/attendance': 'attendance',
-  '/daily-attendance': 'attendance',
-  '/behavior': 'behavior',
+  '/dining-stock': 'dining_stock',
   '/asset-register': 'asset_register',
-  '/gate-pass': 'gate_passes',
-  '/visits': 'visits',
-  '/student-lifecycle': 'student_lifecycle',
-  '/illness': 'illness',
+
+  // Academic Management
+  '/academy-menu': ['marks', 'omr_evaluation', 'terminal_exams', 'published_results', 'routines', 'notices'],
   '/marks': 'marks',
+  '/omr-evaluation': 'omr_evaluation',
   '/terminal-exams': 'terminal_exams',
-  '/class-results': 'published_results',
-  '/problems': 'problems',
+  '/class-results': ['published_results', 'class_results'],
   '/routines': 'routines',
   '/display-control': 'routines',
   '/notices': 'notices',
-  '/deposit-fund': 'deposit_fund',
+  '/library': 'library_panel',
+  '/illness': 'illness',
+  '/problems': 'problems',
+
+  // Accounts Management
   '/fees': 'fees',
-  '/due-fees': 'fees',
+  '/due-fees': ['dues', 'fees'],
   '/bank-statement-matcher': 'fees',
+  '/deposit-fund': ['deposit_fund', 'fees'],
   '/audit-log': 'audit_log',
 };
 
@@ -130,6 +149,15 @@ export default function Dashboard() {
   ];
 
   const navigateToPath = (path: string) => {
+    if (!canAccess(path)) {
+      const msg = 'Access Restricted: You do not have permission for this module.';
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert(msg);
+      } else {
+        Alert.alert('Permission Denied', msg);
+      }
+      return;
+    }
     if (path.includes('?')) {
       const [pathname, queryString] = path.split('?');
       const searchParams: Record<string, string> = {};
@@ -211,8 +239,16 @@ export default function Dashboard() {
     if (userRole === 'super_admin') return true;
     if (path === '/system-admin') return false;
     if (!restricted) return true;
-    const required = menuPermission[path];
-    return !required || permissions.includes(required);
+    let required = menuPermission[path];
+    if (!required) {
+      const base = path.split('?')[0];
+      required = menuPermission[base];
+    }
+    if (!required) return true;
+    if (Array.isArray(required)) {
+      return required.some((k) => permissions.includes(k));
+    }
+    return permissions.includes(required);
   };
 
   const canAccessGroup = (paths: string[]) => paths.some((p) => canAccess(p));
@@ -1046,7 +1082,7 @@ export default function Dashboard() {
                 ['Gateman Sheet (Excel)', '/teachers?action=gateman_sheet'],
                 ['Gateman & Service Staff', '/service-staff'],
                 ['Gateman Portal', '/gateman'],
-              ].map(([label, path]) => (
+              ].filter(([_, path]) => canAccess(path)).map(([label, path]) => (
                 <AdminLink
                   path={path}
                   key={label}
@@ -1089,7 +1125,7 @@ export default function Dashboard() {
                 ['Student Gate Pass', '/gate-pass'],
                 ['Visit Permission', '/visits'],
                 ['Guardians & Passwords', '/guardians'],
-              ].map(([label, path]) => (
+              ].filter(([_, path]) => canAccess(path)).map(([label, path]) => (
                 <AdminLink
                   path={path}
                   key={label}
@@ -1132,7 +1168,7 @@ export default function Dashboard() {
                 ['Student Behaviour', '/behavior'],
                 ['Student Illness', '/illness'],
                 ['Room Problems', '/problems'],
-              ].map(([label, path]) => (
+              ].filter(([_, path]) => canAccess(path)).map(([label, path]) => (
                 <AdminLink
                   path={path}
                   key={label}
@@ -1169,7 +1205,7 @@ export default function Dashboard() {
                 ['Evening Room Attendance', '/attendance'],
                 ['Dining Stock Inventory', '/dining-stock'],
                 ['Asset Register', '/asset-register'],
-              ].map(([label, path]) => (
+              ].filter(([_, path]) => canAccess(path)).map(([label, path]) => (
                 <AdminLink
                   path={path}
                   key={label}
@@ -1206,7 +1242,7 @@ export default function Dashboard() {
                 ['Receipt & Payment', '/fees?tab=receipt_payment'],
                 ['Bank Matcher', '/bank-statement-matcher'],
                 ['Student Deposit Fund', '/deposit-fund'],
-              ].map(([label, path]) => (
+              ].filter(([_, path]) => canAccess(path)).map(([label, path]) => (
                 <AdminLink
                   path={path}
                   key={label}
@@ -1320,29 +1356,33 @@ export default function Dashboard() {
                     ...(userRole === 'super_admin' ? [['System Administration', '/system-admin']] : []),
                   ],
                 },
-              ].map((grp) => (
-                <View key={grp.category} style={{ gap: 8 }}>
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#0f172a', borderBottomWidth: 1, borderBottomColor: '#e2e8f0', paddingBottom: 4 }}>
-                    {grp.category}
-                  </Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    {grp.items.map(([label, path]) => (
-                      <AdminLink
-                        path={path}
-                        key={label}
-                        style={[s.modalItem, { minWidth: 200, width: '31%', minHeight: 48, paddingVertical: 8 }]}
-                        onPress={() => {
-                          setAllMenusDrawer(false);
-                          navigateToPath(path);
-                        }}
-                      >
-                        <Text style={s.arrow}>›</Text>
-                        <Text style={[s.modalItemText, { fontSize: 13 }]}>{label}</Text>
-                      </AdminLink>
-                    ))}
+              ].map((grp) => {
+                const visibleItems = grp.items.filter(([_, path]) => canAccess(path));
+                if (!visibleItems.length) return null;
+                return (
+                  <View key={grp.category} style={{ gap: 8 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#0f172a', borderBottomWidth: 1, borderBottomColor: '#e2e8f0', paddingBottom: 4 }}>
+                      {grp.category}
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      {visibleItems.map(([label, path]) => (
+                        <AdminLink
+                          path={path}
+                          key={label}
+                          style={[s.modalItem, { minWidth: 200, width: '31%', minHeight: 48, paddingVertical: 8 }]}
+                          onPress={() => {
+                            setAllMenusDrawer(false);
+                            navigateToPath(path);
+                          }}
+                        >
+                          <Text style={s.arrow}>›</Text>
+                          <Text style={[s.modalItemText, { fontSize: 13 }]}>{label}</Text>
+                        </AdminLink>
+                      ))}
+                    </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </ScrollView>
           </View>
         </View>
