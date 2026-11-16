@@ -5,12 +5,12 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { api, API_BASE } from '../lib/api';
-import { getToken } from '../lib/auth';
+import { getToken, getUser } from '../lib/auth';
 import { STUDENT_CLASSES, isVisibleStudentClass } from '../lib/studentClasses';
 import { filterStudents, studentSession, normalizeStudentClass } from '../lib/studentDirectory';
 
 type Option = { value: string; label: string; shortLabel?: string; keywords?: string[] };
-export function Select({ label, value, options, onChange, searchable=false, style, textStyle, placeholderTextStyle, chevron, panelWidth, panelMaxHeight }: { label: string; value: string; options: Option[]; onChange: (value: string) => void; searchable?: boolean; style?: any; textStyle?: any; placeholderTextStyle?: any; chevron?: string; panelWidth?: number; panelMaxHeight?: number }) {
+export function Select({ label, value, options, onChange, searchable = false, style, textStyle, placeholderTextStyle, chevron, panelWidth, panelMaxHeight }: { label: string; value: string; options: Option[]; onChange: (value: string) => void; searchable?: boolean; style?: any; textStyle?: any; placeholderTextStyle?: any; chevron?: string; panelWidth?: number; panelMaxHeight?: number }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [previewLabel, setPreviewLabel] = useState('');
@@ -79,8 +79,8 @@ export function Select({ label, value, options, onChange, searchable=false, styl
     const key = String(rawKey || '').toLowerCase();
     const normalizedKey = key === 'arrowdown' || key === 'down' ? 'down'
       : key === 'arrowup' || key === 'up' ? 'up'
-      : key === 'enter' || key === 'return' ? 'enter'
-      : key === 'escape' || key === 'esc' ? 'escape' : '';
+        : key === 'enter' || key === 'return' ? 'enter'
+          : key === 'escape' || key === 'esc' ? 'escape' : '';
     if (!normalizedKey) return;
     const now = Date.now();
     if (lastKeyboardAction.current.key === normalizedKey && now - lastKeyboardAction.current.at < 60) return;
@@ -152,7 +152,7 @@ export function Select({ label, value, options, onChange, searchable=false, styl
             setQuery(prev => prev + e.key);
             e.preventDefault();
             return;
-          } catch (_) {}
+          } catch (_) { }
         }
 
         e.preventDefault();
@@ -233,7 +233,7 @@ export function Select({ label, value, options, onChange, searchable=false, styl
         setTimeout(() => {
           try {
             inputRef.current?.focus?.();
-          } catch (_) {}
+          } catch (_) { }
         }, 50);
       }
     };
@@ -277,7 +277,7 @@ export function Select({ label, value, options, onChange, searchable=false, styl
       </Text>
     </TouchableOpacity>
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-      <View style={[s.overlay,Platform.OS==='web'&&s.webSelectOverlay]}><Pressable accessibilityRole="button" accessibilityLabel="Close dropdown" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} onPress={() => setOpen(false)} /><View style={[s.selectPanel,Platform.OS!=='web'&&panelWidth ? {maxWidth:panelWidth} : false,Platform.OS!=='web'&&panelMaxHeight ? {maxHeight:panelMaxHeight} : false,Platform.OS==='web'&&{position:'absolute',left:anchor.x,top:anchor.y,width:anchor.width,maxWidth:anchor.width,maxHeight:anchor.maxHeight,borderWidth:1,borderColor:'#cbd5e1',zIndex:1000,boxShadow:'0 4px 12px rgba(0,0,0,0.15)' as any}] }>
+      <View style={[s.overlay, Platform.OS === 'web' && s.webSelectOverlay]}><Pressable accessibilityRole="button" accessibilityLabel="Close dropdown" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} onPress={() => setOpen(false)} /><View style={[s.selectPanel, Platform.OS !== 'web' && panelWidth ? { maxWidth: panelWidth } : false, Platform.OS !== 'web' && panelMaxHeight ? { maxHeight: panelMaxHeight } : false, Platform.OS === 'web' && { position: 'absolute', left: anchor.x, top: anchor.y, width: anchor.width, maxWidth: anchor.width, maxHeight: anchor.maxHeight, borderWidth: 1, borderColor: '#cbd5e1', zIndex: 1000, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' as any }]}>
         <Text style={s.panelTitle}>{label}</Text>
         {searchable && (
           <TextInput
@@ -300,16 +300,16 @@ export function Select({ label, value, options, onChange, searchable=false, styl
 }
 
 const DOCUMENT_SLOTS = [
-  ['father_photo','Father Photo'], ['mother_photo','Mother Photo'],
-  ['visitor1_photo','Visitor-1 Photo'], ['visitor2_photo','Visitor-2 Photo'],
-  ['birth_certificate','Date Of Birth'], ['aadhaar','Aadhaar'], ['bank_passbook','Passbook'], ['obc_certificate','OBC'],
-  ['ix_registration','MP Registration'], ['mp_admit','MP Admit'], ['mp_marksheet','MP Marksheet'],
-  ['transfer_certificate','T.C.'], ['xi_registration','HS Registration'],
-  ['hs_admit_3rd','HS Admit 3rd Semester'], ['hs_admit_4th','HS Admit 4th Semester'],
-  ['xi_admission_slip','XI Admission Slip'], ['signature','Signature'],
-  ['ph_certificate','P.H. Certificate'], ['xi_marksheet','XI Marksheet'],
-  ['hs_marksheet','H.S Marksheet'], ['hs_certificate','H.S Certificate'], ['admission_slip','Admission Slip'], ['other','Others'],
-  ['other_2','Others-2'], ['other_3','Others-3'],
+  ['father_photo', 'Father Photo'], ['mother_photo', 'Mother Photo'],
+  ['visitor1_photo', 'Visitor-1 Photo'], ['visitor2_photo', 'Visitor-2 Photo'],
+  ['birth_certificate', 'Date Of Birth'], ['aadhaar', 'Aadhaar'], ['bank_passbook', 'Passbook'], ['obc_certificate', 'OBC'],
+  ['ix_registration', 'MP Registration'], ['mp_admit', 'MP Admit'], ['mp_marksheet', 'MP Marksheet'],
+  ['transfer_certificate', 'T.C.'], ['xi_registration', 'HS Registration'],
+  ['hs_admit_3rd', 'HS Admit 3rd Semester'], ['hs_admit_4th', 'HS Admit 4th Semester'],
+  ['xi_admission_slip', 'XI Admission Slip'], ['signature', 'Signature'],
+  ['ph_certificate', 'P.H. Certificate'], ['xi_marksheet', 'XI Marksheet'],
+  ['hs_marksheet', 'H.S Marksheet'], ['hs_certificate', 'H.S Certificate'], ['admission_slip', 'Admission Slip'], ['other', 'Others'],
+  ['other_2', 'Others-2'], ['other_3', 'Others-3'],
 ] as const;
 
 const columns: [string, string, number][] = [
@@ -318,9 +318,23 @@ const columns: [string, string, number][] = [
   ['mobile_number', 'Mobile', 125], ['whatsapp_number', 'WhatsApp', 125], ['room_name', 'Room No.', 105], ['is_active', 'Status', 90], ['action', 'Action', 195],
 ];
 
-export default function StudentDirectory({ students, loading, error, onEdit, onRefresh, onDeactivate }: {
+export default function StudentDirectory({ students, loading, error, onEdit, onRefresh, onDeactivate, canDeactivate }: {
   students: any[]; loading: boolean; error: string; onEdit: (student: any) => void; onRefresh: () => void; onDeactivate: (student: any) => void;
+  canDeactivate?: boolean;
 }) {
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  useEffect(() => {
+    void getUser<any>().then(u => setIsSuperAdmin(u?.role === 'super_admin'));
+  }, []);
+  const allowDeactivate = canDeactivate !== undefined ? canDeactivate : isSuperAdmin;
+  const currentColumns: [string, string, number][] = useMemo(() => {
+    return columns.map(([key, title, width]) => {
+      if (key === 'action') {
+        return [key, title, allowDeactivate ? 195 : 155] as [string, string, number];
+      }
+      return [key, title, width] as [string, string, number];
+    });
+  }, [allowDeactivate]);
   const [year, setYear] = useState('all');
   const [className, setClassName] = useState('all');
   const [gender, setGender] = useState('all');
@@ -430,7 +444,7 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
           if (!browserWindow) throw new Error('Browser blocked the new window');
           browserWindow.document.write(`<html><body style="margin:0;text-align:center"><img src="${url}" style="max-width:100%;max-height:100vh" /></body></html>`);
           browserWindow.document.close();
-          if (mode === 'print') setTimeout(() => { try { browserWindow.focus(); browserWindow.print(); } catch {} }, 800);
+          if (mode === 'print') setTimeout(() => { try { browserWindow.focus(); browserWindow.print(); } catch { } }, 800);
         }
       } else {
         if (!FileSystem.cacheDirectory) throw new Error('Temporary storage is unavailable');
@@ -507,7 +521,7 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
         browserWindow.location.href = objectUrl;
         if (mode === 'print') {
           setTimeout(() => {
-            try { browserWindow.focus(); browserWindow.print(); } catch {}
+            try { browserWindow.focus(); browserWindow.print(); } catch { }
           }, 1000);
         }
         setTimeout(() => URL.revokeObjectURL(objectUrl), 120000);
@@ -547,16 +561,16 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
     {loading ? <ActivityIndicator style={{ margin: 20 }} /> : error ? <Text style={s.error}>{error}</Text> : <>
       <ScrollView horizontal>
         <View>
-          <View style={[s.row, s.tableHead]}>{columns.map(([key, title, width]) => <TouchableOpacity key={key} disabled={['serial', 'photo', 'action'].includes(key)} accessibilityRole="button" style={[s.cell, { width }]} onPress={() => setSort({ key, ascending: sort.key === key ? !sort.ascending : true })}><Text style={s.columnTitle}>{title}{sort.key === key ? (sort.ascending ? ' -' : ' -') : ''}</Text></TouchableOpacity>)}</View>
+          <View style={[s.row, s.tableHead]}>{currentColumns.map(([key, title, width]) => <TouchableOpacity key={key} disabled={['serial', 'photo', 'action'].includes(key)} accessibilityRole="button" style={[s.cell, { width }]} onPress={() => setSort({ key, ascending: sort.key === key ? !sort.ascending : true })}><Text style={s.columnTitle}>{title}{sort.key === key ? (sort.ascending ? ' -' : ' -') : ''}</Text></TouchableOpacity>)}</View>
           {rows.map((student, index) => <View key={student.id} style={[s.row, index % 2 === 0 && s.striped]}>
-            {columns.map(([key, , width]) => <View key={key} style={[s.cell, { width }]}>
+            {currentColumns.map(([key, , width]) => <View key={key} style={[s.cell, { width }]}>
               {key === 'serial' ? <Text style={s.numberText}>{start + index + 1}</Text> : key === 'photo' ? <Photo student={student} /> : key === 'action' ? <View style={s.inline}>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Edit ${student.student_name}`} style={[s.action, s.edit]} onPress={() => onEdit(student)}><Text>Edit</Text></TouchableOpacity>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel={`View ${student.student_name}`} style={[s.action, s.view]} onPress={() => openDetails(student)}><Text>View</Text></TouchableOpacity>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel={'Documents for ' + student.student_name} style={[s.action, s.documents]} onPress={() => openDocuments(student)}><Text style={s.documentIcon}>{String.fromCodePoint(0x1F4C4)}</Text></TouchableOpacity>
-                {student.is_active && <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Mark ${student.student_name} as dropout`} style={[s.action, s.remove]} onPress={() => onDeactivate(student)}><Text style={{ color: '#fff' }}>-</Text></TouchableOpacity>}
+                {student.is_active && allowDeactivate && <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Mark ${student.student_name} as dropout`} style={[s.action, s.remove]} onPress={() => onDeactivate(student)}><Text style={{ color: '#fff' }}>-</Text></TouchableOpacity>}
               </View> : key === 'is_active' ? <Text style={{ color: student.is_active ? '#166534' : '#b91c1c', fontWeight: '700' }}>{student.is_active ? 'Active' : 'Dropout'}</Text>
-                : <Text selectable style={[s.cellText, ['registration_no','monthly_fees','mobile_number','whatsapp_number','room_name'].includes(key) && s.numberText]}>{String(student[key] ?? '-')}</Text>}
+                : <Text selectable style={[s.cellText, ['registration_no', 'monthly_fees', 'mobile_number', 'whatsapp_number', 'room_name'].includes(key) && s.numberText]}>{String(student[key] ?? '-')}</Text>}
             </View>)}
           </View>)}
         </View>
@@ -567,15 +581,15 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
       </View>
     </>}
     <Modal visible={documentsOpen} transparent animationType="fade" onRequestClose={() => setDocumentsOpen(false)}>
-       <View style={[s.overlay,s.documentOverlay]}><View style={s.documentPanel}>
+      <View style={[s.overlay, s.documentOverlay]}><View style={s.documentPanel}>
         <View style={s.documentTopBar}><TouchableOpacity style={s.documentCloseButton} onPress={() => setDocumentsOpen(false)}><Text style={s.whiteText}>Close</Text></TouchableOpacity><Text style={s.lastUpdated}>Last Updated{documents[0]?.uploaded_at ? '\n' + String(documents[0].uploaded_at).slice(0, 16).replace('T', ' ') : ''}</Text></View>
         <Text style={s.registrationLine}>Reg. No. {documentStudent?.registration_no || '-'}</Text>
-        {documentsLoading ? <ActivityIndicator style={{margin:30}}/> : documentsError ? <Text style={s.error}>{documentsError}</Text> : <ScrollView contentContainerStyle={s.documentGrid}>
-           <View style={s.documentTile}><Text style={s.tileTitle}>Photo</Text><View style={s.previewBox}>{documentStudent?.photo_url?<Image source={{uri:/^https?:/.test(documentStudent.photo_url)?documentStudent.photo_url:API_BASE+documentStudent.photo_url}} resizeMode="contain" style={s.documentPreview}/>:<Text style={s.noPreview}>No photo</Text>}</View><TouchableOpacity disabled={documentBusy!==null} style={s.chooseButton} onPress={uploadStudentPhoto}><Text style={s.chooseText}>{documentBusy==='photo'?'Uploading...':'Upload / Change Photo'}</Text></TouchableOpacity><View style={s.tileActions}><TouchableOpacity accessibilityLabel="View student photo" disabled={!documentStudent?.photo_url||documentBusy!==null} style={[s.iconButton,s.viewIcon,!documentStudent?.photo_url&&s.disabled]} onPress={()=>handleStudentPhoto('view')}><Text style={s.iconText}>{String.fromCodePoint(0x1F441)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel="Print student photo" disabled={!documentStudent?.photo_url||documentBusy!==null} style={[s.iconButton,s.printIcon,!documentStudent?.photo_url&&s.disabled]} onPress={()=>handleStudentPhoto('print')}><Text style={s.iconText}>{String.fromCodePoint(0x1F5A8)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel="Download student photo" disabled={!documentStudent?.photo_url||documentBusy!==null} style={[s.iconButton,s.downloadIcon,!documentStudent?.photo_url&&s.disabled]} onPress={()=>handleStudentPhoto('download')}><Text style={s.iconText}>{String.fromCodePoint(0x2B07)}</Text></TouchableOpacity></View></View>
-           {DOCUMENT_SLOTS.map(([type,label])=>{const doc=documentFor(type),pending=pendingDocuments[type],preview=pending?.uri||previewUrl(doc),displayLabel=label.replace(' Photo','').replace('Visitor-','Visitor_');return <View key={type} style={s.documentTile}><Text numberOfLines={1} style={s.tileTitle}>{displayLabel}</Text><View style={s.previewBox}>{preview?<Image source={{uri:preview}} resizeMode="contain" style={s.documentPreview}/>:<Text style={s.noPreview}>{doc?'PDF / File':'No document'}</Text>}</View><TouchableOpacity disabled={documentBusy!==null} style={s.chooseButton} onPress={()=>chooseDocument(type)}><Text numberOfLines={1} style={s.chooseText}>{pending?pending.name:'Choose File'}</Text></TouchableOpacity><View style={s.tileActions}><TouchableOpacity accessibilityLabel={'View '+displayLabel} disabled={!doc||documentBusy!==null} style={[s.iconButton,s.viewIcon,!doc&&s.disabled]} onPress={()=>doc&&handleDocument(doc,'view')}><Text style={s.iconText}>{String.fromCodePoint(0x1F441)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel={'Print '+displayLabel} disabled={!doc||documentBusy!==null} style={[s.iconButton,s.printIcon,!doc&&s.disabled]} onPress={()=>doc&&handleDocument(doc,'print')}><Text style={s.iconText}>{String.fromCodePoint(0x1F5A8)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel={'Download '+displayLabel} disabled={!doc||documentBusy!==null} style={[s.iconButton,s.downloadIcon,!doc&&s.disabled]} onPress={()=>doc&&handleDocument(doc,'download')}><Text style={s.iconText}>{String.fromCodePoint(0x2B07)}</Text></TouchableOpacity></View></View>})}
+        {documentsLoading ? <ActivityIndicator style={{ margin: 30 }} /> : documentsError ? <Text style={s.error}>{documentsError}</Text> : <ScrollView contentContainerStyle={s.documentGrid}>
+          <View style={s.documentTile}><Text style={s.tileTitle}>Photo</Text><View style={s.previewBox}>{documentStudent?.photo_url ? <Image source={{ uri: /^https?:/.test(documentStudent.photo_url) ? documentStudent.photo_url : API_BASE + documentStudent.photo_url }} resizeMode="contain" style={s.documentPreview} /> : <Text style={s.noPreview}>No photo</Text>}</View><TouchableOpacity disabled={documentBusy !== null} style={s.chooseButton} onPress={uploadStudentPhoto}><Text style={s.chooseText}>{documentBusy === 'photo' ? 'Uploading...' : 'Upload / Change Photo'}</Text></TouchableOpacity><View style={s.tileActions}><TouchableOpacity accessibilityLabel="View student photo" disabled={!documentStudent?.photo_url || documentBusy !== null} style={[s.iconButton, s.viewIcon, !documentStudent?.photo_url && s.disabled]} onPress={() => handleStudentPhoto('view')}><Text style={s.iconText}>{String.fromCodePoint(0x1F441)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel="Print student photo" disabled={!documentStudent?.photo_url || documentBusy !== null} style={[s.iconButton, s.printIcon, !documentStudent?.photo_url && s.disabled]} onPress={() => handleStudentPhoto('print')}><Text style={s.iconText}>{String.fromCodePoint(0x1F5A8)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel="Download student photo" disabled={!documentStudent?.photo_url || documentBusy !== null} style={[s.iconButton, s.downloadIcon, !documentStudent?.photo_url && s.disabled]} onPress={() => handleStudentPhoto('download')}><Text style={s.iconText}>{String.fromCodePoint(0x2B07)}</Text></TouchableOpacity></View></View>
+          {DOCUMENT_SLOTS.map(([type, label]) => { const doc = documentFor(type), pending = pendingDocuments[type], preview = pending?.uri || previewUrl(doc), displayLabel = label.replace(' Photo', '').replace('Visitor-', 'Visitor_'); return <View key={type} style={s.documentTile}><Text numberOfLines={1} style={s.tileTitle}>{displayLabel}</Text><View style={s.previewBox}>{preview ? <Image source={{ uri: preview }} resizeMode="contain" style={s.documentPreview} /> : <Text style={s.noPreview}>{doc ? 'PDF / File' : 'No document'}</Text>}</View><TouchableOpacity disabled={documentBusy !== null} style={s.chooseButton} onPress={() => chooseDocument(type)}><Text numberOfLines={1} style={s.chooseText}>{pending ? pending.name : 'Choose File'}</Text></TouchableOpacity><View style={s.tileActions}><TouchableOpacity accessibilityLabel={'View ' + displayLabel} disabled={!doc || documentBusy !== null} style={[s.iconButton, s.viewIcon, !doc && s.disabled]} onPress={() => doc && handleDocument(doc, 'view')}><Text style={s.iconText}>{String.fromCodePoint(0x1F441)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel={'Print ' + displayLabel} disabled={!doc || documentBusy !== null} style={[s.iconButton, s.printIcon, !doc && s.disabled]} onPress={() => doc && handleDocument(doc, 'print')}><Text style={s.iconText}>{String.fromCodePoint(0x1F5A8)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel={'Download ' + displayLabel} disabled={!doc || documentBusy !== null} style={[s.iconButton, s.downloadIcon, !doc && s.disabled]} onPress={() => doc && handleDocument(doc, 'download')}><Text style={s.iconText}>{String.fromCodePoint(0x2B07)}</Text></TouchableOpacity></View></View> })}
         </ScrollView>}
-        <TouchableOpacity disabled={documentBusy!==null} onPress={uploadSelectedDocuments} style={[s.uploadAllButton,documentBusy!==null&&s.disabled]}><Text style={s.whiteText}>{documentBusy==='upload'?'Uploading...':'Upload Selected Documents'}</Text></TouchableOpacity>
-        {documentBusy && documentBusy!=='upload' && <Text style={s.busyText}>Preparing document...</Text>}
+        <TouchableOpacity disabled={documentBusy !== null} onPress={uploadSelectedDocuments} style={[s.uploadAllButton, documentBusy !== null && s.disabled]}><Text style={s.whiteText}>{documentBusy === 'upload' ? 'Uploading...' : 'Upload Selected Documents'}</Text></TouchableOpacity>
+        {documentBusy && documentBusy !== 'upload' && <Text style={s.busyText}>Preparing document...</Text>}
       </View></View>
     </Modal>
     <Modal visible={detailOpen} transparent animationType="fade" onRequestClose={() => setDetailOpen(false)}><View style={s.overlay}><View style={s.detailPanel}>
@@ -624,7 +638,26 @@ function Photo({ student, large = false }: { student: any; large?: boolean }) {
 }
 
 function RecordDetails({ record }: { record: any }) {
-  return <>{Object.entries(record).filter(([key, value]) => !['id', 'room_id', 'room_name', 'photo_url', 'created_at', 'updated_at', 'user_id', 'visitor1', 'visitor2'].includes(key) && value !== null && value !== '').map(([key, value]) => <View key={key} style={s.detailRow}><Text style={s.detailLabel}>{key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</Text><Text selectable style={{ flex: 1 }}>{typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}</Text></View>)}
+  const getFieldLabel = (key: string) => {
+    const custom: Record<string, string> = {
+      mp_reg_no: 'MP Reg No',
+      mp_roll_no: 'MP Roll No',
+      mp_marks: 'MP Marks',
+      mp_board: 'MP Board',
+      hs_reg_no: 'HS Reg No',
+      hs_roll_no: 'HS Roll No',
+      hs_marks: 'HS Marks',
+      hs_board: 'HS Board',
+      school_reg_no: 'School / MP Reg No',
+      council_reg_no: 'Council / HS Reg No',
+      banglarshiksha_id: 'Banglarshiksha ID',
+      aadhaar_no: 'Aadhaar No',
+      father_aadhaar_no: 'Father Aadhaar No',
+      mother_aadhaar_no: 'Mother Aadhaar No',
+    };
+    return custom[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  };
+  return <>{Object.entries(record).filter(([key, value]) => !['id', 'room_id', 'room_name', 'photo_url', 'created_at', 'updated_at', 'user_id', 'visitor1', 'visitor2'].includes(key) && value !== null && value !== '').map(([key, value]) => <View key={key} style={s.detailRow}><Text style={s.detailLabel}>{getFieldLabel(key)}</Text><Text selectable style={{ flex: 1 }}>{typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}</Text></View>)}
     {(record.room_number || record.room_name) && <View style={s.detailRow}><Text style={s.detailLabel}>Room Number</Text><Text selectable style={{ flex: 1 }}>{record.room_number || record.room_name}</Text></View>}
     {['visitor1', 'visitor2'].map((key, index) => record[key] && <View key={key}><Text style={s.panelTitle}>Visitor {index + 1}</Text><RecordDetails record={record[key]} /></View>)}
   </>;
@@ -658,6 +691,6 @@ const s = StyleSheet.create({
   print: { backgroundColor: '#475569' },
   whiteText: { color: '#fff', fontWeight: '700' },
   busyText: { textAlign: 'center', color: '#1565c0', fontWeight: '700', padding: 8 },
-  documentTopBar:{minHeight:44,marginHorizontal:14,marginTop:12,backgroundColor:'#eef6fc',borderWidth:1,borderColor:'#64748b',borderRadius:5,padding:5,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},documentCloseButton:{backgroundColor:'#dc3545',paddingHorizontal:12,paddingVertical:8,borderRadius:4},lastUpdated:{fontSize:9,textAlign:'right',color:'#475569'},registrationLine:{paddingHorizontal:16,paddingTop:8,color:'#475569',fontSize:16},documentGrid:{padding:14,flexDirection:'row',flexWrap:'wrap',gap:18,justifyContent:'space-around',alignItems:'flex-start'},documentTile:{width:210,minHeight:270,borderWidth:1,borderColor:'#aeb7c1',borderRadius:7,backgroundColor:'#f8fafc',overflow:'hidden'},tileTitle:{textAlign:'center',fontSize:17,paddingVertical:4,color:'#111827',backgroundColor:'#fff'},previewBox:{height:172,marginHorizontal:15,alignItems:'center',justifyContent:'center',backgroundColor:'#fff'},documentPreview:{width:'100%',height:'100%'},noPreview:{color:'#94a3b8',fontSize:12},chooseButton:{height:29,backgroundColor:'#60a5fa',justifyContent:'center',paddingHorizontal:6},chooseText:{fontSize:11,color:'#0f172a'},tileActions:{minHeight:43,backgroundColor:'#d1d5db',flexDirection:'row',justifyContent:'space-around',alignItems:'center',padding:4},iconButton:{minWidth:38,alignItems:'center',paddingHorizontal:8,paddingVertical:7,borderRadius:4},viewIcon:{backgroundColor:'#0d6efd'},printIcon:{backgroundColor:'#059669'},downloadIcon:{backgroundColor:'#06b6d4'},iconText:{color:'#fff',fontSize:19,fontWeight:'800',lineHeight:21},uploadAllButton:{alignSelf:'center',backgroundColor:'#0d6efd',paddingHorizontal:18,paddingVertical:11,borderRadius:6,marginBottom:14},
-    modalHeader: { backgroundColor: '#11101e', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, modalTitle: { color: '#fff', fontSize: 16, fontWeight: '700' }, close: { color: '#fff', fontSize: 28, paddingHorizontal: 8 }, detailRow: { flexDirection: 'row', gap: 12, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }, detailLabel: { width: '42%', color: '#475569', fontWeight: '600' },
+  documentTopBar: { minHeight: 44, marginHorizontal: 14, marginTop: 12, backgroundColor: '#eef6fc', borderWidth: 1, borderColor: '#64748b', borderRadius: 5, padding: 5, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, documentCloseButton: { backgroundColor: '#dc3545', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 4 }, lastUpdated: { fontSize: 9, textAlign: 'right', color: '#475569' }, registrationLine: { paddingHorizontal: 16, paddingTop: 8, color: '#475569', fontSize: 16 }, documentGrid: { padding: 14, flexDirection: 'row', flexWrap: 'wrap', gap: 18, justifyContent: 'space-around', alignItems: 'flex-start' }, documentTile: { width: 210, minHeight: 270, borderWidth: 1, borderColor: '#aeb7c1', borderRadius: 7, backgroundColor: '#f8fafc', overflow: 'hidden' }, tileTitle: { textAlign: 'center', fontSize: 17, paddingVertical: 4, color: '#111827', backgroundColor: '#fff' }, previewBox: { height: 172, marginHorizontal: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }, documentPreview: { width: '100%', height: '100%' }, noPreview: { color: '#94a3b8', fontSize: 12 }, chooseButton: { height: 29, backgroundColor: '#60a5fa', justifyContent: 'center', paddingHorizontal: 6 }, chooseText: { fontSize: 11, color: '#0f172a' }, tileActions: { minHeight: 43, backgroundColor: '#d1d5db', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', padding: 4 }, iconButton: { minWidth: 38, alignItems: 'center', paddingHorizontal: 8, paddingVertical: 7, borderRadius: 4 }, viewIcon: { backgroundColor: '#0d6efd' }, printIcon: { backgroundColor: '#059669' }, downloadIcon: { backgroundColor: '#06b6d4' }, iconText: { color: '#fff', fontSize: 19, fontWeight: '800', lineHeight: 21 }, uploadAllButton: { alignSelf: 'center', backgroundColor: '#0d6efd', paddingHorizontal: 18, paddingVertical: 11, borderRadius: 6, marginBottom: 14 },
+  modalHeader: { backgroundColor: '#11101e', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, modalTitle: { color: '#fff', fontSize: 16, fontWeight: '700' }, close: { color: '#fff', fontSize: 28, paddingHorizontal: 8 }, detailRow: { flexDirection: 'row', gap: 12, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }, detailLabel: { width: '42%', color: '#475569', fontWeight: '600' },
 });

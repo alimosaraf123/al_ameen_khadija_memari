@@ -4,6 +4,17 @@ const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
+pool.query(`
+  ALTER TABLE students ADD COLUMN IF NOT EXISTS mp_reg_no TEXT NULL;
+  ALTER TABLE students ADD COLUMN IF NOT EXISTS mp_roll_no TEXT NULL;
+  ALTER TABLE students ADD COLUMN IF NOT EXISTS mp_marks TEXT NULL;
+  ALTER TABLE students ADD COLUMN IF NOT EXISTS mp_board TEXT NULL;
+  ALTER TABLE students ADD COLUMN IF NOT EXISTS hs_reg_no TEXT NULL;
+  ALTER TABLE students ADD COLUMN IF NOT EXISTS hs_roll_no TEXT NULL;
+  ALTER TABLE students ADD COLUMN IF NOT EXISTS hs_marks TEXT NULL;
+  ALTER TABLE students ADD COLUMN IF NOT EXISTS hs_board TEXT NULL;
+`).catch(err => console.error('Student columns migration error:', err.message));
+
 const exitSchemaReady = pool.query(`
   CREATE TABLE IF NOT EXISTS student_exit_records (
     id BIGSERIAL PRIMARY KEY,
@@ -47,7 +58,7 @@ async function deactivateGuardiansWhenNoActiveStudent(client, studentId) {
 }
 
 router.get('/:id/exit-clearance',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{const data=await exitClearance(req.params.id);if(!data)return res.status(404).json({success:false,message:'Student not found'});res.json({success:true,...data});}));
-router.post('/:id/dropout',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{await exitSchemaReady;const date=String(req.body?.dropout_date||'').trim(),reason=String(req.body?.dropout_reason||'').trim();if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!reason)return res.status(400).json({success:false,message:'Dropout date and reason are required'});const client=await pool.connect();try{await client.query('BEGIN');const student=(await client.query('UPDATE students SET is_active=FALSE,updated_at=NOW() WHERE id=$1 RETURNING id,student_name',[req.params.id])).rows[0];if(!student){await client.query('ROLLBACK');return res.status(404).json({success:false,message:'Student not found'});}const exit=(await client.query(`INSERT INTO student_exit_records(student_id,dropout_date,dropout_reason,created_by) VALUES($1,$2,$3,$4) ON CONFLICT(student_id) DO UPDATE SET dropout_date=EXCLUDED.dropout_date,dropout_reason=EXCLUDED.dropout_reason,tc_issued_at=NULL,tc_issued_by=NULL,reactivated_at=NULL,reactivated_by=NULL,updated_at=NOW() RETURNING *`,[req.params.id,date,reason,req.user.userId])).rows[0];await deactivateGuardiansWhenNoActiveStudent(client,req.params.id);await client.query('COMMIT');res.json({success:true,student,exit});}catch(e){await client.query('ROLLBACK');throw e}finally{client.release();}}));
+router.post('/:id/dropout',auth,allow('super_admin'),asyncHandler(async(req,res)=>{await exitSchemaReady;const date=String(req.body?.dropout_date||'').trim(),reason=String(req.body?.dropout_reason||'').trim();if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!reason)return res.status(400).json({success:false,message:'Dropout date and reason are required'});const client=await pool.connect();try{await client.query('BEGIN');const student=(await client.query('UPDATE students SET is_active=FALSE,updated_at=NOW() WHERE id=$1 RETURNING id,student_name',[req.params.id])).rows[0];if(!student){await client.query('ROLLBACK');return res.status(404).json({success:false,message:'Student not found'});}const exit=(await client.query(`INSERT INTO student_exit_records(student_id,dropout_date,dropout_reason,created_by) VALUES($1,$2,$3,$4) ON CONFLICT(student_id) DO UPDATE SET dropout_date=EXCLUDED.dropout_date,dropout_reason=EXCLUDED.dropout_reason,tc_issued_at=NULL,tc_issued_by=NULL,reactivated_at=NULL,reactivated_by=NULL,updated_at=NOW() RETURNING *`,[req.params.id,date,reason,req.user.userId])).rows[0];await deactivateGuardiansWhenNoActiveStudent(client,req.params.id);await client.query('COMMIT');res.json({success:true,student,exit});}catch(e){await client.query('ROLLBACK');throw e}finally{client.release();}}));
 router.post('/:id/transfer-certificate',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{const data=await exitClearance(req.params.id);if(!data)return res.status(404).json({success:false,message:'Student not found'});if(!data.exit)return res.status(409).json({success:false,message:'Save dropout date and reason before issuing TC'});if(data.student.is_active)return res.status(409).json({success:false,message:'TC can only be issued for a dropout/inactive student'});if(data.tc_blocked)return res.status(409).json({success:false,message:'TC cannot be issued until SDF and Library Book dues are cleared',sdf_dues:data.sdf_dues,library_dues:data.library_dues});const exit=(await pool.query('UPDATE student_exit_records SET tc_issued_at=COALESCE(tc_issued_at,NOW()),tc_issued_by=COALESCE(tc_issued_by,$1),updated_at=NOW() WHERE student_id=$2 RETURNING *',[req.user.userId,req.params.id])).rows[0];res.json({success:true,...data,exit});}));
 
 
@@ -639,7 +650,7 @@ router.put(
 router.delete(
   '/:id',
   auth,
-  allow('super_admin', 'admin'),
+  allow('super_admin'),
 
   asyncHandler(async (req, res) => {
 

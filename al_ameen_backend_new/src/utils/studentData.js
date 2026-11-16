@@ -39,6 +39,14 @@ const studentFields = [
   'school_reg_no',
   'council_reg_no',
   'stream',
+  'mp_reg_no',
+  'mp_roll_no',
+  'mp_marks',
+  'mp_board',
+  'hs_reg_no',
+  'hs_roll_no',
+  'hs_marks',
+  'hs_board',
   'is_handicapped',
   'is_orphan',
   'previous_branch_name',
@@ -176,6 +184,19 @@ function prepareBody(body) {
     b.present_pin_code !== undefined
   ) {
     b.pin_code = b.present_pin_code;
+  }
+
+  if (b.mp_reg_no === undefined && b.school_reg_no !== undefined) {
+    b.mp_reg_no = b.school_reg_no;
+  }
+  if (b.hs_reg_no === undefined && b.council_reg_no !== undefined) {
+    b.hs_reg_no = b.council_reg_no;
+  }
+  if (b.school_reg_no === undefined && b.mp_reg_no !== undefined) {
+    b.school_reg_no = b.mp_reg_no;
+  }
+  if (b.council_reg_no === undefined && b.hs_reg_no !== undefined) {
+    b.council_reg_no = b.hs_reg_no;
   }
 
   return b;

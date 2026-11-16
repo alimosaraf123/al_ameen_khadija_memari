@@ -23,7 +23,7 @@ import DatePickerField from '../components/DatePickerField';
 import { normalizeStudentClass } from '../lib/studentDirectory';
 
 import { api, API_BASE } from '../lib/api';
-import { getToken } from '../lib/auth';
+import { getToken, getUser } from '../lib/auth';
 import {
   Field,
   Button,
@@ -144,6 +144,14 @@ const EMPTY_FORM: any = {
   blood_group: '',
   admitted_school_name: '',
   stream: '',
+  mp_reg_no: '',
+  mp_roll_no: '',
+  mp_marks: '',
+  mp_board: '',
+  hs_reg_no: '',
+  hs_roll_no: '',
+  hs_marks: '',
+  hs_board: '',
   is_handicapped: false,
   is_orphan: false,
   previous_branch_name: '',
@@ -238,6 +246,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
   const [editingId, setEditingId] = useState<any>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [screen, setScreen] = useState<'details' | 'entry'>(getInitialScreen);
+  const [userRole, setUserRole] = useState<string>('');
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState('');
   const [entryDocuments, setEntryDocuments] = useState<Record<string, any>>({});
@@ -263,6 +272,10 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     setIfscMessage('');
     setExitForm({ dropout_date: new Date().toISOString().slice(0, 10), dropout_reason: '' });
   };
+
+  useEffect(() => {
+    void getUser<any>().then(u => setUserRole(String(u?.role || '')));
+  }, []);
 
   useEffect(() => {
     if (initialScreen) {
@@ -485,6 +498,8 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
         session_to:sessionMatch[2],
         registration_no: form.registration_no.trim(),
         room_id: selectedRoom?.id || null,
+        school_reg_no: form.mp_reg_no || null,
+        council_reg_no: form.hs_reg_no || null,
         visitor1,
         visitor2,
       };
@@ -552,6 +567,8 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
 
       if (!next.student_type) next.student_type = 'hostel';
       if (!next.gender) next.gender = 'Female';
+      if (!next.mp_reg_no && s.school_reg_no) next.mp_reg_no = asText(s.school_reg_no);
+      if (!next.hs_reg_no && s.council_reg_no) next.hs_reg_no = asText(s.council_reg_no);
 
       const normalizeVisitor = (v: any) => {
         const out: any = { ...EMPTY_VISITOR };
@@ -578,10 +595,67 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     }
   };
 
-  const deleteStudent = (student: any) => {Alert.alert('Dropout','Open Student Edit and complete Dropout Date and Reason.');void startEdit(student);};
+  const deleteStudent = async (student: any) => {
+    if (userRole !== 'super_admin') {
+      Alert.alert('Permission Denied', 'Only Super Admin can deactivate or dropout students.');
+      return;
+    }
+
+    const performDeactivate = async () => {
+      try {
+        await api('/api/students/' + student.id, { method: 'DELETE' });
+        await loadStudents();
+        if (Platform.OS === 'web') {
+          window.alert(`Student ${student.student_name} marked as Inactive / Dropout successfully.`);
+        } else {
+          Alert.alert('Success', `Student ${student.student_name} marked as Inactive / Dropout successfully.`);
+        }
+      } catch (e: any) {
+        Alert.alert('Error', e.message);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const choice = window.confirm(
+        `Are you sure you want to mark ${student.student_name} (Reg: ${student.registration_no}) as Inactive / Dropout?\n\nClick OK to confirm deactivation, or Cancel.`
+      );
+      if (choice) {
+        void performDeactivate();
+      }
+      return;
+    }
+
+    Alert.alert(
+      'Deactivate Student',
+      `Are you sure you want to mark ${student.student_name} (Reg: ${student.registration_no}) as Inactive / Dropout?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Open Dropout & TC Form', onPress: () => void startEdit(student) },
+        { text: 'Deactivate Now', style: 'destructive', onPress: () => void performDeactivate() },
+      ]
+    );
+  };
 
   const refreshExitClearance=async(id=editingId)=>{if(!id)return;setExitBusy(true);try{setExitClearance(await api('/api/students/'+id+'/exit-clearance'))}catch(e:any){Alert.alert('Clearance',e.message)}finally{setExitBusy(false)}};
-  const saveDropout=async()=>{if(!editingId)return;if(!exitForm.dropout_date||!exitForm.dropout_reason.trim())return Alert.alert('Required','Dropout date and reason are required.');setExitBusy(true);try{await api('/api/students/'+editingId+'/dropout',{method:'POST',body:JSON.stringify(exitForm)});await refreshExitClearance(editingId);await loadStudents();Alert.alert('Saved','Student marked as Dropout.')}catch(e:any){Alert.alert('Dropout',e.message)}finally{setExitBusy(false)}};
+  const saveDropout=async()=>{
+    if (userRole !== 'super_admin') {
+      Alert.alert('Permission Denied', 'Only Super Admin can mark student as dropout.');
+      return;
+    }
+    if(!editingId)return;
+    if(!exitForm.dropout_date||!exitForm.dropout_reason.trim())return Alert.alert('Required','Dropout date and reason are required.');
+    setExitBusy(true);
+    try{
+      await api('/api/students/'+editingId+'/dropout',{method:'POST',body:JSON.stringify(exitForm)});
+      await refreshExitClearance(editingId);
+      await loadStudents();
+      Alert.alert('Saved','Student marked as Dropout.')
+    }catch(e:any){
+      Alert.alert('Dropout',e.message)
+    }finally{
+      setExitBusy(false)
+    }
+  };
   const issueAndPrintTc=async()=>{if(!editingId)return;setExitBusy(true);try{const d=await api('/api/students/'+editingId+'/transfer-certificate',{method:'POST'});setExitClearance(d);const st=d.student,ex=d.exit,session=[st.session_from,st.session_to].filter(Boolean).join('-'),monthly=Number(d.monthly_fee_due_total||0);const html=`<style>@page{size:A4;margin:18mm}body{font:15px Georgia,serif;color:#111}.sheet{border:2px solid #174c36;padding:28px;min-height:245mm}header{text-align:center;border-bottom:2px solid #174c36;padding-bottom:14px}h1{margin:6px;font-size:24px}h2{text-align:center;text-decoration:underline;margin:34px 0}.row{display:grid;grid-template-columns:190px 1fr;border-bottom:1px dotted #777;padding:10px 0}.note{margin-top:25px;padding:12px;border:1px solid #999}.sign{display:flex;justify-content:space-between;margin-top:70px}</style><div class="sheet"><header><h1>Al-Ameen Mission Academy Memari</h1><div>Memari, Purba Bardhaman - 713146</div></header><h2>TRANSFER CERTIFICATE</h2><div class="row"><b>Student Name</b><span>${st.student_name}</span></div><div class="row"><b>Registration No.</b><span>${st.registration_no}</span></div><div class="row"><b>Class</b><span>${st.class_name||'-'}</span></div><div class="row"><b>Academic Session</b><span>${session||'-'}</span></div><div class="row"><b>Guardian Name</b><span>${st.guardian_name||st.father_name||'-'}</span></div><div class="row"><b>Dropout Date</b><span>${String(ex.dropout_date).slice(0,10)}</span></div><div class="row"><b>Reason</b><span>${ex.dropout_reason}</span></div><div class="note"><b>Monthly Fees Due:</b> ${monthly>0?'Rs. '+monthly.toFixed(2):'No due'}${monthly>0?'<br/>The outstanding monthly fees remain payable.':''}</div><div class="sign"><span>Prepared By</span><span>Guardian</span><span>Principal / Administrator</span></div></div>`;await Print.printAsync({html});}catch(e:any){Alert.alert('TC cannot be issued',e.message)}finally{setExitBusy(false)}};
 
   const copyPresentToPermanent = () => {
@@ -722,7 +796,15 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
             <Button title="Student Menu" onPress={() => setMenuOpen(true)} />
           </View>
         </View>
-        <StudentDirectory students={students} loading={listLoading} error={listError} onRefresh={loadStudents} onEdit={startEdit} onDeactivate={deleteStudent} />
+        <StudentDirectory
+          students={students}
+          loading={listLoading}
+          error={listError}
+          onRefresh={loadStudents}
+          onEdit={startEdit}
+          onDeactivate={deleteStudent}
+          canDeactivate={userRole === 'super_admin'}
+        />
       </ScrollView>
       <ScrollNavigationButtons scrollRef={detailsScrollRef} />
       <StudentMenu
@@ -835,6 +917,14 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
         <LabeledField label="Admitted School Name" field="admitted_school_name" />
         {!!form.admitted_school_name && <View style={{flexDirection:'row',flexWrap:'wrap',gap:6,marginTop:-5,marginBottom:10}}>{[...new Set(students.map(item => String(item.admitted_school_name || '').trim()).filter(Boolean))].filter(name => name.toLowerCase().includes(String(form.admitted_school_name).toLowerCase()) && name !== form.admitted_school_name).slice(0,6).map(name => <TouchableOpacity key={name} onPress={() => update('admitted_school_name', name)} style={{paddingHorizontal:10,paddingVertical:7,backgroundColor:'#e8f1fb',borderRadius:15}}><Text>{name}</Text></TouchableOpacity>)}</View>}
         <LabeledField label="Stream" field="stream" />
+        <LabeledField label="MP Reg No" field="mp_reg_no" placeholder="Enter MP Reg No" />
+        <LabeledField label="MP Roll No" field="mp_roll_no" placeholder="Enter MP Roll No" />
+        <LabeledField label="MP Marks" field="mp_marks" placeholder="Enter MP Marks" />
+        <LabeledField label="MP Board" field="mp_board" placeholder="Enter MP Board (e.g. WBBSE)" />
+        <LabeledField label="HS Reg No" field="hs_reg_no" placeholder="Enter HS Reg No" />
+        <LabeledField label="HS Roll No" field="hs_roll_no" placeholder="Enter HS Roll No" />
+        <LabeledField label="HS Marks" field="hs_marks" placeholder="Enter HS Marks" />
+        <LabeledField label="HS Board" field="hs_board" placeholder="Enter HS Board (e.g. WBCHSE)" />
 
         <Text style={styles.label}>Handicapped</Text>
         <View style={styles.options}>
@@ -991,7 +1081,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
           })}
         </View>
 
-        {editingId !== null && <View style={styles.exitPanel}><SectionTitle>Dropout & Transfer Certificate</SectionTitle><DatePickerField label="Dropout Date" value={exitForm.dropout_date} onChange={v=>setExitForm(x=>({...x,dropout_date:v}))}/><LabeledField label="Reason for Dropout" value={exitForm.dropout_reason} onChangeText={(v:string)=>setExitForm(x=>({...x,dropout_reason:v}))}/><TouchableOpacity disabled={exitBusy} style={styles.clearanceButton} onPress={()=>refreshExitClearance()}><Text style={styles.actionText}>{exitBusy?'Checking...':'Check SDF, Library & Fees Clearance'}</Text></TouchableOpacity>{exitClearance&&<View style={styles.clearanceBox}><Text style={exitClearance.sdf_dues?.length?styles.blockedText:styles.clearText}>SDF: {exitClearance.sdf_dues?.length?'Due â€” TC blocked':'Clear'}</Text><Text style={exitClearance.library_dues?.length?styles.blockedText:styles.clearText}>Library Book: {exitClearance.library_dues?.length?'Due â€” TC blocked':'Clear'}</Text><Text style={styles.feeDueText}>Monthly Fees Due: â‚¹{Number(exitClearance.monthly_fee_due_total||0).toFixed(2)} (will be printed on TC)</Text></View>}<View style={styles.exitActions}><TouchableOpacity disabled={exitBusy} style={styles.dropoutButton} onPress={saveDropout}><Text style={styles.actionText}>Save Dropout</Text></TouchableOpacity><TouchableOpacity disabled={exitBusy||!exitClearance?.exit||exitClearance?.tc_blocked} style={[styles.tcButton,(exitBusy||!exitClearance?.exit||exitClearance?.tc_blocked)&&styles.disabledButton]} onPress={issueAndPrintTc}><Text style={styles.actionText}>Preview / Print TC Form</Text></TouchableOpacity></View></View>}
+        {editingId !== null && userRole === 'super_admin' && <View style={styles.exitPanel}><SectionTitle>Dropout & Transfer Certificate</SectionTitle><DatePickerField label="Dropout Date" value={exitForm.dropout_date} onChange={v=>setExitForm(x=>({...x,dropout_date:v}))}/><LabeledField label="Reason for Dropout" value={exitForm.dropout_reason} onChangeText={(v:string)=>setExitForm(x=>({...x,dropout_reason:v}))}/><TouchableOpacity disabled={exitBusy} style={styles.clearanceButton} onPress={()=>refreshExitClearance()}><Text style={styles.actionText}>{exitBusy?'Checking...':'Check SDF, Library & Fees Clearance'}</Text></TouchableOpacity>{exitClearance&&<View style={styles.clearanceBox}><Text style={exitClearance.sdf_dues?.length?styles.blockedText:styles.clearText}>SDF: {exitClearance.sdf_dues?.length?'Due â€” TC blocked':'Clear'}</Text><Text style={exitClearance.library_dues?.length?styles.blockedText:styles.clearText}>Library Book: {exitClearance.library_dues?.length?'Due â€” TC blocked':'Clear'}</Text><Text style={styles.feeDueText}>Monthly Fees Due: â‚¹{Number(exitClearance.monthly_fee_due_total||0).toFixed(2)} (will be printed on TC)</Text></View>}<View style={styles.exitActions}><TouchableOpacity disabled={exitBusy} style={styles.dropoutButton} onPress={saveDropout}><Text style={styles.actionText}>Save Dropout</Text></TouchableOpacity><TouchableOpacity disabled={exitBusy||!exitClearance?.exit||exitClearance?.tc_blocked} style={[styles.tcButton,(exitBusy||!exitClearance?.exit||exitClearance?.tc_blocked)&&styles.disabledButton]} onPress={issueAndPrintTc}><Text style={styles.actionText}>Preview / Print TC Form</Text></TouchableOpacity></View></View>}
 
         <View style={styles.saveArea}>
           <Button
