@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import AcademyHeader from '../components/AcademyHeader';
 import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import {
@@ -120,6 +120,27 @@ const SectionTitle = ({ children }: any) => (
   </View>
 );
 
+const FormRow = ({ children, style }: any) => {
+  const { width } = useWindowDimensions();
+  const isTwoCol = width >= 640;
+  return (
+    <View style={[styles.formRow, !isTwoCol && styles.formRowMobile, style]}>
+      {children}
+    </View>
+  );
+};
+
+const FormCol = ({ children, full = false, style }: any) => {
+  const { width } = useWindowDimensions();
+  const isTwoCol = width >= 640;
+  if (!children && !isTwoCol) return null;
+  return (
+    <View style={[full || !isTwoCol ? styles.colFull : styles.colHalf, style]}>
+      {children || null}
+    </View>
+  );
+};
+
 const EMPTY_FORM: any = {
   registration_no: '',
   admission_no: '',
@@ -149,10 +170,12 @@ const EMPTY_FORM: any = {
   mp_roll_no: '',
   mp_marks: '',
   mp_board: '',
+  mp_year: '',
   hs_reg_no: '',
   hs_roll_no: '',
   hs_marks: '',
   hs_board: '',
+  hs_year: '',
   is_handicapped: false,
   is_orphan: false,
   previous_branch_name: '',
@@ -261,24 +284,18 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
   const { width: windowWidth } = useWindowDimensions();
   const isTwoCol = windowWidth >= 640;
 
-  const FormRow = ({ children, style }: any) => (
-    <View style={[styles.formRow, !isTwoCol && styles.formRowMobile, style]}>
-      {children}
-    </View>
-  );
-
-  const FormCol = ({ children, full = false, style }: any) => {
-    if (!children && !isTwoCol) return null;
-    return (
-      <View style={[full || !isTwoCol ? styles.colFull : styles.colHalf, style]}>
-        {children || null}
-      </View>
-    );
-  };
-
   const [form, setForm] = useState<any>({ ...EMPTY_FORM });
   const [visitor1, setVisitor1] = useState<any>({ ...EMPTY_VISITOR });
   const [visitor2, setVisitor2] = useState<any>({ ...EMPTY_VISITOR });
+
+  const typedReg = String(form.registration_no || '').trim().toLowerCase();
+  const duplicateStudent = typedReg
+    ? students.find(
+        (s) =>
+          String(s.registration_no || '').trim().toLowerCase() === typedReg &&
+          String(s.id) !== String(editingId)
+      )
+    : null;
 
   const clearForm = () => {
     setEditingId(null);
@@ -316,9 +333,11 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     }
   }, [params?.screen, params?.mode, initialScreen]);
 
-  const update = (key: string, value: any) => {
+  const update = useCallback((key: string, value: any) => {
     setForm((old: any) => ({ ...old, [key]: value }));
-  };
+  }, []);
+
+  const formContextValue = useMemo(() => ({ form, update }), [form, update]);
 
   const updateVisitor = (no: 1 | 2, key: string, value: any) => {
     const setter = no === 1 ? setVisitor1 : setVisitor2;
@@ -495,14 +514,11 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     const sessionMatch=String(form.academic_session||'').trim().match(/^(\d{4})-(\d{4})$/);
     if(!sessionMatch){Alert.alert('Invalid Session','Use session format 2026-2026 or 2026-2027.');return;}
 
-    const normalizedRegistration = form.registration_no.trim().toLowerCase();
-    const duplicateRegistration = students.some((student) =>
-      student.id !== editingId &&
-      String(student.registration_no || '').trim().toLowerCase() === normalizedRegistration
-    );
-
-    if (duplicateRegistration) {
-      Alert.alert('Duplicate Registration', 'This Registration Number already exists.');
+    if (duplicateStudent) {
+      Alert.alert(
+        'Duplicate Registration Number',
+        `Registration Number "${form.registration_no.trim()}" is already assigned to:\n\n• Name: ${duplicateStudent.student_name}\n• Class: ${duplicateStudent.class_name || 'N/A'}\n• Session: ${duplicateStudent.session_from ? duplicateStudent.session_from + '-' + duplicateStudent.session_to : 'N/A'}\n\nUnder no circumstances can two students have the same Registration Number.`
+      );
       return;
     }
 
@@ -894,7 +910,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
   }
 
   return (
-    <StudentFormContext.Provider value={{ form, update }}>
+    <StudentFormContext.Provider value={formContextValue}>
       <SafeAreaView style={styles.container}>
       <ScrollView
         ref={entryScrollRef}
@@ -923,7 +939,35 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
 
         <FormRow>
           <FormCol>
-            <LabeledField label="Registration No *" field="registration_no" />
+            <View>
+              <LabeledField
+                label="Registration No *"
+                field="registration_no"
+                placeholder="Enter Registration No"
+                style={
+                  typedReg.length > 0
+                    ? duplicateStudent
+                      ? { borderColor: '#d92d20', borderWidth: 2 }
+                      : { borderColor: '#16803a', borderWidth: 2 }
+                    : undefined
+                }
+              />
+              {typedReg.length > 0 && (
+                <Text
+                  style={{
+                    color: duplicateStudent ? '#d92d20' : '#16803a',
+                    fontWeight: '700',
+                    fontSize: 12,
+                    marginTop: -6,
+                    marginBottom: 10,
+                  }}
+                >
+                  {duplicateStudent
+                    ? `⚠️ Registration No (${form.registration_no}) is already used by: ${duplicateStudent.student_name} (${duplicateStudent.class_name || 'Class N/A'})`
+                    : '✓ Registration No is available'}
+                </Text>
+              )}
+            </View>
           </FormCol>
           <FormCol>
             <LabeledField label="Monthly Fees" field="monthly_fees" />
@@ -1082,23 +1126,36 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
             <LabeledField label="MP Board" field="mp_board" placeholder="Enter MP Board (e.g. WBBSE)" />
           </FormCol>
           <FormCol>
-            <LabeledField label="HS Reg No" field="hs_reg_no" placeholder="Enter HS Reg No" />
+            <LabeledField label="MP Passing Year" field="mp_year" placeholder="Enter MP Year (e.g. 2025)" />
           </FormCol>
         </FormRow>
 
         <FormRow>
+          <FormCol>
+            <LabeledField label="HS Reg No" field="hs_reg_no" placeholder="Enter HS Reg No" />
+          </FormCol>
           <FormCol>
             <LabeledField label="HS Roll No" field="hs_roll_no" placeholder="Enter HS Roll No" />
           </FormCol>
+        </FormRow>
+
+        <FormRow>
           <FormCol>
             <LabeledField label="HS Marks" field="hs_marks" placeholder="Enter HS Marks" />
+          </FormCol>
+          <FormCol>
+            <LabeledField label="HS Board" field="hs_board" placeholder="Enter HS Board (e.g. WBCHSE)" />
           </FormCol>
         </FormRow>
 
         <FormRow>
           <FormCol>
-            <LabeledField label="HS Board" field="hs_board" placeholder="Enter HS Board (e.g. WBCHSE)" />
+            <LabeledField label="HS Passing Year" field="hs_year" placeholder="Enter HS Year (e.g. 2027)" />
           </FormCol>
+          <FormCol />
+        </FormRow>
+
+        <FormRow>
           <FormCol>
             <View style={styles.fieldWrap}>
               <Text style={styles.fieldLabel}>Handicapped</Text>
@@ -1425,8 +1482,13 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
                 : 'Add Student'
             }
             onPress={saveStudent}
-            disabled={saving}
+            disabled={saving || Boolean(duplicateStudent)}
           />
+          {Boolean(duplicateStudent) && (
+            <Text style={{ color: '#d92d20', fontWeight: '700', textAlign: 'center', marginTop: 8 }}>
+              Registration Number already exists. Two students cannot have the same Registration Number.
+            </Text>
+          )}
           {saving && (
             <Text style={styles.savingText}>Saving student and documents...</Text>
           )}

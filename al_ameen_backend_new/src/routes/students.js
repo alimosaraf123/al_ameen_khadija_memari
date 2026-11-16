@@ -9,10 +9,13 @@ pool.query(`
   ALTER TABLE students ADD COLUMN IF NOT EXISTS mp_roll_no TEXT NULL;
   ALTER TABLE students ADD COLUMN IF NOT EXISTS mp_marks TEXT NULL;
   ALTER TABLE students ADD COLUMN IF NOT EXISTS mp_board TEXT NULL;
+  ALTER TABLE students ADD COLUMN IF NOT EXISTS mp_year TEXT NULL;
   ALTER TABLE students ADD COLUMN IF NOT EXISTS hs_reg_no TEXT NULL;
   ALTER TABLE students ADD COLUMN IF NOT EXISTS hs_roll_no TEXT NULL;
   ALTER TABLE students ADD COLUMN IF NOT EXISTS hs_marks TEXT NULL;
   ALTER TABLE students ADD COLUMN IF NOT EXISTS hs_board TEXT NULL;
+  ALTER TABLE students ADD COLUMN IF NOT EXISTS hs_year TEXT NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS students_registration_no_unique ON students (LOWER(TRIM(registration_no)));
 `).catch(err => console.error('Student columns migration error:', err.message));
 
 const exitSchemaReady = pool.query(`
@@ -415,6 +418,18 @@ router.post(
       });
     }
 
+    const regNo = String(b.registration_no || '').trim();
+    const existingCheck = await pool.query(
+      'SELECT id, student_name, class_name FROM students WHERE LOWER(TRIM(registration_no)) = LOWER($1)',
+      [regNo]
+    );
+    if (existingCheck.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: `Registration No '${regNo}' already exists (Student: ${existingCheck.rows[0].student_name}, Class: ${existingCheck.rows[0].class_name || 'N/A'}). Two students cannot have the same Registration Number.`,
+      });
+    }
+
     if (
       !b.student_name ||
       !String(b.student_name).trim()
@@ -545,6 +560,20 @@ router.put(
         message:
           'No student data supplied',
       });
+    }
+
+    if (b.registration_no) {
+      const regNo = String(b.registration_no || '').trim();
+      const existingCheck = await pool.query(
+        'SELECT id, student_name, class_name FROM students WHERE LOWER(TRIM(registration_no)) = LOWER($1) AND id != $2',
+        [regNo, req.params.id]
+      );
+      if (existingCheck.rows.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: `Registration No '${regNo}' is already registered to ${existingCheck.rows[0].student_name} (${existingCheck.rows[0].class_name || 'Class N/A'}). Two students cannot have the same Registration Number.`,
+        });
+      }
     }
 
     const values =
