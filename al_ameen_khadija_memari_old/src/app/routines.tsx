@@ -53,6 +53,14 @@ function getShortTeacherName(name: string, teacher?: any): string {
     if (/das/i.test(clean) || teacher?.subject === 'Math') return 'Jayanta (Math)';
     if (/nath/i.test(clean) || teacher?.subject === 'Chem') return 'Jayanta (Chem)';
   }
+  if (/^samima/i.test(first)) {
+    const rawSub = String(teacher?.subject || (Array.isArray(teacher?.assigned_subjects) ? teacher.assigned_subjects.join(' ') : '') || '').toLowerCase();
+    const isBio = /bio|l\.?sc|botany/i.test(rawSub) || /bio/i.test(clean) || /11161/.test(String(teacher?.staff_id || '')) || String(teacher?.id || teacher?.teacher_id) === '129';
+    const isEng = /eng/i.test(rawSub) || /eng/i.test(clean) || /9403/.test(String(teacher?.staff_id || '')) || String(teacher?.id || teacher?.teacher_id) === '49';
+    if (isBio) return 'Samima (Bio)';
+    if (isEng) return 'Samima (Eng)';
+    return 'Samima';
+  }
   if (/^kamrun/i.test(first)) return 'Kamrun';
   if (/^zinnat/i.test(first)) return 'Zinnat';
   if (/^monalisa/i.test(first)) return 'Monalisa';
@@ -271,7 +279,8 @@ export default function Routines() {
     const current = String(cells[key]?.subject || '');
     const primarySubject = teacherSubs.find(ts => allowed.some(a => subjectMatches(a, ts))) || allowed[0] || '';
     const subject = allowed.some(s => subjectMatches(s, current)) ? current : primarySubject;
-    update(key, { teacher_id: id, teacher_name: t.name || '', ...(academic ? { subject } : {}) });
+    const teacherName = !academic ? (getShortTeacherName(t.name, t) || t.name || '') : (t.name || '');
+    update(key, { teacher_id: id, teacher_name: teacherName, ...(academic ? { subject } : {}) });
   };
   const duplicateGroups = useMemo(() => {
     const slots: Record<string, string[]> = {};
@@ -540,7 +549,7 @@ export default function Routines() {
   }
   async function downloadBackup() { if (Platform.OS !== 'web') return Alert.alert('Web only', 'Routine backup download is available in the web version.'); try { const data = await api(`/api/routines/manager/backup?group=${group}`), url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })), a = document.createElement('a'); a.href = url; a.download = `routine-backup-${group}-${today}.json`; a.click(); URL.revokeObjectURL(url) } catch (e: any) { Alert.alert('Routine Backup', e.message) } }
   async function uploadBackup() { try { const picked = await DocumentPicker.getDocumentAsync({ type: ['application/json', '.json'], copyToCacheDirectory: true }); if (picked.canceled || !picked.assets?.[0]) return; const asset = picked.assets[0]; const text = Platform.OS === 'web' && asset.file ? await asset.file.text() : await FileSystem.readAsStringAsync(asset.uri); let payload: any; try { payload = JSON.parse(text) } catch { throw new Error('Selected file is not valid JSON.') } if (!Array.isArray(payload?.routines) || !payload.routines.length) throw new Error('This file is not a routine backup.'); const result = await api('/api/routines/manager/backup/restore', { method: 'POST', body: JSON.stringify(payload) }); Alert.alert('Backup uploaded', result.message || 'Routine backup uploaded successfully.'); await load(); if (admin) await openHistory() } catch (e: any) { Alert.alert('Upload Backup', e.message || 'Routine backup upload failed.') } }
-  async function print() { let rows = ''; if (academic && section) rows = '<tr><th>Class</th>' + section.periods.map(p => '<th>' + p[0] + '<br>' + p[1] + '</th>').join('') + '</tr>' + section.rows.map((r, ri) => '<tr class="' + (ri % 2 ? 'alt' : '') + '"><th>' + r + '</th>' + section.periods.map((p, i) => { const x = cells[r + '|' + i] || {}; return isTiffin(p) ? '<td class="tiffin" style="color:#94a3b8;font-size:11px;font-weight:500">Tiffin</td>' : '<td><b>' + (x.subject || '-') + '</b><br>' + (x.teacher_name || '-') + '</td>' }).join('') + '</tr>').join(''); else rows = '<tr><th>Time / Room</th>' + rooms.map(r => '<th>' + r + '</th>').join('') + '</tr>' + coachTimes.map((t, i) => '<tr class="' + (i % 2 ? 'alt' : '') + '"><th>' + t + '</th>' + rooms.map(r => '<td><b>' + (cells[t + '|' + r]?.teacher_name || '-') + '</b></td>').join('') + '</tr>').join(''); await Print.printAsync({ html: `<style>@page{size:A4 landscape;margin:9mm}body{font-family:Arial}h1,p{text-align:center;margin:4px}.head{display:flex;align-items:center;justify-content:center;position:relative}.head img{position:absolute;left:10mm;width:22mm;height:22mm;object-fit:contain}.logo{font-size:25px;color:#1764ad}.by{font-family:"Palace Script MT",cursive;font-size:18px;text-align:right;margin-top:10px}table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #789;padding:7px;text-align:center}th{background:#cfe1f4}.alt td{background:#f1f7fd}.tiffin{background:#fff0be!important}b{font-size:12px}</style><div class="head"><img src="/al-ameen-logo.jpg"/><div><h1 class="logo">Al-Ameen Mission Academy Memari</h1><h2 class="logo">Khadija Campus</h2><p>Class Routine for ${GROUPS.find(x => x[0] === group)?.[1]}</p><p>Date- ${dateLabel(date)}, ${dayName(date)}</p></div></div>${noClass ? '<h2 style="text-align:center">No class / coaching</h2>' : '<table>' + rows + '</table>'}<div class="by">By N. Khatun</div>` }) }
+  async function print() { let rows = ''; if (academic && section) rows = '<tr><th>Class</th>' + section.periods.map(p => '<th>' + p[0] + '<br>' + p[1] + '</th>').join('') + '</tr>' + section.rows.map((r, ri) => '<tr class="' + (ri % 2 ? 'alt' : '') + '"><th>' + r + '</th>' + section.periods.map((p, i) => { const x = cells[r + '|' + i] || {}; return isTiffin(p) ? '<td class="tiffin" style="color:#94a3b8;font-size:11px;font-weight:500">Tiffin</td>' : '<td><b>' + (x.subject || '-') + '</b><br>' + (x.teacher_name || '-') + '</td>' }).join('') + '</tr>').join(''); else rows = '<tr><th>Time / Room</th>' + rooms.map(r => '<th>' + r + '</th>').join('') + '</tr>' + coachTimes.map((t, i) => '<tr class="' + (i % 2 ? 'alt' : '') + '"><th>' + t + '</th>' + rooms.map(r => { const c = cells[t + '|' + r]; const tch = c?.teacher_id ? teachers.find(item => String(item.id) === String(c.teacher_id)) : null; const name = getShortTeacherName(c?.teacher_name || tch?.name || '', tch) || c?.teacher_name || '-'; return '<td><b>' + name + '</b></td>'; }).join('') + '</tr>').join(''); await Print.printAsync({ html: `<style>@page{size:A4 landscape;margin:9mm}body{font-family:Arial}h1,p{text-align:center;margin:4px}.head{display:flex;align-items:center;justify-content:center;position:relative}.head img{position:absolute;left:10mm;width:22mm;height:22mm;object-fit:contain}.logo{font-size:25px;color:#1764ad}.by{font-family:"Palace Script MT",cursive;font-size:18px;text-align:right;margin-top:10px}table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #789;padding:7px;text-align:center}th{background:#cfe1f4}.alt td{background:#f1f7fd}.tiffin{background:#fff0be!important}b{font-size:12px}</style><div class="head"><img src="/al-ameen-logo.jpg"/><div><h1 class="logo">Al-Ameen Mission Academy Memari</h1><h2 class="logo">Khadija Campus</h2><p>Class Routine for ${GROUPS.find(x => x[0] === group)?.[1]}</p><p>Date- ${dateLabel(date)}, ${dayName(date)}</p></div></div>${noClass ? '<h2 style="text-align:center">No class / coaching</h2>' : '<table>' + rows + '</table>'}<div class="by">By N. Khatun</div>` }) }
 
   async function shareRoutine() {
     const text = String(GROUPS.find(x => x[0] === group)?.[1] || 'Academy') + ' Routine - ' + dateLabel(date) + ', ' + dayName(date), imageUrl = `${API_BASE}/uploads/routines/routine-${group}-${date}.jpg`;
@@ -573,12 +582,18 @@ export default function Routines() {
     const teacherOptions = [{ value: '', label: 'Teacher', shortLabel: 'Teacher' }, ...teacherList.map(t => {
       const isOut = availability[String(t.id)] === 'Absent' || availability[String(t.id)] === 'Leave';
       const prefix = isOut ? (availability[String(t.id)] === 'Leave' ? 'LEAVE - ' : 'OUT - ') : '';
-      return { value: String(t.id), label: prefix + t.name, shortLabel: prefix + getShortTeacherName(t.name, t) };
+      const shortName = getShortTeacherName(t.name, t);
+      const isDifferentiated = shortName && shortName !== t.name && shortName !== (t.name || '').split(' ')[0];
+      const optLabel = prefix + t.name + (isDifferentiated ? ` (${shortName})` : '');
+      return { value: String(t.id), label: optLabel, shortLabel: prefix + shortName };
     })];
     if (selected && isTeachingTeacher(selected) && !teacherOptions.some(o => o.value === String(selected.id))) {
       const isOut = availability[String(selected.id)] === 'Absent' || availability[String(selected.id)] === 'Leave';
       const prefix = isOut ? (availability[String(selected.id)] === 'Leave' ? 'LEAVE - ' : 'OUT - ') : '';
-      teacherOptions.push({ value: String(selected.id), label: prefix + selected.name, shortLabel: prefix + getShortTeacherName(selected.name, selected) });
+      const shortName = getShortTeacherName(selected.name, selected);
+      const isDifferentiated = shortName && shortName !== selected.name && shortName !== (selected.name || '').split(' ')[0];
+      const optLabel = prefix + selected.name + (isDifferentiated ? ` (${shortName})` : '');
+      teacherOptions.push({ value: String(selected.id), label: optLabel, shortLabel: prefix + shortName });
     }
     const hasTeacher = Boolean(x.teacher_id && x.teacher_id !== '0' && selected && isTeachingTeacher(selected));
     const hasAssignedSubject = Boolean(String(x.subject || '').trim());
