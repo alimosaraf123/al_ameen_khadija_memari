@@ -299,6 +299,8 @@ export function Select({ label, value, options, onChange, searchable = false, st
   </>;
 }
 
+const WHATSAPP_ICON_BASE64 = 'data:image/png;base64,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';
+
 const DOCUMENT_SLOTS = [
   ['father_photo', 'Father Photo'], ['mother_photo', 'Mother Photo'],
   ['visitor1_photo', 'Visitor-1 Photo'], ['visitor2_photo', 'Visitor-2 Photo'],
@@ -419,10 +421,110 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
     } finally { setDocumentBusy(null); }
   };
 
+  const getJpgUrl = (rawUrl?: string | null) => {
+    if (!rawUrl) return '';
+    let url = /^https?:\/\//i.test(rawUrl) ? rawUrl : `${API_BASE}${rawUrl.startsWith('/') ? '' : '/'}${rawUrl}`;
+    if (/res\.cloudinary\.com/i.test(url)) {
+      const [base, query] = url.split('?');
+      const dotIdx = base.lastIndexOf('.');
+      if (dotIdx > base.lastIndexOf('/')) {
+        const jpgBase = base.slice(0, dotIdx) + '.jpg';
+        return query ? `${jpgBase}?${query}` : jpgBase;
+      }
+      return query ? `${base}.jpg?${query}` : `${base}.jpg`;
+    }
+    return url;
+  };
+
+  const shareDocumentJpg = async (docTitle: string, rawUrl: string, safeName: string) => {
+    const jpgUrl = getJpgUrl(rawUrl);
+    if (!jpgUrl) return;
+
+    setDocumentBusy('share-' + safeName);
+    try {
+      if (Platform.OS === 'web') {
+        const nav: any = typeof navigator !== 'undefined' ? navigator : null;
+        if (nav?.share) {
+          try {
+            const response = await fetch(jpgUrl, { cache: 'no-store' });
+            if (response.ok && typeof File !== 'undefined') {
+              const blob = await response.blob();
+              const file = new File([blob], `${safeName}.jpg`, { type: 'image/jpeg' });
+              if (!nav.canShare || nav.canShare({ files: [file] })) {
+                await nav.share({ title: docTitle, files: [file] });
+                return;
+              }
+            }
+          } catch (error: any) {
+            if (error?.name === 'AbortError') return;
+          }
+        }
+
+        // Web fallback if navigator.share is not available:
+        // 1. Copy image to clipboard so pressing Ctrl+V in WhatsApp chat pastes the photo directly
+        try {
+          const img = new (window as any).Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            try {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.naturalWidth || img.width;
+              canvas.height = img.naturalHeight || img.height;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(img, 0, 0);
+                canvas.toBlob(blob => {
+                  if (blob && navigator.clipboard && (window as any).ClipboardItem) {
+                    navigator.clipboard.write([
+                      new (window as any).ClipboardItem({ 'image/png': blob })
+                    ]).catch(() => {});
+                  }
+                }, 'image/png');
+              }
+            } catch {}
+          };
+          img.src = jpgUrl;
+        } catch {}
+
+        // 2. Download JPG photo directly
+        try {
+          const a = document.createElement('a');
+          a.href = jpgUrl;
+          a.download = `${safeName}.jpg`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } catch {}
+
+        // 3. Open WhatsApp Web to select recipient
+        window.open('https://web.whatsapp.com', '_blank');
+        return;
+      }
+
+      // Native mobile:
+      if (!FileSystem.cacheDirectory) throw new Error('Temporary storage is unavailable');
+      const target = `${FileSystem.cacheDirectory}${Date.now()}-${safeName}.jpg`;
+      const result = await FileSystem.downloadAsync(jpgUrl, target);
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(result.uri, {
+          mimeType: 'image/jpeg',
+          dialogTitle: docTitle,
+          UTI: 'public.jpeg',
+        });
+      } else {
+        await Linking.openURL('https://web.whatsapp.com');
+      }
+    } catch (e: any) {
+      Alert.alert('Share Error', e.message || 'Could not share document');
+    } finally {
+      setDocumentBusy(null);
+    }
+  };
+
   const handleStudentPhoto = async (mode: 'view' | 'download' | 'print') => {
     const photoUrl = documentStudent?.photo_url;
     if (!photoUrl) return;
-    const url = /^https?:\/\//.test(photoUrl) ? photoUrl : API_BASE + photoUrl;
+    const url = /^https?:\/\//.test(photoUrl) ? photoUrl : API_BASE + (photoUrl.startsWith('/') ? '' : '/') + photoUrl;
     let browserWindow: any = null;
     try {
       setDocumentBusy('photo-' + mode);
@@ -585,8 +687,8 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
         <View style={s.documentTopBar}><TouchableOpacity style={s.documentCloseButton} onPress={() => setDocumentsOpen(false)}><Text style={s.whiteText}>Close</Text></TouchableOpacity><Text style={s.lastUpdated}>Last Updated{documents[0]?.uploaded_at ? '\n' + String(documents[0].uploaded_at).slice(0, 16).replace('T', ' ') : ''}</Text></View>
         <Text style={s.registrationLine}>Reg. No. {documentStudent?.registration_no || '-'}</Text>
         {documentsLoading ? <ActivityIndicator style={{ margin: 30 }} /> : documentsError ? <Text style={s.error}>{documentsError}</Text> : <ScrollView contentContainerStyle={s.documentGrid}>
-          <View style={s.documentTile}><Text style={s.tileTitle}>Photo</Text><View style={s.previewBox}>{documentStudent?.photo_url ? <Image source={{ uri: /^https?:/.test(documentStudent.photo_url) ? documentStudent.photo_url : API_BASE + documentStudent.photo_url }} resizeMode="contain" style={s.documentPreview} /> : <Text style={s.noPreview}>No photo</Text>}</View><TouchableOpacity disabled={documentBusy !== null} style={s.chooseButton} onPress={uploadStudentPhoto}><Text style={s.chooseText}>{documentBusy === 'photo' ? 'Uploading...' : 'Upload / Change Photo'}</Text></TouchableOpacity><View style={s.tileActions}><TouchableOpacity accessibilityLabel="View student photo" disabled={!documentStudent?.photo_url || documentBusy !== null} style={[s.iconButton, s.viewIcon, !documentStudent?.photo_url && s.disabled]} onPress={() => handleStudentPhoto('view')}><Text style={s.iconText}>{String.fromCodePoint(0x1F441)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel="Print student photo" disabled={!documentStudent?.photo_url || documentBusy !== null} style={[s.iconButton, s.printIcon, !documentStudent?.photo_url && s.disabled]} onPress={() => handleStudentPhoto('print')}><Text style={s.iconText}>{String.fromCodePoint(0x1F5A8)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel="Download student photo" disabled={!documentStudent?.photo_url || documentBusy !== null} style={[s.iconButton, s.downloadIcon, !documentStudent?.photo_url && s.disabled]} onPress={() => handleStudentPhoto('download')}><Text style={s.iconText}>{String.fromCodePoint(0x2B07)}</Text></TouchableOpacity></View></View>
-          {DOCUMENT_SLOTS.map(([type, label]) => { const doc = documentFor(type), pending = pendingDocuments[type], preview = pending?.uri || previewUrl(doc), displayLabel = label.replace(' Photo', '').replace('Visitor-', 'Visitor_'); return <View key={type} style={s.documentTile}><Text numberOfLines={1} style={s.tileTitle}>{displayLabel}</Text><View style={s.previewBox}>{preview ? <Image source={{ uri: preview }} resizeMode="contain" style={s.documentPreview} /> : <Text style={s.noPreview}>{doc ? 'PDF / File' : 'No document'}</Text>}</View><TouchableOpacity disabled={documentBusy !== null} style={s.chooseButton} onPress={() => chooseDocument(type)}><Text numberOfLines={1} style={s.chooseText}>{pending ? pending.name : 'Choose File'}</Text></TouchableOpacity><View style={s.tileActions}><TouchableOpacity accessibilityLabel={'View ' + displayLabel} disabled={!doc || documentBusy !== null} style={[s.iconButton, s.viewIcon, !doc && s.disabled]} onPress={() => doc && handleDocument(doc, 'view')}><Text style={s.iconText}>{String.fromCodePoint(0x1F441)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel={'Print ' + displayLabel} disabled={!doc || documentBusy !== null} style={[s.iconButton, s.printIcon, !doc && s.disabled]} onPress={() => doc && handleDocument(doc, 'print')}><Text style={s.iconText}>{String.fromCodePoint(0x1F5A8)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel={'Download ' + displayLabel} disabled={!doc || documentBusy !== null} style={[s.iconButton, s.downloadIcon, !doc && s.disabled]} onPress={() => doc && handleDocument(doc, 'download')}><Text style={s.iconText}>{String.fromCodePoint(0x2B07)}</Text></TouchableOpacity></View></View> })}
+          <View style={s.documentTile}><Text style={s.tileTitle}>Photo</Text><View style={s.previewBox}>{documentStudent?.photo_url ? <Image source={{ uri: /^https?:/.test(documentStudent.photo_url) ? documentStudent.photo_url : API_BASE + documentStudent.photo_url }} resizeMode="contain" style={s.documentPreview} /> : <Text style={s.noPreview}>No photo</Text>}</View><TouchableOpacity disabled={documentBusy !== null} style={s.chooseButton} onPress={uploadStudentPhoto}><Text style={s.chooseText}>{documentBusy === 'photo' ? 'Uploading...' : 'Upload / Change Photo'}</Text></TouchableOpacity><View style={s.tileActions}><TouchableOpacity accessibilityLabel="View student photo" disabled={!documentStudent?.photo_url || documentBusy !== null} style={[s.iconButton, s.viewIcon, !documentStudent?.photo_url && s.disabled]} onPress={() => handleStudentPhoto('view')}><Text style={s.iconText}>{String.fromCodePoint(0x1F441)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel="Print student photo" disabled={!documentStudent?.photo_url || documentBusy !== null} style={[s.iconButton, s.printIcon, !documentStudent?.photo_url && s.disabled]} onPress={() => handleStudentPhoto('print')}><Text style={s.iconText}>{String.fromCodePoint(0x1F5A8)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel="Download student photo" disabled={!documentStudent?.photo_url || documentBusy !== null} style={[s.iconButton, s.downloadIcon, !documentStudent?.photo_url && s.disabled]} onPress={() => handleStudentPhoto('download')}><Text style={s.iconText}>{String.fromCodePoint(0x2B07)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel="Share student photo on WhatsApp" disabled={!documentStudent?.photo_url || documentBusy !== null} style={[s.iconButton, s.shareIcon, !documentStudent?.photo_url && s.disabled]} onPress={() => { if (!documentStudent?.photo_url) return; const regNo = documentStudent.registration_no || 'student'; shareDocumentJpg('Student Photo', documentStudent.photo_url, `${regNo}-photo`); }}><Image source={{ uri: WHATSAPP_ICON_BASE64 }} style={s.waIconImg} resizeMode="contain" /></TouchableOpacity></View></View>
+          {DOCUMENT_SLOTS.map(([type, label]) => { const doc = documentFor(type), pending = pendingDocuments[type], preview = pending?.uri || previewUrl(doc), displayLabel = label.replace(' Photo', '').replace('Visitor-', 'Visitor_'); return <View key={type} style={s.documentTile}><Text numberOfLines={1} style={s.tileTitle}>{displayLabel}</Text><View style={s.previewBox}>{preview ? <Image source={{ uri: preview }} resizeMode="contain" style={s.documentPreview} /> : <Text style={s.noPreview}>{doc ? 'PDF / File' : 'No document'}</Text>}</View><TouchableOpacity disabled={documentBusy !== null} style={s.chooseButton} onPress={() => chooseDocument(type)}><Text numberOfLines={1} style={s.chooseText}>{pending ? pending.name : 'Choose File'}</Text></TouchableOpacity><View style={s.tileActions}><TouchableOpacity accessibilityLabel={'View ' + displayLabel} disabled={!doc || documentBusy !== null} style={[s.iconButton, s.viewIcon, !doc && s.disabled]} onPress={() => doc && handleDocument(doc, 'view')}><Text style={s.iconText}>{String.fromCodePoint(0x1F441)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel={'Print ' + displayLabel} disabled={!doc || documentBusy !== null} style={[s.iconButton, s.printIcon, !doc && s.disabled]} onPress={() => doc && handleDocument(doc, 'print')}><Text style={s.iconText}>{String.fromCodePoint(0x1F5A8)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel={'Download ' + displayLabel} disabled={!doc || documentBusy !== null} style={[s.iconButton, s.downloadIcon, !doc && s.disabled]} onPress={() => doc && handleDocument(doc, 'download')}><Text style={s.iconText}>{String.fromCodePoint(0x2B07)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel={'Share ' + displayLabel + ' on WhatsApp'} disabled={!doc || documentBusy !== null} style={[s.iconButton, s.shareIcon, !doc && s.disabled]} onPress={() => { if (!doc) return; const regNo = documentStudent?.registration_no || 'student'; const docTitle = doc.document_title || displayLabel; const safeTitle = (doc.document_type || displayLabel).replace(/[\\/:*?"<>|]/g, '_'); const rawUrl = doc.file_url || `${API_BASE}/api/documents/${doc.id}/file`; shareDocumentJpg(docTitle, rawUrl, `${regNo}-${safeTitle}`); }}><Image source={{ uri: WHATSAPP_ICON_BASE64 }} style={s.waIconImg} resizeMode="contain" /></TouchableOpacity></View></View> })}
         </ScrollView>}
         <TouchableOpacity disabled={documentBusy !== null} onPress={uploadSelectedDocuments} style={[s.uploadAllButton, documentBusy !== null && s.disabled]}><Text style={s.whiteText}>{documentBusy === 'upload' ? 'Uploading...' : 'Upload Selected Documents'}</Text></TouchableOpacity>
         {documentBusy && documentBusy !== 'upload' && <Text style={s.busyText}>Preparing document...</Text>}
@@ -693,6 +795,6 @@ const s = StyleSheet.create({
   print: { backgroundColor: '#475569' },
   whiteText: { color: '#fff', fontWeight: '700' },
   busyText: { textAlign: 'center', color: '#1565c0', fontWeight: '700', padding: 8 },
-  documentTopBar: { minHeight: 44, marginHorizontal: 14, marginTop: 12, backgroundColor: '#eef6fc', borderWidth: 1, borderColor: '#64748b', borderRadius: 5, padding: 5, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, documentCloseButton: { backgroundColor: '#dc3545', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 4 }, lastUpdated: { fontSize: 9, textAlign: 'right', color: '#475569' }, registrationLine: { paddingHorizontal: 16, paddingTop: 8, color: '#475569', fontSize: 16 }, documentGrid: { padding: 14, flexDirection: 'row', flexWrap: 'wrap', gap: 18, justifyContent: 'space-around', alignItems: 'flex-start' }, documentTile: { width: 210, minHeight: 270, borderWidth: 1, borderColor: '#aeb7c1', borderRadius: 7, backgroundColor: '#f8fafc', overflow: 'hidden' }, tileTitle: { textAlign: 'center', fontSize: 17, paddingVertical: 4, color: '#111827', backgroundColor: '#fff' }, previewBox: { height: 172, marginHorizontal: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }, documentPreview: { width: '100%', height: '100%' }, noPreview: { color: '#94a3b8', fontSize: 12 }, chooseButton: { height: 29, backgroundColor: '#60a5fa', justifyContent: 'center', paddingHorizontal: 6 }, chooseText: { fontSize: 11, color: '#0f172a' }, tileActions: { minHeight: 43, backgroundColor: '#d1d5db', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', padding: 4 }, iconButton: { minWidth: 38, alignItems: 'center', paddingHorizontal: 8, paddingVertical: 7, borderRadius: 4 }, viewIcon: { backgroundColor: '#0d6efd' }, printIcon: { backgroundColor: '#059669' }, downloadIcon: { backgroundColor: '#06b6d4' }, iconText: { color: '#fff', fontSize: 19, fontWeight: '800', lineHeight: 21 }, uploadAllButton: { alignSelf: 'center', backgroundColor: '#0d6efd', paddingHorizontal: 18, paddingVertical: 11, borderRadius: 6, marginBottom: 14 },
+  documentTopBar: { minHeight: 44, marginHorizontal: 14, marginTop: 12, backgroundColor: '#eef6fc', borderWidth: 1, borderColor: '#64748b', borderRadius: 5, padding: 5, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, documentCloseButton: { backgroundColor: '#dc3545', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 4 }, lastUpdated: { fontSize: 9, textAlign: 'right', color: '#475569' }, registrationLine: { paddingHorizontal: 16, paddingTop: 8, color: '#475569', fontSize: 16 }, documentGrid: { padding: 14, flexDirection: 'row', flexWrap: 'wrap', gap: 18, justifyContent: 'space-around', alignItems: 'flex-start' }, documentTile: { width: 210, minHeight: 270, borderWidth: 1, borderColor: '#aeb7c1', borderRadius: 7, backgroundColor: '#f8fafc', overflow: 'hidden' }, tileTitle: { textAlign: 'center', fontSize: 17, paddingVertical: 4, color: '#111827', backgroundColor: '#fff' }, previewBox: { height: 172, marginHorizontal: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }, documentPreview: { width: '100%', height: '100%' }, noPreview: { color: '#94a3b8', fontSize: 12 }, chooseButton: { height: 29, backgroundColor: '#60a5fa', justifyContent: 'center', paddingHorizontal: 6 }, chooseText: { fontSize: 11, color: '#0f172a' }, tileActions: { minHeight: 43, backgroundColor: '#d1d5db', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', padding: 4 }, iconButton: { minWidth: 36, height: 32, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 4 }, viewIcon: { backgroundColor: '#0d6efd' }, printIcon: { backgroundColor: '#059669' }, downloadIcon: { backgroundColor: '#06b6d4' }, shareIcon: { backgroundColor: '#25D366' }, waIconImg: { width: 19, height: 19 }, iconText: { color: '#fff', fontSize: 19, fontWeight: '800', lineHeight: 21 }, uploadAllButton: { alignSelf: 'center', backgroundColor: '#0d6efd', paddingHorizontal: 18, paddingVertical: 11, borderRadius: 6, marginBottom: 14 },
   modalHeader: { backgroundColor: '#11101e', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, modalTitle: { color: '#fff', fontSize: 16, fontWeight: '700' }, close: { color: '#fff', fontSize: 28, paddingHorizontal: 8 }, detailRow: { flexDirection: 'row', gap: 12, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }, detailLabel: { width: '42%', color: '#475569', fontWeight: '600' },
 });
