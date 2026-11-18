@@ -9,7 +9,7 @@ export const STUDENT_MENU_ITEMS: [string, string][] = [
   ['Student ID Cards & Form', '/id-cards'],
   ['Document Upload', '/documents'],
   ['Promotion / TC (Lifecycle)', '/student-lifecycle'],
-  ['Student Transfer & Bulk Data', '/student-transfer'],
+  ['Excel & Bulk Documents', '/student-transfer'],
   ['Student Behavior', '/behavior'],
   ['Student Gate Pass', '/gate-pass'],
   ['Visit Permission', '/visits'],

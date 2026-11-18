@@ -48,7 +48,7 @@ export const MENU_PERMISSION_GROUPS: MenuGroup[] = [
       { key: 'id_cards', label: 'ID Cards & Form', route: '/id-cards', desc: 'ID card and application print' },
       { key: 'documents', label: 'Document Upload', route: '/documents', desc: 'Documents and photo upload' },
       { key: 'student_lifecycle', label: 'Promotion / TC', route: '/student-lifecycle', desc: 'Promotion, TC and reactivation' },
-      { key: 'student_transfer', label: 'Student Transfer', route: '/student-transfer', desc: 'Branch transfer and bulk data' },
+      { key: 'student_transfer', label: 'Excel & Bulk Documents', route: '/student-transfer', desc: 'Excel export and bulk student documents' },
       { key: 'behavior', label: 'Student Behavior', route: '/behavior', desc: 'Discipline and conduct records' },
       { key: 'gate_passes', label: 'Student Gate Pass', route: '/gate-pass', desc: 'Full gate pass access' },
       { key: 'visits', label: 'Visit Permission', route: '/visits', desc: 'Visiting day permission and records' },
