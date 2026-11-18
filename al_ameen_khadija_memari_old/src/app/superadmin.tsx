@@ -17,6 +17,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { clearSession, getUser } from '../lib/auth';
 import AcademyHeader from '../components/AcademyHeader';
 import { api } from '../lib/api';
+import { isHostelFeesBlockedUser } from '../lib/routeAccess';
 
 const menuPermission: Record<string, string | string[]> = {
   // Student Management
@@ -68,6 +69,7 @@ const menuPermission: Record<string, string | string[]> = {
   '/fees': 'fees',
   '/due-fees': ['dues', 'fees'],
   '/bank-statement-matcher': 'fees',
+  '/hostel-fees': ['fees', 'due_fees', 'hostel_fees'],
   '/deposit-fund': ['deposit_fund', 'fees'],
   '/audit-log': 'audit_log',
 };
@@ -128,6 +130,7 @@ export default function Dashboard() {
   const [restricted, setRestricted] = useState(false);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [userRole, setUserRole] = useState('');
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [dashboardName, setDashboardName] = useState('');
   const [currentDateTime, setCurrentDateTime] = useState('');
   const [activeTab, setActiveTab] = useState<'cards' | 'overview'>('cards');
@@ -238,6 +241,7 @@ export default function Dashboard() {
   const canAccess = (path: string) => {
     if (userRole === 'super_admin') return true;
     if (path === '/system-admin') return false;
+    if (path === '/hostel-fees' && isHostelFeesBlockedUser(currentUser)) return false;
     if (!restricted) return true;
     let required = menuPermission[path];
     if (!required) {
@@ -297,13 +301,17 @@ export default function Dashboard() {
     const clock = setInterval(updateTime, 60000);
 
     void getUser<any>().then((u) => {
-      if (u) setDashboardName(String(u.full_name || u.name || u.login_id || '').trim());
+      if (u) {
+        setCurrentUser(u);
+        setDashboardName(String(u.full_name || u.name || u.login_id || '').trim());
+      }
     });
     void api('/api/me')
       .then((d) => {
         setRestricted(!!d.restricted);
         setPermissions(d.permissions || []);
         setUserRole(d.user?.role || '');
+        if (d.user) setCurrentUser(d.user);
         setDashboardName(String(d.user?.full_name || d.user?.name || d.user?.login_id || '').trim());
         if (d.user?.role === 'super_admin') {
           setActiveTab('overview');
@@ -569,7 +577,7 @@ export default function Dashboard() {
             </TouchableOpacity>
           )}
 
-          {canAccessGroup(['/fees', '/due-fees', '/bank-statement-matcher', '/deposit-fund']) && (
+          {canAccessGroup(['/fees', '/due-fees', '/bank-statement-matcher', '/hostel-fees', '/deposit-fund']) && (
             <TouchableOpacity style={s.navBtn} onPress={() => setAccountsMenu(true)}>
               <Text style={s.navBtnIcon}>💳</Text>
               <Text style={s.navBtnText}>Accounts ▾</Text>
@@ -1234,6 +1242,7 @@ export default function Dashboard() {
                 ['Due Fees Tracker', '/due-fees'],
                 ['Receipt & Payment', '/fees?tab=receipt_payment'],
                 ['Bank Matcher', '/bank-statement-matcher'],
+                ['Hostel Fees (Class-wise)', '/hostel-fees'],
                 ['Student Deposit Fund', '/deposit-fund'],
               ].filter(([_, path]) => canAccess(path)).map(([label, path]) => (
                 <AdminLink
@@ -1329,6 +1338,7 @@ export default function Dashboard() {
                     ['Due Fees Tracker', '/due-fees'],
                     ['Receipt & Payment', '/fees?tab=receipt_payment'],
                     ['Bank Matcher', '/bank-statement-matcher'],
+                    ['Hostel Fees (Class-wise)', '/hostel-fees'],
                     ['Student Deposit Fund', '/deposit-fund'],
                   ],
                 },

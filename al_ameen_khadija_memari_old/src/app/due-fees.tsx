@@ -20,6 +20,7 @@ import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import DatePickerField from '../components/DatePickerField';
 import { api, getApiBase } from '../lib/api';
 import { getToken, getUser } from '../lib/auth';
+import { isHostelFeesBlockedUser } from '../lib/routeAccess';
 
 const getTodayDate = () => {
   const now = new Date();
@@ -180,6 +181,7 @@ export default function DueFeesScreen() {
   const [exportingExcel, setExportingExcel] = useState<boolean>(false);
   const [dueData, setDueData] = useState<any>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(false);
+  const [showHostelFeesTab, setShowHostelFeesTab] = useState<boolean>(false);
 
   // Column Sorting
   const [sortColumn, setSortColumn] = useState<string | null>(null);
@@ -208,6 +210,7 @@ export default function DueFeesScreen() {
   useEffect(() => {
     void getUser<any>().then((u) => {
       if (u?.role === 'super_admin') setIsSuperAdmin(true);
+      setShowHostelFeesTab(Boolean(u) && !isHostelFeesBlockedUser(u));
     });
     void loadDueList();
   }, []);
@@ -529,6 +532,15 @@ export default function DueFeesScreen() {
           >
             <Text style={styles.tabBtnText}>🏦 Bank Matcher</Text>
           </NavTabLink>
+
+          {showHostelFeesTab && (
+            <NavTabLink
+              path="/hostel-fees"
+              style={styles.tabBtn}
+            >
+              <Text style={styles.tabBtnText}>🏠 Hostel Fees</Text>
+            </NavTabLink>
+          )}
         </View>
 
         {/* Filter Controls Bar */}

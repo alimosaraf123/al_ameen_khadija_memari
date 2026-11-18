@@ -18,6 +18,7 @@ import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import DatePickerField from '../components/DatePickerField';
 import { api, getApiBase } from '../lib/api';
 import { getToken, getUser } from '../lib/auth';
+import { isHostelFeesBlockedUser } from '../lib/routeAccess';
 
 const money = (value: any) =>
   `₹${Number(value || 0).toLocaleString('en-IN', {
@@ -121,6 +122,7 @@ export default function Fees() {
   const [toDate, setToDate] = useState(getTodayDate());
   const session = 'last_3_sessions';
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [showHostelFeesTab, setShowHostelFeesTab] = useState(false);
 
   // --- Receipt & Payment State ---
   const [rpLoading, setRpLoading] = useState(false);
@@ -373,6 +375,7 @@ export default function Fees() {
       const role = String(u?.role || '').toLowerCase();
       const isSuper = role === 'super_admin' || role === 'superadmin';
       setIsSuperAdmin(isSuper);
+      setShowHostelFeesTab(Boolean(u) && !isHostelFeesBlockedUser(u));
       if (isSuper) {
         void checkPortalStatus();
       }
@@ -700,6 +703,17 @@ export default function Fees() {
               🏦 Bank Matcher
             </Text>
           </NavTabLink>
+
+          {showHostelFeesTab && (
+            <NavTabLink
+              path="/hostel-fees"
+              style={[styles.tabBtn, { backgroundColor: '#dcfce7', borderColor: '#16a34a', borderWidth: 1 }]}
+            >
+              <Text style={[styles.tabBtnText, { color: '#15803d' }]}>
+                🏠 Hostel Fees
+              </Text>
+            </NavTabLink>
+          )}
         </View>
 
         {/* Date Filter & Search Actions */}
