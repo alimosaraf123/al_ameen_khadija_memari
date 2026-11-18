@@ -21,8 +21,7 @@ function validDate(value) {
     Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0,10) === value;
 }
 function getTodayDateStr() {
-  const d = new Date(Date.now() + 5.5 * 3600 * 1000);
-  return d.toISOString().slice(0, 10);
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
 router.use(auth, allow('super_admin','admin'));
 
@@ -50,7 +49,10 @@ router.post('/mark-all-present', asyncHandler(async(req, res) => {
   const { date } = req.body || {};
   if (!validDate(date)) return res.status(400).json({ message: 'Enter a valid date (YYYY-MM-DD).' });
   const today = getTodayDateStr();
-  if (date < today) return res.status(400).json({ success: false, message: 'Back-dated attendance is turned off.' });
+  const isSuperAdmin = req.user?.role === 'super_admin';
+  if (date < today && !isSuperAdmin) {
+    return res.status(403).json({ success: false, message: 'শুধুমাত্র Super Admin পেছনের তারিখের (Back Date) স্টাফ হাজিরা দিতে বা পরিবর্তন করতে পারবেন।' });
+  }
   if (date > today) return res.status(400).json({ success: false, message: 'Future date attendance is not allowed.' });
   await schema();
   const result = await pool.query(`
@@ -79,7 +81,10 @@ router.post('/', asyncHandler(async(req,res) => {
   if (date) {
     if (!validDate(date)) return res.status(400).json({message:'Enter a valid date (YYYY-MM-DD).'});
     const today = getTodayDateStr();
-    if (date < today) return res.status(400).json({ success: false, message: 'Back-dated attendance is turned off.' });
+    const isSuperAdmin = req.user?.role === 'super_admin';
+    if (date < today && !isSuperAdmin) {
+      return res.status(403).json({ success: false, message: 'শুধুমাত্র Super Admin পেছনের তারিখের (Back Date) স্টাফ হাজিরা দিতে বা পরিবর্তন করতে পারবেন।' });
+    }
     if (date > today) return res.status(400).json({ success: false, message: 'Future date attendance is not allowed.' });
   }
   await schema();

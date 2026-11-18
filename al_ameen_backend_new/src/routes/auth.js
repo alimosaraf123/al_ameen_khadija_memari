@@ -158,15 +158,24 @@ router.post(
 
     // Record login audit event
     try {
-      const { getClientIp, resolveIpLocation } = require('../middleware/governance');
+      const { getClientIp, resolveLocation } = require('../middleware/governance');
       const clientIp = getClientIp(req);
-      resolveIpLocation(clientIp).then((loc) => {
+      resolveLocation(req, clientIp).then((locObj) => {
         const ua = String(req.headers['user-agent'] || '');
         const isMobile = /mobile|android|iphone|ipad/i.test(ua);
         const platform = isMobile ? 'Mobile App' : 'Web Browser';
+        const details = {
+          platform,
+          user_agent: ua.slice(0, 100),
+          latitude: locObj.latitude,
+          longitude: locObj.longitude,
+          accuracy: locObj.accuracy,
+          maps_url: locObj.maps_url,
+          location_source: locObj.source
+        };
         return pool.query(
           'INSERT INTO admin_audit_logs(user_id, method, path, status_code, details, ip_address, location) VALUES($1, $2, $3, $4, $5, $6, $7)',
-          [user.id, 'POST', '/api/auth/login', 200, JSON.stringify({ platform, user_agent: ua.slice(0, 100) }), clientIp, loc]
+          [user.id, 'POST', '/api/auth/login', 200, JSON.stringify(details), clientIp, locObj.location]
         );
       }).catch(() => {});
     } catch {}
@@ -618,15 +627,24 @@ router.post(
 
     // Record login audit event
     try {
-      const { getClientIp, resolveIpLocation } = require('../middleware/governance');
+      const { getClientIp, resolveLocation } = require('../middleware/governance');
       const clientIp = getClientIp(req);
-      resolveIpLocation(clientIp).then((loc) => {
+      resolveLocation(req, clientIp).then((locObj) => {
         const ua = String(req.headers['user-agent'] || '');
         const isMobile = /mobile|android|iphone|ipad/i.test(ua);
         const platform = isMobile ? 'Mobile App' : 'Web Browser';
+        const details = {
+          platform,
+          user_agent: ua.slice(0, 100),
+          latitude: locObj.latitude,
+          longitude: locObj.longitude,
+          accuracy: locObj.accuracy,
+          maps_url: locObj.maps_url,
+          location_source: locObj.source
+        };
         return pool.query(
           'INSERT INTO admin_audit_logs(user_id, method, path, status_code, details, ip_address, location) VALUES($1, $2, $3, $4, $5, $6, $7)',
-          [user.id, 'POST', '/api/auth/login', 200, JSON.stringify({ platform, user_agent: ua.slice(0, 100) }), clientIp, loc]
+          [user.id, 'POST', '/api/auth/login', 200, JSON.stringify(details), clientIp, locObj.location]
         );
       }).catch(() => {});
     } catch {}

@@ -235,6 +235,17 @@ export default function ServiceStaff() {
   };
 
   const reset = async (x: any) => {
+    const warningMessage = `⚠️ WARNING / সতর্কতা:\n\nAre you sure you want to reset the password for staff "${x.name || x.staff_id || x.login_id}" (${x.login_id})?\n\nThis will invalidate the current password and generate a new temporary password.\n\nআপনি কি নিশ্চিত যে আপনি এই Staff-এর পাসওয়ার্ড রিসেট করতে চান?`;
+    const ok = Platform.OS === 'web' && typeof window !== 'undefined'
+      ? window.confirm(warningMessage)
+      : await new Promise<boolean>((resolve) =>
+          Alert.alert('Confirm Password Reset / সতর্কতা', warningMessage, [
+            { text: 'Cancel / বাতিল', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Reset Password / রিসেট করুন', style: 'destructive', onPress: () => resolve(true) },
+          ])
+        );
+    if (!ok) return;
+
     const temporaryPassword = 'Temp@' + Math.floor(100000 + Math.random() * 900000);
     try {
       await api('/api/service-panels/staff/' + x.id, {

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -270,7 +271,7 @@ export default function AuditLog() {
                   <Text style={[s.tHeadCell, s.tLeftCell, { minWidth: 340, flex: 1 }]}>AUDIT DESCRIPTION</Text>
                   <Text style={[s.tHeadCell, { width: 165 }]}>TIMESTAMP</Text>
                   <Text style={[s.tHeadCell, { width: 135 }]}>IP ADDRESS</Text>
-                  <Text style={[s.tHeadCell, s.tLeftCell, { width: 195 }]}>LOCATION</Text>
+                  <Text style={[s.tHeadCell, s.tLeftCell, { width: 230 }]}>LOCATION</Text>
                 </View>
 
                 {activities.length === 0 ? (
@@ -308,12 +309,34 @@ export default function AuditLog() {
                       <Text style={[s.tCell, s.ipCell, { width: 135 }]} numberOfLines={1}>
                         {row.ip_address || '127.0.0.1'}
                       </Text>
-                      <View style={[s.tCellBox, { width: 195, flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
-                        <Text style={{ fontSize: 12 }}>📍</Text>
-                        <Text style={s.locationText} numberOfLines={1}>
-                          {row.location || 'Memari Campus'}
+                      <TouchableOpacity
+                        activeOpacity={row.maps_url ? 0.7 : 1}
+                        onPress={() => {
+                          if (row.maps_url) {
+                            void Linking.openURL(row.maps_url);
+                          }
+                        }}
+                        style={[s.tCellBox, { width: 230, flexDirection: 'row', alignItems: 'center', gap: 5 }]}
+                      >
+                        <Text style={{ fontSize: row.is_gps ? 13 : 12 }}>
+                          {row.is_gps ? '🎯' : String(row.location || '').includes('Campus') ? '🏫' : '📍'}
                         </Text>
-                      </View>
+                        <Text 
+                          style={[
+                            s.locationText,
+                            row.is_gps && { color: '#047857', fontWeight: '800' },
+                            String(row.location || '').includes('Campus') && { color: '#0369a1', fontWeight: '700' }
+                          ]} 
+                          numberOfLines={1}
+                        >
+                          {row.location || 'Memari Campus, West Bengal'}
+                        </Text>
+                        {row.is_gps && (
+                          <View style={s.gpsBadge}>
+                            <Text style={s.gpsBadgeText}>GPS</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
                     </View>
                   ))
                 )}
@@ -604,6 +627,20 @@ const s = StyleSheet.create({
     fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
   },
   locationText: { fontSize: 11, color: '#334155', fontWeight: '700', flexShrink: 1 },
+  gpsBadge: {
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    marginLeft: 3,
+  },
+  gpsBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#059669',
+  },
   emptyRow: { padding: 30, alignItems: 'center' },
   emptyCard: { padding: 30, alignItems: 'center' },
   emptyText: { color: '#64748b', fontStyle: 'italic', fontSize: 13 },

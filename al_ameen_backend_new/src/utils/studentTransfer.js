@@ -265,14 +265,21 @@ async function makeCustomWorkbook(students = [], requestedColumns = []) {
     const row = {};
     for (const field of cols) {
       const raw = field === 'room_number' ? (student.room_name ?? student.room_number) : student[field];
-      if (raw == null) {
+      if (field === 'is_active') {
+        const fromYear = parseInt(String(student.session_from ?? '').trim(), 10);
+        const toYear = parseInt(String(student.session_to ?? '').trim(), 10);
+        const isPassout = !raw && (
+          (!Number.isNaN(fromYear) && fromYear <= 2025) ||
+          (!Number.isNaN(toYear) && toYear <= 2025) ||
+          /pass.*out/i.test(String(student.dropout_reason || ''))
+        );
+        row[field] = raw ? 'Active' : (isPassout ? 'Passout' : 'Dropout');
+      } else if (raw == null) {
         row[field] = '';
       } else if (raw instanceof Date) {
         row[field] = dateText(raw);
       } else if (typeof raw === 'boolean') {
         row[field] = raw ? 'Yes' : 'No';
-      } else if (field === 'is_active') {
-        row[field] = raw ? 'Active' : 'Dropout';
       } else {
         row[field] = String(raw);
       }

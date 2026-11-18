@@ -1,5 +1,5 @@
 export const STUDENT_CLASSES = [
-  'V', 'VI', 'VII', 'VIII', 'IX', 'X',
+  'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XA', 'XB',
   'XI-Sc.', 'XII-Sc.',
 ];
 export function isVisibleStudentClass(value: string) {

@@ -1,6 +1,7 @@
 al_ameen_memari_release.apk
 installed-check.apk
 *.apk
+*.aab
 *.idsig
 *.bin
 *.bundle
@@ -14,3 +15,18 @@ __pycache__/
 *.pyc 
 
 *.xlsx
+*.der
+*.pem
+verify_temp/
+PHOTO/
+al_ameen_khadija_memari_old/.*-check/
+al_ameen_khadija_memari_old/.check-exam/
+al_ameen_khadija_memari_old/.*-toggle/
+al_ameen_khadija_memari_old/.*-check*/
+al_ameen_khadija_memari_old/.*-verify*/
+al_ameen_khadija_memari_old/.status-semantics/
+al_ameen_khadija_memari_old/.time-focus-check/
+al_ameen_khadija_memari_old/.toggle-status-check/
+al_ameen_khadija_memari_old/.remove-display-control-check/
+.vscode/
+

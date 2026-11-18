@@ -93,6 +93,7 @@ app.use('/api/behavior',...moduleAccess(['behavior','rooms']),require('./src/rou
 app.use('/api/illness',...moduleAccess(['illness','students']),require('./src/routes/illness'));
 app.use('/api/problems',...moduleAccess(['problems','rooms']),require('./src/routes/problems'));
 app.use('/api/notices',...moduleAccess('notices'),require('./src/routes/notices'));
+app.use('/api/display-board',require('./src/routes/displayBoard'));
 app.use('/api/push',require('./src/routes/push'));
 app.use('/api/routines',...moduleAccess('routines'),require('./src/routes/routines'));
 app.use('/api/gate-passes',...moduleAccess('gate_passes'),require('./src/routes/gatePasses'));
@@ -104,10 +105,22 @@ app.use('/api/marks',...moduleAccess('marks'),require('./src/routes/marks'));
 app.use('/api/terminal-exams',...moduleAccess(['terminal_exams','marks','published_results']),require('./src/routes/terminalExams'));
 app.use('/api/dues',...moduleAccess(['dues','students','deposit_fund']),require('./src/routes/dues'));
 app.use('/api/bank-matcher',...moduleAccess(['dues','deposit_fund','fees'],null,req=>req.method==='GET'&&req.path.startsWith('/download/')),require('./src/routes/bankStatementMatcher'));
+app.use('/api/hostel-fees',...moduleAccess(['dues','deposit_fund','fees','students']),require('./src/routes/hostelFees'));
+app.use('/api/daily-cashbook',...moduleAccess(['fees','dues','receipt_payment','daily_cashbook']),require('./src/routes/dailyCashBook'));
 app.use('/api/documents',...moduleAccess(['documents','students']),require('./src/routes/documents'));
 app.use('/api/assets',...moduleAccess('asset_register'),require('./src/routes/assetRegister'));
 app.use('/api/omr',require('./src/routes/omr'));
+app.use('/api/calls',require('./src/routes/calls'));
+app.use('/api/calling-schedules',...moduleAccess(['rooms','rooms_support','students']),require('./src/routes/callingSchedule'));
+app.use('/api/calling-booth',require('./src/routes/callingBooth').router);
 
 app.use((err,req,res,next)=>{console.error(err);if(err.code==='CLOUDINARY_NOT_CONFIGURED')return res.status(503).json({success:false,message:err.message});res.status(err.status||500).json({success:false,message:err.status?err.message:'Server error',error:process.env.NODE_ENV==='development'?err.message:undefined});});
 
-app.listen(PORT,'0.0.0.0',()=>console.log(`Server running on http://localhost:${PORT}`));
+app.listen(PORT,'0.0.0.0',()=>{
+  console.log(`Server running on http://localhost:${PORT}`);
+  try {
+    require('./src/services/yealinkSipBridge').startSipBridge();
+  } catch (err) {
+    console.warn('Yealink SIP Bridge start notice:', err.message);
+  }
+});

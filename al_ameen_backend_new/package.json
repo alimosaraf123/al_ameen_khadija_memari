@@ -12,6 +12,7 @@
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
     "@tesseract.js-data/eng": "^1.0.0",
+    "agora-token": "^2.0.7",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.7.0",
     "cors": "^2.8.5",

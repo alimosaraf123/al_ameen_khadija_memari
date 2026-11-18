@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -16,41 +18,70 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { clearSession, getUser } from '../lib/auth';
 import AcademyHeader from '../components/AcademyHeader';
 import { api } from '../lib/api';
+import { isHostelFeesBlockedUser } from '../lib/routeAccess';
 import { initiateAudioCall } from '../lib/callManager';
 
-const menuPermission: Record<string, string> = {
+const menuPermission: Record<string, string | string[]> = {
+  // Student Management
   '/students': 'students',
-  '/student-entry': 'students',
-  '/teachers': 'teachers',
-  '/hostel-menu': 'rooms',
-  '/academy-menu': 'marks',
-  '/omr-evaluation': 'omr_evaluation',
+  '/student-entry': ['student_entry', 'students'],
+  '/student-registration-form': ['students'],
+  '/daily-attendance': ['daily_attendance', 'attendance', 'students'],
+  '/id-cards': ['id_cards', 'students'],
+  '/documents': ['documents', 'students'],
+  '/student-lifecycle': ['student_lifecycle', 'students'],
+  '/student-transfer': ['student_transfer', 'students'],
+  '/behavior': ['behavior', 'students'],
+  '/gate-pass': ['gate_passes', 'gate_pass_generate', 'gate_pass_bulk', 'gate_pass_execute', 'gate_pass_ready', 'gate_pass_records'],
+  '/visits': ['visits', 'students'],
+  '/guardians': ['guardians', 'students'],
+
+  // Staff Management
+  '/teachers': ['teachers', 'teachers_view'],
+  '/teachers?mode=view': ['teachers', 'teachers_view'],
+  '/teachers?mode=add': ['teachers_add', 'teachers'],
+  '/teachers?mode=icard': ['teachers_icard', 'teachers'],
+  '/staff-registration-form': ['teachers', 'teachers_view'],
+  '/teachers?action=gateman_sheet': ['gateman_sheet', 'teachers'],
+  '/teacher-attendance': ['teacher_attendance', 'teachers'],
+  '/staff-summary': ['staff_summary', 'teachers'],
   '/service-staff': 'service_staff',
-  '/office': 'office_panel',
-  '/library': 'library_panel',
-  '/dining-stock': 'dining_stock',
-  '/guardians': 'guardians',
+  '/gateman': 'gateman_panel',
+
+  // Hostel Management
+  '/hostel-menu': 'rooms',
   '/rooms': 'rooms',
   '/room-assignments': 'room_assignments',
+  '/calling-schedule': ['rooms', 'students'],
   '/attendance': 'attendance',
-  '/daily-attendance': 'attendance',
-  '/behavior': 'behavior',
-  '/asset-register': 'asset_register',
-  '/gate-pass': 'gate_passes',
-  '/visits': 'visits',
-  '/student-lifecycle': 'student_lifecycle',
-  '/illness': 'illness',
+  '/dining-stock': 'dining_stock',
+
+  // Academic Management
+  '/academy-menu': 'marks',
   '/marks': 'marks',
+  '/omr-evaluation': 'omr_evaluation',
   '/terminal-exams': 'terminal_exams',
-  '/class-results': 'published_results',
-  '/problems': 'problems',
+  '/class-results': ['published_results', 'class_results'],
   '/routines': 'routines',
   '/notices': 'notices',
+  '/library': 'library_panel',
+  '/illness': 'illness',
+  '/problems': 'problems',
+
+  // Accounts & Fees
+  '/fees': ['fees', 'receipt_payment'],
+  '/fees?tab=fees_collection': 'fees',
+  '/fees?tab=receipt_payment': ['receipt_payment', 'fees'],
+  '/due-fees': ['due_fees', 'fees'],
+  '/bank-statement-matcher': ['bank_matcher', 'fees'],
+  '/hostel-fees': ['fees', 'due_fees', 'hostel_fees'],
+  '/daily-cashbook': ['fees', 'receipt_payment', 'daily_cashbook'],
   '/deposit-fund': 'deposit_fund',
-  '/fees': 'fees',
-  '/due-fees': 'fees',
-  '/bank-statement-matcher': 'fees',
+
+  // Governance & System
+  '/asset-register': 'asset_register',
   '/audit-log': 'audit_log',
+  '/office': 'office_panel',
 };
 
 function AdminLink({
@@ -136,9 +167,30 @@ export default function Dashboard() {
   const [restricted, setRestricted] = useState(false);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [userRole, setUserRole] = useState('');
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [dashboardName, setDashboardName] = useState('');
   const [currentDateTime, setCurrentDateTime] = useState('');
   const [activeTab, setActiveTab] = useState<'cards' | 'overview'>('cards');
+
+  // Check which menus the user is allowed to access
+  const canAccess = (path: string) => {
+    if (userRole === 'super_admin') return true;
+    if (path === '/system-admin') return false;
+    if (path === '/hostel-fees' && isHostelFeesBlockedUser(currentUser)) return false;
+    if (!restricted) return true;
+    let required = menuPermission[path];
+    if (!required) {
+      const base = path.split('?')[0];
+      required = menuPermission[base];
+    }
+    if (!required) return true;
+    if (Array.isArray(required)) {
+      return required.some((req) => permissions.includes(req));
+    }
+    return permissions.includes(required);
+  };
+
+  const canAccessGroup = (paths: string[]) => paths.some((p) => canAccess(p));
 
   const dashboardCards: [string, string][] = [
     ['Students', '/students'],
@@ -152,10 +204,20 @@ export default function Dashboard() {
     ['Student Deposit Fund', '/deposit-fund'],
     ['Asset Register', '/asset-register'],
     ['Activity Audit Log', '/audit-log'],
+    ['Projector Display Control', '/display-control'],
     ...(userRole === 'super_admin' ? [['System Administration', '/system-admin'] as [string, string]] : []),
   ];
 
   const navigateToPath = (path: string) => {
+    if (!canAccess(path)) {
+      const msg = 'Access Restricted: You do not have permission for this module.';
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert(msg);
+      } else {
+        Alert.alert('Permission Denied', msg);
+      }
+      return;
+    }
     if (path.includes('?')) {
       const [pathname, queryString] = path.split('?');
       const searchParams: Record<string, string> = {};
@@ -232,16 +294,7 @@ export default function Dashboard() {
     return fallback || String(rawVal || '-');
   };
 
-  // Check which menus the user is allowed to access
-  const canAccess = (path: string) => {
-    if (userRole === 'super_admin') return true;
-    if (path === '/system-admin') return false;
-    if (!restricted) return true;
-    const required = menuPermission[path];
-    return !required || permissions.includes(required);
-  };
 
-  const canAccessGroup = (paths: string[]) => paths.some((p) => canAccess(p));
 
   const loadCounter = async () => {
     try {
@@ -287,13 +340,17 @@ export default function Dashboard() {
     const clock = setInterval(updateTime, 60000);
 
     void getUser<any>().then((u) => {
-      if (u) setDashboardName(String(u.full_name || u.name || u.login_id || '').trim());
+      if (u) {
+        setCurrentUser(u);
+        setDashboardName(String(u.full_name || u.name || u.login_id || '').trim());
+      }
     });
     void api('/api/me')
       .then((d) => {
         setRestricted(!!d.restricted);
         setPermissions(d.permissions || []);
         setUserRole(d.user?.role || '');
+        if (d.user) setCurrentUser(d.user);
         setDashboardName(String(d.user?.full_name || d.user?.name || d.user?.login_id || '').trim());
         if (d.user?.role === 'super_admin') {
           setActiveTab('overview');
@@ -524,42 +581,35 @@ export default function Dashboard() {
             <Text style={[s.navBtnText, { color: '#ffffff', fontWeight: '800' }]}>All Menus</Text>
           </TouchableOpacity>
 
-          {canAccessGroup(['/students', '/daily-attendance', '/student-lifecycle', '/student-transfer']) && (
+          {canAccessGroup(['/students', '/student-entry', '/student-registration-form', '/daily-attendance', '/id-cards', '/documents', '/student-lifecycle', '/student-transfer', '/behavior', '/gate-pass', '/visits', '/guardians']) && (
             <TouchableOpacity style={s.navBtn} onPress={() => setStudentMenu(true)}>
               <Text style={s.navBtnIcon}>🎓</Text>
               <Text style={s.navBtnText}>Students ▾</Text>
             </TouchableOpacity>
           )}
 
-          {canAccessGroup(['/teachers', '/teacher-attendance', '/staff-summary', '/service-staff']) && (
+          {canAccessGroup(['/teachers', '/teachers?mode=view', '/teachers?mode=add', '/teachers?mode=icard', '/staff-registration-form', '/teacher-attendance', '/staff-summary', '/teachers?action=gateman_sheet', '/service-staff', '/gateman']) && (
             <TouchableOpacity style={s.navBtn} onPress={() => setTeacherMenu(true)}>
               <Text style={s.navBtnIcon}>👥</Text>
               <Text style={s.navBtnText}>Staff ▾</Text>
             </TouchableOpacity>
           )}
 
-          {canAccessGroup(['/hostel-menu', '/rooms', '/room-assignments', '/dining-stock']) && (
+          {canAccessGroup(['/hostel-menu', '/rooms', '/room-assignments', '/attendance', '/dining-stock', '/asset-register']) && (
             <TouchableOpacity style={s.navBtn} onPress={() => setHostelMenu(true)}>
               <Text style={s.navBtnIcon}>🏢</Text>
               <Text style={s.navBtnText}>Hostel ▾</Text>
             </TouchableOpacity>
           )}
 
-          {canAccessGroup(['/marks', '/omr-evaluation', '/terminal-exams', '/routines', '/notices']) && (
+          {canAccessGroup(['/marks', '/omr-evaluation', '/terminal-exams', '/class-results', '/routines', '/notices', '/library', '/illness', '/problems']) && (
             <TouchableOpacity style={s.navBtn} onPress={() => setAcademyMenu(true)}>
               <Text style={s.navBtnIcon}>📚</Text>
               <Text style={s.navBtnText}>Academy ▾</Text>
             </TouchableOpacity>
           )}
 
-          {false && canAccess('/gate-pass') && (
-            <TouchableOpacity style={s.navBtn} onPress={() => router.push('/gate-pass' as any)}>
-              <Text style={s.navBtnIcon}>🎫</Text>
-              <Text style={s.navBtnText}>Gate Pass</Text>
-            </TouchableOpacity>
-          )}
-
-          {canAccessGroup(['/fees', '/due-fees', '/bank-statement-matcher', '/deposit-fund']) && (
+          {canAccessGroup(['/fees', '/fees?tab=fees_collection', '/fees?tab=receipt_payment', '/due-fees', '/bank-statement-matcher', '/deposit-fund']) && (
             <TouchableOpacity style={s.navBtn} onPress={() => setAccountsMenu(true)}>
               <Text style={s.navBtnIcon}>💳</Text>
               <Text style={s.navBtnText}>Accounts ▾</Text>
@@ -577,13 +627,6 @@ export default function Dashboard() {
             <TouchableOpacity style={s.navBtn} onPress={() => router.push('/visits' as any)}>
               <Text style={s.navBtnIcon}>🤝</Text>
               <Text style={s.navBtnText}>Visiting Day</Text>
-            </TouchableOpacity>
-          )}
-
-          {canAccess('/asset-register') && (
-            <TouchableOpacity style={s.navBtn} onPress={() => router.push('/asset-register' as any)}>
-              <Text style={s.navBtnIcon}>🏷️</Text>
-              <Text style={s.navBtnText}>Asset Register</Text>
             </TouchableOpacity>
           )}
 
@@ -994,7 +1037,7 @@ export default function Dashboard() {
                     <Text style={[s.tHeadCell, s.tLeftCell, { minWidth: 320, flex: 1 }]}>AUDIT DESCRIPTION</Text>
                     <Text style={[s.tHeadCell, { width: 160 }]}>TIMESTAMP</Text>
                     <Text style={[s.tHeadCell, { width: 130 }]}>IP ADDRESS</Text>
-                    <Text style={[s.tHeadCell, s.tLeftCell, { width: 180 }]}>LOCATION</Text>
+                    <Text style={[s.tHeadCell, s.tLeftCell, { width: 230 }]}>LOCATION</Text>
                   </View>
 
                   {auditList.length === 0 ? (
@@ -1032,12 +1075,39 @@ export default function Dashboard() {
                         <Text style={[s.tCell, s.ipCell, { width: 130 }]} numberOfLines={1}>
                           {row.ip_address || '127.0.0.1'}
                         </Text>
-                        <View style={[s.tCellBox, { width: 180, flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
-                          <Text style={{ fontSize: 12 }}>📍</Text>
-                          <Text style={s.locationText} numberOfLines={1}>
-                            {row.location || 'Memari Campus'}
+                        <TouchableOpacity
+                          style={[s.tCellBox, { width: 230, flexDirection: 'row', alignItems: 'center', gap: 5 }]}
+                          onPress={() => {
+                            const url = row.maps_url || (row.location ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(String(row.location).replace(/\(GPS\)/g, '').trim())}` : null);
+                            if (url) {
+                              if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                                window.open(url, '_blank');
+                              } else {
+                                Linking.openURL(url).catch(() => {});
+                              }
+                            }
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={{ fontSize: row.is_gps ? 13 : 12 }}>
+                            {row.is_gps ? '🎯' : String(row.location || '').includes('Campus') ? '🏫' : '📍'}
                           </Text>
-                        </View>
+                          <Text 
+                            style={[
+                              s.locationText,
+                              row.is_gps && { color: '#047857', fontWeight: '800' },
+                              String(row.location || '').includes('Campus') && { color: '#0369a1', fontWeight: '700' }
+                            ]} 
+                            numberOfLines={1}
+                          >
+                            {row.location || 'Memari Campus, West Bengal'}
+                          </Text>
+                          {row.is_gps && (
+                            <View style={s.gpsBadge}>
+                              <Text style={s.gpsBadgeText}>GPS</Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
                       </View>
                     ))
                   )}
@@ -1075,12 +1145,13 @@ export default function Dashboard() {
                 ['View Staff', '/teachers?mode=view'],
                 ['Add Staff', '/teachers?mode=add'],
                 ['I-Card, Form & Download', '/teachers?mode=icard'],
+                ['Staff Registration Form', '/staff-registration-form'],
                 ['Staff Attendance', '/teacher-attendance'],
                 ['Staff Summary', '/staff-summary'],
                 ['Gateman Sheet (Excel)', '/teachers?action=gateman_sheet'],
                 ['Gateman & Service Staff', '/service-staff'],
                 ['Gateman Portal', '/gateman'],
-              ].map(([label, path]) => (
+              ].filter(([_, path]) => canAccess(path)).map(([label, path]) => (
                 <AdminLink
                   path={path}
                   key={label}
@@ -1114,16 +1185,17 @@ export default function Dashboard() {
               {[
                 ['Student Details', '/students'],
                 ['Student Entry', '/student-entry'],
+                ['Student Registration Form', '/student-registration-form'],
                 ['Daily Student Attendance', '/daily-attendance'],
                 ['Student ID Cards & Form', '/id-cards'],
                 ['Document Upload', '/documents'],
                 ['Promotion / TC (Lifecycle)', '/student-lifecycle'],
-                ['Student Transfer & Bulk Data', '/student-transfer'],
+                ['Excel & Bulk Documents', '/student-transfer'],
                 ['Student Behavior', '/behavior'],
                 ['Student Gate Pass', '/gate-pass'],
                 ['Visit Permission', '/visits'],
                 ['Guardians & Passwords', '/guardians'],
-              ].map(([label, path]) => (
+              ].filter(([_, path]) => canAccess(path)).map(([label, path]) => (
                 <AdminLink
                   path={path}
                   key={label}
@@ -1160,13 +1232,13 @@ export default function Dashboard() {
                 ['Terminal Exam', '/terminal-exams'],
                 ['Print Terminal Result', '/class-results'],
                 ['Teacher Routine', '/routines'],
-                ['Projector Display Control', '/display-control'],
                 ['Notice Board', '/notices'],
+                ['Projector Display Control', '/display-control'],
                 ['Library Portal', '/library'],
                 ['Student Behaviour', '/behavior'],
                 ['Student Illness', '/illness'],
                 ['Room Problems', '/problems'],
-              ].map(([label, path]) => (
+              ].filter(([_, path]) => canAccess(path)).map(([label, path]) => (
                 <AdminLink
                   path={path}
                   key={label}
@@ -1200,9 +1272,11 @@ export default function Dashboard() {
               {[
                 ['Rooms', '/rooms'],
                 ['Teacher Room Assignment', '/room-assignments'],
+                ['Calling Schedule', '/calling-schedule'],
                 ['Evening Room Attendance', '/attendance'],
                 ['Dining Stock Inventory', '/dining-stock'],
-              ].map(([label, path]) => (
+                ['Asset Register', '/asset-register'],
+              ].filter(([_, path]) => canAccess(path)).map(([label, path]) => (
                 <AdminLink
                   path={path}
                   key={label}
@@ -1238,8 +1312,10 @@ export default function Dashboard() {
                 ['Due Fees Tracker', '/due-fees'],
                 ['Receipt & Payment', '/fees?tab=receipt_payment'],
                 ['Bank Matcher', '/bank-statement-matcher'],
+                ['Hostel Fees (Class-wise)', '/hostel-fees'],
+                ['Daily Cash Book', '/daily-cashbook'],
                 ['Student Deposit Fund', '/deposit-fund'],
-              ].map(([label, path]) => (
+              ].filter(([_, path]) => canAccess(path)).map(([label, path]) => (
                 <AdminLink
                   path={path}
                   key={label}
@@ -1276,11 +1352,12 @@ export default function Dashboard() {
                   items: [
                     ['Student Details', '/students'],
                     ['Student Entry', '/student-entry'],
+                    ['Student Registration Form', '/student-registration-form'],
                     ['Daily Student Attendance', '/daily-attendance'],
                     ['Student ID Cards & Form', '/id-cards'],
                     ['Document Upload', '/documents'],
                     ['Promotion / TC (Lifecycle)', '/student-lifecycle'],
-                    ['Student Transfer & Bulk Data', '/student-transfer'],
+                    ['Excel & Bulk Documents', '/student-transfer'],
                     ['Student Behavior', '/behavior'],
                     ['Student Gate Pass', '/gate-pass'],
                     ['Visit Permission', '/visits'],
@@ -1293,6 +1370,7 @@ export default function Dashboard() {
                     ['View Staff', '/teachers?mode=view'],
                     ['Add Staff', '/teachers?mode=add'],
                     ['I-Card, Form & Download', '/teachers?mode=icard'],
+                    ['Staff Registration Form', '/staff-registration-form'],
                     ['Staff Attendance', '/teacher-attendance'],
                     ['Staff Summary', '/staff-summary'],
                     ['Gateman Sheet (Excel)', '/teachers?action=gateman_sheet'],
@@ -1308,8 +1386,8 @@ export default function Dashboard() {
                     ['Terminal Exam', '/terminal-exams'],
                     ['Print Terminal Result', '/class-results'],
                     ['Teacher Routine', '/routines'],
-                    ['Projector Display Control', '/display-control'],
                     ['Notice Board', '/notices'],
+                    ['Projector Display Control', '/display-control'],
                     ['Library Portal', '/library'],
                     ['Student Behaviour', '/behavior'],
                     ['Student Illness', '/illness'],
@@ -1323,6 +1401,7 @@ export default function Dashboard() {
                     ['Teacher Room Assignment', '/room-assignments'],
                     ['Evening Room Attendance', '/attendance'],
                     ['Dining Stock Inventory', '/dining-stock'],
+                    ['Asset Register', '/asset-register'],
                   ],
                 },
                 {
@@ -1332,6 +1411,8 @@ export default function Dashboard() {
                     ['Due Fees Tracker', '/due-fees'],
                     ['Receipt & Payment', '/fees?tab=receipt_payment'],
                     ['Bank Matcher', '/bank-statement-matcher'],
+                    ['Hostel Fees (Class-wise)', '/hostel-fees'],
+                    ['Daily Cash Book', '/daily-cashbook'],
                     ['Student Deposit Fund', '/deposit-fund'],
                   ],
                 },
@@ -1348,32 +1429,36 @@ export default function Dashboard() {
                   items: [
                     ['Asset Register', '/asset-register'],
                     ['Activity Audit Log', '/audit-log'],
-                    ...(userRole === 'super_admin' ? [['System Administration', '/system-admin']] : []),
+                    ...(userRole === 'super_admin' ? [['System Administration', '/system-admin'] as [string, string]] : []),
                   ],
                 },
-              ].map((grp) => (
-                <View key={grp.category} style={{ gap: 8 }}>
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#0f172a', borderBottomWidth: 1, borderBottomColor: '#e2e8f0', paddingBottom: 4 }}>
-                    {grp.category}
-                  </Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    {grp.items.map(([label, path]) => (
-                      <AdminLink
-                        path={path}
-                        key={label}
-                        style={[s.modalItem, { minWidth: 200, width: '31%', minHeight: 48, paddingVertical: 8 }]}
-                        onPress={() => {
-                          setAllMenusDrawer(false);
-                          navigateToPath(path);
-                        }}
-                      >
-                        <Text style={s.arrow}>›</Text>
-                        <Text style={[s.modalItemText, { fontSize: 13 }]}>{label}</Text>
-                      </AdminLink>
-                    ))}
+              ].map((grp) => {
+                const visibleItems = grp.items.filter(([_, path]) => canAccess(path));
+                if (!visibleItems.length) return null;
+                return (
+                  <View key={grp.category} style={{ gap: 8 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#0f172a', borderBottomWidth: 1, borderBottomColor: '#e2e8f0', paddingBottom: 4 }}>
+                      {grp.category}
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      {visibleItems.map(([label, path]) => (
+                        <AdminLink
+                          path={path}
+                          key={label}
+                          style={[s.modalItem, { minWidth: 200, width: '31%', minHeight: 48, paddingVertical: 8 }]}
+                          onPress={() => {
+                            setAllMenusDrawer(false);
+                            navigateToPath(path);
+                          }}
+                        >
+                          <Text style={s.arrow}>›</Text>
+                          <Text style={[s.modalItemText, { fontSize: 13 }]}>{label}</Text>
+                        </AdminLink>
+                      ))}
+                    </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </ScrollView>
           </View>
         </View>
@@ -1583,6 +1668,39 @@ export default function Dashboard() {
               </View>
               <TouchableOpacity onPress={() => setCallingModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Text style={s.closeText}>×</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Quick Access to Hostel Booth Calling Schedule */}
+            <View style={{ paddingHorizontal: 16, paddingTop: 10 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setCallingModal(false);
+                  router.push('/calling-schedule' as any);
+                }}
+                style={{
+                  backgroundColor: '#1e40af',
+                  borderRadius: 8,
+                  padding: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  borderWidth: 1,
+                  borderColor: '#1d4ed8',
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Text style={{ fontSize: 22 }}>☎️</Text>
+                  <View>
+                    <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 14 }}>
+                      Hostel Student Calling Schedule & Booth
+                    </Text>
+                    <Text style={{ color: '#bfdbfe', fontSize: 11 }}>
+                      হ্যান্ডসেট বুথ শিডিউল, ৮ মিনিটের লিমিট ও অভিভাবকের ফোন নম্বর ম্যানেজ করুন
+                    </Text>
+                  </View>
+                </View>
+                <Text style={{ color: '#ffffff', fontSize: 18, fontWeight: '900' }}>→</Text>
               </TouchableOpacity>
             </View>
 
@@ -2433,6 +2551,20 @@ const s = StyleSheet.create({
     color: '#334155',
     fontWeight: '700',
     flexShrink: 1,
+  },
+  gpsBadge: {
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    marginLeft: 3,
+  },
+  gpsBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#059669',
   },
   auditFooterRow: {
     flexDirection: 'row',

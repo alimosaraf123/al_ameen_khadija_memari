@@ -18,7 +18,8 @@ import AcademyHeader from '../components/AcademyHeader';
 import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import DatePickerField from '../components/DatePickerField';
 import { api, getApiBase } from '../lib/api';
-import { getToken } from '../lib/auth';
+import { getToken, getUser } from '../lib/auth';
+import { isHostelFeesBlockedUser } from '../lib/routeAccess';
 
 const getTodayDate = () => {
   const now = new Date();
@@ -306,6 +307,7 @@ export default function BankStatementMatcherScreen() {
   const [masterStatus, setMasterStatus] = useState<any>(null);
   const [masterModalOpen, setMasterModalOpen] = useState<boolean>(false);
   const [uploadingMaster, setUploadingMaster] = useState<boolean>(false);
+  const [showHostelFeesTab, setShowHostelFeesTab] = useState<boolean>(false);
 
   // Reconcile State
   const [reconciling, setReconciling] = useState<boolean>(false);
@@ -439,6 +441,9 @@ export default function BankStatementMatcherScreen() {
   }, [registerDates]);
 
   useEffect(() => {
+    void getUser<any>().then((u) => {
+      setShowHostelFeesTab(Boolean(u) && !isHostelFeesBlockedUser(u));
+    });
     void loadMasterStatus();
     void loadRegister();
   }, []);
@@ -1028,6 +1033,22 @@ export default function BankStatementMatcherScreen() {
             <Text style={[styles.tabBtnText, styles.tabBtnTextActive]}>
               🏦 Bank Matcher
             </Text>
+          </NavTabLink>
+
+          {showHostelFeesTab && (
+            <NavTabLink
+              path="/hostel-fees"
+              style={styles.tabBtn}
+            >
+              <Text style={styles.tabBtnText}>🏠 Hostel Fees</Text>
+            </NavTabLink>
+          )}
+
+          <NavTabLink
+            path="/daily-cashbook"
+            style={styles.tabBtn}
+          >
+            <Text style={styles.tabBtnText}>📒 Daily Cash Book</Text>
           </NavTabLink>
 
           <TouchableOpacity

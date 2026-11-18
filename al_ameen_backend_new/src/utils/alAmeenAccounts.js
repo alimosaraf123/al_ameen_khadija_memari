@@ -2,6 +2,7 @@ const pool = require('../db');
 
 const ACCOUNTS_BASE_URL = 'https://alameenmission.net/alameen/accounts/';
 const FEES_REPORT_URL = 'https://alameenmission.net/alameen/accounts/?action=fees_report';
+const VOUCHERS_URL = 'https://alameenmission.net/alameen/accounts/?action=vouchers';
 const LOGIN_SUBMIT_URL = 'https://alameenmission.net/alameen/accounts/index.php';
 const MEMARI_BRANCH_ID = '94';
 
@@ -132,11 +133,18 @@ function parseFeesTable(html) {
   const headers = thMatches.map(m => cleanText(m[1]));
 
   let totalColIdx = 52;
+  const devColIndices = [];
   headers.forEach((h, idx) => {
     if (/total\s*amount/i.test(h)) {
       totalColIdx = idx;
     }
+    if (/development\s*fees?/i.test(h)) {
+      devColIndices.push(idx);
+    }
   });
+  if (!devColIndices.length) {
+    devColIndices.push(14, 33);
+  }
 
   // Extract all rows
   const rowMatches = [...tableHtml.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)];
@@ -182,9 +190,31 @@ function parseFeesTable(html) {
       }
     }
 
+    // Development fee amount across Development Fee / Development Fees columns
+    let developmentFee = 0;
+    for (const dIdx of devColIndices) {
+      if (cells.length > dIdx && cells[dIdx]) {
+        const dv = parseFloat(cells[dIdx].replace(/[^0-9.]/g, ''));
+        if (!isNaN(dv) && dv > 0) developmentFee += dv;
+      }
+    }
+
     // "cash hole cash r cash cahra ja thakbe sob online hobe"
-    const isCash = rawMode.toLowerCase().includes('cash');
+    const lowerMode = rawMode.toLowerCase();
+    const isCash = lowerMode.includes('cash');
     const paymentMode = isCash ? 'cash' : 'online';
+
+    // Detailed mode classification for Daily Cash Book
+    let cashbookMode = 'gateway';
+    if (isCash) {
+      cashbookMode = 'cash';
+    } else if (lowerMode.includes('cheque') || lowerMode.includes('chq')) {
+      cashbookMode = 'cheque';
+    } else if (lowerMode.includes('swipe')) {
+      cashbookMode = 'swipe_card';
+    } else if (lowerMode.includes('edc') || lowerMode.includes('gateway') || lowerMode.includes('online') || lowerMode.includes('upi')) {
+      cashbookMode = 'gateway';
+    }
 
     // Format date as YYYY-MM-DD
     let formattedDate = dateStr;
@@ -199,12 +229,15 @@ function parseFeesTable(html) {
       transaction_date: formattedDate,
       raw_date: dateStr,
       payment_mode: paymentMode,
+      cashbook_mode: cashbookMode,
       raw_payment_mode: rawMode,
       registration_no: regNo,
       student_name: studentName,
       father_name: fatherName,
       branch_name: branch || 'Memari',
       class_name: className,
+      development_fee: Number(developmentFee.toFixed(2)),
+      is_development_bill: developmentFee > 0,
       amount: Number(amount.toFixed(2)),
       details: rawMode,
     });
@@ -345,13 +378,13 @@ async function querySessionBills(sessionYear, sdate, edate, cookie) {
   return chunkResults;
 }
 
-async function getFeesReportData({ fromDate = '', toDate = '', session = '', branch = 'Memari' } = {}) {
+async function getFeesReportData({ fromDate = '', toDate = '', session = '', branch = 'Memari', forceRefresh = false } = {}) {
   const today = toYmd(new Date());
   const sdate = fromDate || today;
   const edate = toDate || sdate;
   const reportKey = `${sdate}_${edate}_${session || 'last_3_sessions'}_${branch}`;
 
-  if (edate < today && reportCache.has(reportKey)) {
+  if (!forceRefresh && edate < today && reportCache.has(reportKey)) {
     return reportCache.get(reportKey);
   }
 
@@ -375,10 +408,14 @@ async function getFeesReportData({ fromDate = '', toDate = '', session = '', bra
     { value: '2022', label: 'Session 2022' },
   ];
 
-  const last3Sessions = ['2026', '2025', '2024'];
+  const currYear = new Date().getFullYear();
+  const last2Sessions = [String(currYear), String(currYear - 1)];
+  const last3Sessions = [String(currYear), String(currYear - 1), String(currYear - 2)];
 
   let targetSessions = [];
-  if (session === 'last_3_sessions' || session === 'all' || !session) {
+  if (session === 'last_2_sessions') {
+    targetSessions = last2Sessions;
+  } else if (session === 'last_3_sessions' || session === 'all' || !session) {
     targetSessions = last3Sessions;
   } else {
     targetSessions = [session];
@@ -392,7 +429,7 @@ async function getFeesReportData({ fromDate = '', toDate = '', session = '', bra
     try {
       const sessionRows = await querySessionBills(sess, sdate, edate, cookie);
       for (const r of sessionRows) {
-        const key = `${r.bill_number}-${r.transaction_date}-${r.registration_no}`;
+        const key = `${r.bill_number}-${r.transaction_date}-${r.registration_no}-${r.is_development_bill ? 'dev' : 'fee'}-${r.amount}`;
         if (!seenBillIds.has(key)) {
           seenBillIds.add(key);
           allBills.push(r);
@@ -904,13 +941,134 @@ async function getDueListData({ toDate = '', classId = 'all', sessionYear = 'las
   };
 }
 
+async function getHostelFeeReceiptVouchers({ dateStr = '', branchId = MEMARI_BRANCH_ID } = {}) {
+  const cookie = await ensureValidCookie();
+  const d = dateStr || toYmd(new Date());
+  const fyInfo = getFinancialYearInfo(d);
+
+  const form = new URLSearchParams();
+  form.set('branch_id', String(branchId || MEMARI_BRANCH_ID));
+  form.set('financial_year_id', String(fyInfo.id || '4097'));
+  form.set('sdate', d);
+  form.set('edate', d);
+  form.set('search', '');
+
+  let res = await fetchPortalPage(VOUCHERS_URL, 'POST', form, cookie);
+  if (res.text.includes('id="login_form"') || res.text.includes('Administrator Login')) {
+    const creds = await getPortalCredentials();
+    const newCookie = await loginToPortal(creds.username, creds.password);
+    res = await fetchPortalPage(VOUCHERS_URL, 'POST', form, newCookie);
+  }
+
+  const tableMatch = res.text.match(/<table[\s\S]*?<\/table>/gi) || [];
+  const voucherTable = tableMatch[1] || tableMatch[0] || '';
+  const rows = [...voucherTable.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)]
+    .map(m => [...m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(c => cleanText(c[1])))
+    .filter(c => c.length >= 7 && c[1] && c[2]);
+
+  // Filter: Particulars contains 'Student Hostel Fee' and Vch Type is 'Receipt'
+  const matchedReceipts = rows.filter(r => {
+    const particulars = (r[2] || '').toLowerCase();
+    const vchType = (r[3] || '').toLowerCase();
+    return particulars.includes('student hostel fee') && vchType.includes('receipt');
+  });
+
+  const receiptVchNos = matchedReceipts.map(r => String(r[4] || '').trim()).filter(Boolean);
+  const seenReceipt = new Set();
+  const uniqueReceiptVchNos = [];
+  for (const v of receiptVchNos) {
+    if (!seenReceipt.has(v)) {
+      seenReceipt.add(v);
+      uniqueReceiptVchNos.push(v);
+    }
+  }
+  uniqueReceiptVchNos.sort((a, b) => {
+    const na = parseInt(a.replace(/\D/g, ''), 10);
+    const nb = parseInt(b.replace(/\D/g, ''), 10);
+    if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+    return a.localeCompare(b);
+  });
+
+  const receiptRange =
+    uniqueReceiptVchNos.length > 1
+      ? `${uniqueReceiptVchNos[0]}-${uniqueReceiptVchNos[uniqueReceiptVchNos.length - 1]}`
+      : (uniqueReceiptVchNos[0] || '');
+
+  // Filter: Vch Type is 'Payment' -> P.V Bill and Voucher Payment amount
+  const matchedPayments = rows.filter(r => (r[3] || '').toLowerCase().includes('payment'));
+  const paymentVchNos = matchedPayments.map(r => String(r[4] || '').trim()).filter(Boolean);
+  const seenPayment = new Set();
+  const uniquePaymentVchNos = [];
+  for (const v of paymentVchNos) {
+    if (!seenPayment.has(v)) {
+      seenPayment.add(v);
+      uniquePaymentVchNos.push(v);
+    }
+  }
+  uniquePaymentVchNos.sort((a, b) => {
+    const na = parseInt(a.replace(/\D/g, ''), 10);
+    const nb = parseInt(b.replace(/\D/g, ''), 10);
+    if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+    return a.localeCompare(b);
+  });
+
+  const paymentRange =
+    uniquePaymentVchNos.length > 1
+      ? `${uniquePaymentVchNos[0]}-${uniquePaymentVchNos[uniquePaymentVchNos.length - 1]}`
+      : (uniquePaymentVchNos[0] || '');
+
+  // Sum total debit amount of Payment vouchers
+  let totalPaymentAmount = 0;
+  for (const p of matchedPayments) {
+    const deb = parseFloat(String(p[5] || '').replace(/,/g, ''));
+    if (!isNaN(deb) && deb > 0) totalPaymentAmount += deb;
+  }
+
+  return {
+    success: true,
+    date: d,
+    financial_year: fyInfo.label,
+    total_receipts: uniqueReceiptVchNos.length,
+    vouchers: uniqueReceiptVchNos,
+    rv_bill: uniqueReceiptVchNos.join(', '),
+    rv_bill_range: receiptRange,
+    total_payments: uniquePaymentVchNos.length,
+    pv_bill: uniquePaymentVchNos.join(', '),
+    pv_bill_range: paymentRange,
+    payment_vouchers: uniquePaymentVchNos,
+    voucher_payment_total: Number(totalPaymentAmount.toFixed(2)),
+    raw_vouchers: matchedReceipts.map(r => ({
+      voucher_id: r[0],
+      date: r[1],
+      particulars: r[2],
+      vch_type: r[3],
+      vch_no: r[4],
+      debit: r[5],
+      credit: r[6],
+      user_name: r[8] || ''
+    })),
+    raw_payments: matchedPayments.map(r => ({
+      voucher_id: r[0],
+      date: r[1],
+      particulars: r[2],
+      vch_type: r[3],
+      vch_no: r[4],
+      debit: r[5],
+      credit: r[6],
+      user_name: r[8] || ''
+    }))
+  };
+}
+
 module.exports = {
   getPortalCredentials,
   savePortalCredentials,
   loginToPortal,
   getFeesReportData,
+  getHostelFeeReceiptVouchers,
   getReceiptPaymentReportData,
   getDueListData,
   FEES_REPORT_URL,
+  VOUCHERS_URL,
   DUE_LIST_URL,
 };

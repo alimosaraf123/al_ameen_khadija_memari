@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { getToken, refreshSession } from './auth';
+import { getPreciseLocationHeaders } from './deviceLocation';
 
 const configuredApiBase = process.env.EXPO_PUBLIC_API_BASE_URL
   ?.replace(/\/+$/, '');
@@ -56,6 +57,11 @@ export async function api(
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
+
+  try {
+    const locHeaders = await getPreciseLocationHeaders();
+    Object.assign(headers, locHeaders);
+  } catch {}
 
   const controller = new AbortController();
   const timeout = setTimeout(

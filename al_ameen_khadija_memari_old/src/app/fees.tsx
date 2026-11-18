@@ -18,6 +18,7 @@ import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import DatePickerField from '../components/DatePickerField';
 import { api, getApiBase } from '../lib/api';
 import { getToken, getUser } from '../lib/auth';
+import { isHostelFeesBlockedUser } from '../lib/routeAccess';
 
 const money = (value: any) =>
   `₹${Number(value || 0).toLocaleString('en-IN', {
@@ -121,6 +122,7 @@ export default function Fees() {
   const [toDate, setToDate] = useState(getTodayDate());
   const session = 'last_3_sessions';
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [showHostelFeesTab, setShowHostelFeesTab] = useState(false);
 
   // --- Receipt & Payment State ---
   const [rpLoading, setRpLoading] = useState(false);
@@ -373,6 +375,7 @@ export default function Fees() {
       const role = String(u?.role || '').toLowerCase();
       const isSuper = role === 'super_admin' || role === 'superadmin';
       setIsSuperAdmin(isSuper);
+      setShowHostelFeesTab(Boolean(u) && !isHostelFeesBlockedUser(u));
       if (isSuper) {
         void checkPortalStatus();
       }
@@ -698,6 +701,26 @@ export default function Fees() {
           >
             <Text style={[styles.tabBtnText, { color: '#4338ca' }]}>
               🏦 Bank Matcher
+            </Text>
+          </NavTabLink>
+
+          {showHostelFeesTab && (
+            <NavTabLink
+              path="/hostel-fees"
+              style={[styles.tabBtn, { backgroundColor: '#dcfce7', borderColor: '#16a34a', borderWidth: 1 }]}
+            >
+              <Text style={[styles.tabBtnText, { color: '#15803d' }]}>
+                🏠 Hostel Fees
+              </Text>
+            </NavTabLink>
+          )}
+
+          <NavTabLink
+            path="/daily-cashbook"
+            style={[styles.tabBtn, { backgroundColor: '#fffbeb', borderColor: '#d97706', borderWidth: 1 }]}
+          >
+            <Text style={[styles.tabBtnText, { color: '#b45309' }]}>
+              📒 Daily Cash Book
             </Text>
           </NavTabLink>
         </View>
@@ -3134,6 +3157,24 @@ const styles = StyleSheet.create({
   },
 
   tableScroll: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10 },
+  // Watermark overlay for the entire page
+  watermark: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0.05,
+    transform: [{ rotate: '-30deg' }],
+    pointerEvents: 'none',
+  },
+  watermarkText: {
+    fontSize: 48,
+    color: '#000',
+    fontWeight: '800',
+  },
   table: { minWidth: 1200 },
   tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#e2e8f0', minHeight: 40, alignItems: 'center' },
   tableHead: { backgroundColor: '#e2e8f0' },

@@ -948,7 +948,7 @@ export default function Guardian() {
                     return max !== null ? (max % 1 === 0 ? String(max) : max.toFixed(2)) : '-';
                   };
 
-                  const tableHeaders = ['Subject', 'FM', 'HM', ...(hasOral ? ['Oral FM', 'Oral MO'] : []), 'Total', '%'];
+                  const tableHeaders = ['Subject', 'FM', 'HM', ...(hasOral ? ['OR/PR FM', 'OR/PR MO'] : []), 'Total', '%'];
 
                   return (
                     <ScrollView horizontal showsHorizontalScrollIndicator>
@@ -980,7 +980,7 @@ export default function Guardian() {
                           );
                         })}
                         <Text style={styles.overallResultSummary}>
-                          Overall Total: {ownTotal}  |  Overall Percentage: {subjects.reduce((sum: number, subject: any) => sum + Number(subject.full_marks || 0), 0) ? `${((ownTotal / subjects.reduce((sum: number, subject: any) => sum + Number(subject.full_marks || 0), 0)) * 100).toFixed(2)}%` : '-'}  |  Overall Rank: {rank}
+                          Overall Total: {ownTotal}  |  Overall Percentage: {subjects.reduce((sum: number, subject: any) => sum + Number(subject.full_marks || 0), 0) ? `${((ownTotal / subjects.reduce((sum: number, subject: any) => sum + Number(subject.full_marks || 0), 0)) * 100).toFixed(2)}%` : '-'}  |  Overall Rank: {rank !== '-' && students.length > 0 ? `${rank} / ${students.length}` : rank}
                         </Text>
                       </View>
                     </ScrollView>

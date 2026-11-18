@@ -199,6 +199,18 @@ function formatAuditItem(row, index) {
     row.location || (row.user_id === 1 || row.user_id === '1' ? 'Memari Campus (Local)' : 'Memari, West Bengal')
   );
 
+  let details = row.details;
+  if (typeof details === 'string') {
+    try { details = JSON.parse(details); } catch { }
+  }
+  details = details || {};
+
+  const lat = details.latitude || details.coordinates?.latitude || null;
+  const lon = details.longitude || details.coordinates?.longitude || null;
+  const mapsUrl = details.maps_url || (lat && lon ? `https://www.google.com/maps?q=${lat},${lon}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(resolvedLocation)}`);
+  const isGps = Boolean((row.location && row.location.includes('(GPS)')) || details.location_source === 'gps' || (lat && lon));
+  const locSource = isGps ? 'gps' : (resolvedLocation.includes('Campus') ? 'campus' : 'ip');
+
   return {
     sl: index + 1,
     token: `#${row.id}`,
@@ -210,7 +222,12 @@ function formatAuditItem(row, index) {
     timestamp,
     raw_time: row.created_at,
     ip_address: resolvedIp,
-    location: resolvedLocation
+    location: resolvedLocation,
+    latitude: lat,
+    longitude: lon,
+    maps_url: mapsUrl,
+    is_gps: isGps,
+    location_source: locSource
   };
 }
 
