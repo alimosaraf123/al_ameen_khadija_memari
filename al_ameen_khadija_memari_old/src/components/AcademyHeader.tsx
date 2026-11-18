@@ -53,6 +53,7 @@ const getTimeGreeting = () => {
 };
 
 type HeaderProps = {
+  beforeHomeActions?: React.ReactNode;
   extraActions?: React.ReactNode;
   fixed?: boolean;
   compact?: boolean;
@@ -80,6 +81,7 @@ function HeaderLink({ path, style, onPress, children }: { path: string; style: a
 }
 
 export default function AcademyHeader({
+  beforeHomeActions,
   extraActions,
   fixed = false,
   compact = false,
@@ -227,6 +229,7 @@ export default function AcademyHeader({
             style={[styles.actions, compact && styles.compactActions]}
             contentContainerStyle={styles.actionsContent}
           >
+            {beforeHomeActions}
             <HeaderLink
               path={homeFor(user?.role || user?.data?.role || user?.user_role)}
               style={styles.home}

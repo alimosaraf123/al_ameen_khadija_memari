@@ -23,7 +23,8 @@ import { Platform } from 'react-native';
 import { api, API_BASE } from '../lib/api';
 import { getToken } from '../lib/auth';
 import { Field, Button, Card, H1, Muted } from '../components/ui';
-import PageNavigation from '../components/PageNavigation';
+import AcademyHeader from '../components/AcademyHeader';
+import { StudentMenuActions } from '../components/StudentMenu';
 
 type StudentDocument = {
   id: number;
@@ -1182,8 +1183,11 @@ export default function Documents() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <PageNavigation />
-        <H1>Student Documents</H1>
+        <AcademyHeader />
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+          <H1>Student Documents</H1>
+          <StudentMenuActions />
+        </View>
 
         <Text style={styles.sectionTitle}>
           Find Student

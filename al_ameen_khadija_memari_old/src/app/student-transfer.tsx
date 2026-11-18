@@ -16,6 +16,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import AcademyHeader from '../components/AcademyHeader';
+import { StudentMenuActions } from '../components/StudentMenu';
 import { Select } from '../components/StudentDirectory';
 import { STUDENT_CLASSES } from '../lib/studentClasses';
 import { API_BASE, api } from '../lib/api';
@@ -693,15 +694,10 @@ export default function StudentTransfer() {
     <SafeAreaView style={s.page}>
       <ScrollView contentContainerStyle={s.content}>
         <AcademyHeader />
-        <TouchableOpacity
-          accessibilityRole="button"
-          onPress={() => router.replace('/students')}
-          style={s.backButton}
-        >
-          <Text style={s.backText}>← Back to Students</Text>
-        </TouchableOpacity>
-
-        <Text style={s.title}>Student Data, Excel & Bulk Documents Export</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+          <Text style={[s.title, { marginBottom: 0 }]}>Student Data, Excel & Bulk Documents Export</Text>
+          <StudentMenuActions />
+        </View>
 
         {/* TOP MAIN NAVIGATION TABS */}
         <View style={s.mainTabContainer}>
