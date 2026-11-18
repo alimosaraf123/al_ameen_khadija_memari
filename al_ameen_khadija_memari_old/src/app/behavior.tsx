@@ -1,8 +1,9 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AcademyHeader from '../components/AcademyHeader';
+import { StudentMenuActions } from '../components/StudentMenu';
 import { Field } from '../components/ui';
 import { api } from '../lib/api';
 import { Select } from '../components/StudentDirectory';
@@ -49,7 +50,10 @@ export default function Behavior() {
 
   return <SafeAreaView style={s.page}><ScrollView contentContainerStyle={s.content}>
     <AcademyHeader />
-    <Text style={s.title}>Student Behaviour</Text>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}>
+      <Text style={[s.title, { marginBottom: 0 }]}>Student Behaviour</Text>
+      <StudentMenuActions />
+    </View>
     <Text style={s.help}>Search by registration number to view previous records and add behaviour.</Text>
     <View style={s.searchRow}><Field placeholder="Registration number" value={registrationNo} onChangeText={setRegistrationNo} style={s.searchInput} /><TouchableOpacity onPress={search} style={s.searchButton}><Text style={s.buttonText}>{loading ? 'Searching...' : 'Search'}</Text></TouchableOpacity></View>
     {loading && <ActivityIndicator color="#6f42c1" />}

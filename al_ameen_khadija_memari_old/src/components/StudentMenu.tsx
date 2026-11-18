@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { router, usePathname } from 'expo-router';
 
 export const STUDENT_MENU_ITEMS: [string, string][] = [
   ['Student Details', '/students'],
@@ -24,6 +25,7 @@ export default function StudentMenu({
   onClose: () => void;
   onSelect: (path: string) => void;
 }) {
+  const pathname = usePathname();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={s.modalBackdrop}>
@@ -45,21 +47,86 @@ export default function StudentMenu({
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={s.modalGrid} bounces={false}>
-            {STUDENT_MENU_ITEMS.map(([label, path]) => (
-              <TouchableOpacity
-                key={label}
-                style={s.modalItem}
-                onPress={() => onSelect(path)}
-                activeOpacity={0.7}
-              >
-                <Text style={s.arrow}>›</Text>
-                <Text style={s.modalItemText}>{label}</Text>
-              </TouchableOpacity>
-            ))}
+            {STUDENT_MENU_ITEMS.map(([label, path]) => {
+              const isCurrent = pathname === path;
+              return (
+                <TouchableOpacity
+                  key={label}
+                  style={[s.modalItem, isCurrent && s.modalItemActive]}
+                  onPress={() => onSelect(path)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={s.arrow}>›</Text>
+                  <Text style={[s.modalItemText, isCurrent && s.modalItemTextActive]}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
         </View>
       </View>
     </Modal>
+  );
+}
+
+export function StudentMenuActions({
+  onStudentEntry,
+  onSelect,
+  showEntryButton = true,
+  compact = false,
+}: {
+  onStudentEntry?: () => void;
+  onSelect?: (path: string) => void;
+  showEntryButton?: boolean;
+  compact?: boolean;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const pathname = usePathname();
+
+  const handleSelect = (path: string) => {
+    setMenuOpen(false);
+    if (onSelect) {
+      onSelect(path);
+      return;
+    }
+    if (pathname === path) return;
+    router.push(path as any);
+  };
+
+  const handleEntryPress = () => {
+    if (onStudentEntry) {
+      onStudentEntry();
+      return;
+    }
+    if (pathname === '/student-entry') return;
+    router.push('/student-entry' as any);
+  };
+
+  return (
+    <>
+      <View style={[s.actionRow, compact && s.actionRowCompact]}>
+        {showEntryButton && (
+          <TouchableOpacity
+            onPress={handleEntryPress}
+            style={[s.entryBtn, compact && s.compactBtn]}
+            activeOpacity={0.8}
+          >
+            <Text style={[s.entryBtnText, compact && s.compactBtnText]}>+ Student Entry</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          onPress={() => setMenuOpen(true)}
+          style={[s.menuBtn, compact && s.compactBtn]}
+          activeOpacity={0.8}
+        >
+          <Text style={[s.menuBtnText, compact && s.compactBtnText]}>Student Menu</Text>
+        </TouchableOpacity>
+      </View>
+      <StudentMenu
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onSelect={handleSelect}
+      />
+    </>
   );
 }
 
@@ -124,6 +191,10 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
+  modalItemActive: {
+    borderColor: '#1565c0',
+    backgroundColor: '#e0f2fe',
+  },
   arrow: {
     fontSize: 18,
     color: '#0284c7',
@@ -134,5 +205,54 @@ const s = StyleSheet.create({
     fontWeight: '700',
     color: '#1e293b',
     flex: 1,
+  },
+  modalItemTextActive: {
+    color: '#0369a1',
+    fontWeight: '800',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  actionRowCompact: {
+    gap: 6,
+    flexWrap: 'nowrap',
+  },
+  entryBtn: {
+    backgroundColor: '#16a34a',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  entryBtnText: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 13.5,
+  },
+  menuBtn: {
+    backgroundColor: '#1565c0',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuBtnText: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  compactBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5.5,
+    borderRadius: 6,
+  },
+  compactBtnText: {
+    fontSize: 12.5,
+    fontWeight: '800',
   },
 });

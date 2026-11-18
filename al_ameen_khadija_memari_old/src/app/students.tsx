@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import AcademyHeader from '../components/AcademyHeader';
 import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import {
@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
@@ -18,12 +19,12 @@ import { fetch as expoFetch } from 'expo/fetch';
 import { router, useLocalSearchParams } from 'expo-router';
 import StudentDirectory, { Select } from '../components/StudentDirectory';
 import { STUDENT_CLASSES, isVisibleStudentClass } from '../lib/studentClasses';
-import StudentMenu from '../components/StudentMenu';
+import StudentMenu, { StudentMenuActions } from '../components/StudentMenu';
 import DatePickerField from '../components/DatePickerField';
 import { normalizeStudentClass } from '../lib/studentDirectory';
 
 import { api, API_BASE } from '../lib/api';
-import { getToken } from '../lib/auth';
+import { getToken, getUser } from '../lib/auth';
 import {
   Field,
   Button,
@@ -31,8 +32,8 @@ import {
 } from '../components/ui';
 
 const StudentFormContext = React.createContext<any>(null);
-const PARENT_QUALIFICATIONS=['Illiterate','Primary','Madhyamik','Higher Secondary','ITI','Diploma','Graduate','Post Graduate','Other'];
-const PARENT_OCCUPATIONS=['Farmer','Business','Daily Labourer','Private Service','Government Service','Teacher','Driver','Mason','Carpenter','Housewife','Unemployed','Other'];
+const PARENT_QUALIFICATIONS = ['Illiterate', 'Primary', 'Madhyamik', 'Higher Secondary', 'ITI', 'Diploma', 'Graduate', 'Post Graduate', 'Other'];
+const PARENT_OCCUPATIONS = ['Farmer', 'Business', 'Daily Labourer', 'Private Service', 'Government Service', 'Teacher', 'Driver', 'Mason', 'Carpenter', 'Housewife', 'Unemployed', 'Other'];
 
 const STUDENT_DOCUMENT_TYPES = [
   { key: 'birth_certificate', label: 'Date of Birth Certificate' },
@@ -71,8 +72,8 @@ const LabeledField = ({
     value !== undefined
       ? value
       : field
-      ? ctx?.form?.[field] ?? ''
-      : '';
+        ? ctx?.form?.[field] ?? ''
+        : '';
 
   const handleChange =
     onChangeText ||
@@ -119,6 +120,27 @@ const SectionTitle = ({ children }: any) => (
   </View>
 );
 
+const FormRow = ({ children, style }: any) => {
+  const { width } = useWindowDimensions();
+  const isTwoCol = width >= 640;
+  return (
+    <View style={[styles.formRow, !isTwoCol && styles.formRowMobile, style]}>
+      {children}
+    </View>
+  );
+};
+
+const FormCol = ({ children, full = false, style }: any) => {
+  const { width } = useWindowDimensions();
+  const isTwoCol = width >= 640;
+  if (!children && !isTwoCol) return null;
+  return (
+    <View style={[full || !isTwoCol ? styles.colFull : styles.colHalf, style]}>
+      {children || null}
+    </View>
+  );
+};
+
 const EMPTY_FORM: any = {
   registration_no: '',
   admission_no: '',
@@ -144,6 +166,16 @@ const EMPTY_FORM: any = {
   blood_group: '',
   admitted_school_name: '',
   stream: '',
+  mp_reg_no: '',
+  mp_roll_no: '',
+  mp_marks: '',
+  mp_board: '',
+  mp_year: '',
+  hs_reg_no: '',
+  hs_roll_no: '',
+  hs_marks: '',
+  hs_board: '',
+  hs_year: '',
   is_handicapped: false,
   is_orphan: false,
   previous_branch_name: '',
@@ -238,6 +270,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
   const [editingId, setEditingId] = useState<any>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [screen, setScreen] = useState<'details' | 'entry'>(getInitialScreen);
+  const [userRole, setUserRole] = useState<string>('');
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState('');
   const [entryDocuments, setEntryDocuments] = useState<Record<string, any>>({});
@@ -248,9 +281,21 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
   const [sameAsPresent, setSameAsPresent] = useState(false);
   const [ifscMessage, setIfscMessage] = useState('');
 
+  const { width: windowWidth } = useWindowDimensions();
+  const isTwoCol = windowWidth >= 640;
+
   const [form, setForm] = useState<any>({ ...EMPTY_FORM });
   const [visitor1, setVisitor1] = useState<any>({ ...EMPTY_VISITOR });
   const [visitor2, setVisitor2] = useState<any>({ ...EMPTY_VISITOR });
+
+  const typedReg = String(form.registration_no || '').trim().toLowerCase();
+  const duplicateStudent = typedReg
+    ? students.find(
+      (s) =>
+        String(s.registration_no || '').trim().toLowerCase() === typedReg &&
+        String(s.id) !== String(editingId)
+    )
+    : null;
 
   const clearForm = () => {
     setEditingId(null);
@@ -263,6 +308,10 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     setIfscMessage('');
     setExitForm({ dropout_date: new Date().toISOString().slice(0, 10), dropout_reason: '' });
   };
+
+  useEffect(() => {
+    void getUser<any>().then(u => setUserRole(String(u?.role || '')));
+  }, []);
 
   useEffect(() => {
     if (initialScreen) {
@@ -284,9 +333,11 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     }
   }, [params?.screen, params?.mode, initialScreen]);
 
-  const update = (key: string, value: any) => {
+  const update = useCallback((key: string, value: any) => {
     setForm((old: any) => ({ ...old, [key]: value }));
-  };
+  }, []);
+
+  const formContextValue = useMemo(() => ({ form, update }), [form, update]);
 
   const updateVisitor = (no: 1 | 2, key: string, value: any) => {
     const setter = no === 1 ? setVisitor1 : setVisitor2;
@@ -321,10 +372,10 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
   }, []);
 
 
-  const lookupPin = async (field: 'present_pin_code'|'permanent_pin_code', value: string) => {
-    const pin=String(value||'').replace(/\D/g,'').slice(0,6); update(field,pin);
-    if(pin.length!==6)return;
-    try { const response=await fetch('https://api.postalpincode.in/pincode/'+pin); const data=await response.json(); const offices=data?.[0]?.PostOffice||[]; if(!offices.length)return; const office=offices[0]; const prefix=field.startsWith('present')?'present_':'permanent_'; setForm((old:any)=>({...old,[field]:pin,[prefix+'post_office']:office.Name||old[prefix+'post_office'],[prefix+'block']:office.Block||old[prefix+'block'],[prefix+'police_station']:office.Block||old[prefix+'police_station'],[prefix+'district']:office.District||old[prefix+'district'],[prefix+'state']:office.State||old[prefix+'state']})); } catch {}
+  const lookupPin = async (field: 'present_pin_code' | 'permanent_pin_code', value: string) => {
+    const pin = String(value || '').replace(/\D/g, '').slice(0, 6); update(field, pin);
+    if (pin.length !== 6) return;
+    try { const response = await fetch('https://api.postalpincode.in/pincode/' + pin); const data = await response.json(); const offices = data?.[0]?.PostOffice || []; if (!offices.length) return; const office = offices[0]; const prefix = field.startsWith('present') ? 'present_' : 'permanent_'; setForm((old: any) => ({ ...old, [field]: pin, [prefix + 'post_office']: office.Name || old[prefix + 'post_office'], [prefix + 'block']: office.Block || old[prefix + 'block'], [prefix + 'police_station']: office.Block || old[prefix + 'police_station'], [prefix + 'district']: office.District || old[prefix + 'district'], [prefix + 'state']: office.State || old[prefix + 'state'] })); } catch { }
   };
 
   useEffect(() => {
@@ -406,7 +457,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
         try {
           const data: any = await response.json();
           message = data.message || message;
-        } catch {}
+        } catch { }
         throw new Error(message);
       }
     }
@@ -460,17 +511,14 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     if (invalidAadhaar) { Alert.alert('Invalid Aadhaar', invalidAadhaar[0] + ' number must be exactly 12 digits.'); return; }
     const invalidMobile = [['Student Mobile', form.mobile_number], ['WhatsApp', form.whatsapp_number], ['Father Mobile', form.father_mobile], ['Mother Mobile', form.mother_mobile], ['Guardian Mobile', form.guardian_mobile], ['Alternate Mobile', form.alternate_mobile], ['Visitor-1 Mobile', visitor1.mobile_number], ['Visitor-2 Mobile', visitor2.mobile_number]].find(([, value]) => value && String(value).length !== 10);
     if (invalidMobile) { Alert.alert('Invalid Mobile Number', invalidMobile[0] + ' must be exactly 10 digits.'); return; }
-    const sessionMatch=String(form.academic_session||'').trim().match(/^(\d{4})-(\d{4})$/);
-    if(!sessionMatch){Alert.alert('Invalid Session','Use session format 2026-2026 or 2026-2027.');return;}
+    const sessionMatch = String(form.academic_session || '').trim().match(/^(\d{4})-(\d{4})$/);
+    if (!sessionMatch) { Alert.alert('Invalid Session', 'Use session format 2026-2026 or 2026-2027.'); return; }
 
-    const normalizedRegistration = form.registration_no.trim().toLowerCase();
-    const duplicateRegistration = students.some((student) =>
-      student.id !== editingId &&
-      String(student.registration_no || '').trim().toLowerCase() === normalizedRegistration
-    );
-
-    if (duplicateRegistration) {
-      Alert.alert('Duplicate Registration', 'This Registration Number already exists.');
+    if (duplicateStudent) {
+      Alert.alert(
+        'Duplicate Registration Number',
+        `Registration Number "${form.registration_no.trim()}" is already assigned to:\n\n• Name: ${duplicateStudent.student_name}\n• Class: ${duplicateStudent.class_name || 'N/A'}\n• Session: ${duplicateStudent.session_from ? duplicateStudent.session_from + '-' + duplicateStudent.session_to : 'N/A'}\n\nUnder no circumstances can two students have the same Registration Number.`
+      );
       return;
     }
 
@@ -481,10 +529,12 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
       const selectedRoom = rooms.find((room) => String(room.room_name) === String(room_number));
       const body = {
         ...studentFields,
-        session_from:sessionMatch[1],
-        session_to:sessionMatch[2],
+        session_from: sessionMatch[1],
+        session_to: sessionMatch[2],
         registration_no: form.registration_no.trim(),
         room_id: selectedRoom?.id || null,
+        school_reg_no: form.mp_reg_no || null,
+        council_reg_no: form.hs_reg_no || null,
         visitor1,
         visitor2,
       };
@@ -509,7 +559,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
       Alert.alert(
         'Success',
         (editingId !== null ? 'Student updated successfully' : 'Student added successfully') +
-          (uploaded ? ' with ' + uploaded + ' document(s).' : '.')
+        (uploaded ? ' with ' + uploaded + ' document(s).' : '.')
       );
 
       clearForm();
@@ -552,6 +602,8 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
 
       if (!next.student_type) next.student_type = 'hostel';
       if (!next.gender) next.gender = 'Female';
+      if (!next.mp_reg_no && s.school_reg_no) next.mp_reg_no = asText(s.school_reg_no);
+      if (!next.hs_reg_no && s.council_reg_no) next.hs_reg_no = asText(s.council_reg_no);
 
       const normalizeVisitor = (v: any) => {
         const out: any = { ...EMPTY_VISITOR };
@@ -565,11 +617,11 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
         return out;
       };
 
-      next.academic_session=s.session_from&&s.session_to?String(s.session_from)+'-'+String(s.session_to):'';
+      next.academic_session = s.session_from && s.session_to ? String(s.session_from) + '-' + String(s.session_to) : '';
       setEditingId(s.id);
       setForm(next);
       setExitBusy(true);
-      try{const clearance=await api('/api/students/'+s.id+'/exit-clearance');setExitClearance(clearance);if(clearance.exit)setExitForm({dropout_date:String(clearance.exit.dropout_date).slice(0,10),dropout_reason:clearance.exit.dropout_reason||''});}catch{}finally{setExitBusy(false)};
+      try { const clearance = await api('/api/students/' + s.id + '/exit-clearance'); setExitClearance(clearance); if (clearance.exit) setExitForm({ dropout_date: String(clearance.exit.dropout_date).slice(0, 10), dropout_reason: clearance.exit.dropout_reason || '' }); } catch { } finally { setExitBusy(false) };
       setVisitor1(normalizeVisitor(s.visitor1));
       setVisitor2(normalizeVisitor(s.visitor2));
       setScreen('entry');
@@ -578,11 +630,68 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     }
   };
 
-  const deleteStudent = (student: any) => {Alert.alert('Dropout','Open Student Edit and complete Dropout Date and Reason.');void startEdit(student);};
+  const deleteStudent = async (student: any) => {
+    if (userRole !== 'super_admin') {
+      Alert.alert('Permission Denied', 'Only Super Admin can deactivate or dropout students.');
+      return;
+    }
 
-  const refreshExitClearance=async(id=editingId)=>{if(!id)return;setExitBusy(true);try{setExitClearance(await api('/api/students/'+id+'/exit-clearance'))}catch(e:any){Alert.alert('Clearance',e.message)}finally{setExitBusy(false)}};
-  const saveDropout=async()=>{if(!editingId)return;if(!exitForm.dropout_date||!exitForm.dropout_reason.trim())return Alert.alert('Required','Dropout date and reason are required.');setExitBusy(true);try{await api('/api/students/'+editingId+'/dropout',{method:'POST',body:JSON.stringify(exitForm)});await refreshExitClearance(editingId);await loadStudents();Alert.alert('Saved','Student marked as Dropout.')}catch(e:any){Alert.alert('Dropout',e.message)}finally{setExitBusy(false)}};
-  const issueAndPrintTc=async()=>{if(!editingId)return;setExitBusy(true);try{const d=await api('/api/students/'+editingId+'/transfer-certificate',{method:'POST'});setExitClearance(d);const st=d.student,ex=d.exit,session=[st.session_from,st.session_to].filter(Boolean).join('-'),monthly=Number(d.monthly_fee_due_total||0);const html=`<style>@page{size:A4;margin:18mm}body{font:15px Georgia,serif;color:#111}.sheet{border:2px solid #174c36;padding:28px;min-height:245mm}header{text-align:center;border-bottom:2px solid #174c36;padding-bottom:14px}h1{margin:6px;font-size:24px}h2{text-align:center;text-decoration:underline;margin:34px 0}.row{display:grid;grid-template-columns:190px 1fr;border-bottom:1px dotted #777;padding:10px 0}.note{margin-top:25px;padding:12px;border:1px solid #999}.sign{display:flex;justify-content:space-between;margin-top:70px}</style><div class="sheet"><header><h1>Al-Ameen Mission Academy Memari</h1><div>Memari, Purba Bardhaman - 713146</div></header><h2>TRANSFER CERTIFICATE</h2><div class="row"><b>Student Name</b><span>${st.student_name}</span></div><div class="row"><b>Registration No.</b><span>${st.registration_no}</span></div><div class="row"><b>Class</b><span>${st.class_name||'-'}</span></div><div class="row"><b>Academic Session</b><span>${session||'-'}</span></div><div class="row"><b>Guardian Name</b><span>${st.guardian_name||st.father_name||'-'}</span></div><div class="row"><b>Dropout Date</b><span>${String(ex.dropout_date).slice(0,10)}</span></div><div class="row"><b>Reason</b><span>${ex.dropout_reason}</span></div><div class="note"><b>Monthly Fees Due:</b> ${monthly>0?'Rs. '+monthly.toFixed(2):'No due'}${monthly>0?'<br/>The outstanding monthly fees remain payable.':''}</div><div class="sign"><span>Prepared By</span><span>Guardian</span><span>Principal / Administrator</span></div></div>`;await Print.printAsync({html});}catch(e:any){Alert.alert('TC cannot be issued',e.message)}finally{setExitBusy(false)}};
+    const performDeactivate = async () => {
+      try {
+        await api('/api/students/' + student.id, { method: 'DELETE' });
+        await loadStudents();
+        if (Platform.OS === 'web') {
+          window.alert(`Student ${student.student_name} marked as Inactive / Dropout successfully.`);
+        } else {
+          Alert.alert('Success', `Student ${student.student_name} marked as Inactive / Dropout successfully.`);
+        }
+      } catch (e: any) {
+        Alert.alert('Error', e.message);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const choice = window.confirm(
+        `Are you sure you want to mark ${student.student_name} (Reg: ${student.registration_no}) as Inactive / Dropout?\n\nClick OK to confirm deactivation, or Cancel.`
+      );
+      if (choice) {
+        void performDeactivate();
+      }
+      return;
+    }
+
+    Alert.alert(
+      'Deactivate Student',
+      `Are you sure you want to mark ${student.student_name} (Reg: ${student.registration_no}) as Inactive / Dropout?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Open Dropout & TC Form', onPress: () => void startEdit(student) },
+        { text: 'Deactivate Now', style: 'destructive', onPress: () => void performDeactivate() },
+      ]
+    );
+  };
+
+  const refreshExitClearance = async (id = editingId) => { if (!id) return; setExitBusy(true); try { setExitClearance(await api('/api/students/' + id + '/exit-clearance')) } catch (e: any) { Alert.alert('Clearance', e.message) } finally { setExitBusy(false) } };
+  const saveDropout = async () => {
+    if (userRole !== 'super_admin') {
+      Alert.alert('Permission Denied', 'Only Super Admin can mark student as dropout.');
+      return;
+    }
+    if (!editingId) return;
+    if (!exitForm.dropout_date || !exitForm.dropout_reason.trim()) return Alert.alert('Required', 'Dropout date and reason are required.');
+    setExitBusy(true);
+    try {
+      await api('/api/students/' + editingId + '/dropout', { method: 'POST', body: JSON.stringify(exitForm) });
+      await refreshExitClearance(editingId);
+      await loadStudents();
+      Alert.alert('Saved', 'Student marked as Dropout.')
+    } catch (e: any) {
+      Alert.alert('Dropout', e.message)
+    } finally {
+      setExitBusy(false)
+    }
+  };
+  const issueAndPrintTc = async () => { if (!editingId) return; setExitBusy(true); try { const d = await api('/api/students/' + editingId + '/transfer-certificate', { method: 'POST' }); setExitClearance(d); const st = d.student, ex = d.exit, session = [st.session_from, st.session_to].filter(Boolean).join('-'), monthly = Number(d.monthly_fee_due_total || 0); const html = `<style>@page{size:A4;margin:18mm}body{font:15px Georgia,serif;color:#111}.sheet{border:2px solid #174c36;padding:28px;min-height:245mm}header{text-align:center;border-bottom:2px solid #174c36;padding-bottom:14px}h1{margin:6px;font-size:24px}h2{text-align:center;text-decoration:underline;margin:34px 0}.row{display:grid;grid-template-columns:190px 1fr;border-bottom:1px dotted #777;padding:10px 0}.note{margin-top:25px;padding:12px;border:1px solid #999}.sign{display:flex;justify-content:space-between;margin-top:70px}</style><div class="sheet"><header><h1>Al-Ameen Mission Academy Memari</h1><div>Memari, Purba Bardhaman - 713146</div></header><h2>TRANSFER CERTIFICATE</h2><div class="row"><b>Student Name</b><span>${st.student_name}</span></div><div class="row"><b>Registration No.</b><span>${st.registration_no}</span></div><div class="row"><b>Class</b><span>${st.class_name || '-'}</span></div><div class="row"><b>Academic Session</b><span>${session || '-'}</span></div><div class="row"><b>Guardian Name</b><span>${st.guardian_name || st.father_name || '-'}</span></div><div class="row"><b>Dropout Date</b><span>${String(ex.dropout_date).slice(0, 10)}</span></div><div class="row"><b>Reason</b><span>${ex.dropout_reason}</span></div><div class="note"><b>Monthly Fees Due:</b> ${monthly > 0 ? 'Rs. ' + monthly.toFixed(2) : 'No due'}${monthly > 0 ? '<br/>The outstanding monthly fees remain payable.' : ''}</div><div class="sign"><span>Prepared By</span><span>Guardian</span><span>Principal / Administrator</span></div></div>`; await Print.printAsync({ html }); } catch (e: any) { Alert.alert('TC cannot be issued', e.message) } finally { setExitBusy(false) } };
 
   const copyPresentToPermanent = () => {
     setForm((old: any) => ({
@@ -622,79 +731,141 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     <View>
       <SectionTitle>{title}</SectionTitle>
 
-      <LabeledField
-        label="Name"
-        value={visitor.visitor_name}
-        onChangeText={(v: string) => updateVisitor(no, 'visitor_name', v)}
-      />
-      <LabeledField
-        label="Relation"
-        value={visitor.relation}
-        onChangeText={(v: string) => updateVisitor(no, 'relation', v)}
-      />
-      <DigitField label="Mobile Number" value={visitor.mobile_number} length={10} onChangeText={(v: string) => updateVisitor(no, 'mobile_number', v)} />
-      <LabeledField
-        label="Email ID"
-        value={visitor.email}
-        onChangeText={(v: string) => updateVisitor(no, 'email', v)}
-      />
+      <FormRow>
+        <FormCol>
+          <LabeledField
+            label="Name"
+            value={visitor.visitor_name}
+            onChangeText={(v: string) => updateVisitor(no, 'visitor_name', v)}
+          />
+        </FormCol>
+        <FormCol>
+          <LabeledField
+            label="Relation"
+            value={visitor.relation}
+            onChangeText={(v: string) => updateVisitor(no, 'relation', v)}
+          />
+        </FormCol>
+      </FormRow>
 
-      <Text style={styles.label}>Address source</Text>
-      <View style={styles.options}>
-        {choice(
-          'Present Address',
-          visitor.address_source === 'present',
-          () => copyAddressToVisitor(no, 'present')
-        )}
-        {choice(
-          'Permanent Address',
-          visitor.address_source === 'permanent',
-          () => copyAddressToVisitor(no, 'permanent')
-        )}
-        {choice(
-          'Custom',
-          visitor.address_source === 'custom',
-          () => updateVisitor(no, 'address_source', 'custom')
-        )}
-      </View>
+      <FormRow>
+        <FormCol>
+          <DigitField label="Mobile Number" value={visitor.mobile_number} length={10} onChangeText={(v: string) => updateVisitor(no, 'mobile_number', v)} />
+        </FormCol>
+        <FormCol>
+          <LabeledField
+            label="Email ID"
+            value={visitor.email}
+            onChangeText={(v: string) => updateVisitor(no, 'email', v)}
+          />
+        </FormCol>
+      </FormRow>
 
-      <LabeledField
-        label="Village"
-        value={visitor.village}
-        onChangeText={(v: string) => updateVisitor(no, 'village', v)}
-      />
-      <LabeledField
-        label="Police Station"
-        value={visitor.police_station}
-        onChangeText={(v: string) => updateVisitor(no, 'police_station', v)}
-      />
-      <LabeledField
-        label="PIN Code"
-        value={visitor.pin_code}
-        onChangeText={(v: string) => updateVisitor(no, 'pin_code', v)}
-      />
-      <LabeledField
-        label="Post Office"
-        value={visitor.post_office}
-        onChangeText={(v: string) => updateVisitor(no, 'post_office', v)}
-      />
-      <LabeledField
-        label="Block"
-        value={visitor.block}
-        onChangeText={(v: string) => updateVisitor(no, 'block', v)}
-      />
-      <LabeledField
-        label="District"
-        value={visitor.district}
-        onChangeText={(v: string) => updateVisitor(no, 'district', v)}
-      />
-      <LabeledField
-        label="State"
-        value={visitor.state}
-        onChangeText={(v: string) => updateVisitor(no, 'state', v)}
-      />
+      <FormRow>
+        <FormCol full>
+          <View style={styles.fieldWrap}>
+            <Text style={styles.fieldLabel}>Address source</Text>
+            <View style={styles.options}>
+              {choice(
+                'Present Address',
+                visitor.address_source === 'present',
+                () => copyAddressToVisitor(no, 'present')
+              )}
+              {choice(
+                'Permanent Address',
+                visitor.address_source === 'permanent',
+                () => copyAddressToVisitor(no, 'permanent')
+              )}
+              {choice(
+                'Custom',
+                visitor.address_source === 'custom',
+                () => updateVisitor(no, 'address_source', 'custom')
+              )}
+            </View>
+          </View>
+        </FormCol>
+      </FormRow>
+
+      <FormRow>
+        <FormCol>
+          <LabeledField
+            label="Village"
+            value={visitor.village}
+            onChangeText={(v: string) => updateVisitor(no, 'village', v)}
+          />
+        </FormCol>
+        <FormCol>
+          <LabeledField
+            label="Police Station"
+            value={visitor.police_station}
+            onChangeText={(v: string) => updateVisitor(no, 'police_station', v)}
+          />
+        </FormCol>
+      </FormRow>
+
+      <FormRow>
+        <FormCol>
+          <LabeledField
+            label="PIN Code"
+            value={visitor.pin_code}
+            onChangeText={(v: string) => updateVisitor(no, 'pin_code', v)}
+          />
+        </FormCol>
+        <FormCol>
+          <LabeledField
+            label="Post Office"
+            value={visitor.post_office}
+            onChangeText={(v: string) => updateVisitor(no, 'post_office', v)}
+          />
+        </FormCol>
+      </FormRow>
+
+      <FormRow>
+        <FormCol>
+          <LabeledField
+            label="Block"
+            value={visitor.block}
+            onChangeText={(v: string) => updateVisitor(no, 'block', v)}
+          />
+        </FormCol>
+        <FormCol>
+          <LabeledField
+            label="District"
+            value={visitor.district}
+            onChangeText={(v: string) => updateVisitor(no, 'district', v)}
+          />
+        </FormCol>
+      </FormRow>
+
+      <FormRow>
+        <FormCol>
+          <LabeledField
+            label="State"
+            value={visitor.state}
+            onChangeText={(v: string) => updateVisitor(no, 'state', v)}
+          />
+        </FormCol>
+        <FormCol />
+      </FormRow>
     </View>
   );
+
+  const handleStudentMenuSelect = (path: string) => {
+    setMenuOpen(false);
+    if (path === '/students?screen=details' || path === '/students') {
+      clearForm();
+      if (initialScreen === 'entry') {
+        router.push('/students' as any);
+      } else {
+        setScreen('details');
+      }
+    } else if (path === '/student-entry' || path === '/students?screen=entry') {
+      clearForm();
+      setScreen('entry');
+    } else {
+      router.push(path as any);
+    }
+  };
 
   if (screen === 'details') {
     return <SafeAreaView style={styles.container}>
@@ -702,330 +873,634 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
         <AcademyHeader />
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
           <H1>Students</H1>
-          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-            <TouchableOpacity
-              onPress={() => {
-                clearForm();
-                setScreen('entry');
-              }}
-              style={{
-                backgroundColor: '#16a34a',
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                borderRadius: 6,
-              }}
-            >
-              <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 13 }}>
-                + Student Entry
-              </Text>
-            </TouchableOpacity>
-            <Button title="Student Menu" onPress={() => setMenuOpen(true)} />
-          </View>
+          <StudentMenuActions
+            onStudentEntry={() => {
+              clearForm();
+              setScreen('entry');
+            }}
+            onSelect={handleStudentMenuSelect}
+          />
         </View>
-        <StudentDirectory students={students} loading={listLoading} error={listError} onRefresh={loadStudents} onEdit={startEdit} onDeactivate={deleteStudent} />
+        <StudentDirectory
+          students={students}
+          loading={listLoading}
+          error={listError}
+          onRefresh={loadStudents}
+          onEdit={startEdit}
+          onDeactivate={deleteStudent}
+          canDeactivate={userRole === 'super_admin'}
+        />
       </ScrollView>
       <ScrollNavigationButtons scrollRef={detailsScrollRef} />
       <StudentMenu
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
-        onSelect={path => {
-          setMenuOpen(false);
-          if (path === '/students?screen=details' || path === '/students') {
-            if (initialScreen === 'entry') {
-              router.push('/students' as any);
-            } else {
-              setScreen('details');
-            }
-          } else if (path === '/student-entry' || path === '/students?screen=entry') {
-            clearForm();
-            setScreen('entry');
-          } else {
-            router.push(path as any);
-          }
-        }}
+        onSelect={handleStudentMenuSelect}
       />
     </SafeAreaView>;
   }
 
   return (
-    <StudentFormContext.Provider value={{ form, update }}>
+    <StudentFormContext.Provider value={formContextValue}>
       <SafeAreaView style={styles.container}>
-      <ScrollView
-        ref={entryScrollRef}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-      >
-        <AcademyHeader />
-        <Button
-          title="Back to Student Details"
-          onPress={() => {
-            clearForm();
-            if (initialScreen === 'entry') {
-              router.push('/students' as any);
-            } else {
-              setScreen('details');
-            }
-          }}
-        />
-        <H1>{editingId !== null ? 'Edit Student' : 'Student Entry'}</H1>
-
-        {editingId !== null && (
-          <Text style={styles.editing}>Editing Student</Text>
-        )}
-
-        <SectionTitle>Student Necessary Details</SectionTitle>
-
-        <LabeledField label="Registration No *" field="registration_no" />
-        <LabeledField label="Monthly Fees" field="monthly_fees" />
-        <LabeledField label="Student Name *" field="student_name" />
-        <DigitField label="Mobile Number" field="mobile_number" length={10} onChangeText={(value:string)=>setForm((old:any)=>({...old,mobile_number:value,whatsapp_number:value,father_mobile:value}))} />
-        <LabeledField label="Admission No" field="admission_no" />
-        <DatePickerField label="Admission Date *" value={form.admission_date} onChange={v=>update('admission_date',v)} />
-        <DigitField label="WhatsApp Number" field="whatsapp_number" length={10} />
-        <View style={styles.fieldWrap}>
-          <Text style={styles.fieldLabel}>Class Name *</Text>
-          <Select
-            label="Class Name"
-            value={normalizeStudentClass(form.class_name)}
-            onChange={value => update('class_name', value)}
-            options={[
-              { value: '', label: 'Select Class' },
-              ...[...new Set([...STUDENT_CLASSES, ...(form.class_name ? [normalizeStudentClass(form.class_name)] : [])])]
-                .filter(isVisibleStudentClass).map(value => ({ value, label: value })),
-            ]}
-          />
-        </View>
-        <LabeledField label="Roll No" field="roll_no" />
-        <LabeledField label="Email ID" field="email" />
-        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Admission Session *</Text><Select label="Select Admission Session" value={form.academic_session} onChange={value => update('academic_session', value)} options={[{value:'',label:'Select Session'}, ...SESSION_OPTIONS.map(value => ({value,label:value}))]} /></View>
-
-        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Room No</Text><Select label="Select Room" value={form.room_number} onChange={value => update('room_number', value)} searchable options={[{value:'',label:'Select Room'}, ...rooms.map(room => ({value:String(room.room_name),label:String(room.room_name)}))]} /></View>
-
-        <Text style={styles.label}>Student Type</Text>
-        <View style={styles.options}>
-          {choice(
-            'Hostel',
-            form.student_type === 'hostel',
-            () => update('student_type', 'hostel')
-          )}
-          {choice(
-            'Day Scholar',
-            form.student_type === 'day_scholar',
-            () => update('student_type', 'day_scholar')
-          )}
-        </View>
-
-        <SectionTitle>Student Information</SectionTitle>
-
-        <DatePickerField label="Date of Birth *" value={form.date_of_birth} onChange={value => update('date_of_birth', value)} />
-        <Text style={styles.label}>Gender</Text>
-        <View style={styles.options}>
-          {['Male', 'Female', 'Other'].map((item) =>
-            choice(
-              item,
-              form.gender === item,
-              () => update('gender', item)
-            )
-          )}
-        </View>
-
-        <DigitField label="Aadhaar No" field="aadhaar_no" length={12} />
-        <LabeledField label="Caste Name" field="caste_name" />
-        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Blood Group</Text><Select label="Select Blood Group" value={form.blood_group} onChange={value => update('blood_group', value)} options={BLOOD_GROUPS.map(value => ({value,label:value || 'Select Blood Group'}))} /></View>
-        <LabeledField label="Admitted School Name" field="admitted_school_name" />
-        {!!form.admitted_school_name && <View style={{flexDirection:'row',flexWrap:'wrap',gap:6,marginTop:-5,marginBottom:10}}>{[...new Set(students.map(item => String(item.admitted_school_name || '').trim()).filter(Boolean))].filter(name => name.toLowerCase().includes(String(form.admitted_school_name).toLowerCase()) && name !== form.admitted_school_name).slice(0,6).map(name => <TouchableOpacity key={name} onPress={() => update('admitted_school_name', name)} style={{paddingHorizontal:10,paddingVertical:7,backgroundColor:'#e8f1fb',borderRadius:15}}><Text>{name}</Text></TouchableOpacity>)}</View>}
-        <LabeledField label="Stream" field="stream" />
-
-        <Text style={styles.label}>Handicapped</Text>
-        <View style={styles.options}>
-          {choice(
-            'Yes',
-            form.is_handicapped === true,
-            () => update('is_handicapped', true)
-          )}
-          {choice(
-            'No',
-            form.is_handicapped === false,
-            () => update('is_handicapped', false)
-          )}
-        </View>
-
-        <Text style={styles.label}>Orphan</Text>
-        <View style={styles.options}>
-          {choice(
-            'Yes',
-            form.is_orphan === true,
-            () => update('is_orphan', true)
-          )}
-          {choice(
-            'No',
-            form.is_orphan === false,
-            () => update('is_orphan', false)
-          )}
-        </View>
-
-        <LabeledField
-          label="Previous Branch Name"
-          field="previous_branch_name"
-        />
-        <LabeledField
-          label="Banglarshiksha ID"
-          field="banglarshiksha_id"
-        />
-        <LabeledField label="Kanyashree ID" field="kanyashree_id" />
-        <LabeledField label="Aikyashree ID" field="aikyashree_id" />
-
-        <SectionTitle>Parents Information</SectionTitle>
-
-        <LabeledField label="Father Name *" field="father_name" />
-        <DigitField label="Father Aadhaar No" field="father_aadhaar_no" length={12} />
-        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Father Qualification</Text><Select label="Select Qualification" value={form.father_qualification} onChange={value=>update('father_qualification',value)} options={PARENT_QUALIFICATIONS.map(value=>({value,label:value}))} searchable /></View>
-        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Father Occupation</Text><Select label="Select Occupation" value={form.father_occupation} onChange={value=>update('father_occupation',value)} options={PARENT_OCCUPATIONS.map(value=>({value,label:value}))} searchable /></View>
-        <LabeledField
-          label="Father Annual Income"
-          field="father_annual_income"
-        />
-        <DigitField label="Father Mobile No" field="father_mobile" length={10} />
-
-        <LabeledField label="Mother Name *" field="mother_name" />
-        <DigitField label="Mother Aadhaar No" field="mother_aadhaar_no" length={12} />
-        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Mother Qualification</Text><Select label="Select Qualification" value={form.mother_qualification} onChange={value=>update('mother_qualification',value)} options={PARENT_QUALIFICATIONS.map(value=>({value,label:value}))} searchable /></View>
-        <View style={styles.fieldWrap}><Text style={styles.fieldLabel}>Mother Occupation</Text><Select label="Select Occupation" value={form.mother_occupation} onChange={value=>update('mother_occupation',value)} options={PARENT_OCCUPATIONS.map(value=>({value,label:value}))} searchable /></View>
-        <LabeledField
-          label="Mother Annual Income"
-          field="mother_annual_income"
-        />
-        <DigitField label="Mother Mobile No" field="mother_mobile" length={10} />
-
-        <LabeledField label="Guardian Name" field="guardian_name" />
-        <DigitField label="Guardian Mobile" field="guardian_mobile" length={10} />
-        <DigitField label="Alternate Mobile" field="alternate_mobile" length={10} />
-
-        <SectionTitle>Address Details</SectionTitle>
-
-        <Text style={styles.subSection}>Present Address (All fields mandatory)</Text>
-
-        <LabeledField label="Village" field="present_village" />
-        <LabeledField
-          label="Police Station"
-          field="present_police_station"
-        />
-        <LabeledField label="PIN Code" field="present_pin_code" onChangeText={(value:string)=>lookupPin('present_pin_code',value)} keyboardType="number-pad" maxLength={6} />
-        <LabeledField label="Post Office" field="present_post_office" />
-        <LabeledField label="Block" field="present_block" />
-        <LabeledField label="District" field="present_district" />
-        <LabeledField label="State" field="present_state" />
-
-        <Text style={styles.subSection}>Permanent Address (All fields mandatory)</Text>
-
-        <TouchableOpacity style={styles.copyButton} onPress={() => { const next=!sameAsPresent; setSameAsPresent(next); if(next) copyPresentToPermanent(); }}><Text style={styles.copyButtonText}>{sameAsPresent ? '[x]' : '[ ]'} Same as Present Address</Text></TouchableOpacity>
-
-        <LabeledField label="Village" field="permanent_village" />
-        <LabeledField
-          label="Police Station"
-          field="permanent_police_station"
-        />
-        <LabeledField label="PIN Code" field="permanent_pin_code" onChangeText={(value:string)=>lookupPin('permanent_pin_code',value)} keyboardType="number-pad" maxLength={6} />
-        <LabeledField
-          label="Post Office"
-          field="permanent_post_office"
-        />
-        <LabeledField label="Block" field="permanent_block" />
-        <LabeledField label="District" field="permanent_district" />
-        <LabeledField label="State" field="permanent_state" />
-
-        <SectionTitle>Student Account Details</SectionTitle>
-
-        <LabeledField label="Account No" field="bank_account_no" keyboardType="numeric" />
-        <LabeledField label="IFSC Code" field="bank_ifsc_code" maxLength={11} autoCapitalize="characters" onChangeText={(value:string) => update('bank_ifsc_code', value.replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,11))} />
-        {!!ifscMessage && <Text style={{color:ifscMessage.startsWith('Bank details found')?'#16803a':'#b54708',fontWeight:'700',marginTop:-7,marginBottom:9}}>{ifscMessage}</Text>}
-        <LabeledField label="Bank Name (editable)" field="bank_name" />
-        <LabeledField label="Branch Name (editable)" field="bank_branch_name" />
-        <LabeledField
-          label="Branch Address"
-          field="bank_branch_address"
-        />
-
-        {renderVisitor(1, 'Visitor-1 Information', visitor1)}
-        {renderVisitor(2, 'Visitor-2 Information', visitor2)}
-
-        <SectionTitle>Student Documents (Optional)</SectionTitle>
-        <Text style={styles.documentHint}>
-          Select an image or PDF. It will upload when the student is saved.
-        </Text>
-        <View style={styles.documentGrid}>
-          {STUDENT_DOCUMENT_TYPES.map((item) => {
-            const selected = entryDocuments[item.key];
-            return (
-              <View key={item.key} style={styles.documentRow}>
-                <View style={styles.documentTextArea}>
-                  <Text style={styles.documentLabel}>{item.label}</Text>
-                  <Text numberOfLines={1} style={styles.documentFileName}>
-                    {selected ? selected.name : 'No file selected'}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.documentButton}
-                  onPress={() => chooseEntryDocument(item.key)}
-                  disabled={saving}
-                >
-                  <Text style={styles.documentButtonText}>
-                    {selected ? 'Change' : 'Choose'}
-                  </Text>
-                </TouchableOpacity>
-                {selected && (
-                  <TouchableOpacity
-                    style={styles.documentRemove}
-                    onPress={() => setEntryDocuments((old) => {
-                      const next = { ...old };
-                      delete next[item.key];
-                      return next;
-                    })}
-                    disabled={saving}
-                  >
-                    <Text style={styles.documentRemoveText}>Remove</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            );
-          })}
-        </View>
-
-        {editingId !== null && <View style={styles.exitPanel}><SectionTitle>Dropout & Transfer Certificate</SectionTitle><DatePickerField label="Dropout Date" value={exitForm.dropout_date} onChange={v=>setExitForm(x=>({...x,dropout_date:v}))}/><LabeledField label="Reason for Dropout" value={exitForm.dropout_reason} onChangeText={(v:string)=>setExitForm(x=>({...x,dropout_reason:v}))}/><TouchableOpacity disabled={exitBusy} style={styles.clearanceButton} onPress={()=>refreshExitClearance()}><Text style={styles.actionText}>{exitBusy?'Checking...':'Check SDF, Library & Fees Clearance'}</Text></TouchableOpacity>{exitClearance&&<View style={styles.clearanceBox}><Text style={exitClearance.sdf_dues?.length?styles.blockedText:styles.clearText}>SDF: {exitClearance.sdf_dues?.length?'Due â€” TC blocked':'Clear'}</Text><Text style={exitClearance.library_dues?.length?styles.blockedText:styles.clearText}>Library Book: {exitClearance.library_dues?.length?'Due â€” TC blocked':'Clear'}</Text><Text style={styles.feeDueText}>Monthly Fees Due: â‚¹{Number(exitClearance.monthly_fee_due_total||0).toFixed(2)} (will be printed on TC)</Text></View>}<View style={styles.exitActions}><TouchableOpacity disabled={exitBusy} style={styles.dropoutButton} onPress={saveDropout}><Text style={styles.actionText}>Save Dropout</Text></TouchableOpacity><TouchableOpacity disabled={exitBusy||!exitClearance?.exit||exitClearance?.tc_blocked} style={[styles.tcButton,(exitBusy||!exitClearance?.exit||exitClearance?.tc_blocked)&&styles.disabledButton]} onPress={issueAndPrintTc}><Text style={styles.actionText}>Preview / Print TC Form</Text></TouchableOpacity></View></View>}
-
-        <View style={styles.saveArea}>
-          <Button
-            title={
-              editingId !== null
-                ? 'Update Student'
-                : 'Add Student'
-            }
-            onPress={saveStudent}
-            disabled={saving}
-          />
-          {saving && (
-            <Text style={styles.savingText}>Saving student and documents...</Text>
-          )}
+        <ScrollView
+          ref={entryScrollRef}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
+          <AcademyHeader />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <H1>{editingId !== null ? 'Edit Student' : 'Student Entry'}</H1>
+            <StudentMenuActions
+              onStudentEntry={() => {
+                clearForm();
+                setScreen('entry');
+              }}
+              onSelect={handleStudentMenuSelect}
+            />
+          </View>
 
           {editingId !== null && (
-            <TouchableOpacity
-              style={styles.cancel}
-              onPress={() => {
-                clearForm();
-                if (initialScreen === 'entry') {
-                  router.push('/students' as any);
-                } else {
-                  setScreen('details');
-                }
-              }}
-            >
-              <Text style={styles.cancelText}>Cancel Edit</Text>
-            </TouchableOpacity>
+            <Text style={styles.editing}>Editing Student</Text>
           )}
-        </View>
 
-      </ScrollView>
-      <ScrollNavigationButtons scrollRef={entryScrollRef} />
+          <SectionTitle>Student Necessary Details</SectionTitle>
+
+          <FormRow>
+            <FormCol>
+              <View>
+                <LabeledField
+                  label="Registration No *"
+                  field="registration_no"
+                  placeholder="Enter Registration No"
+                  style={
+                    typedReg.length > 0
+                      ? duplicateStudent
+                        ? { borderColor: '#d92d20', borderWidth: 2 }
+                        : { borderColor: '#16803a', borderWidth: 2 }
+                      : undefined
+                  }
+                />
+                {typedReg.length > 0 && (
+                  <Text
+                    style={{
+                      color: duplicateStudent ? '#d92d20' : '#16803a',
+                      fontWeight: '700',
+                      fontSize: 12,
+                      marginTop: -6,
+                      marginBottom: 10,
+                    }}
+                  >
+                    {duplicateStudent
+                      ? `⚠️ Registration No (${form.registration_no}) is already used by: ${duplicateStudent.student_name} (${duplicateStudent.class_name || 'Class N/A'})`
+                      : '✓ Registration No is available'}
+                  </Text>
+                )}
+              </View>
+            </FormCol>
+            <FormCol>
+              <LabeledField label="Monthly Fees" field="monthly_fees" />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="Student Name *" field="student_name" />
+            </FormCol>
+            <FormCol>
+              <DigitField label="Mobile Number" field="mobile_number" length={10} onChangeText={(value: string) => setForm((old: any) => ({ ...old, mobile_number: value, whatsapp_number: value, father_mobile: value }))} />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="Admission No" field="admission_no" />
+            </FormCol>
+            <FormCol>
+              <DatePickerField label="Admission Date *" value={form.admission_date} onChange={v => update('admission_date', v)} />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <DigitField label="WhatsApp Number" field="whatsapp_number" length={10} />
+            </FormCol>
+            <FormCol>
+              <View style={styles.fieldWrap}>
+                <Text style={styles.fieldLabel}>Class Name *</Text>
+                <Select
+                  label="Class Name"
+                  value={normalizeStudentClass(form.class_name)}
+                  onChange={value => update('class_name', value)}
+                  style={styles.selectInput}
+                  options={[
+                    { value: '', label: 'Select Class' },
+                    ...[...new Set([...STUDENT_CLASSES, ...(form.class_name ? [normalizeStudentClass(form.class_name)] : [])])]
+                      .filter(isVisibleStudentClass).map(value => ({ value, label: value })),
+                  ]}
+                />
+              </View>
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="Roll No" field="roll_no" />
+            </FormCol>
+            <FormCol>
+              <LabeledField label="Email ID" field="email" />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <View style={styles.fieldWrap}>
+                <Text style={styles.fieldLabel}>Admission Session *</Text>
+                <Select label="Select Admission Session" value={form.academic_session} onChange={value => update('academic_session', value)} style={styles.selectInput} options={[{ value: '', label: 'Select Session' }, ...SESSION_OPTIONS.map(value => ({ value, label: value }))]} />
+              </View>
+            </FormCol>
+            <FormCol>
+              <View style={styles.fieldWrap}>
+                <Text style={styles.fieldLabel}>Room No</Text>
+                <Select label="Select Room" value={form.room_number} onChange={value => update('room_number', value)} style={styles.selectInput} searchable options={[{ value: '', label: 'Select Room' }, ...rooms.map(room => ({ value: String(room.room_name), label: String(room.room_name) }))]} />
+              </View>
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <View style={styles.fieldWrap}>
+                <Text style={styles.fieldLabel}>Student Type</Text>
+                <View style={styles.options}>
+                  {choice(
+                    'Hostel',
+                    form.student_type === 'hostel',
+                    () => update('student_type', 'hostel')
+                  )}
+                  {choice(
+                    'Day Scholar',
+                    form.student_type === 'day_scholar',
+                    () => update('student_type', 'day_scholar')
+                  )}
+                </View>
+              </View>
+            </FormCol>
+            <FormCol />
+          </FormRow>
+
+          <SectionTitle>Student Information</SectionTitle>
+
+          <FormRow>
+            <FormCol>
+              <DatePickerField label="Date of Birth *" value={form.date_of_birth} onChange={value => update('date_of_birth', value)} />
+            </FormCol>
+            <FormCol>
+              <View style={styles.fieldWrap}>
+                <Text style={styles.fieldLabel}>Gender</Text>
+                <View style={styles.options}>
+                  {['Male', 'Female', 'Other'].map((item) =>
+                    choice(
+                      item,
+                      form.gender === item,
+                      () => update('gender', item)
+                    )
+                  )}
+                </View>
+              </View>
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <DigitField label="Aadhaar No" field="aadhaar_no" length={12} />
+            </FormCol>
+            <FormCol>
+              <LabeledField label="Caste Name" field="caste_name" />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <View style={styles.fieldWrap}>
+                <Text style={styles.fieldLabel}>Blood Group</Text>
+                <Select label="Select Blood Group" value={form.blood_group} onChange={value => update('blood_group', value)} style={styles.selectInput} options={BLOOD_GROUPS.map(value => ({ value, label: value || 'Select Blood Group' }))} />
+              </View>
+            </FormCol>
+            <FormCol>
+              <LabeledField label="Admitted School Name" field="admitted_school_name" />
+              {!!form.admitted_school_name && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: -5, marginBottom: 10 }}>{[...new Set(students.map(item => String(item.admitted_school_name || '').trim()).filter(Boolean))].filter(name => name.toLowerCase().includes(String(form.admitted_school_name).toLowerCase()) && name !== form.admitted_school_name).slice(0, 6).map(name => <TouchableOpacity key={name} onPress={() => update('admitted_school_name', name)} style={{ paddingHorizontal: 10, paddingVertical: 7, backgroundColor: '#e8f1fb', borderRadius: 15 }}><Text>{name}</Text></TouchableOpacity>)}</View>}
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="Stream" field="stream" />
+            </FormCol>
+            <FormCol>
+              <LabeledField label="MP Reg No" field="mp_reg_no" placeholder="Enter MP Reg No" />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="MP Roll No" field="mp_roll_no" placeholder="Enter MP Roll No" />
+            </FormCol>
+            <FormCol>
+              <LabeledField label="MP Marks" field="mp_marks" placeholder="Enter MP Marks" />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="MP Board" field="mp_board" placeholder="Enter MP Board (e.g. WBBSE)" />
+            </FormCol>
+            <FormCol>
+              <LabeledField label="MP Passing Year" field="mp_year" placeholder="Enter MP Year (e.g. 2025)" />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="HS Reg No" field="hs_reg_no" placeholder="Enter HS Reg No" />
+            </FormCol>
+            <FormCol>
+              <LabeledField label="HS Roll No" field="hs_roll_no" placeholder="Enter HS Roll No" />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="HS Marks" field="hs_marks" placeholder="Enter HS Marks" />
+            </FormCol>
+            <FormCol>
+              <LabeledField label="HS Board" field="hs_board" placeholder="Enter HS Board (e.g. WBCHSE)" />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="HS Passing Year" field="hs_year" placeholder="Enter HS Year (e.g. 2027)" />
+            </FormCol>
+            <FormCol />
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <View style={styles.fieldWrap}>
+                <Text style={styles.fieldLabel}>Handicapped</Text>
+                <View style={styles.options}>
+                  {choice(
+                    'Yes',
+                    form.is_handicapped === true,
+                    () => update('is_handicapped', true)
+                  )}
+                  {choice(
+                    'No',
+                    form.is_handicapped === false,
+                    () => update('is_handicapped', false)
+                  )}
+                </View>
+              </View>
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <View style={styles.fieldWrap}>
+                <Text style={styles.fieldLabel}>Orphan</Text>
+                <View style={styles.options}>
+                  {choice(
+                    'Yes',
+                    form.is_orphan === true,
+                    () => update('is_orphan', true)
+                  )}
+                  {choice(
+                    'No',
+                    form.is_orphan === false,
+                    () => update('is_orphan', false)
+                  )}
+                </View>
+              </View>
+            </FormCol>
+            <FormCol>
+              <LabeledField
+                label="Previous Branch Name"
+                field="previous_branch_name"
+              />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField
+                label="Banglarshiksha ID"
+                field="banglarshiksha_id"
+              />
+            </FormCol>
+            <FormCol>
+              <LabeledField label="Kanyashree ID" field="kanyashree_id" />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="Aikyashree ID" field="aikyashree_id" />
+            </FormCol>
+            <FormCol />
+          </FormRow>
+
+          <SectionTitle>Parents Information</SectionTitle>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="Father Name *" field="father_name" />
+            </FormCol>
+            <FormCol>
+              <DigitField label="Father Aadhaar No" field="father_aadhaar_no" length={12} />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <View style={styles.fieldWrap}>
+                <Text style={styles.fieldLabel}>Father Qualification</Text>
+                <Select label="Select Qualification" value={form.father_qualification} onChange={value => update('father_qualification', value)} style={styles.selectInput} options={PARENT_QUALIFICATIONS.map(value => ({ value, label: value }))} searchable />
+              </View>
+            </FormCol>
+            <FormCol>
+              <View style={styles.fieldWrap}>
+                <Text style={styles.fieldLabel}>Father Occupation</Text>
+                <Select label="Select Occupation" value={form.father_occupation} onChange={value => update('father_occupation', value)} style={styles.selectInput} options={PARENT_OCCUPATIONS.map(value => ({ value, label: value }))} searchable />
+              </View>
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField
+                label="Father Annual Income"
+                field="father_annual_income"
+              />
+            </FormCol>
+            <FormCol>
+              <DigitField label="Father Mobile No" field="father_mobile" length={10} />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="Mother Name *" field="mother_name" />
+            </FormCol>
+            <FormCol>
+              <DigitField label="Mother Aadhaar No" field="mother_aadhaar_no" length={12} />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <View style={styles.fieldWrap}>
+                <Text style={styles.fieldLabel}>Mother Qualification</Text>
+                <Select label="Select Qualification" value={form.mother_qualification} onChange={value => update('mother_qualification', value)} style={styles.selectInput} options={PARENT_QUALIFICATIONS.map(value => ({ value, label: value }))} searchable />
+              </View>
+            </FormCol>
+            <FormCol>
+              <View style={styles.fieldWrap}>
+                <Text style={styles.fieldLabel}>Mother Occupation</Text>
+                <Select label="Select Occupation" value={form.mother_occupation} onChange={value => update('mother_occupation', value)} style={styles.selectInput} options={PARENT_OCCUPATIONS.map(value => ({ value, label: value }))} searchable />
+              </View>
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField
+                label="Mother Annual Income"
+                field="mother_annual_income"
+              />
+            </FormCol>
+            <FormCol>
+              <DigitField label="Mother Mobile No" field="mother_mobile" length={10} />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="Guardian Name" field="guardian_name" />
+            </FormCol>
+            <FormCol>
+              <DigitField label="Guardian Mobile" field="guardian_mobile" length={10} />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <DigitField label="Alternate Mobile" field="alternate_mobile" length={10} />
+            </FormCol>
+            <FormCol />
+          </FormRow>
+
+          <SectionTitle>Address Details</SectionTitle>
+
+          <Text style={styles.subSection}>Present Address (All fields mandatory)</Text>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="Village" field="present_village" />
+            </FormCol>
+            <FormCol>
+              <LabeledField
+                label="Police Station"
+                field="present_police_station"
+              />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="PIN Code" field="present_pin_code" onChangeText={(value: string) => lookupPin('present_pin_code', value)} keyboardType="number-pad" maxLength={6} />
+            </FormCol>
+            <FormCol>
+              <LabeledField label="Post Office" field="present_post_office" />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="Block" field="present_block" />
+            </FormCol>
+            <FormCol>
+              <LabeledField label="District" field="present_district" />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="State" field="present_state" />
+            </FormCol>
+            <FormCol />
+          </FormRow>
+
+          <Text style={styles.subSection}>Permanent Address (All fields mandatory)</Text>
+
+          <TouchableOpacity style={styles.copyButton} onPress={() => { const next = !sameAsPresent; setSameAsPresent(next); if (next) copyPresentToPermanent(); }}><Text style={styles.copyButtonText}>{sameAsPresent ? '[x]' : '[ ]'} Same as Present Address</Text></TouchableOpacity>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="Village" field="permanent_village" />
+            </FormCol>
+            <FormCol>
+              <LabeledField
+                label="Police Station"
+                field="permanent_police_station"
+              />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="PIN Code" field="permanent_pin_code" onChangeText={(value: string) => lookupPin('permanent_pin_code', value)} keyboardType="number-pad" maxLength={6} />
+            </FormCol>
+            <FormCol>
+              <LabeledField
+                label="Post Office"
+                field="permanent_post_office"
+              />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="Block" field="permanent_block" />
+            </FormCol>
+            <FormCol>
+              <LabeledField label="District" field="permanent_district" />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="State" field="permanent_state" />
+            </FormCol>
+            <FormCol />
+          </FormRow>
+
+          <SectionTitle>Student Account Details</SectionTitle>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="Account No" field="bank_account_no" keyboardType="numeric" />
+            </FormCol>
+            <FormCol>
+              <LabeledField label="IFSC Code" field="bank_ifsc_code" maxLength={11} autoCapitalize="characters" onChangeText={(value: string) => update('bank_ifsc_code', value.replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 11))} />
+              {!!ifscMessage && <Text style={{ color: ifscMessage.startsWith('Bank details found') ? '#16803a' : '#b54708', fontWeight: '700', marginTop: -7, marginBottom: 9 }}>{ifscMessage}</Text>}
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol>
+              <LabeledField label="Bank Name (editable)" field="bank_name" />
+            </FormCol>
+            <FormCol>
+              <LabeledField label="Branch Name (editable)" field="bank_branch_name" />
+            </FormCol>
+          </FormRow>
+
+          <FormRow>
+            <FormCol full>
+              <LabeledField
+                label="Branch Address"
+                field="bank_branch_address"
+              />
+            </FormCol>
+          </FormRow>
+
+          {renderVisitor(1, 'Visitor-1 Information', visitor1)}
+          {renderVisitor(2, 'Visitor-2 Information', visitor2)}
+
+          <SectionTitle>Student Documents (Optional)</SectionTitle>
+          <Text style={styles.documentHint}>
+            Select an image or PDF. It will upload when the student is saved.
+          </Text>
+          <View style={styles.documentGrid}>
+            {STUDENT_DOCUMENT_TYPES.map((item) => {
+              const selected = entryDocuments[item.key];
+              return (
+                <View key={item.key} style={[styles.documentCol, !isTwoCol && styles.documentColMobile]}>
+                  <View style={styles.documentRow}>
+                    <View style={styles.documentTextArea}>
+                      <Text style={styles.documentLabel}>{item.label}</Text>
+                      <Text numberOfLines={1} style={styles.documentFileName}>
+                        {selected ? selected.name : 'No file selected'}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.documentButton}
+                      onPress={() => chooseEntryDocument(item.key)}
+                      disabled={saving}
+                    >
+                      <Text style={styles.documentButtonText}>
+                        {selected ? 'Change' : 'Choose'}
+                      </Text>
+                    </TouchableOpacity>
+                    {selected && (
+                      <TouchableOpacity
+                        style={styles.documentRemove}
+                        onPress={() => setEntryDocuments((old) => {
+                          const next = { ...old };
+                          delete next[item.key];
+                          return next;
+                        })}
+                        disabled={saving}
+                      >
+                        <Text style={styles.documentRemoveText}>Remove</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+
+          {editingId !== null && userRole === 'super_admin' && <View style={styles.exitPanel}><SectionTitle>Dropout & Transfer Certificate</SectionTitle><DatePickerField label="Dropout Date" value={exitForm.dropout_date} onChange={v => setExitForm(x => ({ ...x, dropout_date: v }))} /><LabeledField label="Reason for Dropout" value={exitForm.dropout_reason} onChangeText={(v: string) => setExitForm(x => ({ ...x, dropout_reason: v }))} /><TouchableOpacity disabled={exitBusy} style={styles.clearanceButton} onPress={() => refreshExitClearance()}><Text style={styles.actionText}>{exitBusy ? 'Checking...' : 'Check SDF, Library & Fees Clearance'}</Text></TouchableOpacity>{exitClearance && <View style={styles.clearanceBox}><Text style={exitClearance.sdf_dues?.length ? styles.blockedText : styles.clearText}>SDF: {exitClearance.sdf_dues?.length ? 'Due â€” TC blocked' : 'Clear'}</Text><Text style={exitClearance.library_dues?.length ? styles.blockedText : styles.clearText}>Library Book: {exitClearance.library_dues?.length ? 'Due â€” TC blocked' : 'Clear'}</Text><Text style={styles.feeDueText}>Monthly Fees Due: â‚¹{Number(exitClearance.monthly_fee_due_total || 0).toFixed(2)} (will be printed on TC)</Text></View>}<View style={styles.exitActions}><TouchableOpacity disabled={exitBusy} style={styles.dropoutButton} onPress={saveDropout}><Text style={styles.actionText}>Save Dropout</Text></TouchableOpacity><TouchableOpacity disabled={exitBusy || !exitClearance?.exit || exitClearance?.tc_blocked} style={[styles.tcButton, (exitBusy || !exitClearance?.exit || exitClearance?.tc_blocked) && styles.disabledButton]} onPress={issueAndPrintTc}><Text style={styles.actionText}>Preview / Print TC Form</Text></TouchableOpacity></View></View>}
+
+          <View style={styles.saveArea}>
+            <Button
+              title={
+                editingId !== null
+                  ? 'Update Student'
+                  : 'Add Student'
+              }
+              onPress={saveStudent}
+              disabled={saving || Boolean(duplicateStudent)}
+            />
+            {Boolean(duplicateStudent) && (
+              <Text style={{ color: '#d92d20', fontWeight: '700', textAlign: 'center', marginTop: 8 }}>
+                Registration Number already exists. Two students cannot have the same Registration Number.
+              </Text>
+            )}
+            {saving && (
+              <Text style={styles.savingText}>Saving student and documents...</Text>
+            )}
+
+            {editingId !== null && (
+              <TouchableOpacity
+                style={styles.cancel}
+                onPress={() => {
+                  clearForm();
+                  if (initialScreen === 'entry') {
+                    router.push('/students' as any);
+                  } else {
+                    setScreen('details');
+                  }
+                }}
+              >
+                <Text style={styles.cancelText}>Cancel Edit</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+        </ScrollView>
+        <ScrollNavigationButtons scrollRef={entryScrollRef} />
       </SafeAreaView>
     </StudentFormContext.Provider>
   );
@@ -1159,13 +1634,50 @@ const styles = StyleSheet.create({
     color: '#888',
   },
 
-  exitPanel:{marginTop:20,padding:14,borderWidth:1,borderColor:'#e0a800',borderRadius:10,backgroundColor:'#fffaf0'},
-  clearanceButton:{backgroundColor:'#1565c0',padding:11,borderRadius:8,marginVertical:8},
-  clearanceBox:{padding:11,borderWidth:1,borderColor:'#d7e0e7',borderRadius:8,backgroundColor:'#fff'},
-  blockedText:{color:'#c62828',fontWeight:'800',marginVertical:2},clearText:{color:'#198754',fontWeight:'800',marginVertical:2},feeDueText:{color:'#7c4a03',fontWeight:'700',marginTop:5},
-  exitActions:{flexDirection:'row',gap:9,marginTop:10,flexWrap:'wrap'},dropoutButton:{flex:1,minWidth:150,backgroundColor:'#c62828',padding:12,borderRadius:8},tcButton:{flex:1,minWidth:190,backgroundColor:'#198754',padding:12,borderRadius:8},disabledButton:{opacity:.4},
+  exitPanel: { marginTop: 20, padding: 14, borderWidth: 1, borderColor: '#e0a800', borderRadius: 10, backgroundColor: '#fffaf0' },
+  clearanceButton: { backgroundColor: '#1565c0', padding: 11, borderRadius: 8, marginVertical: 8 },
+  clearanceBox: { padding: 11, borderWidth: 1, borderColor: '#d7e0e7', borderRadius: 8, backgroundColor: '#fff' },
+  blockedText: { color: '#c62828', fontWeight: '800', marginVertical: 2 }, clearText: { color: '#198754', fontWeight: '800', marginVertical: 2 }, feeDueText: { color: '#7c4a03', fontWeight: '700', marginTop: 5 },
+  exitActions: { flexDirection: 'row', gap: 9, marginTop: 10, flexWrap: 'wrap' }, dropoutButton: { flex: 1, minWidth: 150, backgroundColor: '#c62828', padding: 12, borderRadius: 8 }, tcButton: { flex: 1, minWidth: 190, backgroundColor: '#198754', padding: 12, borderRadius: 8 }, disabledButton: { opacity: .4 },
   saveArea: {
     marginTop: 24,
+  },
+
+  formRow: {
+    flexDirection: 'row',
+    marginHorizontal: -8,
+  },
+  formRowMobile: {
+    flexDirection: 'column',
+    marginHorizontal: 0,
+  },
+  colHalf: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 8,
+  },
+  colFull: {
+    width: '100%',
+    paddingHorizontal: 8,
+  },
+  selectInput: {
+    borderWidth: 1,
+    borderColor: '#ccd3da',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    minHeight: 46,
+    marginBottom: 10,
+    justifyContent: 'center',
+  },
+  documentCol: {
+    width: '50%',
+    paddingHorizontal: 8,
+    marginBottom: 8,
+  },
+  documentColMobile: {
+    width: '100%',
+    paddingHorizontal: 0,
+    marginBottom: 8,
   },
 
   documentHint: {
@@ -1174,7 +1686,9 @@ const styles = StyleSheet.create({
   },
 
   documentGrid: {
-    gap: 8,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -8,
   },
 
   documentRow: {

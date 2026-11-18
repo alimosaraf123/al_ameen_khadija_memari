@@ -5,6 +5,7 @@ import{useRouter,useLocalSearchParams}from'expo-router';
 import*as Print from'expo-print';
 import{Asset}from'expo-asset';
 import AcademyHeader from'../components/AcademyHeader';
+import{StudentMenuActions}from'../components/StudentMenu';
 import DatePickerField from'../components/DatePickerField';
 import{Select}from'../components/StudentDirectory';
 import{api,API_BASE}from'../lib/api';import{getUser}from'../lib/auth';
@@ -30,9 +31,52 @@ function MultiClassPicker({all,selected,onChange}:{all:boolean;selected:string[]
 }
 const delayText=(x:any)=>x.status==='draft'?'':x.return_delay_days===null||x.return_delay_days===undefined?'-':String(x.return_delay_days)+' - '+(x.return_delay_note||'');
 const logoUri=Asset.fromModule(require('../../assets/images/al-ameen-logo.jpg')).uri;
-export default function GatePass(){const router=useRouter(),params=useLocalSearchParams<{tab?:string;class_name?:string}>(),initialTab=params.tab&&['generate','bulk','ready','execute','list'].includes(params.tab)?params.tab:'generate',[tab,setTab]=useState(initialTab),[reg,setReg]=useState(''),[student,setStudent]=useState<any>(null),[form,setForm]=useState<any>(blank()),[bulkAll,setBulkAll]=useState(true),[bulkClasses,setBulkClasses]=useState<string[]>([]),[list,setList]=useState<any[]>([]),[status,setStatus]=useState(initialTab==='ready'?'draft':'pending'),[year,setYear]=useState(String(new Date().getFullYear())),[className,setClassName]=useState(params.class_name||''),[query,setQuery]=useState(''),[filterKey,setFilterKey]=useState(0),[viewKey,setViewKey]=useState(0),[loading,setLoading]=useState(false),[previewPass,setPreviewPass]=useState<any>(null),[officeRestricted,setOfficeRestricted]=useState<boolean|null>(null);
+
+const ALL_GATE_TABS: [string, string, string][] = [
+  ['generate', 'Generate', 'gate_pass_generate'],
+  ['bulk', 'Bulk Generate', 'gate_pass_bulk'],
+  ['execute', 'Execute Return', 'gate_pass_execute'],
+  ['ready', 'Ready to Print', 'gate_pass_ready'],
+  ['list', 'Gate Pass Records', 'gate_pass_records'],
+];
+
+export default function GatePass(){const router=useRouter(),params=useLocalSearchParams<{tab?:string;class_name?:string}>(),initialTab=params.tab&&['generate','bulk','ready','execute','list'].includes(params.tab)?params.tab:'generate',[tab,setTab]=useState(initialTab),[reg,setReg]=useState(''),[student,setStudent]=useState<any>(null),[form,setForm]=useState<any>(blank()),[bulkAll,setBulkAll]=useState(true),[bulkClasses,setBulkClasses]=useState<string[]>([]),[list,setList]=useState<any[]>([]),[status,setStatus]=useState(initialTab==='ready'?'draft':'pending'),[year,setYear]=useState(String(new Date().getFullYear())),[className,setClassName]=useState(params.class_name||''),[query,setQuery]=useState(''),[filterKey,setFilterKey]=useState(0),[viewKey,setViewKey]=useState(0),[loading,setLoading]=useState(false),[previewPass,setPreviewPass]=useState<any>(null),[userRole,setUserRole]=useState<string>(''),[userLoginId,setUserLoginId]=useState<string>(''),[userPermissions,setUserPermissions]=useState<string[]>([]),[authReady,setAuthReady]=useState(false);
 const listRequest=useRef(0);
-useEffect(()=>{if(params.tab&&['generate','bulk','ready','execute','list'].includes(params.tab)){setTab(params.tab);if(params.tab==='ready')setStatus('draft');if(params.tab==='execute')setStatus('pending')}if(typeof params.class_name==='string'){setClassName(params.class_name)}},[params.tab,params.class_name]);useEffect(()=>{if(officeRestricted===null)return;listRequest.current++;const timer=setTimeout(()=>{void load()},query.trim()?250:0);return()=>{clearTimeout(timer);listRequest.current++}},[tab,status,year,className,query,officeRestricted]);useEffect(()=>{void getUser().then(u=>{const loginKey=String(u?.login_id||u?.loginId||'').toLowerCase().replace(/[^a-z0-9]/g,''),restricted=['office01','office001'].includes(loginKey);setOfficeRestricted(restricted);if(restricted&&!params.tab){setTab('ready');setStatus('draft')}})},[]);async function load(){const request=++listRequest.current;try{const targetStatus=tab==='ready'?'draft':(tab==='execute'?'pending':status);const d=await api('/api/gate-passes?year='+year+'&status='+targetStatus+(className?'&class_name='+encodeURIComponent(className):'')+(query.trim()?'&q='+encodeURIComponent(query.trim()):''));if(request===listRequest.current)setList(d.gate_passes||[])}catch(e:any){if(request===listRequest.current)Alert.alert('Gate Pass',e.message)}}
+
+const isBlockedFromGenerate = React.useMemo(() => {
+  if (userRole === 'super_admin') return false;
+  const norm = userLoginId.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (norm.includes('noorsaba') || norm.includes('masema') || norm === 'office001') {
+    return true;
+  }
+  return false;
+}, [userRole, userLoginId]);
+
+const allowedTabs = React.useMemo(() => {
+  if (userRole === 'super_admin') return ALL_GATE_TABS;
+  let tabs = ALL_GATE_TABS;
+  const specificPerms = userPermissions.filter(p => p.startsWith('gate_pass_'));
+  if (specificPerms.length > 0) {
+    tabs = ALL_GATE_TABS.filter(([_, __, permKey]) => userPermissions.includes(permKey));
+  } else if (!userPermissions.includes('gate_passes')) {
+    tabs = ALL_GATE_TABS.filter(([_, __, permKey]) => userPermissions.includes(permKey));
+  }
+  if (isBlockedFromGenerate) {
+    tabs = tabs.filter(([k]) => k !== 'generate' && k !== 'bulk');
+  }
+  return tabs.length > 0 ? tabs : ALL_GATE_TABS.filter(([k]) => k !== 'generate' && k !== 'bulk');
+}, [userRole, userPermissions, isBlockedFromGenerate]);
+
+useEffect(() => {
+  if (allowedTabs.length > 0 && !allowedTabs.some(([k]) => k === tab)) {
+    const nextTab = allowedTabs[0][0];
+    setTab(nextTab);
+    if (nextTab === 'ready') setStatus('draft');
+    if (nextTab === 'execute') setStatus('pending');
+  }
+}, [allowedTabs, tab]);
+
+useEffect(()=>{if(params.tab&&['generate','bulk','ready','execute','list'].includes(params.tab)){setTab(params.tab);if(params.tab==='ready')setStatus('draft');if(params.tab==='execute')setStatus('pending')}if(typeof params.class_name==='string'){setClassName(params.class_name)}},[params.tab,params.class_name]);useEffect(()=>{if(!authReady)return;listRequest.current++;const timer=setTimeout(()=>{void load()},query.trim()?250:0);return()=>{clearTimeout(timer);listRequest.current++}},[tab,status,year,className,query,authReady]);useEffect(()=>{void api('/api/auth/me').then(res=>{if(res&&res.user){setUserRole(res.user.role||'');setUserLoginId(String(res.user.login_id||''));setUserPermissions(res.permissions||[])}setAuthReady(true)}).catch(()=>setAuthReady(true))},[]);async function load(){const request=++listRequest.current;try{const targetStatus=tab==='ready'?'draft':(tab==='execute'?'pending':status);const d=await api('/api/gate-passes?year='+year+'&status='+targetStatus+(className?'&class_name='+encodeURIComponent(className):'')+(query.trim()?'&q='+encodeURIComponent(query.trim()):''));if(request===listRequest.current)setList(d.gate_passes||[])}catch(e:any){if(request===listRequest.current)Alert.alert('Gate Pass',e.message)}}
 async function search(){if(!reg.trim())return;setLoading(true);try{const d=await api('/api/gate-passes/student/'+encodeURIComponent(reg.trim()));setStudent(d.student)}catch(e:any){setStudent(null);notify('Search',e.message)}finally{setLoading(false)}}
 async function generate(){if(!await confirmAction('Generate gate pass','Create this gate pass for the selected student?'))return;if(!student)return notify('Required','Search a student first.');setLoading(true);try{const d=await api('/api/gate-passes',{method:'POST',body:JSON.stringify({...form,student_id:student.id})});setForm(blank());setStudent(null);setReg('');await load();await openPreview({id:d.id});}catch(e:any){notify('Gate Pass',e.message)}finally{setLoading(false)}}
 async function bulk(){if(!bulkAll&&!bulkClasses.length)return notify('Required','Select at least one class.');setLoading(true);try{const d=await api('/api/gate-passes/bulk',{method:'POST',body:JSON.stringify({...form,all_classes:bulkAll,class_names:bulkAll?[]:bulkClasses})});notify('Bulk generated',d.created+' created, '+d.skipped+' skipped.');await load()}catch(e:any){notify('Bulk',e.message)}finally{setLoading(false)}}
@@ -59,8 +103,8 @@ async function printPass(x:any){
 async function printAndRecord(x:any){try{await printPass(x);await api('/api/gate-passes/'+x.id+'/print',{method:'PATCH'});setPreviewPass(null);setTab('ready');setStatus('draft');setQuery('');setClassName('');setFilterKey(k=>k+1);setViewKey(k=>k+1);if(Platform.OS==='web')window.focus();await load();setTimeout(()=>{void load()},50);Alert.alert('Printed','Gate pass is now recorded officially.')}catch(e:any){setPreviewPass(null);if(Platform.OS==='web'){window.focus();window.alert(e.message)}else Alert.alert('Print',e.message)}}
 const dateTime=(key:string,label:string)=><DatePickerField label={label} kind="datetime" value={form[key]} onChange={v=>setForm((f:any)=>({...f,[key]:v}))} style={s.field} optional={key==='expected_return_at'}/>;
 const fields=<><EditableOptionField label="Reason for Leave *" value={form.reason} options={LEAVE_REASONS} onChange={v=>setForm((f:any)=>({...f,reason:v}))}/><View style={s.two}>{dateTime('departure_at','Departure *')}{dateTime('expected_return_at','Return Date')}</View><EditableOptionField label="If Not Return On Specified Day" value={form.late_note} options={RETURN_NOTES} onChange={v=>setForm((f:any)=>({...f,late_note:v}))}/></>;
-if(officeRestricted===null)return <SafeAreaView style={s.page}><ActivityIndicator size="large" style={{margin:40}}/></SafeAreaView>;
-return <SafeAreaView key={viewKey} style={s.page}><ScrollView contentContainerStyle={s.content}><AcademyHeader/><View style={s.nav}><TouchableOpacity style={s.light} onPress={()=>router.canGoBack()?router.back():router.replace('/superadmin')}><Text>Back</Text></TouchableOpacity><TouchableOpacity style={s.light} onPress={()=>router.push('/superadmin')}><Text>Home</Text></TouchableOpacity></View><Text style={s.title}>Student Gate Pass</Text><View style={s.tabs}>{(officeRestricted?[['execute','Execute Return'],['ready','Ready to Print'],['list','Gate Pass Records']]:[['generate','Generate'],['bulk','Bulk Generate'],['execute','Execute Return'],['ready','Ready to Print'],['list','Gate Pass Records']]).map(x=><TouchableOpacity key={x[0]} onPress={()=>{setTab(x[0]);if(x[0]==='ready')setStatus('draft');if(x[0]==='execute')setStatus('pending')}} style={[s.tab,tab===x[0]&&s.active]}><Text style={tab===x[0]&&s.white}>{x[1]}</Text></TouchableOpacity>)}</View>
+if(!authReady)return <SafeAreaView style={s.page}><ActivityIndicator size="large" style={{margin:40}}/></SafeAreaView>;
+return <SafeAreaView key={viewKey} style={s.page}><ScrollView contentContainerStyle={s.content}><AcademyHeader/><View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,marginVertical:10}}><Text style={[s.title,{marginVertical:0}]}>Student Gate Pass</Text><StudentMenuActions/></View><View style={s.tabs}>{allowedTabs.map(x=><TouchableOpacity key={x[0]} onPress={()=>{setTab(x[0]);if(x[0]==='ready')setStatus('draft');if(x[0]==='execute')setStatus('pending')}} style={[s.tab,tab===x[0]&&s.active]}><Text style={tab===x[0]&&s.white}>{x[1]}</Text></TouchableOpacity>)}</View>
 {tab==='generate'&&<View style={s.card}><View style={s.search}><TextInput value={reg} onChangeText={setReg} onSubmitEditing={search} placeholder="Registration number" style={[s.input,{flex:1}]}/><TouchableOpacity onPress={search} style={s.primary}><Text style={s.white}>Search</Text></TouchableOpacity></View>{loading&&<ActivityIndicator/>}{student&&<><View style={s.student}>{student.photo_url?<Image source={{uri:/^http/.test(student.photo_url)?student.photo_url:API_BASE+student.photo_url}} style={s.photo}/>:null}<View><Text style={s.studentName}>{student.student_name}</Text><Text>Reg: {student.registration_no} | Class: {student.class_name||'-'} | Room: {student.room_name||'-'}</Text><Text>Guardian: {student.guardian_name||student.father_name||'-'}</Text></View></View>{fields}<TouchableOpacity disabled={loading} onPress={generate} style={s.primary}><Text style={s.white}>Generate Gate Pass</Text></TouchableOpacity></>}</View>}
 {tab==='bulk'&&<View style={s.card}><MultiClassPicker all={bulkAll} selected={bulkClasses} onChange={(all,selected)=>{setBulkAll(all);setBulkClasses(selected)}}/>{fields}<TouchableOpacity disabled={loading} onPress={bulk} style={s.primary}><Text style={s.white}>Bulk Generate</Text></TouchableOpacity></View>}
 {tab==='execute'&&<View style={s.card}><Text style={s.help}>Enter gate-pass token or registration number when the student returns.</Text><View style={s.search}><TextInput value={executeCode} onChangeText={setExecuteCode} onSubmitEditing={execute} placeholder="Token / Registration number" style={[s.input,{flex:1}]}/><TouchableOpacity onPress={execute} style={s.primary}><Text style={s.white}>Execute Return</Text></TouchableOpacity></View></View>}

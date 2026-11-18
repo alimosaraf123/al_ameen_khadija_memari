@@ -17,6 +17,7 @@ import { router } from 'expo-router';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import AcademyHeader from '../components/AcademyHeader';
+import { StudentMenuActions } from '../components/StudentMenu';
 import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import DatePickerField from '../components/DatePickerField';
 import { api, API_BASE } from '../lib/api';
@@ -367,7 +368,7 @@ export default function DailyAttendance() {
   return (
     <SafeAreaView style={styles.page}>
       <ScrollView ref={scrollRef} contentContainerStyle={styles.container}>
-        <AcademyHeader compact />
+        <AcademyHeader compact beforeHomeActions={<StudentMenuActions compact />} />
 
         {/* TOP CONTROLS & FILTER BAR */}
         <View style={styles.filterCard}>
