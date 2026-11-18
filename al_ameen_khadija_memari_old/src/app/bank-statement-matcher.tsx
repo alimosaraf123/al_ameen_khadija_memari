@@ -319,6 +319,7 @@ export default function BankStatementMatcherScreen() {
   const [registerDates, setRegisterDates] = useState<any[]>([]);
   const [loadingRegister, setLoadingRegister] = useState<boolean>(false);
   const [expandedDates, setExpandedDates] = useState<Record<number, boolean>>({});
+  const [expandedUnmatchedBills, setExpandedUnmatchedBills] = useState<Record<number, boolean>>({});
   const [selectedFilterDate, setSelectedFilterDate] = useState<string>('all');
   const [registerSearchQuery, setRegisterSearchQuery] = useState<string>('');
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -1391,6 +1392,12 @@ export default function BankStatementMatcherScreen() {
         ) : (
           filteredRegisterDates.map((dateItem) => {
             const isExp = Boolean(expandedDates[dateItem.id]);
+            const isUnmatchedBillsExp = Boolean(expandedUnmatchedBills[dateItem.id]);
+            const unmatchedBillRows = Array.isArray(dateItem.mismatch_rows)
+              ? dateItem.mismatch_rows.filter((m: any) => m.source === 'BILL' || m.source === 'BANK + BILL')
+              : [];
+            const unmatchedBillsTotal = unmatchedBillRows.reduce((sum: number, m: any) => sum + Number(m.bill_amount || 0), 0);
+            const billUnmatchedCount = dateItem.summary?.bill_unmatched_count || unmatchedBillRows.length;
             const dateLabel = `${formatDateDisplay(dateItem.from_date)}${
               dateItem.to_date && dateItem.to_date !== dateItem.from_date ? ' to ' + formatDateDisplay(dateItem.to_date) : ''
             }`;
@@ -1416,12 +1423,29 @@ export default function BankStatementMatcherScreen() {
                           ⚠️ {dateItem.summary?.statement_unmatched_count || 0} Stmt Unmatched
                         </Text>
                       </View>
-                      {dateItem.summary?.bill_unmatched_count > 0 && (
-                        <View style={styles.dateSectionBadgeBills}>
-                          <Text style={styles.dateSectionBadgeBillsText}>
-                            📑 {dateItem.summary?.bill_unmatched_count} Bill Unmatched
+                      {billUnmatchedCount > 0 && (
+                        <TouchableOpacity
+                          activeOpacity={0.75}
+                          onPress={() => {
+                            setExpandedUnmatchedBills((prev) => ({
+                              ...prev,
+                              [dateItem.id]: !isUnmatchedBillsExp,
+                            }));
+                          }}
+                          style={[
+                            styles.dateSectionBadgeBills,
+                            isUnmatchedBillsExp && styles.dateSectionBadgeBillsActive,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.dateSectionBadgeBillsText,
+                              isUnmatchedBillsExp && styles.dateSectionBadgeBillsTextActive,
+                            ]}
+                          >
+                            📑 {billUnmatchedCount} Bill Unmatched {isUnmatchedBillsExp ? '▴' : '▾'}
                           </Text>
-                        </View>
+                        </TouchableOpacity>
                       )}
                     </View>
                     <Text style={styles.dateSectionMeta}>
@@ -1608,6 +1632,86 @@ export default function BankStatementMatcherScreen() {
                       })}
                     </View>
                   </ScrollView>
+                ) : null}
+
+                {/* Quick toggle bar to view unmatched bills right below statement table */}
+                {isExp && unmatchedBillRows.length > 0 && !isUnmatchedBillsExp ? (
+                  <TouchableOpacity
+                    activeOpacity={0.75}
+                    onPress={() =>
+                      setExpandedUnmatchedBills((prev) => ({
+                        ...prev,
+                        [dateItem.id]: true,
+                      }))
+                    }
+                    style={styles.unmatchedBillsFooterBar}
+                  >
+                    <Text style={styles.unmatchedBillsFooterBarText}>
+                      📑 Show {unmatchedBillRows.length} Unmatched Bill{unmatchedBillRows.length > 1 ? 's' : ''} (Total: ₹{formatCurrency(unmatchedBillsTotal)}) ▾
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+
+                {/* Expandable Unmatched Bills Table */}
+                {isUnmatchedBillsExp && unmatchedBillRows.length > 0 ? (
+                  <View style={styles.unmatchedBillsSection}>
+                    <View style={styles.unmatchedBillsHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <Text style={styles.unmatchedBillsTitle}>
+                          📑 Unmatched Bills ({unmatchedBillRows.length}) — Total: ₹{formatCurrency(unmatchedBillsTotal)}
+                        </Text>
+                        <Text style={styles.unmatchedBillsSubtitle}>
+                          (Bills from Bill Report that did not match a bank statement entry)
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setExpandedUnmatchedBills((prev) => ({
+                            ...prev,
+                            [dateItem.id]: false,
+                          }))
+                        }
+                        style={styles.unmatchedBillsCloseBtn}
+                      >
+                        <Text style={styles.unmatchedBillsCloseBtnText}>Hide ▴</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <ScrollView horizontal style={styles.horizontalScroll}>
+                      <View style={styles.unmatchedBillsTable}>
+                        <View style={styles.unmatchedBillsThRow}>
+                          <Text style={[styles.ubTh, { width: 45 }]}>#</Text>
+                          <Text style={[styles.ubTh, { width: 70 }]}>Row</Text>
+                          <Text style={[styles.ubTh, { width: 95 }]}>Receipt No</Text>
+                          <Text style={[styles.ubTh, { width: 90 }]}>Reg No</Text>
+                          <Text style={[styles.ubTh, { width: 170, textAlign: 'left' }]}>Student Name</Text>
+                          <Text style={[styles.ubTh, { width: 80 }]}>Class</Text>
+                          <Text style={[styles.ubTh, { width: 150 }]}>Inst / Ref No</Text>
+                          <Text style={[styles.ubTh, { width: 110 }]}>Bill Amount</Text>
+                          <Text style={[styles.ubTh, { width: 340, textAlign: 'left' }]}>Particulars</Text>
+                          <Text style={[styles.ubTh, { width: 200, borderRightWidth: 0 }]}>Reason</Text>
+                        </View>
+                        {unmatchedBillRows.map((m: any, mIdx: number) => (
+                          <View
+                            key={`ub_${dateItem.id}_${mIdx}`}
+                            style={[styles.ubTr, mIdx % 2 === 0 ? styles.pTrEven : styles.pTrOdd]}
+                          >
+                            <Text style={[styles.ubTd, { width: 45, color: '#64748b' }]}>{mIdx + 1}</Text>
+                            <Text style={[styles.ubTd, { width: 70, color: '#64748b' }]}>{m.bill_row || '-'}</Text>
+                            <Text style={[styles.ubTd, { width: 95, fontWeight: '700', color: '#1e293b' }]} selectable>{m.receipt_no || '-'}</Text>
+                            <Text style={[styles.ubTd, { width: 90, fontWeight: '700', color: '#1d4ed8' }]} selectable>{m.reg_no || '-'}</Text>
+                            <Text style={[styles.ubTd, { width: 170, textAlign: 'left', fontWeight: '600' }]} numberOfLines={1} selectable>{m.student_name || '-'}</Text>
+                            <Text style={[styles.ubTd, { width: 80 }]}>{m.class_name || '-'}</Text>
+                            <Text style={[styles.ubTd, { width: 150, color: '#475569' }]} numberOfLines={1} selectable>{m.inst_no || '-'}</Text>
+                            <Text style={[styles.ubTd, { width: 110, fontWeight: '800', color: '#b91c1c' }]}>
+                              {m.bill_amount ? `₹${formatCurrency(m.bill_amount)}` : '-'}
+                            </Text>
+                            <Text style={[styles.ubTd, { width: 340, textAlign: 'left', color: '#334155' }]} numberOfLines={2} selectable>{m.particulars || '-'}</Text>
+                            <Text style={[styles.ubTd, { width: 200, borderRightWidth: 0, fontWeight: '700', color: '#7c3aed' }]}>{m.reason || 'NOT IN STATEMENT'}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </ScrollView>
+                  </View>
                 ) : null}
               </View>
             );
@@ -3908,14 +4012,109 @@ const styles = StyleSheet.create({
   },
   dateSectionBadgeBills: {
     backgroundColor: '#ede9fe',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#c4b5fd',
+    cursor: 'pointer' as any,
+  },
+  dateSectionBadgeBillsActive: {
+    backgroundColor: '#6d28d9',
+    borderColor: '#5b21b6',
   },
   dateSectionBadgeBillsText: {
     fontSize: 11,
     fontWeight: '700',
     color: '#6d28d9',
+  },
+  dateSectionBadgeBillsTextActive: {
+    color: '#ffffff',
+  },
+  unmatchedBillsFooterBar: {
+    backgroundColor: '#f5f3ff',
+    borderTopWidth: 1,
+    borderTopColor: '#ddd6fe',
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+  },
+  unmatchedBillsFooterBarText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#6d28d9',
+  },
+  unmatchedBillsSection: {
+    borderTopWidth: 2,
+    borderTopColor: '#8b5cf6',
+    backgroundColor: '#faf5ff',
+  },
+  unmatchedBillsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#ede9fe',
+    borderBottomWidth: 1,
+    borderBottomColor: '#c4b5fd',
+  },
+  unmatchedBillsTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#5b21b6',
+  },
+  unmatchedBillsSubtitle: {
+    fontSize: 11.5,
+    color: '#6d28d9',
+    fontWeight: '600',
+  },
+  unmatchedBillsCloseBtn: {
+    backgroundColor: '#6d28d9',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  unmatchedBillsCloseBtnText: {
+    color: '#ffffff',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  unmatchedBillsTable: {
+    backgroundColor: '#ffffff',
+  },
+  unmatchedBillsThRow: {
+    flexDirection: 'row',
+    backgroundColor: '#f3e8ff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#d8b4fe',
+  },
+  ubTh: {
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#4c1d95',
+    textAlign: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#e9d5ff',
+  },
+  ubTr: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    alignItems: 'center',
+  },
+  ubTd: {
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    fontSize: 12,
+    color: '#1e293b',
+    textAlign: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#f1f5f9',
   },
   dateSectionMeta: {
     fontSize: 11,
