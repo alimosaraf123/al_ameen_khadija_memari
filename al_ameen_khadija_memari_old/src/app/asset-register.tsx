@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Platform,
@@ -12,6 +12,7 @@ import {
 import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
 import AcademyHeader from '../components/AcademyHeader';
+import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import { Field } from '../components/ui';
 import { api, API_BASE } from '../lib/api';
 import { getToken } from '../lib/auth';
@@ -31,7 +32,24 @@ const blank = {
   custodian: ''
 };
 
+const todayIso = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const blankPurchase = () => ({
+  quantity: '1',
+  purchase_date: todayIso(),
+  purchase_price: '',
+  bill_no: '',
+  vendor_name: '',
+  allocation: '',
+  specifications: '',
+  notes: ''
+});
+
 export default function AssetRegister() {
+  const scrollRef = useRef<ScrollView>(null);
   const [form, setForm] = useState<any>(blank);
   const [assets, setAssets] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
@@ -41,6 +59,18 @@ export default function AssetRegister() {
   const [maintenance, setMaintenance] = useState<any>(null);
   const [maint, setMaint] = useState({ description: '', cost: '', maintenance_date: '', vendor_name: '' });
   const [invoice, setInvoice] = useState<any>(null);
+  const [purchaseTarget, setPurchaseTarget] = useState<any>(null);
+  const [purchaseForm, setPurchaseForm] = useState<any>(blankPurchase());
+  const [purchaseBill, setPurchaseBill] = useState<any>(null);
+  const [editTarget, setEditTarget] = useState<any>(null);
+  const [editForm, setEditForm] = useState<any>({
+    name: '',
+    category: '',
+    allocation: '',
+    custodian: '',
+    specifications: '',
+    opening_quantity: ''
+  });
 
   const set = (k: string, v: string) => setForm((x: any) => ({ ...x, [k]: v }));
 
@@ -81,6 +111,11 @@ export default function AssetRegister() {
       );
     });
   }, [assets, search, selectedCategory]);
+
+  const filteredTotalQty = useMemo(
+    () => filteredAssets.reduce((sum, a) => sum + (Number(a.quantity) || 0), 0),
+    [filteredAssets]
+  );
 
   const stats = useMemo(() => {
     const totalTypes = assets.length;
@@ -188,6 +223,146 @@ export default function AssetRegister() {
     }
   };
 
+  const openPurchaseModal = (a: any) => {
+    setPurchaseTarget(a);
+    setPurchaseForm({
+      ...blankPurchase(),
+      allocation: a.allocation || ''
+    });
+    setPurchaseBill(null);
+  };
+
+  const pickPurchaseBill = async () => {
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true
+      });
+      if (!picked.canceled && picked.assets?.[0]) setPurchaseBill(picked.assets[0]);
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    }
+  };
+
+  const savePurchase = async () => {
+    if (!purchaseTarget) return;
+    const qty = parseInt(String(purchaseForm.quantity || '').trim(), 10);
+    if (!Number.isInteger(qty) || qty < 1) {
+      return Alert.alert('Validation', 'Enter a valid quantity (1 or more).');
+    }
+    const price = Number(purchaseForm.purchase_price || 0);
+    if (!Number.isFinite(price) || price < 0) {
+      return Alert.alert('Validation', 'Enter a valid purchase price.');
+    }
+    setBusy(true);
+    try {
+      const token = await getToken();
+      if (purchaseBill) {
+        const fd = new FormData();
+        fd.append('quantity', String(qty));
+        fd.append('purchase_date', String(purchaseForm.purchase_date || todayIso()).trim());
+        fd.append('purchase_price', String(price));
+        fd.append('bill_no', String(purchaseForm.bill_no || '').trim());
+        fd.append('vendor_name', String(purchaseForm.vendor_name || '').trim());
+        fd.append('allocation', String(purchaseForm.allocation || '').trim());
+        fd.append('specifications', String(purchaseForm.specifications || '').trim());
+        fd.append('notes', String(purchaseForm.notes || '').trim());
+        if (Platform.OS === 'web' && (purchaseBill as any).file) {
+          fd.append('file', (purchaseBill as any).file);
+        } else {
+          fd.append('file', {
+            uri: purchaseBill.uri,
+            name: purchaseBill.name || 'bill',
+            type: purchaseBill.mimeType || 'application/octet-stream'
+          } as any);
+        }
+        const resp = await fetch(`${API_BASE}/api/assets/${purchaseTarget.id}/purchases`, {
+          method: 'POST',
+          headers: token ? { Authorization: 'Bearer ' + token } : {},
+          body: fd
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.message || 'Failed to add purchase');
+      } else {
+        await api(`/api/assets/${purchaseTarget.id}/purchases`, {
+          method: 'POST',
+          body: JSON.stringify({
+            quantity: qty,
+            purchase_date: String(purchaseForm.purchase_date || todayIso()).trim(),
+            purchase_price: price,
+            bill_no: String(purchaseForm.bill_no || '').trim(),
+            vendor_name: String(purchaseForm.vendor_name || '').trim(),
+            allocation: String(purchaseForm.allocation || '').trim(),
+            specifications: String(purchaseForm.specifications || '').trim(),
+            notes: String(purchaseForm.notes || '').trim()
+          })
+        });
+      }
+      setPurchaseTarget(null);
+      setPurchaseBill(null);
+      await load();
+      Alert.alert('Saved', `Added +${qty} unit(s) to ${purchaseTarget.name}.`);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to add purchase');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deletePurchaseBatch = async (asset: any, batch: any) => {
+    const label = `${batch.quantity} nos (${batch.purchase_date ? String(batch.purchase_date).slice(0, 10) : 'batch'})`;
+    if (Platform.OS === 'web') {
+      if (!window.confirm(`Delete purchase batch ${label} from "${asset.name}"? Stock quantity will be reduced.`)) return;
+    }
+    try {
+      await api(`/api/assets/${asset.id}/purchases/${batch.id}`, { method: 'DELETE' });
+      await load();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to delete purchase record');
+    }
+  };
+
+  const openEditModal = (a: any) => {
+    const openingBatch = Array.isArray(a.purchases) ? a.purchases.find((p: any) => p.is_opening) : null;
+    setEditTarget(a);
+    setEditForm({
+      name: a.name || '',
+      category: a.category || '',
+      allocation: a.allocation || '',
+      custodian: a.custodian || '',
+      specifications: a.specifications || '',
+      opening_quantity: String(openingBatch ? openingBatch.quantity : (a.quantity ?? 1))
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!editTarget) return;
+    if (!String(editForm.name || '').trim()) {
+      return Alert.alert('Validation', 'Asset Name is required.');
+    }
+    setBusy(true);
+    try {
+      await api(`/api/assets/${editTarget.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: String(editForm.name || '').trim(),
+          category: String(editForm.category || '').trim(),
+          allocation: String(editForm.allocation || '').trim(),
+          custodian: String(editForm.custodian || '').trim(),
+          specifications: String(editForm.specifications || '').trim(),
+          opening_quantity: editForm.opening_quantity === '' ? undefined : parseInt(editForm.opening_quantity, 10)
+        })
+      });
+      setEditTarget(null);
+      await load();
+      Alert.alert('Updated', 'Asset details updated successfully.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to update asset');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const dispose = async (a: any) => {
     if (Platform.OS === 'web') {
       const ok = window.confirm(`Are you sure you want to mark "${a.name}" as Disposed?`);
@@ -206,7 +381,8 @@ export default function AssetRegister() {
   };
 
   return (
-    <ScrollView style={s.page} contentContainerStyle={s.content}>
+    <View style={s.page}>
+    <ScrollView ref={scrollRef} style={s.page} contentContainerStyle={s.content}>
       <AcademyHeader />
 
       <View style={s.topBar}>
@@ -381,7 +557,7 @@ export default function AssetRegister() {
       {/* Asset List Heading */}
       <View style={s.listHeaderRow}>
         <Text style={s.heading}>
-          📋 Registered Assets ({filteredAssets.length} of {assets.length})
+          📋 Registered Assets ({filteredAssets.length} of {assets.length}  •  Total Qty: {filteredTotalQty} nos)
         </Text>
       </View>
 
@@ -449,6 +625,88 @@ export default function AssetRegister() {
               </View>
             </View>
 
+            {/* Purchase History Batches */}
+            {Array.isArray(a.purchases) && a.purchases.length > 0 && (
+              <View style={s.purchaseBox}>
+                <Text style={s.purchaseBoxTitle}>
+                  📦 Purchase History ({a.purchases.length} {a.purchases.length === 1 ? 'batch' : 'batches'})
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
+                  <View style={{ minWidth: 740, flex: 1 }}>
+                    <View style={s.purchaseHeadRow}>
+                      <Text style={[s.pHeadCell, s.pColSl]}>Sl</Text>
+                      <Text style={[s.pHeadCell, s.pColQty]}>Qty</Text>
+                      <Text style={[s.pHeadCell, s.pColDate]}>Date</Text>
+                      <Text style={[s.pHeadCell, s.pColPrice]}>Price</Text>
+                      <Text style={[s.pHeadCell, s.pColBill]}>Bill No.</Text>
+                      <Text style={[s.pHeadCell, s.pColVendor]}>Vendor</Text>
+                      <Text style={[s.pHeadCell, s.pColLoc]}>Location</Text>
+                      <Text style={[s.pHeadCell, s.pColAct]} />
+                    </View>
+                    {a.purchases.map((p: any, pIdx: number) => {
+                      const dateTxt = p.purchase_date
+                        ? String(p.purchase_date).slice(0, 10).split('-').reverse().join('-')
+                        : p.is_opening
+                          ? 'Opening Stock'
+                          : '-';
+                      const extraNotes = [p.specifications || null, p.notes && !p.is_opening ? p.notes : null]
+                        .filter(Boolean)
+                        .join(' • ');
+                      return (
+                        <View key={p.id} style={s.purchaseRow}>
+                          <Text style={[s.pSlText, s.pColSl]}>{pIdx + 1}</Text>
+                          <View style={s.pColQty}>
+                            <View style={[s.batchQtyPill, p.is_opening && s.batchQtyOpening]}>
+                              <Text style={[s.batchQtyText, p.is_opening && s.batchQtyOpeningText]}>
+                                {`${p.quantity} nos`}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={[s.batchDateText, s.pColDate]}>
+                            {dateTxt}
+                            {p.is_opening && p.purchase_date ? ' (Opening)' : ''}
+                          </Text>
+                          <Text style={[s.batchMetaText, s.pColPrice, { fontWeight: '700' }]}>
+                            {Number(p.purchase_price || 0) > 0 ? `₹${Number(p.purchase_price).toLocaleString()}` : '—'}
+                          </Text>
+                          <Text style={[s.batchMetaText, s.pColBill]}>{p.bill_no || '—'}</Text>
+                          <Text style={[s.batchMetaText, s.pColVendor]}>{p.vendor_name || '—'}</Text>
+                          <View style={s.pColLoc}>
+                            <Text style={[s.batchMetaText, { fontWeight: '700', color: '#0f172a' }]}>
+                              {p.allocation || '—'}
+                            </Text>
+                            {extraNotes ? <Text style={s.batchSubNote}>{extraNotes}</Text> : null}
+                          </View>
+                          <View style={[s.purchaseRowRight, s.pColAct]}>
+                            {p.bill_file_url && (
+                              <TouchableOpacity
+                                style={s.batchBillBtn}
+                                onPress={() => {
+                                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                                    window.open(API_BASE + p.bill_file_url, '_blank');
+                                  }
+                                }}
+                              >
+                                <Text style={s.batchBillBtnText}>📎 Bill</Text>
+                              </TouchableOpacity>
+                            )}
+                            {!p.is_opening && (
+                              <TouchableOpacity
+                                style={s.batchDelBtn}
+                                onPress={() => deletePurchaseBatch(a, p)}
+                              >
+                                <Text style={s.batchDelBtnText}>✕</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              </View>
+            )}
+
             {/* Maintenance records if any */}
             {Array.isArray(a.maintenance) && a.maintenance.length > 0 && (
               <View style={s.maintBox}>
@@ -462,6 +720,14 @@ export default function AssetRegister() {
             )}
 
             <View style={s.actions}>
+              {a.status !== 'Disposed' && (
+                <TouchableOpacity style={s.btnAddPurchase} onPress={() => openPurchaseModal(a)}>
+                  <Text style={s.actionBtnText}>➕ Add Purchase</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={s.btnEdit} onPress={() => openEditModal(a)}>
+                <Text style={s.actionBtnText}>✏️ Edit</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={s.btnDepreciation} onPress={() => depreciation(a)}>
                 <Text style={s.actionBtnText}>📉 Recalculate Depr.</Text>
               </TouchableOpacity>
@@ -494,44 +760,176 @@ export default function AssetRegister() {
           </View>
         ))
       )}
+    </ScrollView>
 
-      {/* Maintenance Modal */}
-      {maintenance && (
-        <View style={s.modalOverlay}>
+    {/* Add Purchase Modal */}
+    {purchaseTarget && (
+      <View style={s.modalOverlay}>
+        <ScrollView contentContainerStyle={s.modalScrollWrap} style={{ width: '100%' }}>
           <View style={s.modalCard}>
-            <Text style={s.modalHeading}>🛠️ Add Maintenance: {maintenance.name}</Text>
-            <Text style={s.modalSub}>
-              ID: {maintenance.asset_id} | Qty: {maintenance.quantity || 1}
-            </Text>
+            <Text style={s.modalHeading}>➕ Add Purchase: {purchaseTarget.name}</Text>
+            <View style={s.purchasePreviewBanner}>
+              <Text style={s.purchasePreviewText}>
+                ID #{purchaseTarget.asset_id}  •  Current Qty: {Number(purchaseTarget.quantity || 0)} nos  →  New Total:{' '}
+                {Number(purchaseTarget.quantity || 0) + Math.max(0, parseInt(String(purchaseForm.quantity || '0'), 10) || 0)} nos
+              </Text>
+            </View>
             <Field
-              placeholder="Description of issue / maintenance *"
-              value={maint.description}
-              onChangeText={(v: string) => setMaint((x) => ({ ...x, description: v }))}
-              multiline
-            />
-            <Field
-              placeholder="Cost (₹)"
-              value={maint.cost}
-              onChangeText={(v: string) => setMaint((x) => ({ ...x, cost: v }))}
+              placeholder="Quantity Purchased * (e.g. 3)"
+              value={purchaseForm.quantity}
+              onChangeText={(v: string) => setPurchaseForm((x: any) => ({ ...x, quantity: v.replace(/[^0-9]/g, '') }))}
               keyboardType="numeric"
             />
             <Field
-              placeholder="Service Vendor / Technician"
-              value={maint.vendor_name}
-              onChangeText={(v: string) => setMaint((x) => ({ ...x, vendor_name: v }))}
+              placeholder="Purchase Date * (YYYY-MM-DD)"
+              value={purchaseForm.purchase_date}
+              onChangeText={(v: string) => setPurchaseForm((x: any) => ({ ...x, purchase_date: v }))}
             />
-            <View style={s.modalActions}>
-              <TouchableOpacity style={s.submitBtn} onPress={saveMaintenance}>
-                <Text style={s.white}>Save Maintenance</Text>
+            <Field
+              placeholder="Total Purchase Price for this batch (₹)"
+              value={purchaseForm.purchase_price}
+              onChangeText={(v: string) => setPurchaseForm((x: any) => ({ ...x, purchase_price: v }))}
+              keyboardType="numeric"
+            />
+            <Field
+              placeholder="Bill / Invoice Number"
+              value={purchaseForm.bill_no}
+              onChangeText={(v: string) => setPurchaseForm((x: any) => ({ ...x, bill_no: v }))}
+            />
+            <Field
+              placeholder="Vendor / Supplier Name"
+              value={purchaseForm.vendor_name}
+              onChangeText={(v: string) => setPurchaseForm((x: any) => ({ ...x, vendor_name: v }))}
+            />
+            <Field
+              placeholder="Allocation / Location (e.g. Computer Lab)"
+              value={purchaseForm.allocation}
+              onChangeText={(v: string) => setPurchaseForm((x: any) => ({ ...x, allocation: v }))}
+            />
+            <Field
+              placeholder="Model / Specifications / Notes (optional)"
+              value={purchaseForm.specifications}
+              onChangeText={(v: string) => setPurchaseForm((x: any) => ({ ...x, specifications: v }))}
+            />
+
+            {purchaseBill && (
+              <View style={s.selectedInvoiceBadge}>
+                <Text style={s.selectedInvoiceText}>📎 Attached Bill: {purchaseBill.name}</Text>
+              </View>
+            )}
+
+            <View style={[s.modalActions, { flexWrap: 'wrap' }]}>
+              <TouchableOpacity style={s.invoicePicker} onPress={pickPurchaseBill}>
+                <Text style={s.white}>📎 Attach Bill</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={s.cancelBtn} onPress={() => setMaintenance(null)}>
+              <TouchableOpacity disabled={busy} style={s.submitBtn} onPress={savePurchase}>
+                <Text style={s.white}>{busy ? 'Saving...' : '💾 Save Purchase'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={s.cancelBtn}
+                onPress={() => {
+                  setPurchaseTarget(null);
+                  setPurchaseBill(null);
+                }}
+              >
                 <Text style={s.cancelText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </View>
+        </ScrollView>
+      </View>
+    )}
+
+    {/* Edit Asset Modal */}
+    {editTarget && (
+      <View style={s.modalOverlay}>
+        <ScrollView contentContainerStyle={s.modalScrollWrap} style={{ width: '100%' }}>
+          <View style={s.modalCard}>
+            <Text style={s.modalHeading}>✏️ Edit Asset: #{editTarget.asset_id}</Text>
+            <Text style={s.modalSub}>Update asset info or Opening Stock quantity</Text>
+            <Field
+              placeholder="Asset Name *"
+              value={editForm.name}
+              onChangeText={(v: string) => setEditForm((x: any) => ({ ...x, name: v }))}
+            />
+            <Field
+              placeholder="Category"
+              value={editForm.category}
+              onChangeText={(v: string) => setEditForm((x: any) => ({ ...x, category: v }))}
+            />
+            <Field
+              placeholder="Opening Stock Quantity (e.g. 7)"
+              value={editForm.opening_quantity}
+              onChangeText={(v: string) => setEditForm((x: any) => ({ ...x, opening_quantity: v.replace(/[^0-9]/g, '') }))}
+              keyboardType="numeric"
+            />
+            <Field
+              placeholder="Allocation / Location"
+              value={editForm.allocation}
+              onChangeText={(v: string) => setEditForm((x: any) => ({ ...x, allocation: v }))}
+            />
+            <Field
+              placeholder="Custodian / Caretaker"
+              value={editForm.custodian}
+              onChangeText={(v: string) => setEditForm((x: any) => ({ ...x, custodian: v }))}
+            />
+            <Field
+              placeholder="Specifications / Model"
+              value={editForm.specifications}
+              onChangeText={(v: string) => setEditForm((x: any) => ({ ...x, specifications: v }))}
+            />
+            <View style={s.modalActions}>
+              <TouchableOpacity disabled={busy} style={s.submitBtn} onPress={saveEdit}>
+                <Text style={s.white}>{busy ? 'Saving...' : '💾 Save Changes'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.cancelBtn} onPress={() => setEditTarget(null)}>
+                <Text style={s.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    )}
+
+    {/* Maintenance Modal */}
+    {maintenance && (
+      <View style={s.modalOverlay}>
+        <View style={s.modalCard}>
+          <Text style={s.modalHeading}>🛠️ Add Maintenance: {maintenance.name}</Text>
+          <Text style={s.modalSub}>
+            ID: {maintenance.asset_id} | Qty: {maintenance.quantity || 1}
+          </Text>
+          <Field
+            placeholder="Description of issue / maintenance *"
+            value={maint.description}
+            onChangeText={(v: string) => setMaint((x) => ({ ...x, description: v }))}
+            multiline
+          />
+          <Field
+            placeholder="Cost (₹)"
+            value={maint.cost}
+            onChangeText={(v: string) => setMaint((x) => ({ ...x, cost: v }))}
+            keyboardType="numeric"
+          />
+          <Field
+            placeholder="Service Vendor / Technician"
+            value={maint.vendor_name}
+            onChangeText={(v: string) => setMaint((x) => ({ ...x, vendor_name: v }))}
+          />
+          <View style={s.modalActions}>
+            <TouchableOpacity style={s.submitBtn} onPress={saveMaintenance}>
+              <Text style={s.white}>Save Maintenance</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.cancelBtn} onPress={() => setMaintenance(null)}>
+              <Text style={s.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      )}
-    </ScrollView>
+      </View>
+    )}
+
+    <ScrollNavigationButtons scrollRef={scrollRef} />
+    </View>
   );
 }
 
@@ -725,13 +1123,13 @@ const s = StyleSheet.create({
   assetName: { fontSize: 18, fontWeight: '900', color: '#0f172a' },
   qtyBadge: {
     backgroundColor: '#dbeafe',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#93c5fd'
   },
-  qtyBadgeText: { fontSize: 12, fontWeight: '800', color: '#1d4ed8' },
+  qtyBadgeText: { fontSize: 14.5, fontWeight: '900', color: '#1d4ed8' },
   specBadge: {
     backgroundColor: '#fef3c7',
     paddingHorizontal: 8,
@@ -782,6 +1180,145 @@ const s = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     marginTop: 8
+  },
+  btnAddPurchase: {
+    backgroundColor: '#15803d',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 6
+  },
+  btnEdit: {
+    backgroundColor: '#475569',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 6
+  },
+  purchaseBox: {
+    backgroundColor: '#f0fdf4',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#bbf7d0'
+  },
+  purchaseBoxTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#166534',
+    marginBottom: 8
+  },
+  purchaseHeadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+    paddingHorizontal: 4,
+    backgroundColor: '#dcfce7',
+    borderRadius: 5,
+    marginBottom: 2
+  },
+  pHeadCell: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#166534',
+    textTransform: 'uppercase'
+  },
+  pColSl: { width: 34, textAlign: 'center' },
+  pColQty: { width: 88, alignItems: 'flex-start', paddingRight: 6 },
+  pColDate: { width: 160, paddingRight: 8 },
+  pColPrice: { width: 95, paddingRight: 8 },
+  pColBill: { width: 85, paddingRight: 8 },
+  pColVendor: { width: 120, paddingRight: 8 },
+  pColLoc: { flex: 1, minWidth: 140, paddingRight: 8 },
+  pColAct: { width: 82, justifyContent: 'flex-end' },
+  pSlText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#166534'
+  },
+  purchaseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#dcfce7'
+  },
+  purchaseRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  batchQtyPill: {
+    backgroundColor: '#16a34a',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6
+  },
+  batchQtyOpening: {
+    backgroundColor: '#e2e8f0'
+  },
+  batchQtyText: {
+    color: '#ffffff',
+    fontSize: 14.5,
+    fontWeight: '900'
+  },
+  batchQtyOpeningText: {
+    color: '#0f172a'
+  },
+  batchDateText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  batchMetaText: {
+    fontSize: 13,
+    color: '#334155'
+  },
+  batchSubNote: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 1
+  },
+  batchBillBtn: {
+    backgroundColor: '#e0f2fe',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 5
+  },
+  batchBillBtnText: {
+    color: '#0369a1',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  batchDelBtn: {
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 5
+  },
+  batchDelBtnText: {
+    color: '#b91c1c',
+    fontSize: 11,
+    fontWeight: '800'
+  },
+  purchasePreviewBanner: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    borderRadius: 8,
+    padding: 9,
+    marginBottom: 12
+  },
+  purchasePreviewText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#065f46'
+  },
+  modalScrollWrap: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 16
   },
   btnDepreciation: {
     backgroundColor: '#6366f1',
