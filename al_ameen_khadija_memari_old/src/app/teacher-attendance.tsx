@@ -11,6 +11,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -76,6 +77,12 @@ const getTodayDateStr = () => {
 };
 
 export default function TeacherAttendance() {
+  const { width: viewportWidth } = useWindowDimensions();
+  const isCompactViewport = viewportWidth < 768;
+  const colHashStyle = isCompactViewport ? { width: 32 } : s.colHash;
+  const colPhotoStyle = isCompactViewport ? { width: 44 } : s.colPhoto;
+  const colIdStyle = isCompactViewport ? { width: 54 } : s.colId;
+  const colNameStyle = isCompactViewport ? { width: 124 } : s.colName;
   const todayStr = useMemo(() => getTodayDateStr(), []);
   const todayObj = useMemo(() => new Date(), []);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
@@ -614,23 +621,26 @@ export default function TeacherAttendance() {
               <ActivityIndicator size="large" color="#0d6efd" />
               <Text style={s.loadingText}>Loading attendance sheet...</Text>
             </View>
+          ) : paginatedStaff.length === 0 ? (
+            <View style={s.noStaffRow}>
+              <Text style={s.noStaffText}>
+                No staff members match the current filter or search.
+              </Text>
+            </View>
           ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator
-              style={s.horizontalScroll}
-            >
-              <View>
-                {/* Header Row */}
-                <View style={[s.row, s.stickyHeaderRow]}>
-                  <View style={[s.colHash, s.thCell]}>
+            <View style={s.frozenTableWrapper}>
+              {/* LEFT FROZEN COLUMNS: #, Photo, ID, Staff Name */}
+              <View style={s.frozenLeftPane}>
+                {/* Left Header Row */}
+                <View style={[s.row, s.stickyHeaderRow, s.headerRowHeight]}>
+                  <View style={[colHashStyle, s.thCell, s.headerRowHeight]}>
                     <Text style={s.thText}>#</Text>
                   </View>
-                  <View style={[s.colPhoto, s.thCell]}>
+                  <View style={[colPhotoStyle, s.thCell, s.headerRowHeight]}>
                     <Text style={s.thText}>Photo</Text>
                   </View>
                   <TouchableOpacity
-                    style={[s.colId, s.thCell, s.thInteractiveCell]}
+                    style={[colIdStyle, s.thCell, s.thInteractiveCell, s.headerRowHeight]}
                     onPress={() => handleSort('id')}
                     activeOpacity={0.7}
                     accessibilityLabel="Sort by Staff ID"
@@ -643,111 +653,33 @@ export default function TeacherAttendance() {
                     </View>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[s.colName, s.thCell, s.thInteractiveCell, { paddingLeft: 6 }]}
+                    style={[colNameStyle, s.thCell, s.thInteractiveCell, s.headerRowHeight, { paddingLeft: 6 }]}
                     onPress={() => handleSort('name')}
                     activeOpacity={0.7}
                     accessibilityLabel="Sort by Staff Name"
                   >
                     <View style={s.thSortInnerName}>
-                      <Text style={[s.thText, { textAlign: 'left' }]}>Staff Name</Text>
+                      <Text style={[s.thText, { textAlign: 'left' }]} numberOfLines={1}>Staff Name</Text>
                       <Text style={s.thSortArrow}>
                         {sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : '⇅'}
                       </Text>
                     </View>
                   </TouchableOpacity>
-
-                  {/* Day Header Columns */}
-                  {days.map(day => {
-                    const isToday = day.date === todayStr;
-                    const isPast = day.date < todayStr;
-                    if (!isToday) {
-                      if (isPast && isSuperAdmin) {
-                        return (
-                          <TouchableOpacity
-                            key={day.date}
-                            activeOpacity={0.7}
-                            onPress={() => markAllPresent(day.date)}
-                            accessibilityLabel={`Mark all present for ${day.date}`}
-                            style={[
-                              s.colDay,
-                              s.thCell,
-                              s.pastSuperAdminHeaderCell,
-                            ]}
-                          >
-                            <Text style={s.thDayName}>{day.day}</Text>
-                            <Text style={s.thDayNumber}>{day.number}</Text>
-                            <View style={s.thPastQuickAllBadge}>
-                              <Text style={s.thPastQuickAllBadgeText}>✓ All</Text>
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      }
-                      return (
-                        <View
-                          key={day.date}
-                          style={[s.colDay, s.thCell]}
-                        >
-                          <Text style={s.thDayName}>{day.day}</Text>
-                          <Text style={s.thDayNumber}>{day.number}</Text>
-                        </View>
-                      );
-                    }
-                    return (
-                      <TouchableOpacity
-                        key={day.date}
-                        activeOpacity={0.7}
-                        onPress={() => markAllPresent(day.date)}
-                        accessibilityLabel={`Mark all present for today (${day.date})`}
-                        style={[
-                          s.colDay,
-                          s.thCell,
-                          s.todayHeaderCell,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            s.thDayName,
-                            s.todayHeaderText,
-                          ]}
-                        >
-                          {day.day}
-                        </Text>
-                        <Text
-                          style={[
-                            s.thDayNumber,
-                            s.todayHeaderText,
-                          ]}
-                        >
-                          {day.number}
-                        </Text>
-                        <View style={s.thQuickAllBadge}>
-                          <Text style={s.thQuickAllBadgeText}>✓ All</Text>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
                 </View>
 
-                {/* Body Rows */}
-                {paginatedStaff.length === 0 ? (
-                  <View style={s.noStaffRow}>
-                    <Text style={s.noStaffText}>
-                      No staff members match the current filter or search.
-                    </Text>
-                  </View>
-                ) : (
-                  paginatedStaff.map((person, idx) => {
-                    const rowNumber =
-                      pageSize === 0 ? idx + 1 : (page - 1) * pageSize + idx + 1;
-                    return (
-                      <View key={person.id} style={s.row}>
+                {/* Left Body Rows */}
+                {paginatedStaff.map((person, idx) => {
+                  const rowNumber =
+                    pageSize === 0 ? idx + 1 : (page - 1) * pageSize + idx + 1;
+                  return (
+                    <View key={`left-${person.id}`} style={[s.row, s.bodyRowHeight]}>
                       {/* # Col */}
-                      <View style={[s.colHash, s.fixedTdCell]}>
+                      <View style={[colHashStyle, s.fixedTdCell, s.bodyRowHeight]}>
                         <Text style={s.hashText}>{rowNumber}</Text>
                       </View>
 
                       {/* Photo Col */}
-                      <View style={[s.colPhoto, s.fixedTdCell]}>
+                      <View style={[colPhotoStyle, s.fixedTdCell, s.bodyRowHeight]}>
                         {person.photo_url ? (
                           <Image
                             source={{
@@ -755,11 +687,11 @@ export default function TeacherAttendance() {
                                 ? person.photo_url
                                 : API_BASE + person.photo_url,
                             }}
-                            style={s.avatarImg}
+                            style={[s.avatarImg, isCompactViewport && { width: 30, height: 30, borderRadius: 15 }]}
                           />
                         ) : (
-                          <View style={s.avatarPlaceholder}>
-                            <Text style={s.avatarLetter}>
+                          <View style={[s.avatarPlaceholder, isCompactViewport && { width: 30, height: 30, borderRadius: 15 }]}>
+                            <Text style={[s.avatarLetter, isCompactViewport && { fontSize: 13 }]}>
                               {person.name.trim().charAt(0).toUpperCase()}
                             </Text>
                           </View>
@@ -767,21 +699,109 @@ export default function TeacherAttendance() {
                       </View>
 
                       {/* ID Col */}
-                      <View style={[s.colId, s.fixedTdCell]}>
-                        <Text style={s.idText}>{person.staff_id}</Text>
+                      <View style={[colIdStyle, s.fixedTdCell, s.bodyRowHeight]}>
+                        <Text style={[s.idText, isCompactViewport && { fontSize: 11.5 }]} numberOfLines={1}>{person.staff_id}</Text>
                       </View>
 
                       {/* Name Col */}
-                      <View style={[s.colName, s.fixedTdCell, s.nameCellContent]}>
-                        <Text style={s.nameText} numberOfLines={1}>
+                      <View style={[colNameStyle, s.fixedTdCell, s.nameCellContent, s.bodyRowHeight]}>
+                        <Text style={[s.nameText, isCompactViewport && { fontSize: 12 }]} numberOfLines={1}>
                           {person.name}
                         </Text>
-                        <Text style={s.designationText} numberOfLines={1}>
+                        <Text style={[s.designationText, isCompactViewport && { fontSize: 10 }]} numberOfLines={1}>
                           {person.designation || 'Staff'}
                         </Text>
                       </View>
+                    </View>
+                  );
+                })}
+              </View>
 
-                      {/* Day Cells */}
+              {/* RIGHT SCROLLABLE PANE: Days 1..30/31 */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator
+                style={s.scrollableRightPane}
+              >
+                <View>
+                  {/* Day Header Row */}
+                  <View style={[s.row, s.stickyHeaderRow, s.headerRowHeight]}>
+                    {days.map(day => {
+                      const isToday = day.date === todayStr;
+                      const isPast = day.date < todayStr;
+                      if (!isToday) {
+                        if (isPast && isSuperAdmin) {
+                          return (
+                            <TouchableOpacity
+                              key={day.date}
+                              activeOpacity={0.7}
+                              onPress={() => markAllPresent(day.date)}
+                              accessibilityLabel={`Mark all present for ${day.date}`}
+                              style={[
+                                s.colDay,
+                                s.thCell,
+                                s.headerRowHeight,
+                                s.pastSuperAdminHeaderCell,
+                              ]}
+                            >
+                              <Text style={s.thDayName}>{day.day}</Text>
+                              <Text style={s.thDayNumber}>{day.number}</Text>
+                              <View style={s.thPastQuickAllBadge}>
+                                <Text style={s.thPastQuickAllBadgeText}>✓ All</Text>
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        }
+                        return (
+                          <View
+                            key={day.date}
+                            style={[s.colDay, s.thCell, s.headerRowHeight]}
+                          >
+                            <Text style={s.thDayName}>{day.day}</Text>
+                            <Text style={s.thDayNumber}>{day.number}</Text>
+                          </View>
+                        );
+                      }
+                      return (
+                        <TouchableOpacity
+                          key={day.date}
+                          activeOpacity={0.7}
+                          onPress={() => markAllPresent(day.date)}
+                          accessibilityLabel={`Mark all present for today (${day.date})`}
+                          style={[
+                            s.colDay,
+                            s.thCell,
+                            s.headerRowHeight,
+                            s.todayHeaderCell,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              s.thDayName,
+                              s.todayHeaderText,
+                            ]}
+                          >
+                            {day.day}
+                          </Text>
+                          <Text
+                            style={[
+                              s.thDayNumber,
+                              s.todayHeaderText,
+                            ]}
+                          >
+                            {day.number}
+                          </Text>
+                          <View style={s.thQuickAllBadge}>
+                            <Text style={s.thQuickAllBadgeText}>✓ All</Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  {/* Day Body Rows */}
+                  {paginatedStaff.map(person => (
+                    <View key={`days-${person.id}`} style={[s.row, s.bodyRowHeight]}>
                       {days.map(day => {
                         const dateKey = day.date;
                         const isFuture = dateKey > todayStr;
@@ -795,7 +815,7 @@ export default function TeacherAttendance() {
                           return (
                             <View
                               key={dateKey}
-                              style={[s.colDay, s.tdCell, s.futureDayCell]}
+                              style={[s.colDay, s.tdCell, s.bodyRowHeight, s.futureDayCell]}
                             />
                           );
                         }
@@ -810,6 +830,7 @@ export default function TeacherAttendance() {
                                 style={[
                                   s.colDay,
                                   s.tdCell,
+                                  s.bodyRowHeight,
                                   s.activeDayCell,
                                   s.pastEditableCell,
                                 ]}
@@ -842,7 +863,7 @@ export default function TeacherAttendance() {
                                   'শুধুমাত্র Super Admin পেছনের তারিখের (Back Date) স্টাফ হাজিরা পরিবর্তন করতে পারবেন।'
                                 );
                               }}
-                              style={[s.colDay, s.tdCell, s.pastDayCell]}
+                              style={[s.colDay, s.tdCell, s.bodyRowHeight, s.pastDayCell]}
                             >
                               <Text
                                 style={[
@@ -867,6 +888,7 @@ export default function TeacherAttendance() {
                             style={[
                               s.colDay,
                               s.tdCell,
+                              s.bodyRowHeight,
                               s.activeDayCell,
                               s.todayBodyCell,
                             ]}
@@ -889,10 +911,10 @@ export default function TeacherAttendance() {
                         );
                       })}
                     </View>
-                  );
-                }))}
-              </View>
-            </ScrollView>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
           )}
 
           {/* Quick legend footer */}
@@ -1536,6 +1558,33 @@ const s = StyleSheet.create({
   },
   horizontalScroll: {
     width: '100%',
+  },
+  frozenTableWrapper: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  frozenLeftPane: {
+    flexShrink: 0,
+    zIndex: 5,
+    borderRightWidth: 2,
+    borderRightColor: '#64748b',
+    backgroundColor: '#b9d5f5',
+    ...Platform.select({
+      web: { boxShadow: '3px 0 8px rgba(15, 23, 42, 0.14)' as any },
+      default: { elevation: 4 },
+    }),
+  },
+  scrollableRightPane: {
+    flex: 1,
+  },
+  headerRowHeight: {
+    height: 56,
+    overflow: 'hidden',
+  },
+  bodyRowHeight: {
+    height: 54,
+    overflow: 'hidden',
   },
   row: {
     flexDirection: 'row',
