@@ -320,6 +320,156 @@ router.get('/bank/ifsc/:ifsc', auth, allow('super_admin', 'admin'), asyncHandler
   catch(error){if(error.name==='AbortError')return res.status(504).json({success:false,message:'IFSC lookup timed out; enter bank details manually'});throw error;} finally{clearTimeout(timeout);}
 }));
 
+// =========================
+// KANYASHREE MANAGEMENT
+// =========================
+
+router.get('/kanyashree/list', auth, allow('super_admin', 'admin', 'office', 'teacher'), asyncHandler(async (req, res) => {
+  const { class_name, status, gender, q } = req.query;
+  const conditions = ['s.is_active = TRUE'];
+  const values = [];
+
+  if (class_name && class_name !== 'all') {
+    values.push(class_name);
+    conditions.push(`s.class_name = $${values.length}`);
+  }
+
+  if (gender && gender !== 'all') {
+    values.push(gender);
+    conditions.push(`s.gender = $${values.length}`);
+  }
+
+  if (status) {
+    if (status === 'unassigned' || status === 'not_applied' || status === 'blank') {
+      conditions.push(`(s.kanyashree_status IS NULL OR TRIM(s.kanyashree_status) = '' OR LOWER(TRIM(s.kanyashree_status)) = 'not applied')`);
+    } else if (status === 'no_id') {
+      conditions.push(`(s.kanyashree_id IS NULL OR TRIM(s.kanyashree_id) = '')`);
+    } else if (status === 'has_id') {
+      conditions.push(`(s.kanyashree_id IS NOT NULL AND TRIM(s.kanyashree_id) != '')`);
+    } else if (status !== 'all') {
+      values.push(`%${String(status).trim()}%`);
+      conditions.push(`s.kanyashree_status ILIKE $${values.length}`);
+    }
+  }
+
+  if (q) {
+    values.push(`%${String(q).trim()}%`);
+    conditions.push(`(
+      s.student_name ILIKE $${values.length} OR
+      s.registration_no ILIKE $${values.length} OR
+      CAST(s.roll_no AS TEXT) ILIKE $${values.length} OR
+      COALESCE(s.kanyashree_id, '') ILIKE $${values.length}
+    )`);
+  }
+
+  const query = `
+    SELECT
+      s.id,
+      s.registration_no,
+      s.student_name,
+      s.class_name,
+      s.roll_no,
+      s.gender,
+      TO_CHAR(s.date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
+      s.student_type,
+      s.room_id,
+      r.room_name,
+      s.kanyashree_id,
+      s.kanyashree_status,
+      s.kanyashree_date,
+      s.mobile_number,
+      s.father_name,
+      s.mother_name
+    FROM students s
+    LEFT JOIN rooms r ON r.id = s.room_id
+    WHERE ${conditions.join(' AND ')}
+    ORDER BY s.class_name, s.roll_no, s.student_name
+  `;
+
+  const result = await pool.query(query, values);
+  res.json({ success: true, students: result.rows });
+}));
+
+router.patch('/kanyashree/:id', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
+  const studentId = Number(req.params.id);
+  if (!Number.isInteger(studentId)) {
+    return res.status(400).json({ success: false, message: 'Invalid student ID' });
+  }
+
+  const { kanyashree_id, kanyashree_status, kanyashree_date } = req.body;
+
+  const result = await pool.query(
+    `UPDATE students
+     SET kanyashree_id = $1,
+         kanyashree_status = $2,
+         kanyashree_date = $3,
+         updated_at = NOW()
+     WHERE id = $4 AND is_active = TRUE
+     RETURNING id, registration_no, student_name, class_name, roll_no, kanyashree_id, kanyashree_status, kanyashree_date`,
+    [
+      kanyashree_id !== undefined ? (kanyashree_id ? String(kanyashree_id).trim() : null) : null,
+      kanyashree_status !== undefined ? (kanyashree_status ? String(kanyashree_status).trim() : null) : null,
+      kanyashree_date !== undefined ? (kanyashree_date ? String(kanyashree_date).trim() : null) : null,
+      studentId,
+    ]
+  );
+
+  if (result.rowCount === 0) {
+    return res.status(404).json({ success: false, message: 'Active student not found' });
+  }
+
+  res.json({
+    success: true,
+    student: result.rows[0],
+    message: `${result.rows[0].student_name}'s Kanyashree details updated successfully`,
+  });
+}));
+
+router.post('/kanyashree/bulk-update', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
+  const studentIds = Array.isArray(req.body?.student_ids)
+    ? req.body.student_ids.map(Number).filter(id => Number.isInteger(id) && id > 0)
+    : [];
+  const status = req.body?.kanyashree_status !== undefined ? (req.body.kanyashree_status ? String(req.body.kanyashree_status).trim() : null) : undefined;
+  const date = req.body?.kanyashree_date ? String(req.body.kanyashree_date).trim() : null;
+
+  if (!studentIds.length) {
+    return res.status(400).json({ success: false, message: 'At least one student must be selected' });
+  }
+
+  if (status === undefined) {
+    return res.status(400).json({ success: false, message: 'Kanyashree status is required' });
+  }
+
+  let query;
+  let values;
+
+  if (date) {
+    query = `UPDATE students
+             SET kanyashree_status = $1,
+                 kanyashree_date = $2,
+                 updated_at = NOW()
+             WHERE id = ANY($3::bigint[]) AND is_active = TRUE
+             RETURNING id, registration_no, student_name, class_name, roll_no, kanyashree_id, kanyashree_status, kanyashree_date`;
+    values = [status, date, studentIds];
+  } else {
+    query = `UPDATE students
+             SET kanyashree_status = $1,
+                 updated_at = NOW()
+             WHERE id = ANY($2::bigint[]) AND is_active = TRUE
+             RETURNING id, registration_no, student_name, class_name, roll_no, kanyashree_id, kanyashree_status, kanyashree_date`;
+    values = [status, studentIds];
+  }
+
+  const result = await pool.query(query, values);
+
+  res.json({
+    success: true,
+    updated_count: result.rowCount,
+    students: result.rows,
+    message: `Updated Kanyashree status to "${status || 'Cleared'}" for ${result.rowCount} student(s)`,
+  });
+}));
+
 router.get(
   '/:id',
   auth,

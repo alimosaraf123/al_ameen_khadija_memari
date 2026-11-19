@@ -5,7 +5,8 @@ export const PRIVATE_ROUTES = [
   'service-staff', 'routines', 'rooms', 'room-assignments', 'problems', 'office', 'notices',
   'marks', 'library', 'illness', 'id-cards', 'guardians', 'guardian', 'guardian-student',
   'gateman', 'gate-pass', 'dues', 'documents', 'dining-stock', 'deposit-fund',
-  'deposit-fund-report', 'fees', 'hostel-fees', 'class-results', 'behavior', 'asset-register', 'audit-log', 'attendance',
+  'deposit-fund-report', 'fees', 'hostel-fees', 'daily-cashbook', 'class-results', 'behavior', 'asset-register', 'audit-log', 'attendance', 'calling-schedule',
+  'kanyashree',
 ] as const;
 
 const HOSTEL_FEES_BLOCKED_USER_IDS = new Set(['27', '381', '382']);
