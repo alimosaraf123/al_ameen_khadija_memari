@@ -134,6 +134,29 @@ const fmtNum = (n: number) => {
 
 const fmtInr = (n: number) => `₹${Math.round(Number(n || 0)).toLocaleString('en-IN')}`;
 
+const parseItemCount = (raw: string | number | null | undefined): number => {
+  if (!raw) return 0;
+  const s = String(raw).trim();
+  if (!s) return 0;
+  const parts = s.split(/[\n,;]+/).map(p => p.trim()).filter(Boolean);
+  if (parts.length === 0) return 0;
+
+  let total = 0;
+  for (const part of parts) {
+    const m = part.match(/^(\d+)\s*[-–—]\s*(\d+)$/);
+    if (m) {
+      const a = parseInt(m[1], 10);
+      const b = parseInt(m[2], 10);
+      if (!isNaN(a) && !isNaN(b) && b >= a) {
+        total += (b - a + 1);
+        continue;
+      }
+    }
+    total += 1;
+  }
+  return total;
+};
+
 const blankDraft = (date = todayYmd()): RowDraft => ({
   entry_date: date,
   fees_bill: '',
@@ -745,7 +768,7 @@ export default function DailyCashBookScreen() {
               <Text style={s.tabBtnText}>🏠 Hostel Fees</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={[s.tabBtn, s.tabBtnActive]} onPress={() => {}}>
+          <TouchableOpacity style={[s.tabBtn, s.tabBtnActive]} onPress={() => { }}>
             <Text style={[s.tabBtnText, s.tabBtnTextActive]}>📒 Daily Cash Book</Text>
           </TouchableOpacity>
         </View>
@@ -937,7 +960,10 @@ export default function DailyCashBookScreen() {
                         style={s.billMiniBtn}
                       >
                         <Text style={s.billMiniBtnText}>
-                          👁️ View Details{billModalBills.length > 0 ? ` (${billModalBills.length})` : ''}
+                          👁️ View Details{(() => {
+                            const c = billModalBills.length > 0 ? billModalBills.length : parseItemCount(newRow.fees_bill);
+                            return c > 0 ? ` (${c})` : '';
+                          })()}
                         </Text>
                       </TouchableOpacity>
                     )}
@@ -1044,12 +1070,23 @@ export default function DailyCashBookScreen() {
                       placeholderTextColor={PLACEHOLDER_COLOR}
                       onChangeText={v => setNewRow(p => ({ ...p, cash_pv_bill: v }))}
                     />
-                    {pvModalVouchers.length > 0 && (
+                    {(pvModalVouchers.length > 0 || Boolean(newRow.cash_pv_bill)) && (
                       <TouchableOpacity
-                        onPress={() => setPvModalVisible(true)}
+                        onPress={() => {
+                          if (pvModalVouchers.length > 0) {
+                            setPvModalVisible(true);
+                          } else {
+                            void openPaymentVouchersForDate(selectedDate || newRow.entry_date);
+                          }
+                        }}
                         style={s.vchMiniBtn}
                       >
-                        <Text style={s.vchMiniBtnText}>👁️ View Details ({pvModalVouchers.length})</Text>
+                        <Text style={s.vchMiniBtnText}>
+                          👁️ View Details{(() => {
+                            const c = pvModalVouchers.length > 0 ? pvModalVouchers.length : parseItemCount(newRow.cash_pv_bill);
+                            return c > 0 ? ` (${c})` : '';
+                          })()}
+                        </Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1206,7 +1243,12 @@ export default function DailyCashBookScreen() {
                             onPress={() => void openFeesBillsForDate(entry.entry_date)}
                             style={s.billMiniBtn}
                           >
-                            <Text style={s.billMiniBtnText}>👁️ View Details</Text>
+                            <Text style={s.billMiniBtnText}>
+                              👁️ View Details{(() => {
+                                const c = entry.portal_bill_count > 0 ? entry.portal_bill_count : parseItemCount(d.fees_bill);
+                                return c > 0 ? ` (${c})` : '';
+                              })()}
+                            </Text>
                           </TouchableOpacity>
                         )}
                       </View>
@@ -1267,7 +1309,12 @@ export default function DailyCashBookScreen() {
                             onPress={() => openPaymentVouchersForDate(entry.entry_date)}
                             style={s.vchMiniBtn}
                           >
-                            <Text style={s.vchMiniBtnText}>👁️ View Details</Text>
+                            <Text style={s.vchMiniBtnText}>
+                              👁️ View Details{(() => {
+                                const c = parseItemCount(d.cash_pv_bill);
+                                return c > 0 ? ` (${c})` : '';
+                              })()}
+                            </Text>
                           </TouchableOpacity>
                         )}
                       </View>
@@ -1656,10 +1703,10 @@ const s = StyleSheet.create({
     width: '100%',
     ...(Platform.OS === 'web'
       ? ({
-          overflow: 'auto',
-          scrollbarWidth: 'thin',
-          scrollbarColor: '#93c5fd #f1f5f9',
-        } as any)
+        overflow: 'auto',
+        scrollbarWidth: 'thin',
+        scrollbarColor: '#93c5fd #f1f5f9',
+      } as any)
       : {}),
   },
   tableScrollMaxHeight: {
@@ -1668,21 +1715,21 @@ const s = StyleSheet.create({
   stickyHeader: {
     ...(Platform.OS === 'web'
       ? ({
-          position: 'sticky',
-          top: 0,
-          zIndex: 20,
-          backgroundColor: '#dbeafe',
-        } as any)
+        position: 'sticky',
+        top: 0,
+        zIndex: 20,
+        backgroundColor: '#dbeafe',
+      } as any)
       : {}),
   },
   stickyNewRow: {
     ...(Platform.OS === 'web'
       ? ({
-          position: 'sticky',
-          top: 84,
-          zIndex: 19,
-          backgroundColor: '#eff6ff',
-        } as any)
+        position: 'sticky',
+        top: 84,
+        zIndex: 19,
+        backgroundColor: '#eff6ff',
+      } as any)
       : {}),
   },
   centerBox: { padding: 40, alignItems: 'center', gap: 8 },
