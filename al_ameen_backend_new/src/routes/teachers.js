@@ -629,7 +629,13 @@ router.patch('/:id/profile-edit-reset', auth, allow('super_admin','admin'), asyn
   res.json({success:true,teacher_id:result.rows[0].id,profile_edit_count:0,profile_edits_remaining:2});
 }));
 
-router.patch('/:id/password-reset', auth, allow('super_admin','admin'), asyncHandler(async(req,res)=>{const temporaryPassword='Temp@'+Math.floor(100000+Math.random()*900000);const t=(await pool.query('SELECT user_id,login_id FROM teachers JOIN users ON users.id=teachers.user_id WHERE teachers.id=$1',[req.params.id])).rows[0];if(!t)return res.status(404).json({success:false,message:'Teacher not found'});await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2',[await bcrypt.hash(temporaryPassword,12),t.user_id]);res.json({success:true,login_id:t.login_id,temporary_password:temporaryPassword});}));
+router.patch('/:id/password-reset', auth, allow('super_admin','admin'), asyncHandler(async(req,res)=>{
+  const t=(await pool.query('SELECT teachers.user_id, users.login_id, teachers.staff_id FROM teachers JOIN users ON users.id=teachers.user_id WHERE teachers.id=$1',[req.params.id])).rows[0];
+  if(!t)return res.status(404).json({success:false,message:'Teacher not found'});
+  const defaultPassword = String(t.staff_id || '123456').trim();
+  await pool.query('UPDATE users SET password_hash=$1, password_change_required=false WHERE id=$2',[await bcrypt.hash(defaultPassword,12),t.user_id]);
+  res.json({success:true,login_id:t.login_id,temporary_password:defaultPassword});
+}));
 
 router.patch('/:id/status', auth, allow('super_admin','admin'), asyncHandler(async(req,res)=>{
  const active=req.body?.is_active!==false,client=await pool.connect();
