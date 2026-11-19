@@ -374,6 +374,16 @@ router.post('/fetch-portal', asyncHandler(async (req, res) => {
   // Bank Payment = Voucher Payment Total - Cash Payment (voucher total minus cash payment)
   const netBankPayment = Math.max(0, Number((voucherPaymentTotal - cashPaymentTotal).toFixed(2)));
 
+  const cashVchNos = new Set(cashBookPayments.map(p => String(p.vch_no).trim()));
+  const enrichedPayments = ((vchData && vchData.raw_payments) || []).map(p => {
+    const cleanNo = String(p.vch_no || '').replace(/\s*\([^)]*\)/g, '').trim();
+    const isCash = cashVchNos.has(cleanNo) || cashVchNos.has(String(p.vch_no).trim());
+    return {
+      ...p,
+      payment_mode: p.is_cancelled ? 'cancelled' : (isCash ? 'cash' : 'bank')
+    };
+  });
+
   res.json({
     success: true,
     entry_date: entryDate,
@@ -408,7 +418,7 @@ router.post('/fetch-portal', asyncHandler(async (req, res) => {
     cash_payment: Number(cashPaymentTotal.toFixed(2)),
     cash_payment_count: cashBookPayments.length,
     cash_voucher_payment: netBankPayment,
-    payment_vouchers_details: (vchData && vchData.raw_payments) || [],
+    payment_vouchers_details: enrichedPayments,
     receipt_vouchers_details: (vchData && vchData.raw_vouchers) || [],
     cash_book_payments_details: cashBookPayments,
     total_amount: Number((bankGateway + bankCheque + bankSwipeCard + cashFees).toFixed(2)),
@@ -468,6 +478,34 @@ router.get('/vouchers', asyncHandler(async (req, res) => {
       return res.status(502).json({ success: false, message: 'Failed to fetch vouchers from portal.' });
     }
 
+    let cashPaymentTotal = 0;
+    let cashBookPayments = [];
+    try {
+      const cashBookRes = await getCashBookPaymentData({ dateStr });
+      if (cashBookRes?.success) {
+        cashPaymentTotal = Number(cashBookRes.cash_payment_total || 0);
+        cashBookPayments = cashBookRes.payments || [];
+      }
+    } catch (err) {
+      console.error(`[DailyCashBook] Error fetching cash payments in /vouchers for ${dateStr}:`, err.message);
+    }
+
+    const voucherPaymentTotal = Number(vchData.voucher_payment_total || 0);
+    const netBankPayment = Math.max(0, Number((voucherPaymentTotal - cashPaymentTotal).toFixed(2)));
+
+    const cashVchNos = new Set(cashBookPayments.map(p => String(p.vch_no).trim()));
+    const enrichedPayments = (vchData.raw_payments || []).map(p => {
+      const cleanNo = String(p.vch_no || '').replace(/\s*\([^)]*\)/g, '').trim();
+      const isCash = cashVchNos.has(cleanNo) || cashVchNos.has(String(p.vch_no).trim());
+      return {
+        ...p,
+        payment_mode: p.is_cancelled ? 'cancelled' : (isCash ? 'cash' : 'bank')
+      };
+    });
+
+    const bankPaymentsCount = enrichedPayments.filter(p => p.payment_mode === 'bank').length;
+    const cashPaymentsCount = enrichedPayments.filter(p => p.payment_mode === 'cash').length;
+
     res.json({
       success: true,
       entry_date: dateStr,
@@ -484,8 +522,12 @@ router.get('/vouchers', asyncHandler(async (req, res) => {
       pv_bill: vchData.pv_bill || '',
       pv_bill_range: vchData.pv_bill_range || '',
       payment_vouchers: vchData.payment_vouchers || [],
-      voucher_payment_total: Number(vchData.voucher_payment_total || 0),
-      payment_vouchers_details: vchData.raw_payments || []
+      voucher_payment_total: voucherPaymentTotal,
+      bank_payment: netBankPayment,
+      cash_payment: Number(cashPaymentTotal.toFixed(2)),
+      bank_payments_count: bankPaymentsCount,
+      cash_payments_count: cashPaymentsCount,
+      payment_vouchers_details: enrichedPayments
     });
   } catch (err) {
     console.error(`[DailyCashBook] Error fetching vouchers for ${dateStr}:`, err);

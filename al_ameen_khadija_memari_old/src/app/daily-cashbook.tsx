@@ -104,6 +104,7 @@ type PaymentVoucherItem = {
   user_name?: string;
   is_cancelled?: boolean;
   original_debit?: string | number;
+  payment_mode?: 'bank' | 'cash' | 'cancelled';
 };
 
 type CashPaymentItem = {
@@ -604,9 +605,15 @@ export default function DailyCashBookScreen() {
         setPvModalVouchers(list);
         const activeCount = data.total_payments || list.filter(v => !v.is_cancelled).length;
         const cancCount = Number(data.cancelled_payments_count || list.filter(v => v.is_cancelled).length);
-        const cancNote = cancCount > 0 ? `  |  ⚠️ ${cancCount}টি বাতিল (Cancelled) ভাউচার গণনায় বাদ দেওয়া হয়েছে` : '';
+        const cancNote = cancCount > 0 ? `  |  ⚠️ ${cancCount}টি বাতিল ভাউচার গণনায় বাদ` : '';
+        const bankPay = Number(data.bank_payment || 0);
+        const cashPay = Number(data.cash_payment || 0);
+        const bankCnt = Number(data.bank_payments_count ?? list.filter(v => !v.is_cancelled && v.payment_mode === 'bank').length);
+        const cashCnt = Number(data.cash_payments_count ?? list.filter(v => !v.is_cancelled && v.payment_mode === 'cash').length);
+        const payBreakdown = `  |  🏦 Bank: ${fmtInr(bankPay)} (${bankCnt}টি)  |  💵 Cash: ${fmtInr(cashPay)} (${cashCnt}টি)`;
+
         setPvModalMeta(
-          `Date: ${data.entry_date_dmy || dmy}  |  সক্রিয় ভাউচার: ${activeCount} টি  |  P.V Range: ${data.pv_bill_range || data.pv_bill || '-'}  |  মোট পেমেন্ট: ${fmtInr(data.voucher_payment_total || 0)}${cancNote}`
+          `Date: ${data.entry_date_dmy || dmy}  |  সক্রিয় ভাউচার: ${activeCount} টি  |  P.V Range: ${data.pv_bill_range || data.pv_bill || '-'}  |  ভাউচার মোট: ${fmtInr(data.voucher_payment_total || 0)}${payBreakdown}${cancNote}`
         );
       } else {
         setPvModalVouchers([]);
@@ -1222,7 +1229,7 @@ export default function DailyCashBookScreen() {
                       value={newRow.bank_payment}
                       onChangeText={v => setNewRow(p => ({ ...p, bank_payment: v }))}
                     />
-                    {Boolean(num(newRow.bank_payment) > 0 || Boolean(newRow.cash_pv_bill?.trim())) && (
+                    {Boolean(num(newRow.bank_payment) > 0) && (
                       <TouchableOpacity
                         onPress={() => {
                           const ymd = selectedDate || newRow.entry_date || todayYmd();
@@ -1534,7 +1541,7 @@ export default function DailyCashBookScreen() {
                           value={d.bank_payment}
                           onChangeText={v => updateSavedField(entry.id, 'bank_payment', v)}
                         />
-                        {Boolean(num(d.bank_payment) > 0 || Boolean(d.cash_pv_bill?.trim())) && (
+                        {Boolean(num(d.bank_payment) > 0) && (
                           <TouchableOpacity
                             onPress={() => openPaymentVouchersForDate(entry.entry_date)}
                             style={[s.vchMiniBtn, { borderColor: '#93c5fd', backgroundColor: '#eff6ff' }]}
@@ -1798,13 +1805,13 @@ export default function DailyCashBookScreen() {
             ) : (
               <ScrollView style={{ maxHeight: 440 }}>
                 <View style={[s.billHead, { backgroundColor: '#881337' }]}>
-                  <Text style={[s.billTh, { width: 45 }]}>#</Text>
-                  <Text style={[s.billTh, { width: 90 }]}>Vch No</Text>
-                  <Text style={[s.billTh, { width: 90 }]}>Date</Text>
+                  <Text style={[s.billTh, { width: 40 }]}>#</Text>
+                  <Text style={[s.billTh, { width: 95 }]}>Vch No</Text>
+                  <Text style={[s.billTh, { width: 85 }]}>Date</Text>
                   <Text style={[s.billTh, { flex: 1 }]}>Particulars / Payee</Text>
-                  <Text style={[s.billTh, { width: 75 }]}>Type</Text>
+                  <Text style={[s.billTh, { width: 85 }]}>Pay Mode</Text>
                   <Text style={[s.billTh, { width: 110, textAlign: 'right' }]}>Debit Amount</Text>
-                  <Text style={[s.billTh, { width: 140 }]}>Created By</Text>
+                  <Text style={[s.billTh, { width: 130 }]}>Created By</Text>
                 </View>
                 {pvModalVouchers.map((v, i) => {
                   const isCanc = Boolean(v.is_cancelled || /cancell?ed|বাতিল/i.test(v.vch_no));
@@ -1828,8 +1835,8 @@ export default function DailyCashBookScreen() {
                         isCanc && { backgroundColor: '#fee2e2', borderLeftWidth: 3, borderLeftColor: '#ef4444' }
                       ]}
                     >
-                      <Text style={[s.billTd, { width: 45, color: '#64748b', fontSize: 11 }]}>{i + 1}</Text>
-                      <View style={{ width: 100, paddingHorizontal: 4 }}>
+                      <Text style={[s.billTd, { width: 40, color: '#64748b', fontSize: 11 }]}>{i + 1}</Text>
+                      <View style={{ width: 95, paddingHorizontal: 4 }}>
                         <Text
                           style={[
                             s.billTd,
@@ -1854,14 +1861,21 @@ export default function DailyCashBookScreen() {
                       >
                         {v.particulars}
                       </Text>
-                      <Text
-                        style={[
-                          s.billTd,
-                          { width: 75, color: isCanc ? '#dc2626' : '#be123c', fontWeight: '700' }
-                        ]}
-                      >
-                        {isCanc ? 'Cancelled' : v.vch_type || 'Payment'}
-                      </Text>
+                      <View style={{ width: 85, paddingHorizontal: 4 }}>
+                        {isCanc ? (
+                          <View style={{ backgroundColor: '#fee2e2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start' }}>
+                            <Text style={{ color: '#b91c1c', fontSize: 10.5, fontWeight: '800' }}>❌ বাতিল</Text>
+                          </View>
+                        ) : v.payment_mode === 'cash' ? (
+                          <View style={{ backgroundColor: '#dcfce7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start' }}>
+                            <Text style={{ color: '#15803d', fontSize: 10.5, fontWeight: '800' }}>💵 Cash</Text>
+                          </View>
+                        ) : (
+                          <View style={{ backgroundColor: '#dbeafe', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start' }}>
+                            <Text style={{ color: '#1d4ed8', fontSize: 10.5, fontWeight: '800' }}>🏦 Bank</Text>
+                          </View>
+                        )}
+                      </View>
                       <View style={{ width: 110, alignItems: 'flex-end', paddingHorizontal: 4 }}>
                         {isCanc ? (
                           <>
@@ -1876,7 +1890,7 @@ export default function DailyCashBookScreen() {
                           </Text>
                         )}
                       </View>
-                      <Text style={[s.billTd, { width: 140, fontSize: 11, color: '#475569' }]} numberOfLines={1}>
+                      <Text style={[s.billTd, { width: 130, fontSize: 11, color: '#475569' }]} numberOfLines={1}>
                         {v.user_name || '-'}
                       </Text>
                     </View>
@@ -1890,11 +1904,29 @@ export default function DailyCashBookScreen() {
                 const active = pvModalVouchers.filter(v => !v.is_cancelled && !/cancell?ed|বাতিল/i.test(v.vch_no));
                 const canc = pvModalVouchers.length - active.length;
                 const tot = active.reduce((sum, v) => sum + (typeof v.debit === 'number' ? v.debit : parseFloat(String(v.debit || '').replace(/,/g, '')) || 0), 0);
+                const cashVchs = active.filter(v => v.payment_mode === 'cash');
+                const bankVchs = active.filter(v => v.payment_mode !== 'cash');
+                const cashTot = cashVchs.reduce((sum, v) => sum + (typeof v.debit === 'number' ? v.debit : parseFloat(String(v.debit || '').replace(/,/g, '')) || 0), 0);
+                const bankTot = bankVchs.reduce((sum, v) => sum + (typeof v.debit === 'number' ? v.debit : parseFloat(String(v.debit || '').replace(/,/g, '')) || 0), 0);
+
                 return (
-                  <View style={{ flex: 1, gap: 2 }}>
+                  <View style={{ flex: 1, gap: 4 }}>
                     <Text style={{ fontSize: 13, fontWeight: '800', color: '#881337' }}>
-                      মোট সক্রিয় ভাউচার: {active.length} টি  |  মোট পেমেন্ট: {fmtInr(tot)}
+                      মোট সক্রিয় ভাউচার: {active.length} টি  |  মোট ভাউচার পেমেন্ট: {fmtInr(tot)}
                     </Text>
+                    <View style={{ flexDirection: 'row', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#1d4ed8' }}>
+                        🏦 Bank Payment: {fmtInr(bankTot)} ({bankVchs.length}টি)
+                      </Text>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#15803d' }}>
+                        💵 Cash Payment: {fmtInr(cashTot)} ({cashVchs.length}টি)
+                      </Text>
+                    </View>
+                    {bankTot === 0 && active.length > 0 && (
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#b45309' }}>
+                        ℹ️ এই তারিখের সমস্ত সক্রিয় ভাউচার Cash Payment-এ পরিশোধ করা হয়েছে, তাই Bank Payment = ₹0
+                      </Text>
+                    )}
                     {canc > 0 && (
                       <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#dc2626' }}>
                         ⚠️ {canc}টি বাতিল (Cancelled) ভাউচার গণনায় বাদ দেওয়া হয়েছে
