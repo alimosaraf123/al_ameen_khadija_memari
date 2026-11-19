@@ -20,6 +20,76 @@ import AcademyHeader from '../components/AcademyHeader';
 import { api } from '../lib/api';
 import { isHostelFeesBlockedUser } from '../lib/routeAccess';
 import { initiateAudioCall } from '../lib/callManager';
+import * as Location from 'expo-location';
+
+const MISSION_LOCATION = {
+  latitude: 23.186813165763375,
+  longitude: 88.11163491185468,
+  maxDistanceMeters: 200,
+};
+const LOCATION_ERROR_MSG = 'please contact- 7479020091 for submit attednance';
+
+function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371e3;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function showAttendanceAlert(message: string) {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    window.alert(message);
+  } else {
+    Alert.alert('Attendance Alert', message);
+  }
+}
+
+async function getDeviceCoordinates(): Promise<{ latitude: number; longitude: number } | null> {
+  try {
+    let perm = await Location.getForegroundPermissionsAsync().catch(() => null);
+    if (!perm || perm.status !== 'granted') {
+      perm = await Location.requestForegroundPermissionsAsync().catch(() => null);
+    }
+    if (perm?.status === 'granted') {
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      if (loc?.coords && Number.isFinite(loc.coords.latitude) && Number.isFinite(loc.coords.longitude)) {
+        return {
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        };
+      }
+    }
+  } catch {}
+
+  if (typeof navigator !== 'undefined' && navigator.geolocation) {
+    try {
+      const coords = await new Promise<{ latitude: number; longitude: number }>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            resolve({
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+            });
+          },
+          (err) => reject(err),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      });
+      return coords;
+    } catch {}
+  }
+
+  return null;
+}
 
 const menuPermission: Record<string, string | string[]> = {
   // Student Management
@@ -168,9 +238,68 @@ export default function Dashboard() {
   const [permissions, setPermissions] = useState<string[]>([]);
   const [userRole, setUserRole] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [availability, setAvailability] = useState('Present');
+  const [submittingAvailability, setSubmittingAvailability] = useState(false);
+  const [isStaffUser, setIsStaffUser] = useState(false);
   const [dashboardName, setDashboardName] = useState('');
   const [currentDateTime, setCurrentDateTime] = useState('');
   const [activeTab, setActiveTab] = useState<'cards' | 'overview'>('cards');
+
+  const isKnownStaffAccount = useMemo(() => {
+    const raw = `${currentUser?.login_id || ''} ${currentUser?.full_name || ''}`.toLowerCase();
+    return (
+      isStaffUser ||
+      !!currentUser?.teacher_id ||
+      raw.includes('noorsaba') ||
+      raw.includes('nasmin') ||
+      raw.includes('masema')
+    );
+  }, [isStaffUser, currentUser]);
+
+  const handleSetAvailability = async (nextStatus: 'Present' | 'Absent') => {
+    if (submittingAvailability) return;
+    setSubmittingAvailability(true);
+    try {
+      const coords = await getDeviceCoordinates();
+      if (!coords) {
+        showAttendanceAlert(LOCATION_ERROR_MSG);
+        return;
+      }
+
+      const dist = calculateDistanceMeters(
+        coords.latitude,
+        coords.longitude,
+        MISSION_LOCATION.latitude,
+        MISSION_LOCATION.longitude
+      );
+
+      if (!Number.isFinite(dist) || dist > MISSION_LOCATION.maxDistanceMeters) {
+        showAttendanceAlert(LOCATION_ERROR_MSG);
+        return;
+      }
+
+      const res = await api('/api/teachers/me/availability', {
+        method: 'POST',
+        body: JSON.stringify({
+          date: new Date().toISOString().slice(0, 10),
+          status: nextStatus,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+        }),
+      });
+
+      setAvailability(res.status || nextStatus);
+      showAttendanceAlert(
+        nextStatus === 'Present'
+          ? `Marked IN / PRESENT successfully (${Math.round(dist)}m from mission).`
+          : `Marked OUT / ABSENT successfully (${Math.round(dist)}m from mission).`
+      );
+    } catch (e: any) {
+      showAttendanceAlert(e?.message || LOCATION_ERROR_MSG);
+    } finally {
+      setSubmittingAvailability(false);
+    }
+  };
 
   // Check which menus the user is allowed to access
   const canAccess = (path: string) => {
@@ -356,6 +485,15 @@ export default function Dashboard() {
           setActiveTab('overview');
         } else {
           setActiveTab('cards');
+        }
+      })
+      .catch(() => { });
+
+    void api('/api/teachers/me/availability?date=' + new Date().toISOString().slice(0, 10))
+      .then((res) => {
+        if (res?.success) {
+          setIsStaffUser(true);
+          if (res.status) setAvailability(res.status);
         }
       })
       .catch(() => { });
@@ -698,6 +836,66 @@ export default function Dashboard() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* ============================================================== */}
+        {/* MISSION STATUS (FOR NOORSABA, NASMIN, MASEMA & STAFF MEMBERS)  */}
+        {/* ============================================================== */}
+        {isKnownStaffAccount && (
+          <View style={s.missionStatusCard}>
+            <View style={s.missionStatusRow}>
+              <View style={s.missionStatusInfo}>
+                <Text style={s.missionStatusLabel}>Mission Status</Text>
+                <Text style={s.missionStatusSub}>
+                  {availability === 'Present' ? '🟢 IN / PRESENT' : '🔴 OUT / ABSENT'}
+                </Text>
+              </View>
+              <View style={s.missionStatusButtons}>
+                <TouchableOpacity
+                  disabled={submittingAvailability}
+                  style={[
+                    s.missionStatusBtn,
+                    availability === 'Present' ? s.missionStatusIn : s.missionStatusInactive,
+                    submittingAvailability && { opacity: 0.6 },
+                  ]}
+                  onPress={() => handleSetAvailability('Present')}
+                >
+                  <Text
+                    style={[
+                      s.missionStatusBtnText,
+                      availability === 'Present' ? s.missionStatusTextActive : s.missionStatusTextInactive,
+                    ]}
+                  >
+                    {submittingAvailability ? 'CHECKING...' : 'IN / PRESENT'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  disabled={submittingAvailability}
+                  style={[
+                    s.missionStatusBtn,
+                    availability === 'Absent' ? s.missionStatusOut : s.missionStatusInactive,
+                    submittingAvailability && { opacity: 0.6 },
+                  ]}
+                  onPress={() => handleSetAvailability('Absent')}
+                >
+                  <Text
+                    style={[
+                      s.missionStatusBtnText,
+                      availability === 'Absent' ? s.missionStatusTextActive : s.missionStatusTextInactive,
+                    ]}
+                  >
+                    {submittingAvailability ? 'CHECKING...' : 'OUT / ABSENT'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={s.missionRoutineLink}
+                  onPress={() => router.push('/teacher' as any)}
+                >
+                  <Text style={s.missionRoutineLinkText}>🎓 Routine / Dashboard →</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
 
         {overviewLoading ? (
           <View style={s.loadingBox}>
@@ -2042,6 +2240,95 @@ const s = StyleSheet.create({
     color: '#fff',
     fontSize: 11,
     fontWeight: '900',
+  },
+
+  // ==========================================
+  // MISSION STATUS CARD (STAFF / TEACHERS)
+  // ==========================================
+  missionStatusCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+    shadowColor: '#166534',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  missionStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  missionStatusInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  missionStatusLabel: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#166534',
+  },
+  missionStatusSub: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  missionStatusButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  missionStatusBtn: {
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 100,
+  },
+  missionStatusIn: {
+    backgroundColor: '#16a34a',
+  },
+  missionStatusOut: {
+    backgroundColor: '#dc2626',
+  },
+  missionStatusInactive: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  missionStatusBtnText: {
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.3,
+  },
+  missionStatusTextActive: {
+    color: '#ffffff',
+  },
+  missionStatusTextInactive: {
+    color: '#64748b',
+  },
+  missionRoutineLink: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  missionRoutineLinkText: {
+    color: '#1d4ed8',
+    fontSize: 12,
+    fontWeight: '800',
   },
 
   loadingBox: {
