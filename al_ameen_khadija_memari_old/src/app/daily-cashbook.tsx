@@ -102,6 +102,8 @@ type PaymentVoucherItem = {
   debit: string | number;
   credit?: string | number;
   user_name?: string;
+  is_cancelled?: boolean;
+  original_debit?: string | number;
 };
 
 type CashPaymentItem = {
@@ -511,15 +513,19 @@ export default function DailyCashBookScreen() {
         : [];
       setPvModalVouchers(pvDetails);
       setPvModalTitle(`Payment Vouchers — ${data.entry_date_dmy || ymdToDmy(ymd)}`);
+      const activePvCount = data.voucher_payment_count || pvDetails.filter(v => !v.is_cancelled).length;
+      const cancPvCount = Number(data.cancelled_payments_count || pvDetails.filter(v => v.is_cancelled).length);
+      const cancNote = cancPvCount > 0 ? `  |  ⚠️ ${cancPvCount}টি বাতিল ভাউচার গণনায় বাদ` : '';
+
       setPvModalMeta(
-        `Date: ${data.entry_date_dmy || ymdToDmy(ymd)}  |  Total Vouchers: ${pvDetails.length}  |  P.V Range: ${data.cash_pv_bill_range || data.cash_pv_bill || '-'}  |  Total Payment: ${fmtInr(data.bank_payment || 0)}`
+        `Date: ${data.entry_date_dmy || ymdToDmy(ymd)}  |  সক্রিয় ভাউচার: ${activePvCount} টি  |  P.V Range: ${data.cash_pv_bill_range || data.cash_pv_bill || '-'}  |  মোট পেমেন্ট: ${fmtInr(data.bank_payment || 0)}${cancNote}`
       );
 
       const cashPayAmt = Number(data.cash_payment || 0);
       const cashPayCount = Number(data.cash_payment_count || 0);
       const cashPayText = cashPayAmt > 0 ? ` | Cash Payment: ${fmtInr(cashPayAmt)}${cashPayCount > 0 ? ` (${cashPayCount}টি)` : ''}` : '';
       setBanner(
-        `${data.entry_date_dmy || ymdToDmy(ymd)}: ${data.bill_count || 0}টি বিল ও ${pvDetails.length}টি ভাউচার পাওয়া গেছে — Fees: ${data.fees_bill_range || data.fees_bill || '-'} | P.V: ${data.cash_pv_bill_range || data.cash_pv_bill || '-'} (Bank: ${fmtInr(data.bank_payment || 0)})${cashPayText}`
+        `${data.entry_date_dmy || ymdToDmy(ymd)}: ${data.bill_count || 0}টি বিল ও ${activePvCount}টি ভাউচার পাওয়া গেছে — Fees: ${data.fees_bill_range || data.fees_bill || '-'} | P.V: ${data.cash_pv_bill_range || data.cash_pv_bill || '-'} (Bank: ${fmtInr(data.bank_payment || 0)})${cashPayText}`
       );
     } catch (e: any) {
       setError(e.message || 'Portal fetch failed');
@@ -596,8 +602,11 @@ export default function DailyCashBookScreen() {
           ? data.payment_vouchers_details
           : [];
         setPvModalVouchers(list);
+        const activeCount = data.total_payments || list.filter(v => !v.is_cancelled).length;
+        const cancCount = Number(data.cancelled_payments_count || list.filter(v => v.is_cancelled).length);
+        const cancNote = cancCount > 0 ? `  |  ⚠️ ${cancCount}টি বাতিল (Cancelled) ভাউচার গণনায় বাদ দেওয়া হয়েছে` : '';
         setPvModalMeta(
-          `Date: ${data.entry_date_dmy || dmy}  |  Total Vouchers: ${list.length}  |  P.V Range: ${data.pv_bill_range || data.pv_bill || '-'}  |  Total Payment: ${fmtInr(data.voucher_payment_total || 0)}`
+          `Date: ${data.entry_date_dmy || dmy}  |  সক্রিয় ভাউচার: ${activeCount} টি  |  P.V Range: ${data.pv_bill_range || data.pv_bill || '-'}  |  মোট পেমেন্ট: ${fmtInr(data.voucher_payment_total || 0)}${cancNote}`
         );
       } else {
         setPvModalVouchers([]);
@@ -1240,6 +1249,16 @@ export default function DailyCashBookScreen() {
                       </TouchableOpacity>
                     )}
                   </View>
+                  <View style={[s.cell, { width: W.cashPay }]}>
+                    <TextInput
+                      style={s.inputNum}
+                      keyboardType="numeric"
+                      placeholder="0"
+                      placeholderTextColor={PLACEHOLDER_COLOR}
+                      value={newRow.cash_payment}
+                      onChangeText={v => setNewRow(p => ({ ...p, cash_payment: v }))}
+                    />
+                  </View>
                   <View style={[s.cell, { width: W.bankDep }]}>
                     <TextInput
                       style={s.inputNum}
@@ -1535,6 +1554,15 @@ export default function DailyCashBookScreen() {
                           </TouchableOpacity>
                         )}
                       </View>
+                      <View style={[s.cell, { width: W.cashPay }]}>
+                        <TextInput
+                          style={[s.inputNum, !isEditing && s.inputReadonly]}
+                          keyboardType="numeric"
+                          editable={isEditing}
+                          value={d.cash_payment}
+                          onChangeText={v => updateSavedField(entry.id, 'cash_payment', v)}
+                        />
+                      </View>
                       <View style={[s.cell, { width: W.bankDep }]}>
                         <TextInput
                           style={[s.inputNum, !isEditing && s.inputReadonly]}
@@ -1778,16 +1806,78 @@ export default function DailyCashBookScreen() {
                   <Text style={[s.billTh, { width: 140 }]}>Created By</Text>
                 </View>
                 {pvModalVouchers.map((v, i) => {
-                  const deb = typeof v.debit === 'number' ? v.debit : parseFloat(String(v.debit || '').replace(/,/g, '')) || 0;
+                  const isCanc = Boolean(v.is_cancelled || /cancell?ed|বাতিল/i.test(v.vch_no));
+                  const deb = isCanc
+                    ? 0
+                    : typeof v.debit === 'number'
+                    ? v.debit
+                    : parseFloat(String(v.debit || '').replace(/,/g, '')) || 0;
+                  const origDeb = v.original_debit
+                    ? typeof v.original_debit === 'number'
+                      ? v.original_debit
+                      : parseFloat(String(v.original_debit || '').replace(/,/g, '')) || 0
+                    : deb;
+
                   return (
-                    <View key={`${v.vch_no}-${i}`} style={[s.billRow, i % 2 === 1 && { backgroundColor: '#fff1f2' }]}>
+                    <View
+                      key={`${v.vch_no}-${i}`}
+                      style={[
+                        s.billRow,
+                        i % 2 === 1 && { backgroundColor: '#fff1f2' },
+                        isCanc && { backgroundColor: '#fee2e2', borderLeftWidth: 3, borderLeftColor: '#ef4444' }
+                      ]}
+                    >
                       <Text style={[s.billTd, { width: 45, color: '#64748b', fontSize: 11 }]}>{i + 1}</Text>
-                      <Text style={[s.billTd, { width: 90, fontWeight: '800', color: '#9f1239' }]}>{v.vch_no}</Text>
-                      <Text style={[s.billTd, { width: 90, fontSize: 11.5 }]}>{v.date}</Text>
-                      <Text style={[s.billTd, { flex: 1, fontWeight: '600' }]} numberOfLines={2}>{v.particulars}</Text>
-                      <Text style={[s.billTd, { width: 75, color: '#be123c', fontWeight: '700' }]}>{v.vch_type || 'Payment'}</Text>
-                      <Text style={[s.billTd, { width: 110, textAlign: 'right', fontWeight: '800', color: '#be123c' }]}>{fmtInr(deb)}</Text>
-                      <Text style={[s.billTd, { width: 140, fontSize: 11, color: '#475569' }]} numberOfLines={1}>{v.user_name || '-'}</Text>
+                      <View style={{ width: 100, paddingHorizontal: 4 }}>
+                        <Text
+                          style={[
+                            s.billTd,
+                            { paddingHorizontal: 0, fontWeight: '800', color: isCanc ? '#dc2626' : '#9f1239' },
+                            isCanc && { textDecorationLine: 'line-through' }
+                          ]}
+                        >
+                          {v.vch_no}
+                        </Text>
+                        {isCanc && (
+                          <Text style={{ fontSize: 9.5, color: '#b91c1c', fontWeight: '800' }}>[বাতিল / Cancelled]</Text>
+                        )}
+                      </View>
+                      <Text style={[s.billTd, { width: 85, fontSize: 11.5 }]}>{v.date}</Text>
+                      <Text
+                        style={[
+                          s.billTd,
+                          { flex: 1, fontWeight: '600' },
+                          isCanc && { textDecorationLine: 'line-through', color: '#991b1b' }
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {v.particulars}
+                      </Text>
+                      <Text
+                        style={[
+                          s.billTd,
+                          { width: 75, color: isCanc ? '#dc2626' : '#be123c', fontWeight: '700' }
+                        ]}
+                      >
+                        {isCanc ? 'Cancelled' : v.vch_type || 'Payment'}
+                      </Text>
+                      <View style={{ width: 110, alignItems: 'flex-end', paddingHorizontal: 4 }}>
+                        {isCanc ? (
+                          <>
+                            <Text style={{ fontSize: 10.5, color: '#94a3b8', textDecorationLine: 'line-through' }}>
+                              {fmtInr(origDeb)}
+                            </Text>
+                            <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#dc2626' }}>₹0 (বাদ)</Text>
+                          </>
+                        ) : (
+                          <Text style={[s.billTd, { paddingHorizontal: 0, fontWeight: '800', color: '#be123c' }]}>
+                            {fmtInr(deb)}
+                          </Text>
+                        )}
+                      </View>
+                      <Text style={[s.billTd, { width: 140, fontSize: 11, color: '#475569' }]} numberOfLines={1}>
+                        {v.user_name || '-'}
+                      </Text>
                     </View>
                   );
                 })}
@@ -1795,9 +1885,23 @@ export default function DailyCashBookScreen() {
             )}
 
             <View style={s.pvModalFooter}>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: '#881337' }}>
-                মোট ভাউচার: {pvModalVouchers.length} টি  |  মোট পেমেন্ট: {fmtInr(pvModalVouchers.reduce((sum, v) => sum + (typeof v.debit === 'number' ? v.debit : parseFloat(String(v.debit || '').replace(/,/g, '')) || 0), 0))}
-              </Text>
+              {(() => {
+                const active = pvModalVouchers.filter(v => !v.is_cancelled && !/cancell?ed|বাতিল/i.test(v.vch_no));
+                const canc = pvModalVouchers.length - active.length;
+                const tot = active.reduce((sum, v) => sum + (typeof v.debit === 'number' ? v.debit : parseFloat(String(v.debit || '').replace(/,/g, '')) || 0), 0);
+                return (
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#881337' }}>
+                      মোট সক্রিয় ভাউচার: {active.length} টি  |  মোট পেমেন্ট: {fmtInr(tot)}
+                    </Text>
+                    {canc > 0 && (
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#dc2626' }}>
+                        ⚠️ {canc}টি বাতিল (Cancelled) ভাউচার গণনায় বাদ দেওয়া হয়েছে
+                      </Text>
+                    )}
+                  </View>
+                );
+              })()}
               <TouchableOpacity onPress={() => setPvModalVisible(false)} style={[s.primaryBtn, { backgroundColor: '#be123c' }]}>
                 <Text style={s.primaryBtnText}>বন্ধ করুন</Text>
               </TouchableOpacity>

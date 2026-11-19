@@ -161,6 +161,9 @@ function parseFeesTable(html) {
     if (rowText.includes('day total') || rowText.includes('monthly total') || rowText.includes('total amount')) {
       continue;
     }
+    if (rowText.includes('cancelled') || rowText.includes('canceled') || rowText.includes('বাতিল')) {
+      continue;
+    }
 
     const dateStr = (cells[0] || '').trim();
     const billNo = (cells[1] || '').trim();
@@ -575,6 +578,7 @@ function parseBookHtml(html) {
 
     if (cells[0] === '0' && cells[1] === '') continue;
     if (rowText.includes('date') && (rowText.includes('ledger') || rowText.includes('particulars'))) continue;
+    if (rowText.includes('cancelled') || rowText.includes('canceled') || rowText.includes('বাতিল')) continue;
 
     const len = cells.length;
     let debit = 0;
@@ -966,14 +970,26 @@ async function getHostelFeeReceiptVouchers({ dateStr = '', branchId = MEMARI_BRA
     .map(m => [...m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(c => cleanText(c[1])))
     .filter(c => c.length >= 7 && c[1] && c[2]);
 
+  const isVoucherRowCancelled = r => {
+    if (!r) return false;
+    if (Array.isArray(r)) {
+      return r.some(cell => /cancell?ed|বাতিল/i.test(String(cell || '')));
+    }
+    return /cancell?ed|বাতিল/i.test(String(r));
+  };
+
   // Filter: Particulars contains 'Student Hostel Fee' and Vch Type is 'Receipt'
-  const matchedReceipts = rows.filter(r => {
+  const allReceiptRows = rows.filter(r => {
     const particulars = (r[2] || '').toLowerCase();
     const vchType = (r[3] || '').toLowerCase();
     return particulars.includes('student hostel fee') && vchType.includes('receipt');
   });
+  const matchedReceipts = allReceiptRows.filter(r => !isVoucherRowCancelled(r));
+  const cancelledReceipts = allReceiptRows.filter(r => isVoucherRowCancelled(r));
 
-  const receiptVchNos = matchedReceipts.map(r => String(r[4] || '').trim()).filter(Boolean);
+  const receiptVchNos = matchedReceipts
+    .map(r => String(r[4] || '').replace(/\(.*?cancell?ed.*?\)/gi, '').trim())
+    .filter(Boolean);
   const seenReceipt = new Set();
   const uniqueReceiptVchNos = [];
   for (const v of receiptVchNos) {
@@ -994,9 +1010,14 @@ async function getHostelFeeReceiptVouchers({ dateStr = '', branchId = MEMARI_BRA
       ? `${uniqueReceiptVchNos[0]}-${uniqueReceiptVchNos[uniqueReceiptVchNos.length - 1]}`
       : (uniqueReceiptVchNos[0] || '');
 
-  // Filter: Vch Type is 'Payment' -> P.V Bill and Voucher Payment amount
-  const matchedPayments = rows.filter(r => (r[3] || '').toLowerCase().includes('payment'));
-  const paymentVchNos = matchedPayments.map(r => String(r[4] || '').trim()).filter(Boolean);
+  // Filter: Vch Type is 'Payment' -> P.V Bill and Voucher Payment amount (exclude cancelled from calculation)
+  const allPaymentRows = rows.filter(r => (r[3] || '').toLowerCase().includes('payment'));
+  const matchedPayments = allPaymentRows.filter(r => !isVoucherRowCancelled(r));
+  const cancelledPayments = allPaymentRows.filter(r => isVoucherRowCancelled(r));
+
+  const paymentVchNos = matchedPayments
+    .map(r => String(r[4] || '').replace(/\(.*?cancell?ed.*?\)/gi, '').trim())
+    .filter(Boolean);
   const seenPayment = new Set();
   const uniquePaymentVchNos = [];
   for (const v of paymentVchNos) {
@@ -1017,12 +1038,64 @@ async function getHostelFeeReceiptVouchers({ dateStr = '', branchId = MEMARI_BRA
       ? `${uniquePaymentVchNos[0]}-${uniquePaymentVchNos[uniquePaymentVchNos.length - 1]}`
       : (uniquePaymentVchNos[0] || '');
 
-  // Sum total debit amount of Payment vouchers
+  // Sum total debit amount of active Payment vouchers ONLY (cancelled excluded from calculation)
   let totalPaymentAmount = 0;
   for (const p of matchedPayments) {
     const deb = parseFloat(String(p[5] || '').replace(/,/g, ''));
     if (!isNaN(deb) && deb > 0) totalPaymentAmount += deb;
   }
+
+  const rawReceipts = [
+    ...matchedReceipts.map(r => ({
+      voucher_id: r[0],
+      date: r[1],
+      particulars: r[2],
+      vch_type: r[3],
+      vch_no: String(r[4] || '').trim(),
+      debit: r[5],
+      credit: r[6],
+      user_name: r[8] || '',
+      is_cancelled: false
+    })),
+    ...cancelledReceipts.map(r => ({
+      voucher_id: r[0],
+      date: r[1],
+      particulars: r[2],
+      vch_type: r[3],
+      vch_no: String(r[4] || '').trim(),
+      debit: 0,
+      credit: 0,
+      original_credit: r[6],
+      user_name: r[8] || '',
+      is_cancelled: true
+    }))
+  ];
+
+  const rawPayments = [
+    ...matchedPayments.map(r => ({
+      voucher_id: r[0],
+      date: r[1],
+      particulars: r[2],
+      vch_type: r[3],
+      vch_no: String(r[4] || '').trim(),
+      debit: r[5],
+      credit: r[6],
+      user_name: r[8] || '',
+      is_cancelled: false
+    })),
+    ...cancelledPayments.map(r => ({
+      voucher_id: r[0],
+      date: r[1],
+      particulars: r[2],
+      vch_type: r[3],
+      vch_no: String(r[4] || '').trim(),
+      debit: 0,
+      original_debit: r[5],
+      credit: r[6],
+      user_name: r[8] || '',
+      is_cancelled: true
+    }))
+  ];
 
   return {
     success: true,
@@ -1037,26 +1110,10 @@ async function getHostelFeeReceiptVouchers({ dateStr = '', branchId = MEMARI_BRA
     pv_bill_range: paymentRange,
     payment_vouchers: uniquePaymentVchNos,
     voucher_payment_total: Number(totalPaymentAmount.toFixed(2)),
-    raw_vouchers: matchedReceipts.map(r => ({
-      voucher_id: r[0],
-      date: r[1],
-      particulars: r[2],
-      vch_type: r[3],
-      vch_no: r[4],
-      debit: r[5],
-      credit: r[6],
-      user_name: r[8] || ''
-    })),
-    raw_payments: matchedPayments.map(r => ({
-      voucher_id: r[0],
-      date: r[1],
-      particulars: r[2],
-      vch_type: r[3],
-      vch_no: r[4],
-      debit: r[5],
-      credit: r[6],
-      user_name: r[8] || ''
-    }))
+    cancelled_payments_count: cancelledPayments.length,
+    cancelled_receipts_count: cancelledReceipts.length,
+    raw_vouchers: rawReceipts,
+    raw_payments: rawPayments
   };
 }
 
@@ -1084,7 +1141,8 @@ async function getCashBookPaymentData({ dateStr = '', branchId = MEMARI_BRANCH_I
   const payments = (bookData.transactions || []).filter(t => {
     const isPaymentType = (t.vch_type || '').toLowerCase().includes('payment');
     const hasPaymentAmt = Number(t.payment || 0) > 0;
-    return isPaymentType || hasPaymentAmt;
+    const isCancelled = /cancell?ed|বাতিল/i.test(`${t.vch_no || ''} ${t.particulars || ''} ${t.narration || ''}`);
+    return (isPaymentType || hasPaymentAmt) && !isCancelled;
   });
 
   const totalPayment = payments.reduce((sum, t) => sum + Number(t.payment || 0), 0);
