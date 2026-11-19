@@ -23,6 +23,7 @@ const menuPermission: Record<string, string | string[]> = {
   // Student Management
   '/students': 'students',
   '/student-entry': ['student_entry', 'students'],
+  '/student-registration-form': ['students'],
   '/daily-attendance': ['daily_attendance', 'attendance', 'students'],
   '/id-cards': ['id_cards', 'students'],
   '/documents': ['documents', 'students'],
@@ -38,6 +39,7 @@ const menuPermission: Record<string, string | string[]> = {
   '/teachers?mode=view': ['teachers', 'teachers_view'],
   '/teachers?mode=add': ['teachers_add', 'teachers'],
   '/teachers?mode=icard': ['teachers_icard', 'teachers'],
+  '/staff-registration-form': ['teachers', 'teachers_view'],
   '/teachers?action=gateman_sheet': ['gateman_sheet', 'teachers'],
   '/teacher-attendance': ['teacher_attendance', 'teachers'],
   '/staff-summary': ['staff_summary', 'teachers'],
@@ -542,14 +544,14 @@ export default function Dashboard() {
             <Text style={[s.navBtnText, { color: '#ffffff', fontWeight: '800' }]}>All Menus</Text>
           </TouchableOpacity>
 
-          {canAccessGroup(['/students', '/daily-attendance', '/student-lifecycle', '/student-transfer']) && (
+          {canAccessGroup(['/students', '/student-registration-form', '/daily-attendance', '/student-lifecycle', '/student-transfer']) && (
             <TouchableOpacity style={s.navBtn} onPress={() => setStudentMenu(true)}>
               <Text style={s.navBtnIcon}>🎓</Text>
               <Text style={s.navBtnText}>Students ▾</Text>
             </TouchableOpacity>
           )}
 
-          {canAccessGroup(['/teachers', '/teacher-attendance', '/staff-summary', '/service-staff']) && (
+          {canAccessGroup(['/teachers', '/staff-registration-form', '/teacher-attendance', '/staff-summary', '/service-staff']) && (
             <TouchableOpacity style={s.navBtn} onPress={() => setTeacherMenu(true)}>
               <Text style={s.navBtnIcon}>👥</Text>
               <Text style={s.navBtnText}>Staff ▾</Text>
@@ -1075,9 +1077,11 @@ export default function Dashboard() {
             </View>
             <View style={s.modalGrid}>
               {[
+                ['Teacher Dashboard', '/teacher'],
                 ['View Staff', '/teachers?mode=view'],
                 ['Add Staff', '/teachers?mode=add'],
                 ['I-Card, Form & Download', '/teachers?mode=icard'],
+                ['Staff Registration Form', '/staff-registration-form'],
                 ['Staff Attendance', '/teacher-attendance'],
                 ['Staff Summary', '/staff-summary'],
                 ['Gateman Sheet (Excel)', '/teachers?action=gateman_sheet'],
@@ -1117,6 +1121,7 @@ export default function Dashboard() {
               {[
                 ['Student Details', '/students'],
                 ['Student Entry', '/student-entry'],
+                ['Student Registration Form', '/student-registration-form'],
                 ['Daily Student Attendance', '/daily-attendance'],
                 ['Student ID Cards & Form', '/id-cards'],
                 ['Document Upload', '/documents'],

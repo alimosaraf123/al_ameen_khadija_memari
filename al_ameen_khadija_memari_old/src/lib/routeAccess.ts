@@ -1,7 +1,7 @@
 export const PRIVATE_ROUTES = [
   'display-control',
   'visits', 'terminal-exams', 'teachers', 'teacher-attendance', 'teacher-settings', 'teacher', 'teacher-security', 'system-admin',
-  'superadmin', 'students', 'student-transfer', 'student-lifecycle', 'settings',
+  'superadmin', 'students', 'student-registration-form', 'staff-registration-form', 'student-transfer', 'student-lifecycle', 'settings',
   'service-staff', 'routines', 'rooms', 'room-assignments', 'problems', 'office', 'notices',
   'marks', 'library', 'illness', 'id-cards', 'guardians', 'guardian', 'guardian-student',
   'gateman', 'gate-pass', 'dues', 'documents', 'dining-stock', 'deposit-fund',
