@@ -1225,6 +1225,19 @@ export default function DailyCashBookScreen() {
                       value={newRow.bank_payment}
                       onChangeText={v => setNewRow(p => ({ ...p, bank_payment: v }))}
                     />
+                    {Boolean(num(newRow.bank_payment) > 0) && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          const ymd = selectedDate || newRow.entry_date || todayYmd();
+                          openPaymentVouchersForDate(ymd);
+                        }}
+                        style={[s.vchMiniBtn, { borderColor: '#93c5fd', backgroundColor: '#eff6ff' }]}
+                      >
+                        <Text style={[s.vchMiniBtnText, { color: '#1d4ed8' }]}>
+                          👁️ View Details
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                   <View style={[s.cell, { width: W.cashPay }]}>
                     <TextInput
@@ -1534,6 +1547,16 @@ export default function DailyCashBookScreen() {
                           value={d.bank_payment}
                           onChangeText={v => updateSavedField(entry.id, 'bank_payment', v)}
                         />
+                        {Boolean(num(d.bank_payment) > 0) && (
+                          <TouchableOpacity
+                            onPress={() => openPaymentVouchersForDate(entry.entry_date)}
+                            style={[s.vchMiniBtn, { borderColor: '#93c5fd', backgroundColor: '#eff6ff' }]}
+                          >
+                            <Text style={[s.vchMiniBtnText, { color: '#1d4ed8' }]}>
+                              👁️ View Details
+                            </Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                       <View style={[s.cell, { width: W.cashPay }]}>
                         <TextInput
