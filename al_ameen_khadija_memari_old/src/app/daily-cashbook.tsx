@@ -306,8 +306,12 @@ export default function DailyCashBookScreen() {
   const onDateChange = (d: string) => {
     if (!d) return;
     setSelectedDate(d);
-    setNewRow(prev => ({ ...prev, entry_date: d }));
+    setNewRow(blankDraft(d));
     setNewDateText(ymdToDmy(d));
+    setBillModalBills([]);
+    setBillModalMeta('');
+    setPvModalVouchers([]);
+    setPvModalMeta('');
   };
 
   const [fetchingKey, setFetchingKey] = useState<string | null>(null); // 'new' or String(entry.id)
@@ -380,6 +384,10 @@ export default function DailyCashBookScreen() {
     if (resetNewRow) {
       setNewRow(blankDraft(selectedDate));
       setNewDateText(ymdToDmy(selectedDate));
+      setBillModalBills([]);
+      setBillModalMeta('');
+      setPvModalVouchers([]);
+      setPvModalMeta('');
     }
     setEditingId(null);
   };
@@ -545,10 +553,6 @@ export default function DailyCashBookScreen() {
   const fetchPortalForNewRow = () => {
     const ymd = selectedDate || newRow.entry_date || todayYmd();
     void fetchPortalForDate(ymd, 'new');
-  };
-
-  const fetchPortalForSavedRow = (entry: CashBookEntry) => {
-    void fetchPortalForDate(entry.entry_date, entry.id);
   };
 
   const saveDraft = async (key: string, draft: RowDraft, overrideDate?: string) => {
@@ -995,7 +999,7 @@ export default function DailyCashBookScreen() {
                       placeholderTextColor={PLACEHOLDER_COLOR}
                       onChangeText={v => setNewRow(p => ({ ...p, fees_bill: v }))}
                     />
-                    {(billModalBills.length > 0 || Boolean(newRow.fees_bill)) && (
+                    {Boolean(newRow.fees_bill?.trim()) && (
                       <TouchableOpacity
                         onPress={() => {
                           if (billModalBills.length > 0) {
@@ -1294,7 +1298,7 @@ export default function DailyCashBookScreen() {
                           value={d.fees_bill}
                           onChangeText={v => updateSavedField(entry.id, 'fees_bill', v)}
                         />
-                        {Boolean(d.fees_bill || entry.portal_bill_count) && (
+                        {Boolean(d.fees_bill?.trim()) && (
                           <TouchableOpacity
                             onPress={() => void openFeesBillsForDate(entry.entry_date)}
                             style={s.billMiniBtn}
@@ -1399,7 +1403,7 @@ export default function DailyCashBookScreen() {
                           value={d.cash_pv_bill}
                           onChangeText={v => updateSavedField(entry.id, 'cash_pv_bill', v)}
                         />
-                        {Boolean(d.cash_pv_bill || num(d.cash_voucher_payment)) && (
+                        {Boolean(d.cash_pv_bill?.trim()) && (
                           <TouchableOpacity
                             onPress={() => openPaymentVouchersForDate(entry.entry_date)}
                             style={s.vchMiniBtn}
@@ -1524,27 +1528,15 @@ export default function DailyCashBookScreen() {
                         ) : (
                           <>
                             <TouchableOpacity
-                              disabled={fetchingKey === String(entry.id)}
-                              onPress={() => void fetchPortalForSavedRow(entry)}
-                              style={[s.miniBtn, { backgroundColor: '#0284c7' }]}
-                              accessibilityLabel="Refresh from portal"
-                            >
-                              {fetchingKey === String(entry.id) ? (
-                                <ActivityIndicator size="small" color="#fff" />
-                              ) : (
-                                <Text style={s.miniBtnText}>🔄</Text>
-                              )}
-                            </TouchableOpacity>
-                            <TouchableOpacity
                               onPress={() => startEdit(entry)}
-                              style={[s.miniBtn, { backgroundColor: '#f59e0b', paddingHorizontal: 8 }]}
+                              style={[s.miniBtn, { backgroundColor: '#f59e0b', paddingHorizontal: 10 }]}
                               accessibilityLabel="Edit entry"
                             >
                               <Text style={s.miniBtnText}>✏️</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                               onPress={() => deleteEntry(entry)}
-                              style={[s.miniBtn, { backgroundColor: '#dc2626' }]}
+                              style={[s.miniBtn, { backgroundColor: '#dc2626', paddingHorizontal: 10 }]}
                               accessibilityLabel="Delete entry"
                             >
                               <Text style={s.miniBtnText}>🗑️</Text>
