@@ -531,7 +531,7 @@ async function getAvailableBanks(cookie) {
 
 function parseBookHtml(html) {
   const tableMatch = html.match(/<table[^>]*id=["']fee_report["'][\s\S]*?<\/table>/i) ||
-                     html.match(/<table[^>]*class=["'][^"']*data_table[^"']*["'][\s\S]*?<\/table>/i);
+    html.match(/<table[^>]*class=["'][^"']*data_table[^"']*["'][\s\S]*?<\/table>/i);
   if (!tableMatch) {
     return { opening: 0, receipt: 0, payment: 0, closing: 0, transactions: [] };
   }

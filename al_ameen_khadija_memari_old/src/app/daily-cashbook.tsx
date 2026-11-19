@@ -1196,20 +1196,17 @@ export default function DailyCashBookScreen() {
                       placeholderTextColor={PLACEHOLDER_COLOR}
                       onChangeText={v => setNewRow(p => ({ ...p, cash_pv_bill: v }))}
                     />
-                    {(pvModalVouchers.length > 0 || Boolean(newRow.cash_pv_bill)) && (
+                    {Boolean(newRow.cash_pv_bill?.trim()) && (
                       <TouchableOpacity
                         onPress={() => {
-                          if (pvModalVouchers.length > 0) {
-                            setPvModalVisible(true);
-                          } else {
-                            void openPaymentVouchersForDate(selectedDate || newRow.entry_date);
-                          }
+                          const ymd = selectedDate || newRow.entry_date || todayYmd();
+                          void openPaymentVouchersForDate(ymd);
                         }}
                         style={s.vchMiniBtn}
                       >
                         <Text style={s.vchMiniBtnText}>
                           👁️ View Details{(() => {
-                            const c = pvModalVouchers.length > 0 ? pvModalVouchers.length : parseItemCount(newRow.cash_pv_bill);
+                            const c = parseItemCount(newRow.cash_pv_bill);
                             return c > 0 ? ` (${c})` : '';
                           })()}
                         </Text>
@@ -1261,16 +1258,6 @@ export default function DailyCashBookScreen() {
                         </Text>
                       </TouchableOpacity>
                     )}
-                  </View>
-                  <View style={[s.cell, { width: W.cashPay }]}>
-                    <TextInput
-                      style={s.inputNum}
-                      keyboardType="numeric"
-                      placeholder="0"
-                      placeholderTextColor={PLACEHOLDER_COLOR}
-                      value={newRow.cash_payment}
-                      onChangeText={v => setNewRow(p => ({ ...p, cash_payment: v }))}
-                    />
                   </View>
                   <View style={[s.cell, { width: W.bankDep }]}>
                     <TextInput
@@ -1576,15 +1563,6 @@ export default function DailyCashBookScreen() {
                             </Text>
                           </TouchableOpacity>
                         )}
-                      </View>
-                      <View style={[s.cell, { width: W.cashPay }]}>
-                        <TextInput
-                          style={[s.inputNum, !isEditing && s.inputReadonly]}
-                          keyboardType="numeric"
-                          editable={isEditing}
-                          value={d.cash_payment}
-                          onChangeText={v => updateSavedField(entry.id, 'cash_payment', v)}
-                        />
                       </View>
                       <View style={[s.cell, { width: W.bankDep }]}>
                         <TextInput
