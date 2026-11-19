@@ -223,6 +223,34 @@ const TOTAL_TABLE_WIDTH =
   W.remarks +
   W.action;
 
+const TableScrollWrapper = ({ children, nativeID, isOver15 }: any) => {
+  if (Platform.OS === 'web') {
+    return (
+      <View
+        nativeID={nativeID}
+        style={[
+          s.tableScrollFrame,
+          isOver15 && s.tableScrollMaxHeight
+        ]}
+      >
+        {children}
+      </View>
+    );
+  }
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator persistentScrollbar>
+      <ScrollView
+        style={isOver15 ? s.tableScrollMaxHeight : undefined}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator
+        persistentScrollbar
+      >
+        {children}
+      </ScrollView>
+    </ScrollView>
+  );
+};
+
 export default function DailyCashBookScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const [entries, setEntries] = useState<CashBookEntry[]>([]);
@@ -267,6 +295,36 @@ export default function DailyCashBookScreen() {
   const [pvModalLoading, setPvModalLoading] = useState(false);
 
   useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const styleId = 'daily-cashbook-scrollbar-style';
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.innerHTML = `
+          #dailyCashBookScroll {
+            scrollbar-width: thin;
+            scrollbar-color: #93c5fd #f1f5f9;
+          }
+          #dailyCashBookScroll::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+          }
+          #dailyCashBookScroll::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 6px;
+          }
+          #dailyCashBookScroll::-webkit-scrollbar-thumb {
+            background: #93c5fd;
+            border-radius: 6px;
+            border: 2px solid #f1f5f9;
+          }
+          #dailyCashBookScroll::-webkit-scrollbar-thumb:hover {
+            background: #2563eb;
+          }
+        `;
+        document.head.appendChild(style);
+      }
+    }
     void getUser<any>().then(u => {
       setShowHostelFeesTab(Boolean(u) && !isHostelFeesBlockedUser(u));
     });
@@ -720,16 +778,6 @@ export default function DailyCashBookScreen() {
                 <Text style={s.primaryBtnText}>🔄 Check Portal</Text>
               )}
             </TouchableOpacity>
-            {billModalBills.length > 0 && (
-              <TouchableOpacity onPress={() => setBillModalVisible(true)} style={[s.secondaryBtn, { backgroundColor: '#7c3aed' }]}>
-                <Text style={s.secondaryBtnText}>📄 View {billModalBills.length} Bills</Text>
-              </TouchableOpacity>
-            )}
-            {pvModalVouchers.length > 0 && (
-              <TouchableOpacity onPress={() => setPvModalVisible(true)} style={[s.secondaryBtn, { backgroundColor: '#be123c' }]}>
-                <Text style={s.secondaryBtnText}>💳 View {pvModalVouchers.length} Vouchers</Text>
-              </TouchableOpacity>
-            )}
             <TouchableOpacity onPress={downloadExcel} disabled={!entries.length} style={[s.secondaryBtn, !entries.length && { opacity: 0.5 }]}>
               <Text style={s.secondaryBtnText}>📊 Excel</Text>
             </TouchableOpacity>
@@ -769,18 +817,6 @@ export default function DailyCashBookScreen() {
         {banner ? (
           <View style={s.successBanner}>
             <Text style={s.successText}>✅ {banner}</Text>
-            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
-              {billModalBills.length > 0 && (
-                <TouchableOpacity onPress={() => setBillModalVisible(true)} style={s.inlineLinkBtn}>
-                  <Text style={s.inlineLinkBtnText}>বিল লিস্ট দেখুন ({billModalBills.length})</Text>
-                </TouchableOpacity>
-              )}
-              {pvModalVouchers.length > 0 && (
-                <TouchableOpacity onPress={() => setPvModalVisible(true)} style={[s.inlineLinkBtn, { backgroundColor: '#be123c' }]}>
-                  <Text style={s.inlineLinkBtnText}>পেমেন্ট ভাউচার দেখুন ({pvModalVouchers.length})</Text>
-                </TouchableOpacity>
-              )}
-            </View>
           </View>
         ) : null}
 
@@ -798,10 +834,10 @@ export default function DailyCashBookScreen() {
               <Text style={s.muted}>Loading Daily Cash Book...</Text>
             </View>
           ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator persistentScrollbar>
+            <TableScrollWrapper nativeID="dailyCashBookScroll" isOver15={entries.length > 15}>
               <View style={{ width: TOTAL_TABLE_WIDTH }}>
                 {/* 3-Row Grouped Header matching Screenshot 1 */}
-                <View style={s.headerGroupWrap}>
+                <View style={[s.headerGroupWrap, s.stickyHeader]}>
                   {/* Left Fixed-Height Full-Span Columns */}
                   <View style={[s.hSpanCell, { width: W.sl }]}>
                     <Text style={s.hText}>S.L.</Text>
@@ -871,7 +907,7 @@ export default function DailyCashBookScreen() {
                 </View>
 
                 {/* TOP "New" ROW (matching Screenshot 1) */}
-                <View style={[s.dataRow, s.newRowBg]}>
+                <View style={[s.dataRow, s.newRowBg, s.stickyNewRow]}>
                   <View style={[s.cell, { width: W.sl }]}>
                     <Text style={s.newLabel}>New</Text>
                   </View>
@@ -1331,7 +1367,7 @@ export default function DailyCashBookScreen() {
                   );
                 })}
               </View>
-            </ScrollView>
+            </TableScrollWrapper>
           )}
         </View>
       </ScrollView>
@@ -1614,6 +1650,40 @@ const s = StyleSheet.create({
     overflow: 'hidden',
     width: '100%',
     maxWidth: '100%'
+  },
+  tableScrollFrame: {
+    backgroundColor: '#ffffff',
+    width: '100%',
+    ...(Platform.OS === 'web'
+      ? ({
+          overflow: 'auto',
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#93c5fd #f1f5f9',
+        } as any)
+      : {}),
+  },
+  tableScrollMaxHeight: {
+    maxHeight: 880,
+  },
+  stickyHeader: {
+    ...(Platform.OS === 'web'
+      ? ({
+          position: 'sticky',
+          top: 0,
+          zIndex: 20,
+          backgroundColor: '#dbeafe',
+        } as any)
+      : {}),
+  },
+  stickyNewRow: {
+    ...(Platform.OS === 'web'
+      ? ({
+          position: 'sticky',
+          top: 84,
+          zIndex: 19,
+          backgroundColor: '#eff6ff',
+        } as any)
+      : {}),
   },
   centerBox: { padding: 40, alignItems: 'center', gap: 8 },
   muted: { color: '#64748b', fontSize: 13 },
