@@ -203,6 +203,14 @@ const entryToDraft = (e: CashBookEntry): RowDraft => ({
   dirty: false
 });
 
+interface ConfirmSaveTarget {
+  key: string;
+  draft: RowDraft;
+  overrideDate?: string;
+  dateLabel: string;
+  isNew: boolean;
+}
+
 // Column widths (consistent across 3-row grouped header and every data row)
 const PLACEHOLDER_COLOR = 'rgba(0, 0, 0, 0.20)';
 const W = {
@@ -292,6 +300,8 @@ export default function DailyCashBookScreen() {
   const [newRow, setNewRow] = useState<RowDraft>(() => blankDraft());
   const [newDateText, setNewDateText] = useState<string>(() => ymdToDmy(todayYmd()));
   const [rowDrafts, setRowDrafts] = useState<Record<number, RowDraft>>({});
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [confirmSaveTarget, setConfirmSaveTarget] = useState<ConfirmSaveTarget | null>(null);
 
   const onDateChange = (d: string) => {
     if (!d) return;
@@ -371,6 +381,7 @@ export default function DailyCashBookScreen() {
       setNewRow(blankDraft(selectedDate));
       setNewDateText(ymdToDmy(selectedDate));
     }
+    setEditingId(null);
   };
 
   const loadLedger = async (f = fromDate, t = toDate, resetNew = true) => {
@@ -446,6 +457,7 @@ export default function DailyCashBookScreen() {
             }
           };
         });
+        setEditingId(targetKey);
       }
 
       setBillModalTitle(`Portal Fees Bills — ${data.entry_date_dmy || ymdToDmy(ymd)}`);
@@ -577,12 +589,47 @@ export default function DailyCashBookScreen() {
         })
       });
       applyLedgerResponse(data, key === 'new');
+      setEditingId(null);
       setBanner(data.message || `Saved ${ymdToDmy(ymd)}`);
     } catch (e: any) {
       setError(e.message || 'Save failed');
     } finally {
       setSavingKey(null);
     }
+  };
+
+  const startEdit = (entry: CashBookEntry) => {
+    if (editingId && editingId !== entry.id) {
+      const prev = entries.find(e => e.id === editingId);
+      if (prev) {
+        setRowDrafts(p => ({ ...p, [editingId]: entryToDraft(prev) }));
+      }
+    }
+    setEditingId(entry.id);
+  };
+
+  const cancelEdit = (entry: CashBookEntry) => {
+    setRowDrafts(prev => ({
+      ...prev,
+      [entry.id]: entryToDraft(entry)
+    }));
+    setEditingId(null);
+  };
+
+  const requestSave = (key: string, draft: RowDraft, overrideDate?: string, dateLabel?: string) => {
+    const ymd = overrideDate || draft.entry_date;
+    if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+      setError('সঠিক তারিখ দিন (DD-MM-YYYY)');
+      return;
+    }
+    const label = dateLabel || ymdToDmy(ymd);
+    setConfirmSaveTarget({
+      key,
+      draft,
+      overrideDate: ymd,
+      dateLabel: label,
+      isNew: key === 'new'
+    });
   };
 
   const deleteEntry = (entry: CashBookEntry) => {
@@ -1198,7 +1245,7 @@ export default function DailyCashBookScreen() {
                       disabled={savingKey === 'new'}
                       onPress={() => {
                         const ymd = dmyOrYmdToYmd(newDateText) || newRow.entry_date;
-                        void saveDraft('new', newRow, ymd);
+                        requestSave('new', newRow, ymd, newDateText || ymdToDmy(ymd));
                       }}
                       style={[s.miniBtn, { backgroundColor: '#16a34a', paddingHorizontal: 10 }]}
                     >
@@ -1213,6 +1260,7 @@ export default function DailyCashBookScreen() {
 
                 {/* SAVED ROWS (SL N down to 1, matching Screenshot 1) */}
                 {entries.map((entry, idx) => {
+                  const isEditing = editingId === entry.id;
                   const d = rowDrafts[entry.id] || entryToDraft(entry);
                   const cashRecTot = num(d.cash_fees) + num(d.cash_other_source);
                   const cashPayTot = num(d.cash_voucher_payment) + num(d.cash_bank_deposit);
@@ -1222,7 +1270,14 @@ export default function DailyCashBookScreen() {
                   const matched = hasMachine ? Math.abs(num(d.machine_balance) - cashInHand) < 0.01 : null;
 
                   return (
-                    <View key={entry.id} style={[s.dataRow, idx % 2 === 1 && s.altRow]}>
+                    <View
+                      key={entry.id}
+                      style={[
+                        s.dataRow,
+                        idx % 2 === 1 && s.altRow,
+                        isEditing && s.editingRow
+                      ]}
+                    >
                       <View style={[s.cell, { width: W.sl }]}>
                         <Text style={s.slText}>{entry.sl_no}</Text>
                       </View>
@@ -1233,8 +1288,9 @@ export default function DailyCashBookScreen() {
                       </View>
                       <View style={[s.cell, { width: W.feesBill }]}>
                         <TextInput
-                          style={s.inputMulti}
+                          style={[s.inputMulti, !isEditing && s.inputReadonly]}
                           multiline
+                          editable={isEditing}
                           value={d.fees_bill}
                           onChangeText={v => updateSavedField(entry.id, 'fees_bill', v)}
                         />
@@ -1254,8 +1310,9 @@ export default function DailyCashBookScreen() {
                       </View>
                       <View style={[s.cell, { width: W.devBill }]}>
                         <TextInput
-                          style={s.inputMulti}
+                          style={[s.inputMulti, !isEditing && s.inputReadonly]}
                           multiline
+                          editable={isEditing}
                           value={d.dev_bill}
                           onChangeText={v => updateSavedField(entry.id, 'dev_bill', v)}
                         />
@@ -1263,21 +1320,46 @@ export default function DailyCashBookScreen() {
 
                       {/* Bank Received */}
                       <View style={[s.cell, { width: W.gateway }]}>
-                        <TextInput style={s.inputNum} keyboardType="numeric" value={d.bank_gateway} onChangeText={v => updateSavedField(entry.id, 'bank_gateway', v)} />
+                        <TextInput
+                          style={[s.inputNum, !isEditing && s.inputReadonly]}
+                          keyboardType="numeric"
+                          editable={isEditing}
+                          value={d.bank_gateway}
+                          onChangeText={v => updateSavedField(entry.id, 'bank_gateway', v)}
+                        />
                       </View>
                       <View style={[s.cell, { width: W.cheque }]}>
-                        <TextInput style={s.inputNum} keyboardType="numeric" value={d.bank_cheque} onChangeText={v => updateSavedField(entry.id, 'bank_cheque', v)} />
+                        <TextInput
+                          style={[s.inputNum, !isEditing && s.inputReadonly]}
+                          keyboardType="numeric"
+                          editable={isEditing}
+                          value={d.bank_cheque}
+                          onChangeText={v => updateSavedField(entry.id, 'bank_cheque', v)}
+                        />
                       </View>
                       <View style={[s.cell, { width: W.edc }]}>
-                        <TextInput style={s.inputNum} keyboardType="numeric" value={d.bank_edc} onChangeText={v => updateSavedField(entry.id, 'bank_edc', v)} />
+                        <TextInput
+                          style={[s.inputNum, !isEditing && s.inputReadonly]}
+                          keyboardType="numeric"
+                          editable={isEditing}
+                          value={d.bank_edc}
+                          onChangeText={v => updateSavedField(entry.id, 'bank_edc', v)}
+                        />
                       </View>
                       <View style={[s.cell, { width: W.swipe }]}>
-                        <TextInput style={s.inputNum} keyboardType="numeric" value={d.bank_swipe_card} onChangeText={v => updateSavedField(entry.id, 'bank_swipe_card', v)} />
+                        <TextInput
+                          style={[s.inputNum, !isEditing && s.inputReadonly]}
+                          keyboardType="numeric"
+                          editable={isEditing}
+                          value={d.bank_swipe_card}
+                          onChangeText={v => updateSavedField(entry.id, 'bank_swipe_card', v)}
+                        />
                       </View>
                       <View style={[s.cell, { width: W.rvBill }, s.sectionDividerRight]}>
                         <TextInput
-                          style={s.inputMulti}
+                          style={[s.inputMulti, !isEditing && s.inputReadonly]}
                           multiline
+                          editable={isEditing}
                           value={d.bank_rv_bill}
                           onChangeText={v => updateSavedField(entry.id, 'bank_rv_bill', v)}
                         />
@@ -1285,10 +1367,22 @@ export default function DailyCashBookScreen() {
 
                       {/* Cash Received */}
                       <View style={[s.cell, { width: W.cashFees }]}>
-                        <TextInput style={s.inputNum} keyboardType="numeric" value={d.cash_fees} onChangeText={v => updateSavedField(entry.id, 'cash_fees', v)} />
+                        <TextInput
+                          style={[s.inputNum, !isEditing && s.inputReadonly]}
+                          keyboardType="numeric"
+                          editable={isEditing}
+                          value={d.cash_fees}
+                          onChangeText={v => updateSavedField(entry.id, 'cash_fees', v)}
+                        />
                       </View>
                       <View style={[s.cell, { width: W.othSource }]}>
-                        <TextInput style={s.inputNum} keyboardType="numeric" value={d.cash_other_source} onChangeText={v => updateSavedField(entry.id, 'cash_other_source', v)} />
+                        <TextInput
+                          style={[s.inputNum, !isEditing && s.inputReadonly]}
+                          keyboardType="numeric"
+                          editable={isEditing}
+                          value={d.cash_other_source}
+                          onChangeText={v => updateSavedField(entry.id, 'cash_other_source', v)}
+                        />
                       </View>
                       <View style={[s.cell, { width: W.cashRecTot }, s.sectionDividerRight]}>
                         <View style={s.readonlyBox}>
@@ -1299,8 +1393,9 @@ export default function DailyCashBookScreen() {
                       {/* Cash Payment */}
                       <View style={[s.cell, { width: W.pvBill }]}>
                         <TextInput
-                          style={s.inputMulti}
+                          style={[s.inputMulti, !isEditing && s.inputReadonly]}
                           multiline
+                          editable={isEditing}
                           value={d.cash_pv_bill}
                           onChangeText={v => updateSavedField(entry.id, 'cash_pv_bill', v)}
                         />
@@ -1319,10 +1414,22 @@ export default function DailyCashBookScreen() {
                         )}
                       </View>
                       <View style={[s.cell, { width: W.voucherPay }]}>
-                        <TextInput style={s.inputNum} keyboardType="numeric" value={d.cash_voucher_payment} onChangeText={v => updateSavedField(entry.id, 'cash_voucher_payment', v)} />
+                        <TextInput
+                          style={[s.inputNum, !isEditing && s.inputReadonly]}
+                          keyboardType="numeric"
+                          editable={isEditing}
+                          value={d.cash_voucher_payment}
+                          onChangeText={v => updateSavedField(entry.id, 'cash_voucher_payment', v)}
+                        />
                       </View>
                       <View style={[s.cell, { width: W.bankDep }]}>
-                        <TextInput style={s.inputNum} keyboardType="numeric" value={d.cash_bank_deposit} onChangeText={v => updateSavedField(entry.id, 'cash_bank_deposit', v)} />
+                        <TextInput
+                          style={[s.inputNum, !isEditing && s.inputReadonly]}
+                          keyboardType="numeric"
+                          editable={isEditing}
+                          value={d.cash_bank_deposit}
+                          onChangeText={v => updateSavedField(entry.id, 'cash_bank_deposit', v)}
+                        />
                       </View>
                       <View style={[s.cell, { width: W.cashPayTot }, s.sectionDividerRight]}>
                         <View style={s.readonlyBox}>
@@ -1333,8 +1440,9 @@ export default function DailyCashBookScreen() {
                       {/* Opening Balance */}
                       <View style={[s.cell, { width: W.opening }]}>
                         <TextInput
-                          style={s.inputNum}
+                          style={[s.inputNum, !isEditing && s.inputReadonly]}
                           keyboardType="numeric"
+                          editable={isEditing}
                           value={d.opening_balance_override !== '' ? d.opening_balance_override : fmtNum(entry.opening_balance)}
                           onChangeText={v => updateSavedField(entry.id, 'opening_balance_override', v)}
                         />
@@ -1366,12 +1474,14 @@ export default function DailyCashBookScreen() {
                         <TextInput
                           style={[
                             s.inputNum,
+                            !isEditing && s.inputReadonly,
                             matched === true && s.matchBg,
                             matched === false && s.mismatchBg,
                             matched === true && s.matchText,
                             matched === false && s.mismatchText
                           ]}
                           keyboardType="numeric"
+                          editable={isEditing}
                           value={d.machine_balance}
                           onChangeText={v => updateSavedField(entry.id, 'machine_balance', v)}
                         />
@@ -1379,36 +1489,68 @@ export default function DailyCashBookScreen() {
 
                       {/* Remarks */}
                       <View style={[s.cell, { width: W.remarks }]}>
-                        <TextInput style={s.inputLeft} value={d.remarks} onChangeText={v => updateSavedField(entry.id, 'remarks', v)} />
+                        <TextInput
+                          style={[s.inputLeft, !isEditing && s.inputReadonly]}
+                          editable={isEditing}
+                          value={d.remarks}
+                          onChangeText={v => updateSavedField(entry.id, 'remarks', v)}
+                        />
                       </View>
 
                       {/* Actions */}
                       <View style={[s.cell, s.actionCell, { width: W.action }]}>
-                        <TouchableOpacity
-                          disabled={fetchingKey === String(entry.id)}
-                          onPress={() => void fetchPortalForSavedRow(entry)}
-                          style={[s.miniBtn, { backgroundColor: '#0284c7' }]}
-                        >
-                          {fetchingKey === String(entry.id) ? (
-                            <ActivityIndicator size="small" color="#fff" />
-                          ) : (
-                            <Text style={s.miniBtnText}>🔄</Text>
-                          )}
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          disabled={savingKey === String(entry.id)}
-                          onPress={() => void saveDraft(String(entry.id), d, entry.entry_date)}
-                          style={[s.miniBtn, { backgroundColor: d.dirty ? '#1d4ed8' : '#64748b' }]}
-                        >
-                          {savingKey === String(entry.id) ? (
-                            <ActivityIndicator size="small" color="#fff" />
-                          ) : (
-                            <Text style={s.miniBtnText}>💾</Text>
-                          )}
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => deleteEntry(entry)} style={[s.miniBtn, { backgroundColor: '#dc2626' }]}>
-                          <Text style={s.miniBtnText}>🗑️</Text>
-                        </TouchableOpacity>
+                        {isEditing ? (
+                          <>
+                            <TouchableOpacity
+                              disabled={savingKey === String(entry.id)}
+                              onPress={() => requestSave(String(entry.id), d, entry.entry_date, entry.entry_date_dmy)}
+                              style={[s.miniBtn, { backgroundColor: '#16a34a', paddingHorizontal: 8 }]}
+                              accessibilityLabel="Save changes"
+                            >
+                              {savingKey === String(entry.id) ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                              ) : (
+                                <Text style={s.miniBtnText}>💾</Text>
+                              )}
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => cancelEdit(entry)}
+                              style={[s.miniBtn, { backgroundColor: '#64748b', paddingHorizontal: 8 }]}
+                              accessibilityLabel="Cancel edit"
+                            >
+                              <Text style={s.miniBtnText}>✕</Text>
+                            </TouchableOpacity>
+                          </>
+                        ) : (
+                          <>
+                            <TouchableOpacity
+                              disabled={fetchingKey === String(entry.id)}
+                              onPress={() => void fetchPortalForSavedRow(entry)}
+                              style={[s.miniBtn, { backgroundColor: '#0284c7' }]}
+                              accessibilityLabel="Refresh from portal"
+                            >
+                              {fetchingKey === String(entry.id) ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                              ) : (
+                                <Text style={s.miniBtnText}>🔄</Text>
+                              )}
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => startEdit(entry)}
+                              style={[s.miniBtn, { backgroundColor: '#f59e0b', paddingHorizontal: 8 }]}
+                              accessibilityLabel="Edit entry"
+                            >
+                              <Text style={s.miniBtnText}>✏️</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => deleteEntry(entry)}
+                              style={[s.miniBtn, { backgroundColor: '#dc2626' }]}
+                              accessibilityLabel="Delete entry"
+                            >
+                              <Text style={s.miniBtnText}>🗑️</Text>
+                            </TouchableOpacity>
+                          </>
+                        )}
                       </View>
                     </View>
                   );
@@ -1557,6 +1699,94 @@ export default function DailyCashBookScreen() {
               </Text>
               <TouchableOpacity onPress={() => setPvModalVisible(false)} style={[s.primaryBtn, { backgroundColor: '#be123c' }]}>
                 <Text style={s.primaryBtnText}>বন্ধ করুন</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Save Confirmation Warning Modal */}
+      <Modal
+        visible={Boolean(confirmSaveTarget)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmSaveTarget(null)}
+      >
+        <View style={s.modalOverlay}>
+          <View style={[s.modalCard, { maxWidth: 500, padding: 22 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 12 }}>
+              <View
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: confirmSaveTarget?.isNew ? '#ecfdf5' : '#fef3c7',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: confirmSaveTarget?.isNew ? '#a7f3d0' : '#fde68a'
+                }}
+              >
+                <Text style={{ fontSize: 24 }}>{confirmSaveTarget?.isNew ? '💾' : '⚠️'}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 17, fontWeight: '800', color: '#0f172a' }}>
+                  {confirmSaveTarget?.isNew ? 'নতুন Cash Book সেভ করবেন?' : 'Cash Book এন্ট্রি আপডেট সতর্কতা'}
+                </Text>
+                <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
+                  তারিখ: <Text style={{ fontWeight: '700', color: '#1e293b' }}>{confirmSaveTarget?.dateLabel}</Text>
+                </Text>
+              </View>
+            </View>
+
+            <View
+              style={{
+                backgroundColor: confirmSaveTarget?.isNew ? '#f8fafc' : '#fffbeb',
+                borderColor: confirmSaveTarget?.isNew ? '#e2e8f0' : '#fef08a',
+                borderWidth: 1,
+                borderRadius: 8,
+                padding: 12,
+                marginBottom: 20
+              }}
+            >
+              <Text style={{ fontSize: 13, color: '#334155', lineHeight: 20 }}>
+                {confirmSaveTarget?.isNew
+                  ? `আপনি ${confirmSaveTarget?.dateLabel} তারিখের নতুন Daily Cash Book রেকর্ডটি সিস্টেমে সেভ করতে চলেছেন। সমস্ত তথ্য সঠিক আছে কিনা অনুগ্রহ করে একবার মিলিয়ে নিন।`
+                  : `⚠️ আপনি ${confirmSaveTarget?.dateLabel} তারিখের পূর্ববর্তী সেভ করা Cash Book রেকর্ডটিতে পরিবর্তন সেভ করতে চলেছেন। ভুলবশত পরিবর্তন এড়াতে নিশ্চিত হয়ে সেভ করুন।`}
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => setConfirmSaveTarget(null)}
+                style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 9,
+                  borderRadius: 6,
+                  backgroundColor: '#f1f5f9',
+                  borderWidth: 1,
+                  borderColor: '#cbd5e1'
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569' }}>✕ বাতিল (Cancel)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  if (!confirmSaveTarget) return;
+                  const target = confirmSaveTarget;
+                  setConfirmSaveTarget(null);
+                  void saveDraft(target.key, target.draft, target.overrideDate);
+                }}
+                style={{
+                  paddingHorizontal: 18,
+                  paddingVertical: 9,
+                  borderRadius: 6,
+                  backgroundColor: confirmSaveTarget?.isNew ? '#16a34a' : '#2563eb'
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#ffffff' }}>
+                  💾 হ্যাঁ, সেভ করুন
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1890,6 +2120,12 @@ const s = StyleSheet.create({
   matchText: { color: '#14532d', fontWeight: '900' },
   mismatchBg: { backgroundColor: '#fecaca', borderColor: '#dc2626' },
   mismatchText: { color: '#991b1b', fontWeight: '900' },
+  editingRow: { backgroundColor: '#fefce8' },
+  inputReadonly: {
+    backgroundColor: '#f8fafc',
+    borderColor: '#e2e8f0',
+    color: '#334155'
+  },
 
   actionCell: { flexDirection: 'row', gap: 5, justifyContent: 'center', alignItems: 'center' },
   miniBtn: {
