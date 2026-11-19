@@ -544,9 +544,87 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
         } else {
           browserWindow = window.open('about:blank', '_blank');
           if (!browserWindow) throw new Error('Browser blocked the new window');
-          browserWindow.document.write(`<html><body style="margin:0;text-align:center"><img src="${url}" style="max-width:100%;max-height:100vh" /></body></html>`);
+          const title = `${documentStudent?.student_name || 'student'}-photo`;
+          browserWindow.document.open();
+          browserWindow.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${title}</title>
+  <style>
+    @page {
+      margin: 8mm;
+      size: auto;
+      background: #ffffff !important;
+    }
+    *, *::before, *::after {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      min-height: 100% !important;
+      background: #ffffff !important;
+      background-color: #ffffff !important;
+      color: #000000 !important;
+    }
+    .img-wrap {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      min-height: 100vh;
+      background: #ffffff !important;
+      background-color: #ffffff !important;
+      padding: 10px;
+    }
+    img {
+      max-width: 96vw;
+      max-height: 94vh;
+      object-fit: contain;
+      display: block;
+      margin: auto;
+      background: #ffffff !important;
+      background-color: #ffffff !important;
+    }
+    @media print {
+      html, body, .img-wrap {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+        min-height: auto !important;
+      }
+      img {
+        max-width: 100% !important;
+        max-height: 98vh !important;
+        page-break-inside: avoid;
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="img-wrap">
+    <img src="${url}" alt="${title}" onload="onImgLoad()" />
+  </div>
+  <script>
+    function onImgLoad() {
+      ${mode === 'print' ? `setTimeout(function() {
+        try {
+          window.focus();
+          window.print();
+        } catch (e) {}
+      }, 400);` : ''}
+    }
+  </script>
+</body>
+</html>`);
           browserWindow.document.close();
-          if (mode === 'print') setTimeout(() => { try { browserWindow.focus(); browserWindow.print(); } catch { } }, 800);
         }
       } else {
         if (!FileSystem.cacheDirectory) throw new Error('Temporary storage is unavailable');
@@ -620,13 +698,99 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
           return;
         }
         if (!browserWindow) throw new Error('Browser blocked the new window');
-        browserWindow.location.href = objectUrl;
-        if (mode === 'print') {
-          setTimeout(() => {
-            try { browserWindow.focus(); browserWindow.print(); } catch { }
-          }, 1000);
+        const isPdf = blob.type === 'application/pdf' || /\.pdf(?:[?#]|$)/i.test(doc.file_url || '');
+        if (isPdf) {
+          browserWindow.location.href = objectUrl;
+          if (mode === 'print') {
+            setTimeout(() => {
+              try { browserWindow.focus(); browserWindow.print(); } catch { }
+            }, 1000);
+          }
+        } else {
+          // Render HTML page with pure white background to avoid browser dark viewer & black margins on print
+          const title = documentFileName(doc);
+          browserWindow.document.open();
+          browserWindow.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${title}</title>
+  <style>
+    @page {
+      margin: 8mm;
+      size: auto;
+      background: #ffffff !important;
+    }
+    *, *::before, *::after {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      min-height: 100% !important;
+      background: #ffffff !important;
+      background-color: #ffffff !important;
+      color: #000000 !important;
+    }
+    .img-wrap {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      min-height: 100vh;
+      background: #ffffff !important;
+      background-color: #ffffff !important;
+      padding: 10px;
+    }
+    img {
+      max-width: 96vw;
+      max-height: 94vh;
+      object-fit: contain;
+      display: block;
+      margin: auto;
+      background: #ffffff !important;
+      background-color: #ffffff !important;
+    }
+    @media print {
+      html, body, .img-wrap {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+        min-height: auto !important;
+      }
+      img {
+        max-width: 100% !important;
+        max-height: 98vh !important;
+        page-break-inside: avoid;
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="img-wrap">
+    <img src="${objectUrl}" alt="${title}" onload="onImgLoad()" />
+  </div>
+  <script>
+    function onImgLoad() {
+      ${mode === 'print' ? `setTimeout(function() {
+        try {
+          window.focus();
+          window.print();
+        } catch (e) {}
+      }, 400);` : ''}
+    }
+  </script>
+</body>
+</html>`);
+          browserWindow.document.close();
         }
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 120000);
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 180000);
         return;
       }
       if (!FileSystem.cacheDirectory) throw new Error('Temporary storage is unavailable');
