@@ -518,7 +518,7 @@ export default function DailyCashBookScreen() {
       const cancNote = cancPvCount > 0 ? `  |  ⚠️ ${cancPvCount}টি বাতিল ভাউচার গণনায় বাদ` : '';
 
       setPvModalMeta(
-        `Date: ${data.entry_date_dmy || ymdToDmy(ymd)}  |  সক্রিয় ভাউচার: ${activePvCount} টি  |  P.V Range: ${data.cash_pv_bill_range || data.cash_pv_bill || '-'}  |  মোট পেমেন্ট: ${fmtInr(data.bank_payment || 0)}${cancNote}`
+        `Date: ${data.entry_date_dmy || ymdToDmy(ymd)}  |  সক্রিয় ভাউচার: ${activePvCount} টি  |  P.V Range: ${data.cash_pv_bill_range || data.cash_pv_bill || '-'}  |  ভাউচার মোট: ${fmtInr(data.voucher_payment_total || data.bank_payment || 0)} (Bank: ${fmtInr(data.bank_payment || 0)}, Cash: ${fmtInr(data.cash_payment || 0)})${cancNote}`
       );
 
       const cashPayAmt = Number(data.cash_payment || 0);
@@ -1225,7 +1225,7 @@ export default function DailyCashBookScreen() {
                       value={newRow.bank_payment}
                       onChangeText={v => setNewRow(p => ({ ...p, bank_payment: v }))}
                     />
-                    {Boolean(num(newRow.bank_payment) > 0) && (
+                    {Boolean(num(newRow.bank_payment) > 0 || Boolean(newRow.cash_pv_bill?.trim())) && (
                       <TouchableOpacity
                         onPress={() => {
                           const ymd = selectedDate || newRow.entry_date || todayYmd();
@@ -1547,7 +1547,7 @@ export default function DailyCashBookScreen() {
                           value={d.bank_payment}
                           onChangeText={v => updateSavedField(entry.id, 'bank_payment', v)}
                         />
-                        {Boolean(num(d.bank_payment) > 0) && (
+                        {Boolean(num(d.bank_payment) > 0 || Boolean(d.cash_pv_bill?.trim())) && (
                           <TouchableOpacity
                             onPress={() => openPaymentVouchersForDate(entry.entry_date)}
                             style={[s.vchMiniBtn, { borderColor: '#93c5fd', backgroundColor: '#eff6ff' }]}

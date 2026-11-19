@@ -371,6 +371,9 @@ router.post('/fetch-portal', asyncHandler(async (req, res) => {
     console.error(`[DailyCashBook] Cash book payment sync error for ${entryDate}:`, err.message);
   }
 
+  // Bank Payment = Voucher Payment Total - Cash Payment (voucher total minus cash payment)
+  const netBankPayment = Math.max(0, Number((voucherPaymentTotal - cashPaymentTotal).toFixed(2)));
+
   res.json({
     success: true,
     entry_date: entryDate,
@@ -398,12 +401,13 @@ router.post('/fetch-portal', asyncHandler(async (req, res) => {
     cash_pv_bill_list: pvBillList,
     cash_pv_bill_range: pvBillRange,
     voucher_payment_count: voucherPaymentCount,
+    voucher_payment_total: Number(voucherPaymentTotal.toFixed(2)),
     cancelled_payments_count: vchData?.cancelled_payments_count || 0,
     cancelled_receipts_count: vchData?.cancelled_receipts_count || 0,
-    bank_payment: Number(voucherPaymentTotal.toFixed(2)),
+    bank_payment: netBankPayment,
     cash_payment: Number(cashPaymentTotal.toFixed(2)),
     cash_payment_count: cashBookPayments.length,
-    cash_voucher_payment: Number(voucherPaymentTotal.toFixed(2)),
+    cash_voucher_payment: netBankPayment,
     payment_vouchers_details: (vchData && vchData.raw_payments) || [],
     receipt_vouchers_details: (vchData && vchData.raw_vouchers) || [],
     cash_book_payments_details: cashBookPayments,
