@@ -42,6 +42,9 @@ function schema() {
       ALTER TABLE daily_cash_book_entries ALTER COLUMN dev_bill TYPE TEXT;
       ALTER TABLE daily_cash_book_entries ALTER COLUMN bank_rv_bill TYPE TEXT;
       ALTER TABLE daily_cash_book_entries ALTER COLUMN cash_pv_bill TYPE TEXT;
+      ALTER TABLE daily_cash_book_entries ADD COLUMN IF NOT EXISTS bank_payment NUMERIC(14,2) NOT NULL DEFAULT 0;
+      ALTER TABLE daily_cash_book_entries ADD COLUMN IF NOT EXISTS cash_payment NUMERIC(14,2) NOT NULL DEFAULT 0;
+      UPDATE daily_cash_book_entries SET bank_payment = cash_voucher_payment WHERE (bank_payment IS NULL OR bank_payment = 0) AND cash_voucher_payment > 0;
     `).catch(err => {
       ready = null;
       throw err;
@@ -121,9 +124,11 @@ async function computeLedger({ fromDate = '', toDate = '' } = {}) {
     const cashOtherSource = Number(r.cash_other_source || 0);
     const cashReceivedTotal = Number((cashFees + cashOtherSource).toFixed(2));
 
-    const cashVoucherPayment = Number(r.cash_voucher_payment || 0);
+    const bankPayment = Number(r.bank_payment !== undefined && r.bank_payment !== null ? r.bank_payment : (r.cash_voucher_payment || 0));
+    const cashPayment = Number(r.cash_payment || 0);
     const cashBankDeposit = Number(r.cash_bank_deposit || 0);
-    const cashPaymentTotal = Number((cashVoucherPayment + cashBankDeposit).toFixed(2));
+    const paymentTotal = Number((bankPayment + cashPayment + cashBankDeposit).toFixed(2));
+    const cashPaymentTotal = Number((cashPayment + cashBankDeposit).toFixed(2));
 
     const cashInHand = Number((openingBalance + cashReceivedTotal - cashPaymentTotal).toFixed(2));
     runningCash = cashInHand;
@@ -155,8 +160,11 @@ async function computeLedger({ fromDate = '', toDate = '' } = {}) {
       cash_other_source: cashOtherSource,
       cash_received_total: cashReceivedTotal,
       cash_pv_bill: r.cash_pv_bill || '',
-      cash_voucher_payment: cashVoucherPayment,
+      bank_payment: bankPayment,
+      cash_payment: cashPayment,
+      cash_voucher_payment: bankPayment,
       cash_bank_deposit: cashBankDeposit,
+      payment_total: paymentTotal,
       cash_payment_total: cashPaymentTotal,
       opening_balance: Number(openingBalance.toFixed(2)),
       opening_balance_override: hasOverride ? Number(r.opening_balance_override) : null,
@@ -194,9 +202,12 @@ async function computeLedger({ fromDate = '', toDate = '' } = {}) {
       acc.cash_fees += r.cash_fees;
       acc.cash_other_source += r.cash_other_source;
       acc.cash_received_total += r.cash_received_total;
-      acc.cash_voucher_payment += r.cash_voucher_payment;
-      acc.cash_bank_deposit += r.cash_bank_deposit;
-      acc.cash_payment_total += r.cash_payment_total;
+      acc.bank_payment = Number(((acc.bank_payment || 0) + (r.bank_payment || 0)).toFixed(2));
+      acc.cash_payment = Number(((acc.cash_payment || 0) + (r.cash_payment || 0)).toFixed(2));
+      acc.cash_voucher_payment = acc.bank_payment;
+      acc.cash_bank_deposit = Number(((acc.cash_bank_deposit || 0) + (r.cash_bank_deposit || 0)).toFixed(2));
+      acc.payment_total = Number(((acc.payment_total || 0) + (r.payment_total || 0)).toFixed(2));
+      acc.cash_payment_total = Number(((acc.cash_payment_total || 0) + (r.cash_payment_total || 0)).toFixed(2));
       return acc;
     },
     {
@@ -208,8 +219,11 @@ async function computeLedger({ fromDate = '', toDate = '' } = {}) {
       cash_fees: 0,
       cash_other_source: 0,
       cash_received_total: 0,
+      bank_payment: 0,
+      cash_payment: 0,
       cash_voucher_payment: 0,
       cash_bank_deposit: 0,
+      payment_total: 0,
       cash_payment_total: 0
     }
   );
@@ -371,6 +385,8 @@ router.post('/fetch-portal', asyncHandler(async (req, res) => {
     cash_pv_bill_list: pvBillList,
     cash_pv_bill_range: pvBillRange,
     voucher_payment_count: voucherPaymentCount,
+    bank_payment: Number(voucherPaymentTotal.toFixed(2)),
+    cash_payment: 0,
     cash_voucher_payment: Number(voucherPaymentTotal.toFixed(2)),
     payment_vouchers_details: (vchData && vchData.raw_payments) || [],
     receipt_vouchers_details: (vchData && vchData.raw_vouchers) || [],
@@ -445,7 +461,9 @@ router.post('/save', asyncHandler(async (req, res) => {
   const cashFees = toNum(body.cash_fees, 0);
   const cashOtherSource = toNum(body.cash_other_source, 0);
   const cashPvBill = String(body.cash_pv_bill ?? '').trim();
-  const cashVoucherPayment = toNum(body.cash_voucher_payment, 0);
+  const bankPayment = toNum(body.bank_payment !== undefined && body.bank_payment !== null ? body.bank_payment : body.cash_voucher_payment, 0);
+  const cashPayment = toNum(body.cash_payment, 0);
+  const cashVoucherPayment = bankPayment;
   const cashBankDeposit = toNum(body.cash_bank_deposit, 0);
   const openingOverride = toNullableNum(body.opening_balance_override);
   const machineBalance = toNullableNum(body.machine_balance);
@@ -458,17 +476,19 @@ router.post('/save', asyncHandler(async (req, res) => {
     `INSERT INTO daily_cash_book_entries (
        entry_date, fees_bill, dev_bill,
        bank_gateway, bank_cheque, bank_edc, bank_swipe_card, bank_rv_bill,
-       cash_fees, cash_other_source, cash_pv_bill, cash_voucher_payment, cash_bank_deposit,
+       cash_fees, cash_other_source, cash_pv_bill,
+       bank_payment, cash_payment, cash_voucher_payment, cash_bank_deposit,
        opening_balance_override, machine_balance, remarks,
        portal_bill_count, portal_sessions, portal_synced_at,
        created_by, updated_by, updated_at
      ) VALUES (
        $1::date, $2, $3,
        $4, $5, $6, $7, $8,
-       $9, $10, $11, $12, $13,
-       $14, $15, $16,
-       $17, $18, CASE WHEN $19::boolean THEN NOW() ELSE NULL END,
-       $20, $20, NOW()
+       $9, $10, $11,
+       $12, $13, $14, $15,
+       $16, $17, $18,
+       $19, $20, CASE WHEN $21::boolean THEN NOW() ELSE NULL END,
+       $22, $22, NOW()
      )
      ON CONFLICT (entry_date) DO UPDATE SET
        fees_bill = EXCLUDED.fees_bill,
@@ -481,20 +501,23 @@ router.post('/save', asyncHandler(async (req, res) => {
        cash_fees = EXCLUDED.cash_fees,
        cash_other_source = EXCLUDED.cash_other_source,
        cash_pv_bill = EXCLUDED.cash_pv_bill,
+       bank_payment = EXCLUDED.bank_payment,
+       cash_payment = EXCLUDED.cash_payment,
        cash_voucher_payment = EXCLUDED.cash_voucher_payment,
        cash_bank_deposit = EXCLUDED.cash_bank_deposit,
        opening_balance_override = EXCLUDED.opening_balance_override,
        machine_balance = EXCLUDED.machine_balance,
        remarks = EXCLUDED.remarks,
-       portal_bill_count = CASE WHEN $19::boolean THEN EXCLUDED.portal_bill_count ELSE daily_cash_book_entries.portal_bill_count END,
-       portal_sessions = CASE WHEN $19::boolean THEN EXCLUDED.portal_sessions ELSE daily_cash_book_entries.portal_sessions END,
-       portal_synced_at = CASE WHEN $19::boolean THEN NOW() ELSE daily_cash_book_entries.portal_synced_at END,
+       portal_bill_count = CASE WHEN $21::boolean THEN EXCLUDED.portal_bill_count ELSE daily_cash_book_entries.portal_bill_count END,
+       portal_sessions = CASE WHEN $21::boolean THEN EXCLUDED.portal_sessions ELSE daily_cash_book_entries.portal_sessions END,
+       portal_synced_at = CASE WHEN $21::boolean THEN NOW() ELSE daily_cash_book_entries.portal_synced_at END,
        updated_by = EXCLUDED.updated_by,
        updated_at = NOW()`,
     [
       entryDate, feesBill, devBill,
       bankGateway, bankCheque, bankEdc, bankSwipeCard, bankRvBill,
-      cashFees, cashOtherSource, cashPvBill, cashVoucherPayment, cashBankDeposit,
+      cashFees, cashOtherSource, cashPvBill,
+      bankPayment, cashPayment, cashVoucherPayment, cashBankDeposit,
       openingOverride, machineBalance, remarks,
       portalBillCount, portalSessions, markSynced,
       req.user.userId
@@ -559,7 +582,7 @@ router.get('/excel', asyncHandler(async (req, res) => {
     '', '', '', '',
     'Gateway', 'Cheque', 'E.D.C', 'Swipe Card', 'R.V Bill',
     'Fees', 'Oth. Source', 'Total',
-    'P.V Bill', 'Voucher Payment', 'Bank Dep.', 'Total',
+    'P.V Bill', 'Bank Payment', 'Cash Payment', 'Bank Dep.', 'Total',
     '', '', '', ''
   ]);
 
@@ -572,12 +595,12 @@ router.get('/excel', asyncHandler(async (req, res) => {
   ws.mergeCells('E3:I3'); // Bank Received
   ws.mergeCells('J2:L2'); // Cash (cols 10..12 strictly over Received)
   ws.mergeCells('J3:L3'); // Cash Received
-  ws.mergeCells('M2:P2'); // Payment top (cols 13..16)
-  ws.mergeCells('M3:P3'); // Payment mid
-  ws.mergeCells('Q2:Q4');
+  ws.mergeCells('M2:Q2'); // Payment top (cols 13..17)
+  ws.mergeCells('M3:Q3'); // Payment mid
   ws.mergeCells('R2:R4');
   ws.mergeCells('S2:S4');
   ws.mergeCells('T2:T4');
+  ws.mergeCells('U2:U4');
 
   const thinBorder = {
     top: { style: 'thin', color: { argb: 'FF475569' } },
@@ -588,7 +611,7 @@ router.get('/excel', asyncHandler(async (req, res) => {
 
   for (let r = 2; r <= 4; r++) {
     ws.getRow(r).height = 22;
-    for (let c = 1; c <= 20; c++) {
+    for (let c = 1; c <= 21; c++) {
       const cell = ws.getCell(r, c);
       cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
       cell.border = thinBorder;
@@ -606,7 +629,7 @@ router.get('/excel', asyncHandler(async (req, res) => {
     ws.getCell(2, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD6C7A1' } };
     ws.getCell(3, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBBF7D0' } };
   }
-  for (let c = 13; c <= 16; c++) {
+  for (let c = 13; c <= 17; c++) {
     ws.getCell(2, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFECDD3' } };
     ws.getCell(3, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFECDD3' } };
     ws.getCell(2, c).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF881337' } };
@@ -628,9 +651,10 @@ router.get('/excel', asyncHandler(async (req, res) => {
       e.cash_other_source,
       e.cash_received_total,
       e.cash_pv_bill,
-      e.cash_voucher_payment,
+      e.bank_payment,
+      e.cash_payment,
       e.cash_bank_deposit,
-      e.cash_payment_total,
+      e.payment_total,
       e.opening_balance,
       e.cash_in_hand,
       e.machine_balance === null ? '' : e.machine_balance,
@@ -640,30 +664,30 @@ router.get('/excel', asyncHandler(async (req, res) => {
       cell.border = thinBorder;
       cell.font = { name: 'Calibri', size: 10 };
       cell.alignment = {
-        horizontal: col === 20 ? 'left' : col >= 5 && col <= 19 && col !== 9 && col !== 13 ? 'right' : 'center',
+        horizontal: col === 21 ? 'left' : col >= 5 && col <= 20 && col !== 9 && col !== 13 ? 'right' : 'center',
         vertical: 'middle',
-        wrapText: col === 3 || col === 4 || col === 9 || col === 13 || col === 20
+        wrapText: col === 3 || col === 4 || col === 9 || col === 13 || col === 21
       };
-      if (col >= 5 && col <= 19 && col !== 9 && col !== 13 && typeof cell.value === 'number') {
+      if (col >= 5 && col <= 20 && col !== 9 && col !== 13 && typeof cell.value === 'number') {
         cell.numFmt = '#,##0';
       }
-      if ((col === 18 || col === 19) && e.balance_matched === true) {
+      if ((col === 19 || col === 20) && e.balance_matched === true) {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF86EFAC' } };
         cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF14532D' } };
-      } else if ((col === 18 || col === 19) && e.balance_matched === false) {
+      } else if ((col === 19 || col === 20) && e.balance_matched === false) {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFECACA' } };
         cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF991B1B' } };
       }
     });
   }
 
-  const widths = [7, 13, 22, 18, 12, 11, 10, 12, 22, 12, 12, 12, 18, 15, 13, 12, 15, 15, 15, 22];
+  const widths = [7, 13, 22, 18, 12, 11, 10, 12, 22, 12, 12, 12, 18, 15, 15, 13, 12, 15, 15, 15, 22];
   widths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
 
-  // Add thick section dividing line after Bank (col 9), Cash Received (col 12), and Payment (col 16)
+  // Add thick section dividing line after Bank (col 9), Cash Received (col 12), and Payment (col 17)
   const lastRow = ws.rowCount;
   for (let r = 2; r <= lastRow; r++) {
-    for (const c of [9, 12, 16]) {
+    for (const c of [9, 12, 17]) {
       const cell = ws.getCell(r, c);
       cell.border = {
         ...cell.border,

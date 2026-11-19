@@ -38,8 +38,11 @@ type CashBookEntry = {
   cash_other_source: number;
   cash_received_total: number;
   cash_pv_bill: string;
-  cash_voucher_payment: number;
+  bank_payment: number;
+  cash_payment: number;
+  cash_voucher_payment?: number;
   cash_bank_deposit: number;
+  payment_total?: number;
   cash_payment_total: number;
   opening_balance: number;
   opening_balance_override: number | null;
@@ -64,7 +67,9 @@ type RowDraft = {
   cash_fees: string;
   cash_other_source: string;
   cash_pv_bill: string;
-  cash_voucher_payment: string;
+  bank_payment: string;
+  cash_payment: string;
+  cash_voucher_payment?: string;
   cash_bank_deposit: string;
   opening_balance_override: string;
   machine_balance: string;
@@ -169,6 +174,8 @@ const blankDraft = (date = todayYmd()): RowDraft => ({
   cash_fees: '',
   cash_other_source: '',
   cash_pv_bill: '',
+  bank_payment: '',
+  cash_payment: '',
   cash_voucher_payment: '',
   cash_bank_deposit: '',
   opening_balance_override: '',
@@ -192,6 +199,8 @@ const entryToDraft = (e: CashBookEntry): RowDraft => ({
   cash_fees: e.cash_fees ? fmtNum(e.cash_fees) : '',
   cash_other_source: e.cash_other_source ? fmtNum(e.cash_other_source) : '',
   cash_pv_bill: e.cash_pv_bill || '',
+  bank_payment: e.bank_payment !== undefined && e.bank_payment !== null ? fmtNum(e.bank_payment) : (e.cash_voucher_payment ? fmtNum(e.cash_voucher_payment) : ''),
+  cash_payment: e.cash_payment ? fmtNum(e.cash_payment) : '',
   cash_voucher_payment: e.cash_voucher_payment ? fmtNum(e.cash_voucher_payment) : '',
   cash_bank_deposit: e.cash_bank_deposit ? fmtNum(e.cash_bank_deposit) : '',
   opening_balance_override: e.opening_balance_override !== null ? fmtNum(e.opening_balance_override) : '',
@@ -227,9 +236,10 @@ const W = {
   othSource: 88,
   cashRecTot: 94,
   pvBill: 128,
-  voucherPay: 104,
+  bankPay: 104,
+  cashPay: 104,
   bankDep: 96,
-  cashPayTot: 94,
+  payTot: 94,
   opening: 106,
   cashInHand: 108,
   machineBal: 108,
@@ -239,7 +249,7 @@ const W = {
 
 const BANK_WIDTH = W.gateway + W.cheque + W.edc + W.swipe + W.rvBill;
 const CASH_REC_WIDTH = W.cashFees + W.othSource + W.cashRecTot;
-const CASH_PAY_WIDTH = W.pvBill + W.voucherPay + W.bankDep + W.cashPayTot;
+const CASH_PAY_WIDTH = W.pvBill + W.bankPay + W.cashPay + W.bankDep + W.payTot;
 const CASH_WIDTH = CASH_REC_WIDTH + CASH_PAY_WIDTH;
 const TOTAL_TABLE_WIDTH =
   W.sl +
@@ -436,7 +446,9 @@ export default function DailyCashBookScreen() {
           bank_rv_bill: data.bank_rv_bill || '',
           cash_fees: fmtNum(data.cash_fees || 0),
           cash_pv_bill: data.cash_pv_bill || '',
-          cash_voucher_payment: fmtNum(data.cash_voucher_payment || 0),
+          bank_payment: fmtNum(data.bank_payment !== undefined ? data.bank_payment : (data.cash_voucher_payment || 0)),
+          cash_payment: fmtNum(data.cash_payment || 0),
+          cash_voucher_payment: fmtNum(data.bank_payment !== undefined ? data.bank_payment : (data.cash_voucher_payment || 0)),
           portal_bill_count: data.bill_count || 0,
           portal_sessions: (data.queried_sessions || []).join(', '),
           portal_synced: true
@@ -582,7 +594,9 @@ export default function DailyCashBookScreen() {
           cash_fees: num(draft.cash_fees),
           cash_other_source: num(draft.cash_other_source),
           cash_pv_bill: draft.cash_pv_bill,
-          cash_voucher_payment: num(draft.cash_voucher_payment),
+          bank_payment: num(draft.bank_payment),
+          cash_payment: num(draft.cash_payment),
+          cash_voucher_payment: num(draft.bank_payment),
           cash_bank_deposit: num(draft.cash_bank_deposit),
           opening_balance_override: draft.opening_balance_override.trim() === '' ? null : num(draft.opening_balance_override),
           machine_balance: draft.machine_balance.trim() === '' ? null : num(draft.machine_balance),
@@ -670,12 +684,13 @@ export default function DailyCashBookScreen() {
   // Live calculations for the "New" row
   const newRowCalc = useMemo(() => {
     const cashRecTotal = num(newRow.cash_fees) + num(newRow.cash_other_source);
-    const cashPayTotal = num(newRow.cash_voucher_payment) + num(newRow.cash_bank_deposit);
+    const payTotal = num(newRow.bank_payment) + num(newRow.cash_payment) + num(newRow.cash_bank_deposit);
+    const cashPayTotal = num(newRow.cash_payment) + num(newRow.cash_bank_deposit);
     const opening = newRow.opening_balance_override.trim() !== '' ? num(newRow.opening_balance_override) : nextOpeningBalance;
     const cashInHand = opening + cashRecTotal - cashPayTotal;
     const hasMachine = newRow.machine_balance.trim() !== '';
     const matched = hasMachine ? Math.abs(num(newRow.machine_balance) - cashInHand) < 0.01 : null;
-    return { cashRecTotal, cashPayTotal, opening, cashInHand, matched };
+    return { cashRecTotal, payTotal, cashPayTotal, opening, cashInHand, matched };
   }, [newRow, nextOpeningBalance]);
 
   const summaryKpis = useMemo(() => {
@@ -730,9 +745,10 @@ export default function DailyCashBookScreen() {
           <td class="r">${fmtNum(e.cash_other_source)}</td>
           <td class="r b div-r">${fmtNum(e.cash_received_total)}</td>
           <td>${e.cash_pv_bill || ''}</td>
-          <td class="r">${fmtNum(e.cash_voucher_payment)}</td>
-          <td class="r">${fmtNum(e.cash_bank_deposit)}</td>
-          <td class="r b div-r">${fmtNum(e.cash_payment_total)}</td>
+          <td class="r">${fmtNum(e.bank_payment ?? e.cash_voucher_payment ?? 0)}</td>
+          <td class="r">${fmtNum(e.cash_payment || 0)}</td>
+          <td class="r">${fmtNum(e.cash_bank_deposit || 0)}</td>
+          <td class="r b div-r">${fmtNum(e.payment_total ?? (num(e.bank_payment) + num(e.cash_payment) + num(e.cash_bank_deposit)))}</td>
           <td class="r">${fmtNum(e.opening_balance)}</td>
           <td class="r b ${cls}">${fmtNum(e.cash_in_hand)}</td>
           <td class="r b ${cls}">${e.machine_balance === null ? '' : fmtNum(e.machine_balance)}</td>
@@ -762,7 +778,7 @@ export default function DailyCashBookScreen() {
           <th rowspan="3" class="blue">Dev. Bill</th>
           <th colspan="5" class="maroon div-r">Bank</th>
           <th colspan="3" class="beige div-r">Cash</th>
-          <th colspan="4" class="pink div-r">Payment</th>
+          <th colspan="5" class="pink div-r">Payment</th>
           <th rowspan="3" class="blue">Opening Balance</th>
           <th rowspan="3" class="blue">Cash In Hand</th>
           <th rowspan="3" class="blue">Machine Balance</th>
@@ -771,12 +787,12 @@ export default function DailyCashBookScreen() {
         <tr>
           <th colspan="5" class="green div-r">Received</th>
           <th colspan="3" class="green div-r">Received</th>
-          <th colspan="4" class="pink div-r">Payment</th>
+          <th colspan="5" class="pink div-r">Payment</th>
         </tr>
         <tr>
           <th class="blue">Gateway</th><th class="blue">Cheque</th><th class="blue">E.D.C</th><th class="blue">Swipe Card</th><th class="blue div-r">R.V Bill</th>
           <th class="blue">Fees</th><th class="blue">Oth. Source</th><th class="blue div-r">Total</th>
-          <th class="blue">P.V Bill</th><th class="blue">Voucher Payment</th><th class="blue">Bank Dep.</th><th class="blue div-r">Total</th>
+          <th class="blue">P.V Bill</th><th class="blue">Bank Payment</th><th class="blue">Cash Payment</th><th class="blue">Bank Dep.</th><th class="blue div-r">Total</th>
         </tr>
       </thead>
       <tbody>${rowsHtml}</tbody>
@@ -966,9 +982,10 @@ export default function DailyCashBookScreen() {
                     </View>
                     <View style={s.hTier3Row}>
                       <View style={[s.hSubCell, { width: W.pvBill }]}><Text style={s.hText}>P.V Bill</Text></View>
-                      <View style={[s.hSubCell, { width: W.voucherPay }]}><Text style={s.hText}>Voucher Payment</Text></View>
+                      <View style={[s.hSubCell, { width: W.bankPay }]}><Text style={s.hText}>Bank Payment</Text></View>
+                      <View style={[s.hSubCell, { width: W.cashPay }]}><Text style={s.hText}>Cash Payment</Text></View>
                       <View style={[s.hSubCell, { width: W.bankDep }]}><Text style={s.hText}>Bank Dep.</Text></View>
-                      <View style={[s.hSubCell, { width: W.cashPayTot, borderRightWidth: 0 }]}><Text style={s.hText}>Total</Text></View>
+                      <View style={[s.hSubCell, { width: W.payTot, borderRightWidth: 0 }]}><Text style={s.hText}>Total</Text></View>
                     </View>
                   </View>
 
@@ -1141,14 +1158,24 @@ export default function DailyCashBookScreen() {
                       </TouchableOpacity>
                     )}
                   </View>
-                  <View style={[s.cell, { width: W.voucherPay }]}>
+                  <View style={[s.cell, { width: W.bankPay }]}>
                     <TextInput
                       style={s.inputNum}
                       keyboardType="numeric"
                       placeholder="0"
                       placeholderTextColor={PLACEHOLDER_COLOR}
-                      value={newRow.cash_voucher_payment}
-                      onChangeText={v => setNewRow(p => ({ ...p, cash_voucher_payment: v }))}
+                      value={newRow.bank_payment}
+                      onChangeText={v => setNewRow(p => ({ ...p, bank_payment: v }))}
+                    />
+                  </View>
+                  <View style={[s.cell, { width: W.cashPay }]}>
+                    <TextInput
+                      style={s.inputNum}
+                      keyboardType="numeric"
+                      placeholder="0"
+                      placeholderTextColor={PLACEHOLDER_COLOR}
+                      value={newRow.cash_payment}
+                      onChangeText={v => setNewRow(p => ({ ...p, cash_payment: v }))}
                     />
                   </View>
                   <View style={[s.cell, { width: W.bankDep }]}>
@@ -1161,10 +1188,10 @@ export default function DailyCashBookScreen() {
                       onChangeText={v => setNewRow(p => ({ ...p, cash_bank_deposit: v }))}
                     />
                   </View>
-                  <View style={[s.cell, { width: W.cashPayTot }, s.sectionDividerRight]}>
+                  <View style={[s.cell, { width: W.payTot }, s.sectionDividerRight]}>
                     <View style={s.readonlyBox}>
-                      <Text style={[s.readonlyNum, !num(newRowCalc.cashPayTotal) && s.faintText]}>
-                        {fmtNum(newRowCalc.cashPayTotal)}
+                      <Text style={[s.readonlyNum, !num(newRowCalc.payTotal) && s.faintText]}>
+                        {fmtNum(newRowCalc.payTotal)}
                       </Text>
                     </View>
                   </View>
@@ -1267,7 +1294,8 @@ export default function DailyCashBookScreen() {
                   const isEditing = editingId === entry.id;
                   const d = rowDrafts[entry.id] || entryToDraft(entry);
                   const cashRecTot = num(d.cash_fees) + num(d.cash_other_source);
-                  const cashPayTot = num(d.cash_voucher_payment) + num(d.cash_bank_deposit);
+                  const payTot = num(d.bank_payment) + num(d.cash_payment) + num(d.cash_bank_deposit);
+                  const cashPayTot = num(d.cash_payment) + num(d.cash_bank_deposit);
                   const openBal = d.opening_balance_override.trim() !== '' ? num(d.opening_balance_override) : entry.opening_balance;
                   const cashInHand = openBal + cashRecTot - cashPayTot;
                   const hasMachine = d.machine_balance.trim() !== '';
@@ -1417,13 +1445,22 @@ export default function DailyCashBookScreen() {
                           </TouchableOpacity>
                         )}
                       </View>
-                      <View style={[s.cell, { width: W.voucherPay }]}>
+                      <View style={[s.cell, { width: W.bankPay }]}>
                         <TextInput
                           style={[s.inputNum, !isEditing && s.inputReadonly]}
                           keyboardType="numeric"
                           editable={isEditing}
-                          value={d.cash_voucher_payment}
-                          onChangeText={v => updateSavedField(entry.id, 'cash_voucher_payment', v)}
+                          value={d.bank_payment}
+                          onChangeText={v => updateSavedField(entry.id, 'bank_payment', v)}
+                        />
+                      </View>
+                      <View style={[s.cell, { width: W.cashPay }]}>
+                        <TextInput
+                          style={[s.inputNum, !isEditing && s.inputReadonly]}
+                          keyboardType="numeric"
+                          editable={isEditing}
+                          value={d.cash_payment}
+                          onChangeText={v => updateSavedField(entry.id, 'cash_payment', v)}
                         />
                       </View>
                       <View style={[s.cell, { width: W.bankDep }]}>
@@ -1435,9 +1472,9 @@ export default function DailyCashBookScreen() {
                           onChangeText={v => updateSavedField(entry.id, 'cash_bank_deposit', v)}
                         />
                       </View>
-                      <View style={[s.cell, { width: W.cashPayTot }, s.sectionDividerRight]}>
+                      <View style={[s.cell, { width: W.payTot }, s.sectionDividerRight]}>
                         <View style={s.readonlyBox}>
-                          <Text style={s.readonlyNum}>{fmtNum(cashPayTot)}</Text>
+                          <Text style={s.readonlyNum}>{fmtNum(payTot)}</Text>
                         </View>
                       </View>
 
