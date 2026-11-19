@@ -63,9 +63,11 @@ async function ensureStaffAvailability(){
 router.get('/me/availability',auth,allow('teacher', 'admin', 'super_admin'),asyncHandler(async(req,res)=>{
   const date=String(req.query.date||new Date().toISOString().slice(0,10));
   await ensureStaffAvailability();
-  const r=await pool.query(`SELECT COALESCE(a.status,'Present') status, a.punch_in, a.punch_out, a.distance_meters FROM teachers t LEFT JOIN staff_attendance a ON a.teacher_id=t.id AND a.attendance_date=$1 WHERE t.user_id=$2 LIMIT 1`,[date,req.user.userId]);
-  if(!r.rowCount)return res.status(404).json({success:false,message:'Teacher profile not found'});
-  res.json({success:true,status:r.rows[0]?.status||'Present',date,punch_in:r.rows[0]?.punch_in,punch_out:r.rows[0]?.punch_out,distance:r.rows[0]?.distance_meters});
+  const r=await pool.query(`SELECT t.id as teacher_id, COALESCE(a.status,'Present') status, a.punch_in, a.punch_out, a.distance_meters FROM teachers t LEFT JOIN staff_attendance a ON a.teacher_id=t.id AND a.attendance_date=$1 WHERE t.user_id=$2 LIMIT 1`,[date,req.user.userId]);
+  if (!r.rowCount) {
+    return res.json({success:true, has_staff_profile:false, status:'Present', date});
+  }
+  res.json({success:true, has_staff_profile:true, status:r.rows[0]?.status||'Present', date, punch_in:r.rows[0]?.punch_in, punch_out:r.rows[0]?.punch_out, distance:r.rows[0]?.distance_meters});
 }));
 
 router.post('/me/availability',auth,allow('teacher', 'admin', 'super_admin'),asyncHandler(async(req,res)=>{
@@ -92,7 +94,7 @@ router.post('/me/availability',auth,allow('teacher', 'admin', 'super_admin'),asy
 
   await ensureStaffAvailability();
   const t=await pool.query('SELECT id FROM teachers WHERE user_id=$1 LIMIT 1',[req.user.userId]);
-  if(!t.rowCount)return res.status(404).json({message:'Teacher profile not found'});
+  if(!t.rowCount)return res.status(404).json({message:'Staff profile not found'});
 
   await pool.query(`
     INSERT INTO staff_attendance(
