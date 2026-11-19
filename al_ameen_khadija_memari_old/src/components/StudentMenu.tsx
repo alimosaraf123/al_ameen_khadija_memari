@@ -11,6 +11,7 @@ export const STUDENT_MENU_ITEMS: [string, string][] = [
   ['Document Upload', '/documents'],
   ['Promotion / TC (Lifecycle)', '/student-lifecycle'],
   ['Excel & Bulk Documents', '/student-transfer'],
+  ['Kanyashree Portal (K1/K2)', '/kanyashree'],
   ['Student Behavior', '/behavior'],
   ['Student Gate Pass', '/gate-pass'],
   ['Visit Permission', '/visits'],
