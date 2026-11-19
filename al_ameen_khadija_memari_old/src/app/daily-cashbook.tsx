@@ -257,6 +257,7 @@ export default function DailyCashBookScreen() {
   const [billModalTitle, setBillModalTitle] = useState('');
   const [billModalBills, setBillModalBills] = useState<PortalBillPreview[]>([]);
   const [billModalMeta, setBillModalMeta] = useState<string>('');
+  const [billModalLoading, setBillModalLoading] = useState(false);
 
   // Portal payment voucher breakdown modal
   const [pvModalVisible, setPvModalVisible] = useState(false);
@@ -388,6 +389,35 @@ export default function DailyCashBookScreen() {
       setError(e.message || 'Portal fetch failed');
     } finally {
       setFetchingKey(null);
+    }
+  };
+
+  const openFeesBillsForDate = async (ymd: string) => {
+    const dmy = ymdToDmy(ymd);
+    setBillModalTitle(`Portal Fees Bills — ${dmy}`);
+    setBillModalMeta('');
+    setBillModalLoading(true);
+    setBillModalVisible(true);
+    try {
+      const data: any = await api('/api/daily-cashbook/fetch-portal', {
+        method: 'POST',
+        body: JSON.stringify({ entry_date: ymd })
+      });
+      if (data?.success) {
+        const list: PortalBillPreview[] = Array.isArray(data.bills) ? data.bills : [];
+        setBillModalBills(list);
+        setBillModalMeta(
+          `Sessions: ${(data.queried_sessions || []).join(', ')}  |  Bills: ${list.length}  |  Fees Bill: ${data.fees_bill_range || data.fees_bill || '-'}  |  Dev. Bill: ${data.dev_bill_range || data.dev_bill || '-'}  |  Gateway: ${fmtInr(data.bank_gateway || 0)}  |  Cash: ${fmtInr(data.cash_fees || 0)}`
+        );
+      } else {
+        setBillModalBills([]);
+        setBillModalMeta(data?.message || 'কোনো বিল পাওয়া যায়নি।');
+      }
+    } catch (e: any) {
+      setBillModalBills([]);
+      setBillModalMeta(e.message || 'বিল লোড করতে সমস্যা হয়েছে');
+    } finally {
+      setBillModalLoading(false);
     }
   };
 
@@ -859,6 +889,22 @@ export default function DailyCashBookScreen() {
                       placeholderTextColor={PLACEHOLDER_COLOR}
                       onChangeText={v => setNewRow(p => ({ ...p, fees_bill: v }))}
                     />
+                    {(billModalBills.length > 0 || Boolean(newRow.fees_bill)) && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (billModalBills.length > 0) {
+                            setBillModalVisible(true);
+                          } else {
+                            void openFeesBillsForDate(selectedDate || newRow.entry_date);
+                          }
+                        }}
+                        style={s.billMiniBtn}
+                      >
+                        <Text style={s.billMiniBtnText}>
+                          👁️ View Details{billModalBills.length > 0 ? ` (${billModalBills.length})` : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                   <View style={[s.cell, { width: W.devBill }]}>
                     <TextInput
@@ -1119,6 +1165,14 @@ export default function DailyCashBookScreen() {
                           value={d.fees_bill}
                           onChangeText={v => updateSavedField(entry.id, 'fees_bill', v)}
                         />
+                        {Boolean(d.fees_bill || entry.portal_bill_count) && (
+                          <TouchableOpacity
+                            onPress={() => void openFeesBillsForDate(entry.entry_date)}
+                            style={s.billMiniBtn}
+                          >
+                            <Text style={s.billMiniBtnText}>👁️ View Details</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                       <View style={[s.cell, { width: W.devBill }]}>
                         <TextInput
@@ -1285,49 +1339,80 @@ export default function DailyCashBookScreen() {
       {/* Portal Bills Breakdown Modal */}
       <Modal visible={billModalVisible} transparent animationType="fade" onRequestClose={() => setBillModalVisible(false)}>
         <View style={s.modalOverlay}>
-          <View style={s.modalCard}>
+          <View style={[s.modalCard, { maxWidth: 960 }]}>
             <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>{billModalTitle}</Text>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={s.modalTitle}>{billModalTitle || '📄 Portal Fees Bills'}</Text>
+                {billModalMeta ? (
+                  <Text style={[s.modalMeta, { backgroundColor: '#f5f3ff', color: '#6d28d9' }]}>
+                    {billModalMeta}
+                  </Text>
+                ) : null}
+              </View>
               <TouchableOpacity onPress={() => setBillModalVisible(false)} style={s.modalCloseBtn}>
                 <Text style={s.modalCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
-            {billModalMeta ? <Text style={s.modalMeta}>{billModalMeta}</Text> : null}
-            <ScrollView style={{ maxHeight: 420 }}>
-              <View style={s.billHead}>
-                <Text style={[s.billTh, { width: 65 }]}>Bill No</Text>
-                <Text style={[s.billTh, { width: 65 }]}>Type</Text>
-                <Text style={[s.billTh, { width: 155 }]}>Payment Mode</Text>
-                <Text style={[s.billTh, { width: 75 }]}>Reg No</Text>
-                <Text style={[s.billTh, { flex: 1 }]}>Student Name</Text>
-                <Text style={[s.billTh, { width: 70 }]}>Class</Text>
-                <Text style={[s.billTh, { width: 80, textAlign: 'right' }]}>Dev Fee</Text>
-                <Text style={[s.billTh, { width: 90, textAlign: 'right' }]}>Amount</Text>
+
+            {billModalLoading ? (
+              <View style={{ padding: 40, alignItems: 'center', justifyContent: 'center' }}>
+                <ActivityIndicator size="large" color="#7c3aed" />
+                <Text style={{ marginTop: 10, color: '#64748b', fontSize: 13, fontWeight: '700' }}>
+                  বিল লোড হচ্ছে...
+                </Text>
               </View>
-              {billModalBills.map((b, i) => (
-                <View key={`${b.bill_number}-${i}`} style={[s.billRow, i % 2 === 1 && { backgroundColor: '#f8fafc' }]}>
-                  <Text style={[s.billTd, { width: 65, fontWeight: '800' }]}>{b.bill_number}</Text>
-                  <Text
-                    style={[
-                      s.billTd,
-                      {
-                        width: 65,
-                        fontWeight: '700',
-                        color: b.is_development_bill ? '#9333ea' : '#1d4ed8'
-                      }
-                    ]}
-                  >
-                    {b.is_development_bill ? 'Dev.' : 'Fees'}
-                  </Text>
-                  <Text style={[s.billTd, { width: 155 }]} numberOfLines={1}>{b.raw_payment_mode}</Text>
-                  <Text style={[s.billTd, { width: 75 }]}>{b.registration_no}</Text>
-                  <Text style={[s.billTd, { flex: 1 }]} numberOfLines={1}>{b.student_name}</Text>
-                  <Text style={[s.billTd, { width: 70 }]}>{b.class_name}</Text>
-                  <Text style={[s.billTd, { width: 80, textAlign: 'right' }]}>{b.development_fee > 0 ? fmtInr(b.development_fee) : '-'}</Text>
-                  <Text style={[s.billTd, { width: 90, textAlign: 'right', fontWeight: '800', color: '#15803d' }]}>{fmtInr(b.amount)}</Text>
+            ) : billModalBills.length === 0 ? (
+              <View style={{ padding: 30, alignItems: 'center' }}>
+                <Text style={{ color: '#64748b', fontSize: 13, fontWeight: '700' }}>
+                  কোনো বিল পাওয়া যায়নি।
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={{ maxHeight: 420 }}>
+                <View style={s.billHead}>
+                  <Text style={[s.billTh, { width: 65 }]}>Bill No</Text>
+                  <Text style={[s.billTh, { width: 65 }]}>Type</Text>
+                  <Text style={[s.billTh, { width: 155 }]}>Payment Mode</Text>
+                  <Text style={[s.billTh, { width: 75 }]}>Reg No</Text>
+                  <Text style={[s.billTh, { flex: 1 }]}>Student Name</Text>
+                  <Text style={[s.billTh, { width: 70 }]}>Class</Text>
+                  <Text style={[s.billTh, { width: 80, textAlign: 'right' }]}>Dev Fee</Text>
+                  <Text style={[s.billTh, { width: 90, textAlign: 'right' }]}>Amount</Text>
                 </View>
-              ))}
-            </ScrollView>
+                {billModalBills.map((b, i) => (
+                  <View key={`${b.bill_number}-${i}`} style={[s.billRow, i % 2 === 1 && { backgroundColor: '#f8fafc' }]}>
+                    <Text style={[s.billTd, { width: 65, fontWeight: '800' }]}>{b.bill_number}</Text>
+                    <Text
+                      style={[
+                        s.billTd,
+                        {
+                          width: 65,
+                          fontWeight: '700',
+                          color: b.is_development_bill ? '#9333ea' : '#1d4ed8'
+                        }
+                      ]}
+                    >
+                      {b.is_development_bill ? 'Dev.' : 'Fees'}
+                    </Text>
+                    <Text style={[s.billTd, { width: 155 }]} numberOfLines={1}>{b.raw_payment_mode}</Text>
+                    <Text style={[s.billTd, { width: 75 }]}>{b.registration_no}</Text>
+                    <Text style={[s.billTd, { flex: 1 }]} numberOfLines={1}>{b.student_name}</Text>
+                    <Text style={[s.billTd, { width: 70 }]}>{b.class_name}</Text>
+                    <Text style={[s.billTd, { width: 80, textAlign: 'right' }]}>{b.development_fee > 0 ? fmtInr(b.development_fee) : '-'}</Text>
+                    <Text style={[s.billTd, { width: 90, textAlign: 'right', fontWeight: '800', color: '#15803d' }]}>{fmtInr(b.amount)}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+
+            <View style={[s.pvModalFooter, { borderTopColor: '#ddd6fe' }]}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#5b21b6' }}>
+                মোট বিল: {billModalBills.length} টি  |  মোট টাকা: {fmtInr(billModalBills.reduce((sum, b) => sum + (Number(b.amount) || 0), 0))}
+              </Text>
+              <TouchableOpacity onPress={() => setBillModalVisible(false)} style={[s.primaryBtn, { backgroundColor: '#7c3aed' }]}>
+                <Text style={s.primaryBtnText}>বন্ধ করুন</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1752,6 +1837,21 @@ const s = StyleSheet.create({
     alignItems: 'center'
   },
   billTd: { fontSize: 12, color: '#0f172a' },
+  billMiniBtn: {
+    marginTop: 4,
+    backgroundColor: '#ede9fe',
+    borderWidth: 1,
+    borderColor: '#c4b5fd',
+    borderRadius: 5,
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+    alignItems: 'center'
+  },
+  billMiniBtnText: {
+    color: '#6d28d9',
+    fontSize: 10,
+    fontWeight: '800'
+  },
   vchMiniBtn: {
     marginTop: 4,
     backgroundColor: '#ffe4e6',
