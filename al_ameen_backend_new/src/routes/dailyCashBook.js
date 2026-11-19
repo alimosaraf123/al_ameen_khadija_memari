@@ -3,7 +3,7 @@ const ExcelJS = require('exceljs');
 const pool = require('../db');
 const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
-const { getFeesReportData, getHostelFeeReceiptVouchers } = require('../utils/alAmeenAccounts');
+const { getFeesReportData, getHostelFeeReceiptVouchers, getCashBookPaymentData } = require('../utils/alAmeenAccounts');
 
 const router = express.Router();
 
@@ -358,6 +358,19 @@ router.post('/fetch-portal', asyncHandler(async (req, res) => {
     console.error(`[DailyCashBook] Voucher sync error for ${entryDate}:`, err.message);
   }
 
+  // Fetch Cash Book Payments from action=cash_book
+  let cashPaymentTotal = 0;
+  let cashBookPayments = [];
+  try {
+    const cashBookRes = await getCashBookPaymentData({ dateStr: entryDate });
+    if (cashBookRes?.success) {
+      cashPaymentTotal = Number(cashBookRes.cash_payment_total || 0);
+      cashBookPayments = cashBookRes.payments || [];
+    }
+  } catch (err) {
+    console.error(`[DailyCashBook] Cash book payment sync error for ${entryDate}:`, err.message);
+  }
+
   res.json({
     success: true,
     entry_date: entryDate,
@@ -386,10 +399,12 @@ router.post('/fetch-portal', asyncHandler(async (req, res) => {
     cash_pv_bill_range: pvBillRange,
     voucher_payment_count: voucherPaymentCount,
     bank_payment: Number(voucherPaymentTotal.toFixed(2)),
-    cash_payment: 0,
+    cash_payment: Number(cashPaymentTotal.toFixed(2)),
+    cash_payment_count: cashBookPayments.length,
     cash_voucher_payment: Number(voucherPaymentTotal.toFixed(2)),
     payment_vouchers_details: (vchData && vchData.raw_payments) || [],
     receipt_vouchers_details: (vchData && vchData.raw_vouchers) || [],
+    cash_book_payments_details: cashBookPayments,
     total_amount: Number((bankGateway + bankCheque + bankSwipeCard + cashFees).toFixed(2)),
     bills: bills.map(b => ({
       bill_number: b.bill_number,
@@ -404,6 +419,34 @@ router.post('/fetch-portal', asyncHandler(async (req, res) => {
       amount: Number(b.amount || 0)
     }))
   });
+}));
+
+// GET /api/daily-cashbook/cash-payments?date=YYYY-MM-DD — fetch cash payments directly from action=cash_book
+router.get('/cash-payments', asyncHandler(async (req, res) => {
+  const dateStr = formatYmd(req.query.date || req.query.entry_date || '');
+  if (!dateStr) {
+    return res.status(400).json({ success: false, message: 'Valid date (YYYY-MM-DD) is required.' });
+  }
+
+  try {
+    const cashBookRes = await getCashBookPaymentData({ dateStr });
+    if (!cashBookRes?.success) {
+      return res.status(502).json({ success: false, message: 'Failed to fetch cash book payments from portal.' });
+    }
+
+    res.json({
+      success: true,
+      entry_date: dateStr,
+      entry_date_dmy: formatDmy(dateStr),
+      financial_year: cashBookRes.financial_year,
+      total_count: cashBookRes.total_count || 0,
+      cash_payment_total: cashBookRes.cash_payment_total || 0,
+      payments: cashBookRes.payments || []
+    });
+  } catch (err) {
+    console.error(`[DailyCashBook] Error fetching cash payments for ${dateStr}:`, err);
+    res.status(500).json({ success: false, message: err.message || 'Error fetching cash payments.' });
+  }
 }));
 
 // GET /api/daily-cashbook/vouchers?date=YYYY-MM-DD — fetch voucher details (payment & receipt) for a specific date

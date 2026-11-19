@@ -104,6 +104,15 @@ type PaymentVoucherItem = {
   user_name?: string;
 };
 
+type CashPaymentItem = {
+  date: string;
+  ledger: string;
+  narration: string;
+  vch_type: string;
+  vch_no: string;
+  amount: number;
+};
+
 const todayYmd = () => {
   const now = new Date();
   const y = now.getFullYear();
@@ -322,6 +331,8 @@ export default function DailyCashBookScreen() {
     setBillModalMeta('');
     setPvModalVouchers([]);
     setPvModalMeta('');
+    setCashModalPayments([]);
+    setCashModalMeta('');
   };
 
   const [fetchingKey, setFetchingKey] = useState<string | null>(null); // 'new' or String(entry.id)
@@ -340,6 +351,13 @@ export default function DailyCashBookScreen() {
   const [pvModalVouchers, setPvModalVouchers] = useState<PaymentVoucherItem[]>([]);
   const [pvModalMeta, setPvModalMeta] = useState<string>('');
   const [pvModalLoading, setPvModalLoading] = useState(false);
+
+  // Portal cash book payment breakdown modal
+  const [cashModalVisible, setCashModalVisible] = useState(false);
+  const [cashModalTitle, setCashModalTitle] = useState('');
+  const [cashModalPayments, setCashModalPayments] = useState<CashPaymentItem[]>([]);
+  const [cashModalMeta, setCashModalMeta] = useState<string>('');
+  const [cashModalLoading, setCashModalLoading] = useState(false);
 
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -469,7 +487,9 @@ export default function DailyCashBookScreen() {
               bank_rv_bill: data.bank_rv_bill || '',
               cash_fees: fmtNum(data.cash_fees || 0),
               cash_pv_bill: data.cash_pv_bill || '',
-              cash_voucher_payment: fmtNum(data.cash_voucher_payment || 0),
+              bank_payment: fmtNum(data.bank_payment !== undefined ? data.bank_payment : (data.cash_voucher_payment || 0)),
+              cash_payment: fmtNum(data.cash_payment || 0),
+              cash_voucher_payment: fmtNum(data.bank_payment !== undefined ? data.bank_payment : (data.cash_voucher_payment || 0)),
               portal_bill_count: data.bill_count || 0,
               portal_sessions: (data.queried_sessions || []).join(', '),
               portal_synced: true,
@@ -492,16 +512,45 @@ export default function DailyCashBookScreen() {
       setPvModalVouchers(pvDetails);
       setPvModalTitle(`Payment Vouchers — ${data.entry_date_dmy || ymdToDmy(ymd)}`);
       setPvModalMeta(
-        `Date: ${data.entry_date_dmy || ymdToDmy(ymd)}  |  Total Vouchers: ${pvDetails.length}  |  P.V Range: ${data.cash_pv_bill_range || data.cash_pv_bill || '-'}  |  Total Payment: ${fmtInr(data.cash_voucher_payment || 0)}`
+        `Date: ${data.entry_date_dmy || ymdToDmy(ymd)}  |  Total Vouchers: ${pvDetails.length}  |  P.V Range: ${data.cash_pv_bill_range || data.cash_pv_bill || '-'}  |  Total Payment: ${fmtInr(data.bank_payment || 0)}`
       );
 
+      const cashPayAmt = Number(data.cash_payment || 0);
+      const cashPayCount = Number(data.cash_payment_count || 0);
+      const cashPayText = cashPayAmt > 0 ? ` | Cash Payment: ${fmtInr(cashPayAmt)}${cashPayCount > 0 ? ` (${cashPayCount}টি)` : ''}` : '';
       setBanner(
-        `${data.entry_date_dmy || ymdToDmy(ymd)}: ${data.bill_count || 0}টি বিল ও ${pvDetails.length}টি পেমেন্ট ভাউচার পাওয়া গেছে — Fees: ${data.fees_bill_range || data.fees_bill || '-'} | P.V: ${data.cash_pv_bill_range || data.cash_pv_bill || '-'} (Payment: ${fmtInr(data.cash_voucher_payment || 0)})`
+        `${data.entry_date_dmy || ymdToDmy(ymd)}: ${data.bill_count || 0}টি বিল ও ${pvDetails.length}টি ভাউচার পাওয়া গেছে — Fees: ${data.fees_bill_range || data.fees_bill || '-'} | P.V: ${data.cash_pv_bill_range || data.cash_pv_bill || '-'} (Bank: ${fmtInr(data.bank_payment || 0)})${cashPayText}`
       );
     } catch (e: any) {
       setError(e.message || 'Portal fetch failed');
     } finally {
       setFetchingKey(null);
+    }
+  };
+
+  const openCashPaymentsForDate = async (ymd: string) => {
+    const dmy = ymdToDmy(ymd);
+    setCashModalTitle(`Cash Book Payments — ${dmy}`);
+    setCashModalMeta('');
+    setCashModalLoading(true);
+    setCashModalVisible(true);
+    try {
+      const data: any = await api(`/api/daily-cashbook/cash-payments?date=${ymd}`);
+      if (data?.success) {
+        const list: CashPaymentItem[] = Array.isArray(data.payments) ? data.payments : [];
+        setCashModalPayments(list);
+        setCashModalMeta(
+          `Date: ${data.entry_date_dmy || dmy}  |  Total Entries: ${list.length}  |  Total Cash Payment: ${fmtInr(data.cash_payment_total || 0)}`
+        );
+      } else {
+        setCashModalPayments([]);
+        setCashModalMeta(data?.message || 'কোনো ক্যাশ পেমেন্ট পাওয়া যায়নি।');
+      }
+    } catch (e: any) {
+      setCashModalPayments([]);
+      setCashModalMeta(e.message || 'ক্যাশ পেমেন্ট লোড করতে সমস্যা হয়েছে');
+    } finally {
+      setCashModalLoading(false);
     }
   };
 
@@ -1177,6 +1226,19 @@ export default function DailyCashBookScreen() {
                       value={newRow.cash_payment}
                       onChangeText={v => setNewRow(p => ({ ...p, cash_payment: v }))}
                     />
+                    {Boolean(num(newRow.cash_payment) > 0) && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          const ymd = selectedDate || newRow.entry_date || todayYmd();
+                          openCashPaymentsForDate(ymd);
+                        }}
+                        style={[s.vchMiniBtn, { borderColor: '#16a34a', backgroundColor: '#f0fdf4' }]}
+                      >
+                        <Text style={[s.vchMiniBtnText, { color: '#15803d' }]}>
+                          👁️ View Details
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                   <View style={[s.cell, { width: W.bankDep }]}>
                     <TextInput
@@ -1462,6 +1524,16 @@ export default function DailyCashBookScreen() {
                           value={d.cash_payment}
                           onChangeText={v => updateSavedField(entry.id, 'cash_payment', v)}
                         />
+                        {Boolean(num(d.cash_payment) > 0) && (
+                          <TouchableOpacity
+                            onPress={() => openCashPaymentsForDate(entry.entry_date)}
+                            style={[s.vchMiniBtn, { borderColor: '#16a34a', backgroundColor: '#f0fdf4' }]}
+                          >
+                            <Text style={[s.vchMiniBtnText, { color: '#15803d' }]}>
+                              👁️ View Details
+                            </Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                       <View style={[s.cell, { width: W.bankDep }]}>
                         <TextInput
@@ -1727,6 +1799,64 @@ export default function DailyCashBookScreen() {
                 মোট ভাউচার: {pvModalVouchers.length} টি  |  মোট পেমেন্ট: {fmtInr(pvModalVouchers.reduce((sum, v) => sum + (typeof v.debit === 'number' ? v.debit : parseFloat(String(v.debit || '').replace(/,/g, '')) || 0), 0))}
               </Text>
               <TouchableOpacity onPress={() => setPvModalVisible(false)} style={[s.primaryBtn, { backgroundColor: '#be123c' }]}>
+                <Text style={s.primaryBtnText}>বন্ধ করুন</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Cash Book Payments Breakdown Modal */}
+      <Modal visible={cashModalVisible} transparent animationType="fade" onRequestClose={() => setCashModalVisible(false)}>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalCard, { maxWidth: 960 }]}>
+            <View style={s.modalHeader}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={[s.modalTitle, { color: '#14532d' }]}>💵 {cashModalTitle || 'Cash Book Payments'}</Text>
+                {cashModalMeta ? <Text style={[s.modalMeta, { backgroundColor: '#f0fdf4', color: '#15803d' }]}>{cashModalMeta}</Text> : null}
+              </View>
+              <TouchableOpacity onPress={() => setCashModalVisible(false)} style={s.modalCloseBtn}>
+                <Text style={s.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {cashModalLoading ? (
+              <View style={{ padding: 40, alignItems: 'center' }}>
+                <ActivityIndicator size="large" color="#16a34a" />
+                <Text style={{ marginTop: 10, color: '#475569', fontWeight: '700' }}>পোর্টাল Cash Book থেকে পেমেন্ট এন্ট্রি লোড হচ্ছে...</Text>
+              </View>
+            ) : cashModalPayments.length === 0 ? (
+              <View style={{ padding: 40, alignItems: 'center' }}>
+                <Text style={{ color: '#64748b', fontSize: 14, fontWeight: '700' }}>কোনো Cash Book Payment পাওয়া যায়নি।</Text>
+              </View>
+            ) : (
+              <ScrollView style={{ maxHeight: 440 }}>
+                <View style={[s.billHead, { backgroundColor: '#14532d' }]}>
+                  <Text style={[s.billTh, { width: 45 }]}>#</Text>
+                  <Text style={[s.billTh, { width: 85 }]}>Vch No</Text>
+                  <Text style={[s.billTh, { width: 90 }]}>Date</Text>
+                  <Text style={[s.billTh, { width: 180 }]}>Ledger</Text>
+                  <Text style={[s.billTh, { flex: 1 }]}>Narration</Text>
+                  <Text style={[s.billTh, { width: 110, textAlign: 'right' }]}>Amount</Text>
+                </View>
+                {cashModalPayments.map((p, i) => (
+                  <View key={`${p.vch_no}-${i}`} style={[s.billRow, i % 2 === 1 && { backgroundColor: '#f0fdf4' }]}>
+                    <Text style={[s.billTd, { width: 45, color: '#64748b', fontSize: 11 }]}>{i + 1}</Text>
+                    <Text style={[s.billTd, { width: 85, fontWeight: '800', color: '#15803d' }]}>{p.vch_no || '-'}</Text>
+                    <Text style={[s.billTd, { width: 90, fontSize: 11.5 }]}>{p.date || '-'}</Text>
+                    <Text style={[s.billTd, { width: 180, fontWeight: '700', color: '#1e293b' }]} numberOfLines={2}>{p.ledger || '-'}</Text>
+                    <Text style={[s.billTd, { flex: 1, fontSize: 11.5, color: '#334155' }]} numberOfLines={2}>{p.narration || '-'}</Text>
+                    <Text style={[s.billTd, { width: 110, textAlign: 'right', fontWeight: '800', color: '#15803d' }]}>{fmtInr(p.amount)}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+
+            <View style={[s.pvModalFooter, { backgroundColor: '#f0fdf4', borderTopColor: '#bbf7d0' }]}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#14532d' }}>
+                মোট এন্ট্রি: {cashModalPayments.length} টি  |  মোট ক্যাশ পেমেন্ট: {fmtInr(cashModalPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0))}
+              </Text>
+              <TouchableOpacity onPress={() => setCashModalVisible(false)} style={[s.primaryBtn, { backgroundColor: '#16a34a' }]}>
                 <Text style={s.primaryBtnText}>বন্ধ করুন</Text>
               </TouchableOpacity>
             </View>

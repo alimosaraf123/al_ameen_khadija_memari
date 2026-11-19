@@ -1060,12 +1060,59 @@ async function getHostelFeeReceiptVouchers({ dateStr = '', branchId = MEMARI_BRA
   };
 }
 
+async function getCashBookPaymentData({ dateStr = '', branchId = MEMARI_BRANCH_ID } = {}) {
+  const cookie = await ensureValidCookie();
+  const d = dateStr || toYmd(new Date());
+  const fyInfo = getFinancialYearInfo(d);
+
+  const cashForm = new URLSearchParams({
+    financial_year_id: String(fyInfo.id || '4097'),
+    sdate: d,
+    edate: d,
+    branch_id: String(branchId || MEMARI_BRANCH_ID),
+    search: ''
+  });
+
+  let res = await fetchPortalPage(ACCOUNTS_BASE_URL + '?action=cash_book', 'POST', cashForm, cookie);
+  if (res.text.includes('id="login_form"') || res.text.includes('Administrator Login')) {
+    const creds = await getPortalCredentials();
+    const newCookie = await loginToPortal(creds.username, creds.password);
+    res = await fetchPortalPage(ACCOUNTS_BASE_URL + '?action=cash_book', 'POST', cashForm, newCookie);
+  }
+
+  const bookData = parseBookHtml(res.text);
+  const payments = (bookData.transactions || []).filter(t => {
+    const isPaymentType = (t.vch_type || '').toLowerCase().includes('payment');
+    const hasPaymentAmt = Number(t.payment || 0) > 0;
+    return isPaymentType || hasPaymentAmt;
+  });
+
+  const totalPayment = payments.reduce((sum, t) => sum + Number(t.payment || 0), 0);
+
+  return {
+    success: true,
+    date: d,
+    financial_year: fyInfo.label,
+    total_count: payments.length,
+    cash_payment_total: Number(totalPayment.toFixed(2)),
+    payments: payments.map(p => ({
+      date: p.date,
+      ledger: p.particulars,
+      narration: p.narration,
+      vch_type: p.vch_type,
+      vch_no: p.vch_no,
+      amount: Number(p.payment || 0)
+    }))
+  };
+}
+
 module.exports = {
   getPortalCredentials,
   savePortalCredentials,
   loginToPortal,
   getFeesReportData,
   getHostelFeeReceiptVouchers,
+  getCashBookPaymentData,
   getReceiptPaymentReportData,
   getDueListData,
   FEES_REPORT_URL,
