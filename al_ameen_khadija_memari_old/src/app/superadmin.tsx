@@ -107,6 +107,7 @@ const menuPermission: Record<string, string | string[]> = {
   '/guardians': ['guardians', 'students'],
 
   // Staff Management
+  '/teacher': ['teachers', 'teachers_view'],
   '/teachers': ['teachers', 'teachers_view'],
   '/teachers?mode=view': ['teachers', 'teachers_view'],
   '/teachers?mode=add': ['teachers_add', 'teachers'],
@@ -1340,6 +1341,7 @@ export default function Dashboard() {
             </View>
             <View style={s.modalGrid}>
               {[
+                ['Teacher Dashboard', '/teacher'],
                 ['View Staff', '/teachers?mode=view'],
                 ['Add Staff', '/teachers?mode=add'],
                 ['I-Card, Form & Download', '/teachers?mode=icard'],
