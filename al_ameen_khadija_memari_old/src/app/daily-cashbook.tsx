@@ -1651,6 +1651,18 @@ export default function DailyCashBookScreen() {
                         {isEditing ? (
                           <>
                             <TouchableOpacity
+                              disabled={fetchingKey === String(entry.id)}
+                              onPress={() => fetchPortalForDate(entry.entry_date, entry.id)}
+                              style={[s.miniBtn, { backgroundColor: '#0284c7', paddingHorizontal: 7 }]}
+                              accessibilityLabel="Refresh from portal"
+                            >
+                              {fetchingKey === String(entry.id) ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                              ) : (
+                                <Text style={s.miniBtnText}>🔄</Text>
+                              )}
+                            </TouchableOpacity>
+                            <TouchableOpacity
                               disabled={savingKey === String(entry.id)}
                               onPress={() => requestSave(String(entry.id), d, entry.entry_date, entry.entry_date_dmy)}
                               style={[s.miniBtn, { backgroundColor: '#16a34a', paddingHorizontal: 8 }]}
