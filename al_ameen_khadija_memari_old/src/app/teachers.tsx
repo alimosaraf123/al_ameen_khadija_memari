@@ -626,8 +626,19 @@ export default function Teachers() {
   const printDocument = (d: any) => {
     if (!d?.file_url) return;
     if (Platform.OS === 'web') {
-      const w = window.open(d.file_url, '_blank');
-      if (w) setTimeout(() => w.print(), 900);
+      const isPdf = /\.pdf(?:[?#]|$)/i.test(d.file_url);
+      if (isPdf) {
+        const w = window.open(d.file_url, '_blank');
+        if (w) setTimeout(() => w.print(), 900);
+      } else {
+        const w = window.open('about:blank', '_blank');
+        if (w) {
+          const title = d.document_title || 'Document';
+          w.document.open();
+          w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>@page{margin:8mm;background:#fff!important;}*,*::before,*::after{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}html,body{margin:0!important;padding:0!important;width:100%!important;min-height:100%!important;background:#fff!important;background-color:#fff!important;color:#000!important;}.wrap{display:flex;justify-content:center;align-items:center;width:100%;min-height:100vh;background:#fff!important;padding:10px;}img{max-width:96vw;max-height:94vh;display:block;margin:auto;object-fit:contain;background:#fff!important;}@media print{html,body,.wrap{background:#fff!important;background-color:#fff!important;min-height:auto!important;}img{max-width:100%!important;max-height:98vh!important;page-break-inside:avoid;background:#fff!important;}}</style></head><body><div class="wrap"><img src="${d.file_url}" alt="${title}" onload="setTimeout(()=>{try{window.focus();window.print();}catch(e){}},400)"/></div></body></html>`);
+          w.document.close();
+        }
+      }
     } else Linking.openURL(d.file_url);
   };
 
