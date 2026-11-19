@@ -256,7 +256,7 @@ router.get('/', asyncHandler(async (req, res) => {
 // POST /api/daily-cashbook/fetch-portal — fetches last 2 sessions from fees_report for a specific date
 router.post('/fetch-portal', asyncHandler(async (req, res) => {
   await schema();
-  const entryDate = formatYmd(req.body?.entry_date) || todayIstYmd();
+  const entryDate = formatYmd(req.body?.entry_date || req.body?.date) || todayIstYmd();
 
   const report = await getFeesReportData({
     fromDate: entryDate,
@@ -324,9 +324,10 @@ router.post('/fetch-portal', asyncHandler(async (req, res) => {
   let pvBillRange = '';
   let voucherPaymentCount = 0;
   let voucherPaymentTotal = 0;
+  let vchData = null;
 
   try {
-    const vchData = await getHostelFeeReceiptVouchers({ dateStr: entryDate });
+    vchData = await getHostelFeeReceiptVouchers({ dateStr: entryDate });
     if (vchData?.success) {
       rvBillList = vchData.vouchers || [];
       rvBill = vchData.rv_bill || '';
