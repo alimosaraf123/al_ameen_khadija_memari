@@ -404,6 +404,7 @@ export function buildRegistrationFormHtml(student: any = null) {
         </div>
         <div class="row">
           <div class="f" style="flex: 1;"><span class="lbl">Kanyashree ID</span>${val(s.kanyashree_id)}</div>
+          <div class="f" style="flex: 1.5;"><span class="lbl">Kanyashree Status</span>${val(s.kanyashree_status)}</div>
         </div>
       </div>
 

@@ -1129,6 +1129,7 @@ export default function Guardian() {
               <Info label="Previous Branch" value={s.previous_branch_name} />
               <Info label="Banglar Shiksha ID" value={s.banglarshiksha_id} />
               <Info label="Kanyashree ID" value={s.kanyashree_id} />
+              <Info label="Kanyashree Status" value={s.kanyashree_status} />
               <Info label="Aikyashree ID" value={s.aikyashree_id} />
             </Card>
 

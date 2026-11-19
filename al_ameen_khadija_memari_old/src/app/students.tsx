@@ -181,6 +181,7 @@ const EMPTY_FORM: any = {
   previous_branch_name: '',
   banglarshiksha_id: '',
   kanyashree_id: '',
+  kanyashree_status: '',
   aikyashree_id: '',
 
   father_name: '',
@@ -1198,15 +1199,21 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
               />
             </FormCol>
             <FormCol>
-              <LabeledField label="Kanyashree ID" field="kanyashree_id" />
+              <LabeledField label="Aikyashree ID" field="aikyashree_id" />
             </FormCol>
           </FormRow>
 
           <FormRow>
             <FormCol>
-              <LabeledField label="Aikyashree ID" field="aikyashree_id" />
+              <LabeledField label="Kanyashree ID" field="kanyashree_id" />
             </FormCol>
-            <FormCol />
+            <FormCol>
+              <LabeledField
+                label="Kanyashree Status"
+                field="kanyashree_status"
+                placeholder="e.g. জমা হয়েছে / K1 Added (Date) / K2 Applied (Date)"
+              />
+            </FormCol>
           </FormRow>
 
           <SectionTitle>Parents Information</SectionTitle>

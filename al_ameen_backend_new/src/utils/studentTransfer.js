@@ -159,6 +159,7 @@ const FIELD_LABELS = {
   previous_branch_name: 'Previous Branch Name',
   banglarshiksha_id: 'Banglarshiksha ID',
   kanyashree_id: 'Kanyashree ID',
+  kanyashree_status: 'Kanyashree Status',
   aikyashree_id: 'Aikyashree ID',
   school_reg_no: 'School Reg No',
   council_reg_no: 'Council Reg No',
