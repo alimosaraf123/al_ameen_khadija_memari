@@ -134,10 +134,10 @@ const fmtNum = (n: number) => {
 
 const fmtInr = (n: number) => `₹${Math.round(Number(n || 0)).toLocaleString('en-IN')}`;
 
-const blankDraft = (date = todayYmd(), lastFees = '', lastDev = ''): RowDraft => ({
+const blankDraft = (date = todayYmd()): RowDraft => ({
   entry_date: date,
-  fees_bill: lastFees,
-  dev_bill: lastDev,
+  fees_bill: '',
+  dev_bill: '',
   bank_gateway: '',
   bank_cheque: '',
   bank_edc: '',
@@ -286,7 +286,7 @@ export default function DailyCashBookScreen() {
     setRowDrafts(nextDrafts);
 
     if (resetNewRow) {
-      setNewRow(blankDraft(selectedDate, data.last_fees_bill || '', data.last_dev_bill || ''));
+      setNewRow(blankDraft(selectedDate));
       setNewDateText(ymdToDmy(selectedDate));
     }
   };
