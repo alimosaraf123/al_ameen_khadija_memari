@@ -109,6 +109,7 @@ type PaymentVoucherItem = {
   bank_name?: string;
   bank_short?: string;
   inst_no?: string;
+  cheque_no?: string;
 };
 
 type CashPaymentItem = {
@@ -355,6 +356,8 @@ export default function DailyCashBookScreen() {
   // Portal payment voucher breakdown modal
   const [pvModalVisible, setPvModalVisible] = useState(false);
   const [pvModalTitle, setPvModalTitle] = useState('');
+  const [pvModalMode, setPvModalMode] = useState<'all' | 'bank'>('bank');
+  const [pvFilterTab, setPvFilterTab] = useState<'bank' | 'cash' | 'all'>('bank');
   const [pvModalVouchers, setPvModalVouchers] = useState<PaymentVoucherItem[]>([]);
   const [pvModalMeta, setPvModalMeta] = useState<string>('');
   const [pvModalLoading, setPvModalLoading] = useState(false);
@@ -594,9 +597,11 @@ export default function DailyCashBookScreen() {
     }
   };
 
-  const openPaymentVouchersForDate = async (ymd: string) => {
+  const openPaymentVouchersForDate = async (ymd: string, mode: 'all' | 'bank' = 'all') => {
+    setPvModalMode(mode);
+    setPvFilterTab(mode);
     const dmy = ymdToDmy(ymd);
-    setPvModalTitle(`Payment Vouchers — ${dmy}`);
+    setPvModalTitle(mode === 'bank' ? `🏦 Bank Payment Vouchers — ${dmy}` : `💳 Payment Vouchers — ${dmy}`);
     setPvModalMeta('');
     setPvModalLoading(true);
     setPvModalVisible(true);
@@ -612,13 +617,19 @@ export default function DailyCashBookScreen() {
         const cancNote = cancCount > 0 ? `  |  ⚠️ ${cancCount}টি বাতিল ভাউচার গণনায় বাদ` : '';
         const bankPay = Number(data.bank_payment || 0);
         const cashPay = Number(data.cash_payment || 0);
-        const bankCnt = Number(data.bank_payments_count ?? list.filter(v => !v.is_cancelled && v.payment_mode === 'bank').length);
+        const bankCnt = Number(data.bank_payments_count ?? list.filter(v => !v.is_cancelled && (v.payment_mode === 'bank' || Boolean(v.bank_name || v.bank_short))).length);
         const cashCnt = Number(data.cash_payments_count ?? list.filter(v => !v.is_cancelled && v.payment_mode === 'cash').length);
-        const payBreakdown = `  |  🏦 Bank: ${fmtInr(bankPay)} (${bankCnt}টি)  |  💵 Cash: ${fmtInr(cashPay)} (${cashCnt}টি)`;
 
-        setPvModalMeta(
-          `Date: ${data.entry_date_dmy || dmy}  |  সক্রিয় ভাউচার: ${activeCount} টি  |  P.V Range: ${data.pv_bill_range || data.pv_bill || '-'}  |  ভাউচার মোট: ${fmtInr(data.voucher_payment_total || 0)}${payBreakdown}${cancNote}`
-        );
+        if (mode === 'bank') {
+          setPvModalMeta(
+            `Date: ${data.entry_date_dmy || dmy}  |  সক্রিয় ব্যাংক ভাউচার: ${bankCnt} টি  |  ব্যাংক পেমেন্ট মোট: ${fmtInr(bankPay)} (Axis-3880 / SBI-9665)`
+          );
+        } else {
+          const payBreakdown = `  |  🏦 Bank: ${fmtInr(bankPay)} (${bankCnt}টি)  |  💵 Cash: ${fmtInr(cashPay)} (${cashCnt}টি)`;
+          setPvModalMeta(
+            `Date: ${data.entry_date_dmy || dmy}  |  সক্রিয় ভাউচার: ${activeCount} টি  |  P.V Range: ${data.pv_bill_range || data.pv_bill || '-'}  |  ভাউচার মোট: ${fmtInr(data.voucher_payment_total || 0)}${payBreakdown}${cancNote}`
+          );
+        }
       } else {
         setPvModalVouchers([]);
         setPvModalMeta(data?.message || 'কোনো ভাউচার পাওয়া যায়নি।');
@@ -1211,7 +1222,7 @@ export default function DailyCashBookScreen() {
                       <TouchableOpacity
                         onPress={() => {
                           const ymd = selectedDate || newRow.entry_date || todayYmd();
-                          void openPaymentVouchersForDate(ymd);
+                          void openPaymentVouchersForDate(ymd, 'all');
                         }}
                         style={s.vchMiniBtn}
                       >
@@ -1237,7 +1248,7 @@ export default function DailyCashBookScreen() {
                       <TouchableOpacity
                         onPress={() => {
                           const ymd = selectedDate || newRow.entry_date || todayYmd();
-                          openPaymentVouchersForDate(ymd);
+                          openPaymentVouchersForDate(ymd, 'bank');
                         }}
                         style={[s.vchMiniBtn, { borderColor: '#93c5fd', backgroundColor: '#eff6ff' }]}
                       >
@@ -1525,7 +1536,7 @@ export default function DailyCashBookScreen() {
                         />
                         {Boolean(d.cash_pv_bill?.trim()) && (
                           <TouchableOpacity
-                            onPress={() => openPaymentVouchersForDate(entry.entry_date)}
+                            onPress={() => openPaymentVouchersForDate(entry.entry_date, 'all')}
                             style={s.vchMiniBtn}
                           >
                             <Text style={s.vchMiniBtnText}>
@@ -1547,7 +1558,7 @@ export default function DailyCashBookScreen() {
                         />
                         {Boolean(num(d.bank_payment) > 0) && (
                           <TouchableOpacity
-                            onPress={() => openPaymentVouchersForDate(entry.entry_date)}
+                            onPress={() => openPaymentVouchersForDate(entry.entry_date, 'bank')}
                             style={[s.vchMiniBtn, { borderColor: '#93c5fd', backgroundColor: '#eff6ff' }]}
                           >
                             <Text style={[s.vchMiniBtnText, { color: '#1d4ed8' }]}>
@@ -1799,133 +1810,214 @@ export default function DailyCashBookScreen() {
       <Modal visible={pvModalVisible} transparent animationType="fade" onRequestClose={() => setPvModalVisible(false)}>
         <View style={s.modalOverlay}>
           <View style={[s.modalCard, { maxWidth: 960 }]}>
-            <View style={s.modalHeader}>
+            <View style={[s.modalHeader, pvModalMode === 'bank' && { backgroundColor: '#eff6ff', borderBottomColor: '#bfdbfe' }]}>
               <View style={{ flex: 1, gap: 2 }}>
-                <Text style={s.modalTitle}>{pvModalTitle || '💳 Payment Vouchers'}</Text>
-                {pvModalMeta ? <Text style={[s.modalMeta, { backgroundColor: '#fff1f2', color: '#9f1239' }]}>{pvModalMeta}</Text> : null}
+                <Text style={[s.modalTitle, pvModalMode === 'bank' && { color: '#1e3a8a' }]}>
+                  {pvModalTitle || (pvModalMode === 'bank' ? '🏦 Bank Payment Vouchers' : '💳 Payment Vouchers')}
+                </Text>
+                {pvModalMeta ? (
+                  <Text
+                    style={[
+                      s.modalMeta,
+                      pvModalMode === 'bank'
+                        ? { backgroundColor: '#dbeafe', color: '#1e40af' }
+                        : { backgroundColor: '#fff1f2', color: '#9f1239' }
+                    ]}
+                  >
+                    {pvModalMeta}
+                  </Text>
+                ) : null}
               </View>
               <TouchableOpacity onPress={() => setPvModalVisible(false)} style={s.modalCloseBtn}>
                 <Text style={s.modalCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
 
+            {/* Filter Pills when opened in 'all' mode */}
+            {pvModalMode === 'all' && !pvModalLoading && pvModalVouchers.length > 0 && (
+              <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', backgroundColor: '#f8fafc' }}>
+                <TouchableOpacity
+                  onPress={() => setPvFilterTab('all')}
+                  style={[s.filterPill, pvFilterTab === 'all' && s.filterPillActiveAll]}
+                >
+                  <Text style={[s.filterPillText, pvFilterTab === 'all' && s.filterPillTextActive]}>
+                    📋 All ({pvModalVouchers.filter(v => !v.is_cancelled).length})
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setPvFilterTab('bank')}
+                  style={[s.filterPill, pvFilterTab === 'bank' && s.filterPillActiveBank]}
+                >
+                  <Text style={[s.filterPillText, pvFilterTab === 'bank' && s.filterPillTextActive]}>
+                    🏦 Bank ({pvModalVouchers.filter(v => !v.is_cancelled && (v.payment_mode === 'bank' || Boolean(v.bank_name || v.bank_short))).length})
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setPvFilterTab('cash')}
+                  style={[s.filterPill, pvFilterTab === 'cash' && s.filterPillActiveCash]}
+                >
+                  <Text style={[s.filterPillText, pvFilterTab === 'cash' && s.filterPillTextActive]}>
+                    💵 Cash ({pvModalVouchers.filter(v => !v.is_cancelled && v.payment_mode === 'cash').length})
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {pvModalLoading ? (
               <View style={{ padding: 40, alignItems: 'center' }}>
-                <ActivityIndicator size="large" color="#be123c" />
-                <Text style={{ marginTop: 10, color: '#475569', fontWeight: '700' }}>পোর্টাল থেকে পেমেন্ট ভাউচার লোড হচ্ছে...</Text>
+                <ActivityIndicator size="large" color={pvModalMode === 'bank' ? '#1d4ed8' : '#be123c'} />
+                <Text style={{ marginTop: 10, color: '#475569', fontWeight: '700' }}>
+                  {pvModalMode === 'bank' ? 'পোর্টাল Bank Book থেকে ভাউচার লোড হচ্ছে...' : 'পোর্টাল থেকে পেমেন্ট ভাউচার লোড হচ্ছে...'}
+                </Text>
               </View>
-            ) : pvModalVouchers.length === 0 ? (
-              <View style={{ padding: 40, alignItems: 'center' }}>
-                <Text style={{ color: '#64748b', fontSize: 14, fontWeight: '700' }}>কোনো Payment Voucher পাওয়া যায়নি।</Text>
-              </View>
-            ) : (
-              <ScrollView style={{ maxHeight: 440 }}>
-                <View style={[s.billHead, { backgroundColor: '#881337' }]}>
-                  <Text style={[s.billTh, { width: 40 }]}>#</Text>
-                  <Text style={[s.billTh, { width: 95 }]}>Vch No</Text>
-                  <Text style={[s.billTh, { width: 85 }]}>Date</Text>
-                  <Text style={[s.billTh, { flex: 1 }]}>Particulars / Payee</Text>
-                  <Text style={[s.billTh, { width: 85 }]}>Pay Mode</Text>
-                  <Text style={[s.billTh, { width: 110, textAlign: 'right' }]}>Debit Amount</Text>
-                  <Text style={[s.billTh, { width: 130 }]}>Created By</Text>
-                </View>
-                {pvModalVouchers.map((v, i) => {
-                  const isCanc = Boolean(v.is_cancelled || /cancell?ed|বাতিল/i.test(v.vch_no));
-                  const deb = isCanc
-                    ? 0
-                    : typeof v.debit === 'number'
-                    ? v.debit
-                    : parseFloat(String(v.debit || '').replace(/,/g, '')) || 0;
-                  const origDeb = v.original_debit
-                    ? typeof v.original_debit === 'number'
-                      ? v.original_debit
-                      : parseFloat(String(v.original_debit || '').replace(/,/g, '')) || 0
-                    : deb;
+            ) : (() => {
+                const isBankOnly = pvModalMode === 'bank' || pvFilterTab === 'bank';
+                const isCashOnly = pvModalMode !== 'bank' && pvFilterTab === 'cash';
+                const displayed = pvModalVouchers.filter(v => {
+                  if (isBankOnly) {
+                    return (v.payment_mode === 'bank' || Boolean(v.bank_name || v.bank_short)) && !v.is_cancelled;
+                  }
+                  if (isCashOnly) {
+                    return v.payment_mode === 'cash' && !v.is_cancelled;
+                  }
+                  return true;
+                });
 
+                if (displayed.length === 0) {
                   return (
-                    <View
-                      key={`${v.vch_no}-${i}`}
-                      style={[
-                        s.billRow,
-                        i % 2 === 1 && { backgroundColor: '#fff1f2' },
-                        isCanc && { backgroundColor: '#fee2e2', borderLeftWidth: 3, borderLeftColor: '#ef4444' }
-                      ]}
-                    >
-                      <Text style={[s.billTd, { width: 40, color: '#64748b', fontSize: 11 }]}>{i + 1}</Text>
-                      <View style={{ width: 95, paddingHorizontal: 4 }}>
-                        <Text
-                          style={[
-                            s.billTd,
-                            { paddingHorizontal: 0, fontWeight: '800', color: isCanc ? '#dc2626' : '#9f1239' },
-                            isCanc && { textDecorationLine: 'line-through' }
-                          ]}
-                        >
-                          {v.vch_no}
-                        </Text>
-                        {isCanc && (
-                          <Text style={{ fontSize: 9.5, color: '#b91c1c', fontWeight: '800' }}>[বাতিল / Cancelled]</Text>
-                        )}
-                      </View>
-                      <Text style={[s.billTd, { width: 85, fontSize: 11.5 }]}>{v.date}</Text>
-                      <Text
-                        style={[
-                          s.billTd,
-                          { flex: 1, fontWeight: '600' },
-                          isCanc && { textDecorationLine: 'line-through', color: '#991b1b' }
-                        ]}
-                        numberOfLines={2}
-                      >
-                        {v.particulars}
-                      </Text>
-                      <View style={{ width: 85, paddingHorizontal: 4 }}>
-                        {isCanc ? (
-                          <View style={{ backgroundColor: '#fee2e2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start' }}>
-                            <Text style={{ color: '#b91c1c', fontSize: 10.5, fontWeight: '800' }}>❌ বাতিল</Text>
-                          </View>
-                        ) : v.payment_mode === 'cash' ? (
-                          <View style={{ backgroundColor: '#dcfce7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start' }}>
-                            <Text style={{ color: '#15803d', fontSize: 10.5, fontWeight: '800' }}>💵 Cash</Text>
-                          </View>
-                        ) : (
-                          <View style={{ backgroundColor: '#dbeafe', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start' }}>
-                            <Text style={{ color: '#1d4ed8', fontSize: 10.5, fontWeight: '800' }}>
-                              🏦 {v.bank_short || v.bank_name || 'Bank'}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                      <View style={{ width: 110, alignItems: 'flex-end', paddingHorizontal: 4 }}>
-                        {isCanc ? (
-                          <>
-                            <Text style={{ fontSize: 10.5, color: '#94a3b8', textDecorationLine: 'line-through' }}>
-                              {fmtInr(origDeb)}
-                            </Text>
-                            <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#dc2626' }}>₹0 (বাদ)</Text>
-                          </>
-                        ) : (
-                          <Text style={[s.billTd, { paddingHorizontal: 0, fontWeight: '800', color: '#be123c' }]}>
-                            {fmtInr(deb)}
-                          </Text>
-                        )}
-                      </View>
-                      <Text style={[s.billTd, { width: 130, fontSize: 11, color: '#475569' }]} numberOfLines={1}>
-                        {v.user_name || '-'}
+                    <View style={{ padding: 40, alignItems: 'center' }}>
+                      <Text style={{ color: '#64748b', fontSize: 14, fontWeight: '700' }}>
+                        {isBankOnly ? 'কোনো Bank Payment Voucher পাওয়া যায়নি।' : 'কোনো Payment Voucher পাওয়া যায়নি।'}
                       </Text>
                     </View>
                   );
-                })}
-              </ScrollView>
-            )}
+                }
 
-            <View style={s.pvModalFooter}>
+                return (
+                  <ScrollView style={{ maxHeight: 440 }}>
+                    <View style={[s.billHead, { backgroundColor: isBankOnly ? '#1e40af' : '#881337' }]}>
+                      <Text style={[s.billTh, { width: 40 }]}>#</Text>
+                      <Text style={[s.billTh, { width: 95 }]}>Vch No</Text>
+                      <Text style={[s.billTh, { width: 85 }]}>Date</Text>
+                      <Text style={[s.billTh, { flex: 1 }]}>Particulars / Payee</Text>
+                      <Text style={[s.billTh, { width: 105 }]}>{isBankOnly ? 'Bank A/c' : 'Pay Mode'}</Text>
+                      <Text style={[s.billTh, { width: 110, textAlign: 'right' }]}>Amount</Text>
+                      <Text style={[s.billTh, { width: 120 }]}>{isBankOnly ? 'Inst / Ref No' : 'Created By'}</Text>
+                    </View>
+                    {displayed.map((v, i) => {
+                      const isCanc = Boolean(v.is_cancelled || /cancell?ed|বাতিল/i.test(v.vch_no));
+                      const deb = isCanc
+                        ? 0
+                        : typeof v.debit === 'number'
+                        ? v.debit
+                        : parseFloat(String(v.debit || '').replace(/,/g, '')) || 0;
+                      const origDeb = v.original_debit
+                        ? typeof v.original_debit === 'number'
+                          ? v.original_debit
+                          : parseFloat(String(v.original_debit || '').replace(/,/g, '')) || 0
+                        : deb;
+
+                      return (
+                        <View
+                          key={`${v.vch_no}-${i}`}
+                          style={[
+                            s.billRow,
+                            i % 2 === 1 && { backgroundColor: isBankOnly ? '#f0f9ff' : '#fff1f2' },
+                            isCanc && { backgroundColor: '#fee2e2', borderLeftWidth: 3, borderLeftColor: '#ef4444' }
+                          ]}
+                        >
+                          <Text style={[s.billTd, { width: 40, color: '#64748b', fontSize: 11 }]}>{i + 1}</Text>
+                          <View style={{ width: 95, paddingHorizontal: 4 }}>
+                            <Text
+                              style={[
+                                s.billTd,
+                                { paddingHorizontal: 0, fontWeight: '800', color: isCanc ? '#dc2626' : (isBankOnly ? '#1d4ed8' : '#9f1239') },
+                                isCanc && { textDecorationLine: 'line-through' }
+                              ]}
+                            >
+                              {v.vch_no}
+                            </Text>
+                            {isCanc && (
+                              <Text style={{ fontSize: 9.5, color: '#b91c1c', fontWeight: '800' }}>[বাতিল / Cancelled]</Text>
+                            )}
+                          </View>
+                          <Text style={[s.billTd, { width: 85, fontSize: 11.5 }]}>{v.date}</Text>
+                          <Text
+                            style={[
+                              s.billTd,
+                              { flex: 1, fontWeight: '600' },
+                              isCanc && { textDecorationLine: 'line-through', color: '#991b1b' }
+                            ]}
+                            numberOfLines={2}
+                          >
+                            {v.particulars}
+                          </Text>
+                          <View style={{ width: 105, paddingHorizontal: 4 }}>
+                            {isCanc ? (
+                              <View style={{ backgroundColor: '#fee2e2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start' }}>
+                                <Text style={{ color: '#b91c1c', fontSize: 10.5, fontWeight: '800' }}>❌ বাতিল</Text>
+                              </View>
+                            ) : v.payment_mode === 'cash' ? (
+                              <View style={{ backgroundColor: '#dcfce7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start' }}>
+                                <Text style={{ color: '#15803d', fontSize: 10.5, fontWeight: '800' }}>💵 Cash</Text>
+                              </View>
+                            ) : (
+                              <View style={{ backgroundColor: '#dbeafe', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start' }}>
+                                <Text style={{ color: '#1d4ed8', fontSize: 10.5, fontWeight: '800' }}>
+                                  🏦 {v.bank_short || v.bank_name || 'Bank'}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                          <View style={{ width: 110, alignItems: 'flex-end', paddingHorizontal: 4 }}>
+                            {isCanc ? (
+                              <>
+                                <Text style={{ fontSize: 10.5, color: '#94a3b8', textDecorationLine: 'line-through' }}>
+                                  {fmtInr(origDeb)}
+                                </Text>
+                                <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#dc2626' }}>₹0 (বাদ)</Text>
+                              </>
+                            ) : (
+                              <Text style={[s.billTd, { paddingHorizontal: 0, fontWeight: '800', color: isBankOnly ? '#1d4ed8' : '#be123c' }]}>
+                                {fmtInr(deb)}
+                              </Text>
+                            )}
+                          </View>
+                          <Text style={[s.billTd, { width: 120, fontSize: 11, color: '#475569' }]} numberOfLines={1}>
+                            {isBankOnly ? (v.inst_no || v.cheque_no || '-') : (v.user_name || '-')}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </ScrollView>
+                );
+              })()
+            }
+
+            <View style={[s.pvModalFooter, pvModalMode === 'bank' && { backgroundColor: '#eff6ff', borderTopColor: '#bfdbfe' }]}>
               {(() => {
                 const active = pvModalVouchers.filter(v => !v.is_cancelled && !/cancell?ed|বাতিল/i.test(v.vch_no));
                 const canc = pvModalVouchers.length - active.length;
                 const tot = active.reduce((sum, v) => sum + (typeof v.debit === 'number' ? v.debit : parseFloat(String(v.debit || '').replace(/,/g, '')) || 0), 0);
                 const cashVchs = active.filter(v => v.payment_mode === 'cash');
-                const bankVchs = active.filter(v => v.payment_mode !== 'cash');
+                const bankVchs = active.filter(v => v.payment_mode === 'bank' || Boolean(v.bank_name || v.bank_short));
                 const cashTot = cashVchs.reduce((sum, v) => sum + (typeof v.debit === 'number' ? v.debit : parseFloat(String(v.debit || '').replace(/,/g, '')) || 0), 0);
                 const bankTot = bankVchs.reduce((sum, v) => sum + (typeof v.debit === 'number' ? v.debit : parseFloat(String(v.debit || '').replace(/,/g, '')) || 0), 0);
+
+                if (pvModalMode === 'bank') {
+                  return (
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#1e3a8a' }}>
+                        মোট ব্যাংক ভাউচার: {bankVchs.length} টি  |  মোট ব্যাংক পেমেন্ট: {fmtInr(bankTot)}
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#1d4ed8' }}>
+                          🏦 শুধুমাত্র Axis Bank (3880) ও SBI (9665) Bank Book-এর পেমেন্ট ভাউচার
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                }
 
                 return (
                   <View style={{ flex: 1, gap: 4 }}>
@@ -1953,7 +2045,10 @@ export default function DailyCashBookScreen() {
                   </View>
                 );
               })()}
-              <TouchableOpacity onPress={() => setPvModalVisible(false)} style={[s.primaryBtn, { backgroundColor: '#be123c' }]}>
+              <TouchableOpacity
+                onPress={() => setPvModalVisible(false)}
+                style={[s.primaryBtn, { backgroundColor: pvModalMode === 'bank' ? '#1d4ed8' : '#be123c' }]}
+              >
                 <Text style={s.primaryBtnText}>বন্ধ করুন</Text>
               </TouchableOpacity>
             </View>
@@ -2543,5 +2638,33 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     flexWrap: 'wrap'
+  },
+  filterPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  filterPillActiveAll: {
+    backgroundColor: '#881337',
+    borderColor: '#881337',
+  },
+  filterPillActiveBank: {
+    backgroundColor: '#1d4ed8',
+    borderColor: '#1d4ed8',
+  },
+  filterPillActiveCash: {
+    backgroundColor: '#15803d',
+    borderColor: '#15803d',
+  },
+  filterPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  filterPillTextActive: {
+    color: '#ffffff',
   }
 });
