@@ -415,21 +415,44 @@ router.get('/logs', auth, asyncHandler(async (req, res) => {
   const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
   const q = await pool.query(`
     SELECT 
-      COALESCE(h.id, cl.id) AS id,
-      COALESCE(cl.call_sid, 'booth_' || h.id) AS call_sid,
-      COALESCE(h.registration_no, cl.reg_no) AS reg_no,
+      h.id,
+      'booth_' || h.id AS call_sid,
+      h.registration_no AS reg_no,
       COALESCE(h.student_name, s.student_name, 'Student') AS student_name,
-      COALESCE(cl.from_number, 'Booth') AS from_number,
-      COALESCE(h.phone_number, cl.to_number) AS to_number,
-      COALESCE(h.contact_person, cl.called_relation, 'Guardian') AS called_relation,
-      COALESCE(h.call_status, cl.status) AS status,
-      COALESCE(h.call_duration_seconds, cl.duration, 0) AS duration,
-      COALESCE(ROUND(h.max_allowed_seconds / 60), cl.allowed_talk_time, 8) AS allowed_talk_time,
-      cl.recording_url,
-      COALESCE(h.created_at, cl.created_at) AS created_at
+      'Booth' AS from_number,
+      h.phone_number AS to_number,
+      COALESCE(h.contact_person, 'Guardian') AS called_relation,
+      h.call_status AS status,
+      COALESCE(h.call_duration_seconds, 0) AS duration,
+      COALESCE(ROUND(h.max_allowed_seconds / 60), 8) AS allowed_talk_time,
+      NULL AS recording_url,
+      h.started_at,
+      h.ended_at,
+      h.created_at
     FROM hostel_call_logs h
-    FULL OUTER JOIN call_logs cl ON cl.reg_no = h.registration_no AND cl.created_at = h.created_at
-    LEFT JOIN students s ON s.registration_no = COALESCE(h.registration_no, cl.reg_no)
+    LEFT JOIN students s ON s.registration_no = h.registration_no
+
+    UNION ALL
+
+    SELECT
+      cl.id,
+      cl.call_sid,
+      cl.reg_no,
+      COALESCE(s.student_name, 'Student') AS student_name,
+      COALESCE(cl.from_number, 'External') AS from_number,
+      cl.to_number,
+      COALESCE(cl.called_relation, 'Guardian') AS called_relation,
+      cl.status,
+      COALESCE(cl.duration, 0) AS duration,
+      COALESCE(cl.allowed_talk_time, 8) AS allowed_talk_time,
+      cl.recording_url,
+      cl.created_at AS started_at,
+      (CASE WHEN cl.duration > 0 THEN cl.created_at + (cl.duration || ' seconds')::interval ELSE cl.updated_at END) AS ended_at,
+      cl.created_at
+    FROM call_logs cl
+    LEFT JOIN students s ON s.registration_no = cl.reg_no
+    WHERE cl.context != 'booth_call' AND cl.call_sid NOT LIKE 'booth_%'
+
     ORDER BY created_at DESC
     LIMIT $1
   `, [limit]);

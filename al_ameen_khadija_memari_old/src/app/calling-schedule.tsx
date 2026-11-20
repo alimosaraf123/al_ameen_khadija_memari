@@ -63,6 +63,8 @@ interface CallLog {
   duration: number;
   allowed_talk_time: number;
   recording_url: string | null;
+  started_at?: string;
+  ended_at?: string;
   created_at: string;
 }
 
@@ -221,6 +223,65 @@ export default function CallingScheduleScreen() {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const formatStartDateTime = (dateStr?: string) => {
+    if (!dateStr) return '—';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '—';
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      let hours = d.getHours();
+      const mins = String(d.getMinutes()).padStart(2, '0');
+      const secs = String(d.getSeconds()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      const hh = String(hours).padStart(2, '0');
+      return `${day}-${month}-${year} ${hh}:${mins}:${secs} ${ampm}`;
+    } catch {
+      return '—';
+    }
+  };
+
+  const formatEndTime = (startStr?: string, endStr?: string, duration?: number) => {
+    let targetDate: Date | null = null;
+    if (endStr) {
+      const d = new Date(endStr);
+      if (!isNaN(d.getTime())) targetDate = d;
+    }
+    if (!targetDate && startStr && duration && duration > 0) {
+      const s = new Date(startStr);
+      if (!isNaN(s.getTime())) {
+        targetDate = new Date(s.getTime() + duration * 1000);
+      }
+    }
+    if (!targetDate) return '—';
+
+    try {
+      let hours = targetDate.getHours();
+      const mins = String(targetDate.getMinutes()).padStart(2, '0');
+      const secs = String(targetDate.getSeconds()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      const hh = String(hours).padStart(2, '0');
+      return `${hh}:${mins}:${secs} ${ampm}`;
+    } catch {
+      return '—';
+    }
+  };
+
+  const formatDurationDisplay = (durationSecs?: number, status?: string) => {
+    const secs = Number(durationSecs) || 0;
+    if (secs <= 0) {
+      return '0s';
+    }
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    if (m > 0 && s > 0) return `${m}m ${s}s`;
+    if (m > 0) return `${m}m`;
+    return `${s}s`;
   };
 
   // Fetch Schedules
@@ -1222,38 +1283,48 @@ export default function CallingScheduleScreen() {
               <ScrollView horizontal showsHorizontalScrollIndicator={true}>
                 <View style={styles.table}>
                   <View style={styles.tableHead}>
-                    <Text style={[styles.th, { width: 50 }]}>#</Text>
-                    <Text style={[styles.th, { width: 80 }]}>Reg No</Text>
+                    <Text style={[styles.th, { width: 45 }]}>#</Text>
+                    <Text style={[styles.th, { width: 75 }]}>Reg No</Text>
                     <Text style={[styles.th, { width: 140 }]}>Student</Text>
                     <Text style={[styles.th, { width: 100 }]}>Relation</Text>
-                    <Text style={[styles.th, { width: 120 }]}>Dialed To</Text>
-                    <Text style={[styles.th, { width: 90 }]}>Status</Text>
-                    <Text style={[styles.th, { width: 80 }]}>Duration</Text>
-                    <Text style={[styles.th, { width: 140 }]}>Time Limit</Text>
-                    <Text style={[styles.th, { width: 120 }]}>Recording</Text>
+                    <Text style={[styles.th, { width: 115 }]}>Dialed To</Text>
+                    <Text style={[styles.th, { width: 95 }]}>Status</Text>
+                    <Text style={[styles.th, { width: 160 }]}>Start Time</Text>
+                    <Text style={[styles.th, { width: 110 }]}>Stop Time</Text>
+                    <Text style={[styles.th, { width: 95 }]}>Duration</Text>
+                    <Text style={[styles.th, { width: 90 }]}>Time Limit</Text>
+                    <Text style={[styles.th, { width: 100 }]}>Recording</Text>
                   </View>
 
                   {callLogs.map((log, idx) => (
                     <View key={log.call_sid ? `${log.call_sid}-${idx}` : `log-${log.id || 'x'}-${idx}`} style={[styles.tableRow, idx % 2 === 1 && styles.tableRowAlt]}>
-                      <Text style={[styles.td, { width: 50 }]}>{idx + 1}</Text>
-                      <Text style={[styles.td, { width: 80, fontWeight: '700', color: '#173f77' }]}>{log.reg_no || '-'}</Text>
+                      <Text style={[styles.td, { width: 45 }]}>{idx + 1}</Text>
+                      <Text style={[styles.td, { width: 75, fontWeight: '700', color: '#173f77' }]}>{log.reg_no || '-'}</Text>
                       <Text style={[styles.td, { width: 140 }]}>{log.student_name || '-'}</Text>
                       <Text style={[styles.td, { width: 100, fontWeight: '600' }]}>{log.called_relation || 'Manual'}</Text>
-                      <Text style={[styles.td, { width: 120 }]}>{log.to_number}</Text>
-                      <View style={{ width: 90 }}>
+                      <Text style={[styles.td, { width: 115 }]}>{log.to_number}</Text>
+                      <View style={{ width: 95 }}>
                         <Text style={[
                           styles.badgeText,
                           log.status === 'completed' ? styles.badgeTextActive : styles.badgeTextInactive,
                           { fontWeight: '700' }
                         ]}>
-                          {log.status}
+                          {log.status === 'completed' ? '✓ Completed' : log.status === 'no_answer' ? '✕ No Answer' : log.status}
                         </Text>
                       </View>
-                      <Text style={[styles.td, { width: 80, fontWeight: '700' }]}>{log.duration ? `${log.duration}s` : '0s'}</Text>
-                      <Text style={[styles.td, { width: 140, color: '#0969da' }]}>
-                        {log.allowed_talk_time ? `${log.allowed_talk_time} min` : 'Standard'}
+                      <Text style={[styles.td, { width: 160, fontSize: 12, color: '#334155' }]}>
+                        {formatStartDateTime(log.started_at || log.created_at)}
                       </Text>
-                      <View style={{ width: 120 }}>
+                      <Text style={[styles.td, { width: 110, fontSize: 12, color: '#475569' }]}>
+                        {formatEndTime(log.started_at || log.created_at, log.ended_at, log.duration)}
+                      </Text>
+                      <Text style={[styles.td, { width: 95, fontWeight: '800', color: (log.duration && log.duration > 0) ? '#16a34a' : '#64748b' }]}>
+                        {formatDurationDisplay(log.duration, log.status)}
+                      </Text>
+                      <Text style={[styles.td, { width: 90, color: '#0969da' }]}>
+                        {log.allowed_talk_time ? `${log.allowed_talk_time} min` : '8 min'}
+                      </Text>
+                      <View style={{ width: 100 }}>
                         {log.recording_url ? (
                           <TouchableOpacity
                             onPress={() => {
@@ -1698,7 +1769,7 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 12, fontWeight: '600', color: '#334155' },
   activeChipText: { color: '#fff' },
 
-  table: { minWidth: 800 },
+  table: { minWidth: 1125 },
   tableHead: {
     flexDirection: 'row',
     backgroundColor: '#11101e',
