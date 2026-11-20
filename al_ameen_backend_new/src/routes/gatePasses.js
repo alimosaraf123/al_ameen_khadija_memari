@@ -15,8 +15,9 @@ router.get('/:id/monthly-fee-due',auth,roles,asyncHandler(async(req,res)=>{
 }));
 async function blockOffice001(req,res,next){
   try{
-    if(req.user?.role==='super_admin')return next();
     const loginKey=String(req.user?.loginId||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+    const isSuper = req.user?.role==='super_admin'||req.user?.role==='superadmin'||loginKey.includes('superadmin')||loginKey==='adminsuper';
+    if(isSuper)return next();
     const staff=await pool.query('SELECT staff_id FROM service_staff_profiles WHERE user_id=$1 LIMIT 1',[req.user?.userId]);
     const staffKey=String(staff.rows[0]?.staff_id||'').toLowerCase().replace(/[^a-z0-9]/g,'');
     if(loginKey==='office001'||staffKey==='office001'||loginKey.includes('noorsaba')||loginKey.includes('masema')) {

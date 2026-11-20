@@ -43,8 +43,14 @@ const ALL_GATE_TABS: [string, string, string][] = [
 export default function GatePass(){const router=useRouter(),params=useLocalSearchParams<{tab?:string;class_name?:string}>(),initialTab=params.tab&&['generate','bulk','ready','execute','list'].includes(params.tab)?params.tab:'generate',[tab,setTab]=useState(initialTab),[reg,setReg]=useState(''),[student,setStudent]=useState<any>(null),[form,setForm]=useState<any>(blank()),[bulkAll,setBulkAll]=useState(true),[bulkClasses,setBulkClasses]=useState<string[]>([]),[list,setList]=useState<any[]>([]),[status,setStatus]=useState(initialTab==='ready'?'draft':'pending'),[year,setYear]=useState(String(new Date().getFullYear())),[className,setClassName]=useState(params.class_name||''),[query,setQuery]=useState(''),[filterKey,setFilterKey]=useState(0),[viewKey,setViewKey]=useState(0),[loading,setLoading]=useState(false),[previewPass,setPreviewPass]=useState<any>(null),[userRole,setUserRole]=useState<string>(''),[userLoginId,setUserLoginId]=useState<string>(''),[userPermissions,setUserPermissions]=useState<string[]>([]),[authReady,setAuthReady]=useState(false);
 const listRequest=useRef(0);
 
+const isSuperAdminUser = (role: string, loginId: string) => {
+  const r = String(role || '').toLowerCase();
+  const l = String(loginId || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return r === 'super_admin' || r === 'superadmin' || l.includes('superadmin') || l === 'adminsuper';
+};
+
 const isBlockedFromGenerate = React.useMemo(() => {
-  if (userRole === 'super_admin') return false;
+  if (isSuperAdminUser(userRole, userLoginId)) return false;
   const norm = userLoginId.toLowerCase().replace(/[^a-z0-9]/g, '');
   if (norm.includes('noorsaba') || norm.includes('masema') || norm === 'office001') {
     return true;
@@ -53,19 +59,20 @@ const isBlockedFromGenerate = React.useMemo(() => {
 }, [userRole, userLoginId]);
 
 const allowedTabs = React.useMemo(() => {
-  if (userRole === 'super_admin') return ALL_GATE_TABS;
-  let tabs = ALL_GATE_TABS;
+  if (isSuperAdminUser(userRole, userLoginId)) return ALL_GATE_TABS;
+  if (isBlockedFromGenerate) {
+    return ALL_GATE_TABS.filter(([k]) => k !== 'generate' && k !== 'bulk');
+  }
   const specificPerms = userPermissions.filter(p => p.startsWith('gate_pass_'));
   if (specificPerms.length > 0) {
-    tabs = ALL_GATE_TABS.filter(([_, __, permKey]) => userPermissions.includes(permKey));
-  } else if (!userPermissions.includes('gate_passes')) {
-    tabs = ALL_GATE_TABS.filter(([_, __, permKey]) => userPermissions.includes(permKey));
+    const matched = ALL_GATE_TABS.filter(([_, __, permKey]) => userPermissions.includes(permKey));
+    if (matched.length > 0) return matched;
   }
-  if (isBlockedFromGenerate) {
-    tabs = tabs.filter(([k]) => k !== 'generate' && k !== 'bulk');
+  if (userPermissions.includes('gate_passes') || userRole === 'admin') {
+    return ALL_GATE_TABS;
   }
-  return tabs.length > 0 ? tabs : ALL_GATE_TABS.filter(([k]) => k !== 'generate' && k !== 'bulk');
-}, [userRole, userPermissions, isBlockedFromGenerate]);
+  return ALL_GATE_TABS;
+}, [userRole, userLoginId, userPermissions, isBlockedFromGenerate]);
 
 useEffect(() => {
   if (allowedTabs.length > 0 && !allowedTabs.some(([k]) => k === tab)) {
@@ -76,7 +83,7 @@ useEffect(() => {
   }
 }, [allowedTabs, tab]);
 
-useEffect(()=>{if(params.tab&&['generate','bulk','ready','execute','list'].includes(params.tab)){setTab(params.tab);if(params.tab==='ready')setStatus('draft');if(params.tab==='execute')setStatus('pending')}if(typeof params.class_name==='string'){setClassName(params.class_name)}},[params.tab,params.class_name]);useEffect(()=>{if(!authReady)return;listRequest.current++;const timer=setTimeout(()=>{void load()},query.trim()?250:0);return()=>{clearTimeout(timer);listRequest.current++}},[tab,status,year,className,query,authReady]);useEffect(()=>{void api('/api/auth/me').then(res=>{if(res&&res.user){setUserRole(res.user.role||'');setUserLoginId(String(res.user.login_id||''));setUserPermissions(res.permissions||[])}setAuthReady(true)}).catch(()=>setAuthReady(true))},[]);async function load(){const request=++listRequest.current;try{const targetStatus=tab==='ready'?'draft':(tab==='execute'?'pending':status);const d=await api('/api/gate-passes?year='+year+'&status='+targetStatus+(className?'&class_name='+encodeURIComponent(className):'')+(query.trim()?'&q='+encodeURIComponent(query.trim()):''));if(request===listRequest.current)setList(d.gate_passes||[])}catch(e:any){if(request===listRequest.current)Alert.alert('Gate Pass',e.message)}}
+useEffect(()=>{if(params.tab&&['generate','bulk','ready','execute','list'].includes(params.tab)){setTab(params.tab);if(params.tab==='ready')setStatus('draft');if(params.tab==='execute')setStatus('pending')}if(typeof params.class_name==='string'){setClassName(params.class_name)}},[params.tab,params.class_name]);useEffect(()=>{if(!authReady)return;listRequest.current++;const timer=setTimeout(()=>{void load()},query.trim()?250:0);return()=>{clearTimeout(timer);listRequest.current++}},[tab,status,year,className,query,authReady]);useEffect(()=>{void getUser<any>().then(u=>{if(u){if(u.role)setUserRole(u.role);if(u.login_id||u.loginId)setUserLoginId(String(u.login_id||u.loginId))}});void api('/api/auth/me').then(res=>{if(res&&res.user){setUserRole(res.user.role||'');setUserLoginId(String(res.user.login_id||''));setUserPermissions(res.permissions||[])}setAuthReady(true)}).catch(()=>setAuthReady(true))},[]);async function load(){const request=++listRequest.current;try{const targetStatus=tab==='ready'?'draft':(tab==='execute'?'pending':status);const d=await api('/api/gate-passes?year='+year+'&status='+targetStatus+(className?'&class_name='+encodeURIComponent(className):'')+(query.trim()?'&q='+encodeURIComponent(query.trim()):''));if(request===listRequest.current)setList(d.gate_passes||[])}catch(e:any){if(request===listRequest.current)Alert.alert('Gate Pass',e.message)}}
 async function search(){if(!reg.trim())return;setLoading(true);try{const d=await api('/api/gate-passes/student/'+encodeURIComponent(reg.trim()));setStudent(d.student)}catch(e:any){setStudent(null);notify('Search',e.message)}finally{setLoading(false)}}
 async function generate(){if(!await confirmAction('Generate gate pass','Create this gate pass for the selected student?'))return;if(!student)return notify('Required','Search a student first.');setLoading(true);try{const d=await api('/api/gate-passes',{method:'POST',body:JSON.stringify({...form,student_id:student.id})});setForm(blank());setStudent(null);setReg('');await load();await openPreview({id:d.id});}catch(e:any){notify('Gate Pass',e.message)}finally{setLoading(false)}}
 async function bulk(){if(!bulkAll&&!bulkClasses.length)return notify('Required','Select at least one class.');setLoading(true);try{const d=await api('/api/gate-passes/bulk',{method:'POST',body:JSON.stringify({...form,all_classes:bulkAll,class_names:bulkAll?[]:bulkClasses})});notify('Bulk generated',d.created+' created, '+d.skipped+' skipped.');await load()}catch(e:any){notify('Bulk',e.message)}finally{setLoading(false)}}
