@@ -325,7 +325,7 @@ router.get('/bank/ifsc/:ifsc', auth, allow('super_admin', 'admin'), asyncHandler
 // =========================
 
 router.get('/kanyashree/list', auth, allow('super_admin', 'admin', 'office', 'teacher'), asyncHandler(async (req, res) => {
-  const { class_name, status, gender, q } = req.query;
+  const { class_name, status, gender, school_name, q } = req.query;
   const conditions = ['s.is_active = TRUE'];
   const values = [];
 
@@ -337,6 +337,15 @@ router.get('/kanyashree/list', auth, allow('super_admin', 'admin', 'office', 'te
   if (gender && gender !== 'all') {
     values.push(gender);
     conditions.push(`s.gender = $${values.length}`);
+  }
+
+  if (school_name && school_name !== 'all') {
+    if (school_name === 'no_school') {
+      conditions.push(`(s.admitted_school_name IS NULL OR TRIM(s.admitted_school_name) = '')`);
+    } else {
+      values.push(school_name);
+      conditions.push(`s.admitted_school_name = $${values.length}`);
+    }
   }
 
   if (status) {
@@ -358,7 +367,8 @@ router.get('/kanyashree/list', auth, allow('super_admin', 'admin', 'office', 'te
       s.student_name ILIKE $${values.length} OR
       s.registration_no ILIKE $${values.length} OR
       CAST(s.roll_no AS TEXT) ILIKE $${values.length} OR
-      COALESCE(s.kanyashree_id, '') ILIKE $${values.length}
+      COALESCE(s.kanyashree_id, '') ILIKE $${values.length} OR
+      COALESCE(s.admitted_school_name, '') ILIKE $${values.length}
     )`);
   }
 
@@ -374,6 +384,7 @@ router.get('/kanyashree/list', auth, allow('super_admin', 'admin', 'office', 'te
       s.student_type,
       s.room_id,
       r.room_name,
+      s.admitted_school_name,
       s.kanyashree_id,
       s.kanyashree_status,
       s.kanyashree_date,
@@ -396,21 +407,27 @@ router.patch('/kanyashree/:id', auth, allow('super_admin', 'admin', 'office'), a
     return res.status(400).json({ success: false, message: 'Invalid student ID' });
   }
 
-  const { kanyashree_id, kanyashree_status, kanyashree_date } = req.body;
+  const { kanyashree_id, kanyashree_status, kanyashree_date, admitted_school_name } = req.body;
+
+  const hasSchoolUpdate = admitted_school_name !== undefined;
+  const schoolVal = admitted_school_name ? String(admitted_school_name).trim() : null;
 
   const result = await pool.query(
     `UPDATE students
      SET kanyashree_id = $1,
          kanyashree_status = $2,
          kanyashree_date = $3,
+         admitted_school_name = CASE WHEN $5::boolean THEN $6 ELSE admitted_school_name END,
          updated_at = NOW()
      WHERE id = $4 AND is_active = TRUE
-     RETURNING id, registration_no, student_name, class_name, roll_no, kanyashree_id, kanyashree_status, kanyashree_date`,
+     RETURNING id, registration_no, student_name, class_name, roll_no, admitted_school_name, kanyashree_id, kanyashree_status, kanyashree_date`,
     [
       kanyashree_id !== undefined ? (kanyashree_id ? String(kanyashree_id).trim() : null) : null,
       kanyashree_status !== undefined ? (kanyashree_status ? String(kanyashree_status).trim() : null) : null,
       kanyashree_date !== undefined ? (kanyashree_date ? String(kanyashree_date).trim() : null) : null,
       studentId,
+      hasSchoolUpdate,
+      schoolVal,
     ]
   );
 

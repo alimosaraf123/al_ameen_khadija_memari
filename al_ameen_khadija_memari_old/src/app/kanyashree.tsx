@@ -111,6 +111,7 @@ export default function KanyashreePortal() {
 
   // Filters
   const [selectedClass, setSelectedClass] = useState('all');
+  const [selectedSchoolFilter, setSelectedSchoolFilter] = useState('all');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('all');
   const [selectedIdFilter, setSelectedIdFilter] = useState('all');
   const [selectedAgeFilter, setSelectedAgeFilter] = useState('all');
@@ -131,6 +132,7 @@ export default function KanyashreePortal() {
     kanyashreeId: string;
     kanyashreeStatus: string;
     kanyashreeDate: string;
+    admittedSchoolName: string;
     saving: boolean;
   }>({
     open: false,
@@ -138,6 +140,7 @@ export default function KanyashreePortal() {
     kanyashreeId: '',
     kanyashreeStatus: '',
     kanyashreeDate: '',
+    admittedSchoolName: '',
     saving: false,
   });
 
@@ -157,11 +160,33 @@ export default function KanyashreePortal() {
     void loadStudents();
   }, []);
 
+  // Distinct school options for filter dropdown
+  const schoolOptions = useMemo(() => {
+    const set = new Set<string>();
+    students.forEach((st) => {
+      const sch = String(st.admitted_school_name || '').trim();
+      if (sch) set.add(sch);
+    });
+    const sorted = Array.from(set).sort((a, b) => a.localeCompare(b));
+    return [
+      { value: 'all', label: 'All Schools (সব স্কুল)' },
+      { value: 'no_school', label: '⚠️ School Not Set (স্কুল ছাড়া)' },
+      ...sorted.map((sch) => ({ value: sch, label: `🏫 ${sch}` })),
+    ];
+  }, [students]);
+
   // Filter pipeline
   const filteredStudents = useMemo(() => {
     return students.filter((s) => {
       // Class filter
       if (selectedClass !== 'all' && s.class_name !== selectedClass) return false;
+
+      // School filter
+      if (selectedSchoolFilter === 'no_school') {
+        if (s.admitted_school_name && String(s.admitted_school_name).trim()) return false;
+      } else if (selectedSchoolFilter !== 'all') {
+        if (String(s.admitted_school_name || '').trim().toLowerCase() !== selectedSchoolFilter.toLowerCase()) return false;
+      }
 
       // Status filter
       const st = String(s.kanyashree_status || '').trim();
@@ -192,16 +217,17 @@ export default function KanyashreePortal() {
         const matchesRoll = String(s.roll_no || '').toLowerCase().includes(q);
         const matchesKid = String(s.kanyashree_id || '').toLowerCase().includes(q);
         const matchesStatus = String(s.kanyashree_status || '').toLowerCase().includes(q);
-        if (!matchesName && !matchesReg && !matchesRoll && !matchesKid && !matchesStatus) return false;
+        const matchesSchool = String(s.admitted_school_name || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesReg && !matchesRoll && !matchesKid && !matchesStatus && !matchesSchool) return false;
       }
 
       return true;
     });
-  }, [students, selectedClass, selectedStatusFilter, selectedIdFilter, selectedAgeFilter, searchQuery]);
+  }, [students, selectedClass, selectedSchoolFilter, selectedStatusFilter, selectedIdFilter, selectedAgeFilter, searchQuery]);
 
   useEffect(() => {
     setPage(1);
-  }, [selectedClass, selectedStatusFilter, selectedIdFilter, selectedAgeFilter, searchQuery, pageSize]);
+  }, [selectedClass, selectedSchoolFilter, selectedStatusFilter, selectedIdFilter, selectedAgeFilter, searchQuery, pageSize]);
 
   // Pagination
   const effectivePageSize = pageSize === 'all' ? Math.max(1, filteredStudents.length) : Number(pageSize);
@@ -245,6 +271,7 @@ export default function KanyashreePortal() {
       kanyashreeId: s.kanyashree_id || '',
       kanyashreeStatus: s.kanyashree_status || 'K1 Applied',
       kanyashreeDate: s.kanyashree_date || getTodayString(),
+      admittedSchoolName: s.admitted_school_name || '',
       saving: false,
     });
   };
@@ -261,6 +288,7 @@ export default function KanyashreePortal() {
           kanyashree_id: modal.kanyashreeId.trim() || null,
           kanyashree_status: modal.kanyashreeStatus.trim() || null,
           kanyashree_date: modal.kanyashreeDate.trim() || null,
+          admitted_school_name: modal.admittedSchoolName.trim() || null,
         }),
       });
 
@@ -271,7 +299,7 @@ export default function KanyashreePortal() {
         Alert.alert('Success', msg);
       }
 
-      setModal({ open: false, student: null, kanyashreeId: '', kanyashreeStatus: '', kanyashreeDate: '', saving: false });
+      setModal({ open: false, student: null, kanyashreeId: '', kanyashreeStatus: '', kanyashreeDate: '', admittedSchoolName: '', saving: false });
       await loadStudents();
     } catch (e: any) {
       setModal((prev) => ({ ...prev, saving: false }));
@@ -338,6 +366,7 @@ export default function KanyashreePortal() {
       'Student Name',
       'Class',
       'Roll No',
+      'Present / Admitted School',
       'Date of Birth',
       'Age',
       'Kanyashree ID',
@@ -355,6 +384,7 @@ export default function KanyashreePortal() {
         `"${(s.student_name || '').replace(/"/g, '""')}"`,
         `"${s.class_name || ''}"`,
         `"${s.roll_no || ''}"`,
+        `"${(s.admitted_school_name || '').replace(/"/g, '""')}"`,
         `"${s.date_of_birth || ''}"`,
         age !== null ? age : '',
         `"${s.kanyashree_id || ''}"`,
@@ -425,6 +455,7 @@ export default function KanyashreePortal() {
                 <th>Student Name</th>
                 <th>Class</th>
                 <th>Roll</th>
+                <th>Present / Admitted School</th>
                 <th>Reg. No</th>
                 <th>DOB / Age</th>
                 <th>Kanyashree ID</th>
@@ -452,6 +483,7 @@ export default function KanyashreePortal() {
                       <td><b>${s.student_name || ''}</b></td>
                       <td>${s.class_name || ''}</td>
                       <td>${s.roll_no || ''}</td>
+                      <td><b>${s.admitted_school_name || '<span style="color:#94a3b8;">Not Set</span>'}</b></td>
                       <td>${s.registration_no || ''}</td>
                       <td>${s.date_of_birth || '-'} ${age !== null ? `(${age}y)` : ''}</td>
                       <td style="font-family: monospace; font-weight: bold;">${s.kanyashree_id || '-'}</td>
@@ -595,6 +627,16 @@ export default function KanyashreePortal() {
               />
             </View>
 
+            <View style={{ width: 220 }}>
+              <Select
+                label="All Schools"
+                value={selectedSchoolFilter}
+                onChange={setSelectedSchoolFilter}
+                options={schoolOptions}
+                searchable={true}
+              />
+            </View>
+
             <View style={{ width: 190 }}>
               <Select
                 label="All Status"
@@ -628,7 +670,7 @@ export default function KanyashreePortal() {
                 style={styles.compactSearchInput}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholder="Search name, reg. no, roll, or Kanyashree ID..."
+                placeholder="Search name, reg. no, roll, school, or ID..."
                 placeholderTextColor="#94a3b8"
               />
             </View>
@@ -640,6 +682,7 @@ export default function KanyashreePortal() {
 
               {Boolean(
                 selectedClass !== 'all' ||
+                  selectedSchoolFilter !== 'all' ||
                   selectedStatusFilter !== 'all' ||
                   selectedIdFilter !== 'all' ||
                   selectedAgeFilter !== 'all' ||
@@ -648,6 +691,7 @@ export default function KanyashreePortal() {
                 <TouchableOpacity
                   onPress={() => {
                     setSelectedClass('all');
+                    setSelectedSchoolFilter('all');
                     setSelectedStatusFilter('all');
                     setSelectedIdFilter('all');
                     setSelectedAgeFilter('all');
@@ -798,9 +842,13 @@ export default function KanyashreePortal() {
                             <Text style={styles.badgeClassText}>Class {s.class_name || '-'}</Text>
                           </View>
 
-                          {Boolean(s.roll_no) && (
-                            <View style={styles.badgeRoll}>
-                              <Text style={styles.badgeRollText}>Roll: {s.roll_no}</Text>
+                          {Boolean(s.admitted_school_name && String(s.admitted_school_name).trim()) ? (
+                            <View style={styles.badgeSchool}>
+                              <Text style={styles.badgeSchoolText}>🏫 {String(s.admitted_school_name).trim()}</Text>
+                            </View>
+                          ) : (
+                            <View style={styles.badgeSchoolMissing}>
+                              <Text style={styles.badgeSchoolMissingText}>🏫 School: Not Set</Text>
                             </View>
                           )}
 
@@ -813,6 +861,7 @@ export default function KanyashreePortal() {
 
                         <Text style={styles.studentMeta}>
                           Reg. No: <Text style={styles.metaHighlight}>{s.registration_no || '-'}</Text>
+                          {Boolean(s.roll_no) ? ` · Roll: ${s.roll_no}` : ''}
                           {s.date_of_birth ? ` · DOB: ${s.date_of_birth}` : ''}
                           {age !== null ? ` (${age} yrs)` : ''}
                           {s.room_name ? ` · Room ${s.room_name}` : ''}
@@ -1038,6 +1087,9 @@ export default function KanyashreePortal() {
                   <Text style={styles.modalStudentMeta}>
                     Reg: {modal.student.registration_no} · Class: {modal.student.class_name || '-'} · Roll: {modal.student.roll_no || '-'}
                   </Text>
+                  <Text style={[styles.modalStudentMeta, { marginTop: 2, color: '#0369a1', fontWeight: '700' }]}>
+                    🏫 Present School: {modal.student.admitted_school_name || 'Not Set'}
+                  </Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
                     <Text style={{ fontSize: 13, color: '#475569' }}>
                       DOB: <Text style={{ fontWeight: '700' }}>{modal.student.date_of_birth || 'Not recorded'}</Text>
@@ -1050,6 +1102,18 @@ export default function KanyashreePortal() {
                         </View>
                       )}
                   </View>
+                </View>
+
+                {/* Admitted / Present School Name */}
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={styles.inputLabel}>Present / Admitted School Name (ভর্তিকৃত স্কুলের নাম):</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={modal.admittedSchoolName}
+                    onChangeText={(val) => setModal((prev) => ({ ...prev, admittedSchoolName: val }))}
+                    placeholder="e.g. Baidyadanga Girls High School (H.S)..."
+                    placeholderTextColor="#94a3b8"
+                  />
                 </View>
 
                 {/* Kanyashree ID */}
@@ -1462,6 +1526,33 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: '#15803d',
+  },
+  badgeSchool: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    maxWidth: 340,
+  },
+  badgeSchoolText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#166534',
+  },
+  badgeSchoolMissing: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fef3c7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  badgeSchoolMissingText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#b45309',
   },
   badge18Plus: {
     backgroundColor: '#fef3c7',
