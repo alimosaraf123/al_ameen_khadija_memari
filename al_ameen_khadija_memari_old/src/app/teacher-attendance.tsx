@@ -26,6 +26,14 @@ type DayCol = {
   number: number;
 };
 
+type PunchDetail = {
+  status: string;
+  punch_in: string | null;
+  punch_out: string | null;
+  distance: number | null;
+  marked_by: number | null;
+};
+
 type StaffMember = {
   id: number;
   staff_id: string;
@@ -33,6 +41,7 @@ type StaffMember = {
   photo_url?: string;
   designation?: string;
   attendance: Record<string, string>;
+  details?: Record<string, PunchDetail>;
 };
 
 const MONTHS = [
@@ -74,6 +83,53 @@ const STATUS_CYCLE = ['Present', 'Absent', 'Late', 'Leave', ''];
 
 const getTodayDateStr = () => {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+};
+
+const formatPunchTime = (isoString?: string | null) => {
+  if (!isoString) return '--';
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return '--';
+    return d.toLocaleTimeString('en-US', {
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return '--';
+  }
+};
+
+const formatPunchDuration = (inIso?: string | null, outIso?: string | null) => {
+  if (!inIso) return '--';
+  try {
+    const start = new Date(inIso).getTime();
+    const end = outIso ? new Date(outIso).getTime() : Date.now();
+    if (isNaN(start) || isNaN(end) || end < start) return '--';
+    const diffSec = Math.floor((end - start) / 1000);
+    const hrs = Math.floor(diffSec / 3600);
+    const mins = Math.floor((diffSec % 3600) / 60);
+    return `${hrs}h ${mins}m`;
+  } catch {
+    return '--';
+  }
+};
+
+const formatFullDate = (dateStr: string) => {
+  try {
+    const [y, m, d] = dateStr.split('-');
+    const dt = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+    return dt.toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      weekday: 'short',
+    });
+  } catch {
+    return dateStr;
+  }
 };
 
 export default function TeacherAttendance() {
@@ -124,6 +180,21 @@ export default function TeacherAttendance() {
   const [statusPickerOpen, setStatusPickerOpen] = useState(false);
   const [sortField, setSortField] = useState<'id' | 'name' | 'default'>('default');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // Punch Details & Daily In/Out Timings states
+  const [interactionMode, setInteractionMode] = useState<'details' | 'quick'>('details');
+  const [selectedPunchCell, setSelectedPunchCell] = useState<{
+    staff: StaffMember;
+    date: string;
+    details?: PunchDetail;
+  } | null>(null);
+  const [punchDetailsModalOpen, setPunchDetailsModalOpen] = useState(false);
+
+  const [dailyPunchLogModalOpen, setDailyPunchLogModalOpen] = useState(false);
+  const [selectedLogDate, setSelectedLogDate] = useState<string>(() => todayStr);
+  const [logStaffList, setLogStaffList] = useState<any[]>([]);
+  const [loadingLog, setLoadingLog] = useState(false);
+  const [logSearchQuery, setLogSearchQuery] = useState('');
 
   const monthParam = `${selectedYear}-${selectedMonth}`;
 
@@ -322,8 +393,39 @@ export default function TeacherAttendance() {
     }
   };
 
-  const cycleStatus = async (staffId: number, dateStr: string) => {
-    if (dateStr > todayStr) return; // Future days are disabled
+  const openDailyPunchLog = async (targetDate: string = todayStr) => {
+    setSelectedLogDate(targetDate);
+    setDailyPunchLogModalOpen(true);
+    setLoadingLog(true);
+    try {
+      const res = await api(`/api/teachers/attendance?date=${encodeURIComponent(targetDate)}`);
+      if (res.success) {
+        setLogStaffList(res.staff || []);
+      } else {
+        Alert.alert('Error', res.message || 'Failed to load daily attendance');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to load daily attendance');
+    } finally {
+      setLoadingLog(false);
+    }
+  };
+
+  const filteredDailyLog = useMemo(() => {
+    if (!logSearchQuery.trim()) return logStaffList;
+    const q = logSearchQuery.trim().toLowerCase();
+    return logStaffList.filter((s: any) =>
+      String(s.name || '').toLowerCase().includes(q) ||
+      String(s.staff_id || '').toLowerCase().includes(q) ||
+      String(s.designation || '').toLowerCase().includes(q)
+    );
+  }, [logStaffList, logSearchQuery]);
+
+  const updateCellStatus = async (staffId: number, dateStr: string, nextVal: string) => {
+    if (dateStr > todayStr) {
+      Alert.alert('Not allowed', 'Cannot edit attendance for future dates.');
+      return;
+    }
     if (dateStr < todayStr && !isSuperAdmin) {
       Alert.alert('Attendance Locked', 'শুধুমাত্র Super Admin পেছনের তারিখের (Back Date) স্টাফ হাজিরা পরিবর্তন বা এন্ট্রি করতে পারবেন।');
       return;
@@ -331,8 +433,7 @@ export default function TeacherAttendance() {
 
     const currentStaff = staffList.find(s => s.id === staffId);
     const currentVal = currentStaff?.attendance?.[dateStr] || '';
-    const currentIndex = STATUS_CYCLE.indexOf(currentVal);
-    const nextVal = STATUS_CYCLE[(currentIndex + 1) % STATUS_CYCLE.length];
+    const currentDetail = currentStaff?.details?.[dateStr];
 
     // Optimistic UI update
     setStaffList(prev =>
@@ -344,10 +445,33 @@ export default function TeacherAttendance() {
               ...(item.attendance || {}),
               [dateStr]: nextVal,
             },
+            details: {
+              ...(item.details || {}),
+              [dateStr]: {
+                status: nextVal,
+                punch_in: currentDetail?.punch_in || null,
+                punch_out: currentDetail?.punch_out || null,
+                distance: currentDetail?.distance || null,
+                marked_by: currentDetail?.marked_by || null,
+              },
+            },
           }
           : item
       )
     );
+
+    if (selectedPunchCell && selectedPunchCell.staff.id === staffId && selectedPunchCell.date === dateStr) {
+      setSelectedPunchCell(prev => prev ? {
+        ...prev,
+        details: {
+          status: nextVal,
+          punch_in: currentDetail?.punch_in || null,
+          punch_out: currentDetail?.punch_out || null,
+          distance: currentDetail?.distance || null,
+          marked_by: currentDetail?.marked_by || null,
+        },
+      } : null);
+    }
 
     const cellKey = `${staffId}_${dateStr}`;
     setSavingCell(cellKey);
@@ -372,6 +496,16 @@ export default function TeacherAttendance() {
                 ...(item.attendance || {}),
                 [dateStr]: currentVal,
               },
+              details: {
+                ...(item.details || {}),
+                [dateStr]: currentDetail || {
+                  status: currentVal,
+                  punch_in: null,
+                  punch_out: null,
+                  distance: null,
+                  marked_by: null,
+                },
+              },
             }
             : item
         )
@@ -379,6 +513,29 @@ export default function TeacherAttendance() {
     } finally {
       setSavingCell(null);
     }
+  };
+
+  const cycleStatus = async (staffId: number, dateStr: string) => {
+    const currentStaff = staffList.find(s => s.id === staffId);
+    const currentVal = currentStaff?.attendance?.[dateStr] || '';
+    const currentIndex = STATUS_CYCLE.indexOf(currentVal);
+    const nextVal = STATUS_CYCLE[(currentIndex + 1) % STATUS_CYCLE.length];
+    await updateCellStatus(staffId, dateStr, nextVal);
+  };
+
+  const handleCellClick = (person: StaffMember, dateStr: string) => {
+    if (dateStr > todayStr) return;
+    const detail = person.details?.[dateStr];
+    if (interactionMode === 'details') {
+      setSelectedPunchCell({
+        staff: person,
+        date: dateStr,
+        details: detail,
+      });
+      setPunchDetailsModalOpen(true);
+      return;
+    }
+    void cycleStatus(person.id, dateStr);
   };
 
   const getStatusSymbol = (status?: string) => {
@@ -485,6 +642,16 @@ export default function TeacherAttendance() {
                   <Text style={s.presentAllBtnText}>One-Click Present All</Text>
                 </View>
               )}
+            </TouchableOpacity>
+
+            {/* Daily In/Out Timings Log Button */}
+            <TouchableOpacity
+              style={s.punchLogHeaderBtn}
+              onPress={() => void openDailyPunchLog(todayStr)}
+              activeOpacity={0.8}
+            >
+              <Text style={s.punchLogHeaderBtnIcon}>⏱️</Text>
+              <Text style={s.punchLogHeaderBtnText}>Punch Timings (ইন-আউট সময়)</Text>
             </TouchableOpacity>
           </View>
 
@@ -605,6 +772,31 @@ export default function TeacherAttendance() {
               <Text style={s.resetBtnText}>↺ Reset</Text>
             </TouchableOpacity>
           )}
+
+          {/* Mode Toggle: View In/Out Details vs Quick Toggle */}
+          <View style={s.modeToggleWrap}>
+            <Text style={s.modeToggleLabel}>Cell Click:</Text>
+            <View style={s.modeToggleGroup}>
+              <TouchableOpacity
+                style={[s.modeToggleBtn, interactionMode === 'details' && s.modeToggleBtnActive]}
+                onPress={() => setInteractionMode('details')}
+                activeOpacity={0.7}
+              >
+                <Text style={[s.modeToggleText, interactionMode === 'details' && s.modeToggleTextActive]}>
+                  ℹ️ In/Out Details
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.modeToggleBtn, interactionMode === 'quick' && s.modeToggleBtnActive]}
+                onPress={() => setInteractionMode('quick')}
+                activeOpacity={0.7}
+              >
+                <Text style={[s.modeToggleText, interactionMode === 'quick' && s.modeToggleTextActive]}>
+                  ⚡ Quick Toggle
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
           {/* Count Badge */}
           <View style={s.countBadge}>
@@ -809,6 +1001,8 @@ export default function TeacherAttendance() {
                         const isPast = dateKey < todayStr;
                         const val = person.attendance?.[dateKey];
                         const symbol = getStatusSymbol(val);
+                        const detail = person.details?.[dateKey];
+                        const hasPunch = Boolean(detail?.punch_in || detail?.punch_out);
                         const isSavingThis = savingCell === `${person.id}_${dateKey}`;
 
                         if (isFuture) {
@@ -820,92 +1014,41 @@ export default function TeacherAttendance() {
                           );
                         }
 
-                        if (isPast) {
-                          if (isSuperAdmin) {
-                            return (
-                              <TouchableOpacity
-                                key={dateKey}
-                                activeOpacity={0.65}
-                                onPress={() => cycleStatus(person.id, dateKey)}
-                                style={[
-                                  s.colDay,
-                                  s.tdCell,
-                                  s.bodyRowHeight,
-                                  s.activeDayCell,
-                                  s.pastEditableCell,
-                                ]}
-                              >
-                                {isSavingThis ? (
-                                  <ActivityIndicator size="small" color="#0d6efd" />
-                                ) : (
-                                  <Text
-                                    style={[
-                                      s.statusSymbolText,
-                                      symbol === 'A' && s.absentColor,
-                                      symbol === 'P' && s.presentColor,
-                                      (symbol === 'L' || symbol === 'LV') && s.lateColor,
-                                    ]}
-                                  >
-                                    {symbol}
-                                  </Text>
-                                )}
-                              </TouchableOpacity>
-                            );
-                          }
-
-                          return (
-                            <TouchableOpacity
-                              key={dateKey}
-                              activeOpacity={0.8}
-                              onPress={() => {
-                                Alert.alert(
-                                  'Attendance Locked',
-                                  'শুধুমাত্র Super Admin পেছনের তারিখের (Back Date) স্টাফ হাজিরা পরিবর্তন করতে পারবেন।'
-                                );
-                              }}
-                              style={[s.colDay, s.tdCell, s.bodyRowHeight, s.pastDayCell]}
-                            >
-                              <Text
-                                style={[
-                                  s.statusSymbolText,
-                                  s.pastSymbolText,
-                                  symbol === 'A' && s.absentColor,
-                                  symbol === 'P' && s.presentColor,
-                                  (symbol === 'L' || symbol === 'LV') && s.lateColor,
-                                ]}
-                              >
-                                {symbol}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        }
+                        const tooltipText = hasPunch
+                          ? `${person.name} (${dateKey}):\n🟢 IN: ${formatPunchTime(detail?.punch_in)}\n🔴 OUT: ${formatPunchTime(detail?.punch_out)}\n⏱️ Hours: ${formatPunchDuration(detail?.punch_in, detail?.punch_out)}\n📍 Dist: ${detail?.distance != null ? detail.distance + 'm' : 'Campus'}`
+                          : `${person.name} (${dateKey}): ${symbol ? (val || symbol) : 'Not Marked'}`;
 
                         return (
                           <TouchableOpacity
                             key={dateKey}
                             activeOpacity={0.65}
-                            onPress={() => cycleStatus(person.id, dateKey)}
+                            onPress={() => handleCellClick(person, dateKey)}
+                            {...(Platform.OS === 'web' ? { title: tooltipText } : {})}
                             style={[
                               s.colDay,
                               s.tdCell,
                               s.bodyRowHeight,
                               s.activeDayCell,
-                              s.todayBodyCell,
+                              isToday && s.todayBodyCell,
+                              isPast && !isSuperAdmin && interactionMode === 'quick' && s.pastDayCell,
                             ]}
                           >
                             {isSavingThis ? (
                               <ActivityIndicator size="small" color="#0d6efd" />
                             ) : (
-                              <Text
-                                style={[
-                                  s.statusSymbolText,
-                                  symbol === 'A' && s.absentColor,
-                                  symbol === 'P' && s.presentColor,
-                                  (symbol === 'L' || symbol === 'LV') && s.lateColor,
-                                ]}
-                              >
-                                {symbol}
-                              </Text>
+                              <>
+                                <Text
+                                  style={[
+                                    s.statusSymbolText,
+                                    symbol === 'A' && s.absentColor,
+                                    symbol === 'P' && s.presentColor,
+                                    (symbol === 'L' || symbol === 'LV') && s.lateColor,
+                                  ]}
+                                >
+                                  {symbol}
+                                </Text>
+                                {hasPunch && <View style={s.punchDot} />}
+                              </>
                             )}
                           </TouchableOpacity>
                         );
@@ -935,6 +1078,10 @@ export default function TeacherAttendance() {
             <View style={s.legendItem}>
               <Text style={[s.legendBadge, s.lateColor]}>LV</Text>
               <Text style={s.legendLabel}>Leave</Text>
+            </View>
+            <View style={s.legendItem}>
+              <View style={s.punchDotLegend} />
+              <Text style={s.legendLabel}>Mobile Punch (ইন/আউট টাইম আছে)</Text>
             </View>
             <Text style={s.autoSaveHint}>
               {isSuperAdmin
@@ -1141,6 +1288,366 @@ export default function TeacherAttendance() {
                 </TouchableOpacity>
               ))}
             </View>
+          </Pressable>
+        </Modal>
+
+        {/* Punch Details Modal (Mobile IN/OUT Timings) */}
+        <Modal
+          visible={punchDetailsModalOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setPunchDetailsModalOpen(false)}
+        >
+          <Pressable style={s.modalBackdrop} onPress={() => setPunchDetailsModalOpen(false)}>
+            <Pressable style={s.detailModalCard} onPress={e => e.stopPropagation()}>
+              {/* Header */}
+              <View style={s.detailModalHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  {selectedPunchCell?.staff.photo_url ? (
+                    <Image
+                      source={{
+                        uri: /^https?:/.test(selectedPunchCell.staff.photo_url)
+                          ? selectedPunchCell.staff.photo_url
+                          : API_BASE + selectedPunchCell.staff.photo_url,
+                      }}
+                      style={s.detailModalAvatar}
+                    />
+                  ) : (
+                    <View style={s.detailModalAvatarPlaceholder}>
+                      <Text style={s.detailModalAvatarLetter}>
+                        {selectedPunchCell?.staff.name?.trim().charAt(0).toUpperCase() || 'S'}
+                      </Text>
+                    </View>
+                  )}
+                  <View>
+                    <Text style={s.detailModalName}>{selectedPunchCell?.staff.name}</Text>
+                    <Text style={s.detailModalSub}>
+                      ID: {selectedPunchCell?.staff.staff_id} • {selectedPunchCell?.staff.designation || 'Staff'}
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity style={s.detailModalCloseBtn} onPress={() => setPunchDetailsModalOpen(false)}>
+                  <Text style={s.detailModalCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Date & Current Status */}
+              <View style={s.detailDateRow}>
+                <Text style={s.detailDateText}>
+                  📅 {selectedPunchCell ? formatFullDate(selectedPunchCell.date) : ''}
+                </Text>
+                <View style={[
+                  s.detailStatusBadge,
+                  selectedPunchCell?.details?.status === 'Present' && s.badgePresent,
+                  selectedPunchCell?.details?.status === 'Absent' && s.badgeAbsent,
+                  (selectedPunchCell?.details?.status === 'Late' || selectedPunchCell?.details?.status === 'Leave') && s.badgeLate,
+                ]}>
+                  <Text style={s.detailStatusBadgeText}>
+                    Status: {selectedPunchCell?.details?.status || selectedPunchCell?.staff.attendance?.[selectedPunchCell.date] || 'Not Marked'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Punch IN / OUT Timings Card */}
+              <View style={s.punchInfoCard}>
+                <Text style={s.punchInfoCardTitle}>📱 Mobile Attendance Punch Timings (ইন-আউট সময়)</Text>
+
+                <View style={s.punchTimesGrid}>
+                  {/* Punch IN */}
+                  <View style={s.punchTimeBox}>
+                    <Text style={s.punchTimeLabel}>🟢 Punch IN (প্রবেশের সময়)</Text>
+                    <Text style={[s.punchTimeVal, { color: '#16a34a' }]}>
+                      {formatPunchTime(selectedPunchCell?.details?.punch_in)}
+                    </Text>
+                    <Text style={s.punchSubText}>
+                      {selectedPunchCell?.details?.punch_in ? 'In-Time Recorded' : 'Not recorded'}
+                    </Text>
+                  </View>
+
+                  {/* Punch OUT */}
+                  <View style={s.punchTimeBox}>
+                    <Text style={s.punchTimeLabel}>🔴 Punch OUT (প্রস্থানের সময়)</Text>
+                    <Text style={[s.punchTimeVal, { color: '#dc2626' }]}>
+                      {formatPunchTime(selectedPunchCell?.details?.punch_out)}
+                    </Text>
+                    <Text style={s.punchSubText}>
+                      {selectedPunchCell?.details?.punch_out
+                        ? 'Out-Time Recorded'
+                        : selectedPunchCell?.details?.punch_in
+                          ? '🟢 Currently Inside Campus'
+                          : 'Not recorded'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Duration & GPS Distance */}
+                <View style={s.punchMetaRow}>
+                  <View style={s.punchMetaItem}>
+                    <Text style={s.punchMetaLabel}>⏱️ Working Duration (কাজের সময়):</Text>
+                    <Text style={s.punchMetaValue}>
+                      {formatPunchDuration(selectedPunchCell?.details?.punch_in, selectedPunchCell?.details?.punch_out)}
+                    </Text>
+                  </View>
+                  <View style={s.punchMetaItem}>
+                    <Text style={s.punchMetaLabel}>📍 GPS Distance (ক্যাম্পাস দূরত্ব):</Text>
+                    <Text style={s.punchMetaValue}>
+                      {selectedPunchCell?.details?.distance != null
+                        ? `${selectedPunchCell.details.distance} meters (Within Campus)`
+                        : 'Manual Entry'}
+                    </Text>
+                  </View>
+                  <View style={s.punchMetaItem}>
+                    <Text style={s.punchMetaLabel}>👤 Attendance Source:</Text>
+                    <Text style={[s.punchMetaValue, { color: selectedPunchCell?.details?.punch_in ? '#059669' : '#475569' }]}>
+                      {selectedPunchCell?.details?.punch_in ? '📱 Staff Mobile App (GPS Verified)' : 'Admin / Manual Entry'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Status Change Buttons (Super Admin or Today) */}
+              <View style={s.statusChangeSection}>
+                <Text style={s.statusChangeTitle}>Change Attendance Status (হাজিরা পরিবর্তন):</Text>
+                <View style={s.statusButtonsRow}>
+                  {['Present', 'Absent', 'Late', 'Leave', ''].map(st => (
+                    <TouchableOpacity
+                      key={st || 'Clear'}
+                      style={[
+                        s.statusBtn,
+                        st === 'Present' && s.btnPresent,
+                        st === 'Absent' && s.btnAbsent,
+                        st === 'Late' && s.btnLate,
+                        st === 'Leave' && s.btnLeave,
+                        !st && s.btnClear,
+                        selectedPunchCell?.details?.status === st && s.statusBtnSelected,
+                      ]}
+                      onPress={() => {
+                        if (!selectedPunchCell) return;
+                        void updateCellStatus(selectedPunchCell.staff.id, selectedPunchCell.date, st);
+                      }}
+                    >
+                      <Text style={s.statusBtnText}>{st ? st : 'Clear'}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Footer Close */}
+              <TouchableOpacity
+                style={s.detailModalCloseActionBtn}
+                onPress={() => setPunchDetailsModalOpen(false)}
+              >
+                <Text style={s.detailModalCloseActionBtnText}>Close</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        {/* Daily Punch Log Modal (All staff in/out times for a day) */}
+        <Modal
+          visible={dailyPunchLogModalOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setDailyPunchLogModalOpen(false)}
+        >
+          <Pressable style={s.modalBackdrop} onPress={() => setDailyPunchLogModalOpen(false)}>
+            <Pressable style={s.dailyLogModalCard} onPress={e => e.stopPropagation()}>
+              {/* Modal Top Bar */}
+              <View style={s.dailyLogHeader}>
+                <View>
+                  <Text style={s.dailyLogTitle}>⏱️ Staff Daily In/Out Timings Log (দৈনিক পাঞ্চ লগ)</Text>
+                  <Text style={s.dailyLogSubtitle}>
+                    Selected Date: {formatFullDate(selectedLogDate)}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={s.detailModalCloseBtn}
+                  onPress={() => setDailyPunchLogModalOpen(false)}
+                >
+                  <Text style={s.detailModalCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Date Navigation & Search */}
+              <View style={s.dailyLogToolbar}>
+                <View style={s.dateNavGroup}>
+                  <TouchableOpacity
+                    style={s.dateNavBtn}
+                    onPress={() => {
+                      const prev = new Date(selectedLogDate);
+                      prev.setDate(prev.getDate() - 1);
+                      const pStr = prev.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+                      void openDailyPunchLog(pStr);
+                    }}
+                  >
+                    <Text style={s.dateNavBtnText}>◀ Prev Day</Text>
+                  </TouchableOpacity>
+                  <View style={s.currentDateBadge}>
+                    <Text style={s.currentDateBadgeText}>{selectedLogDate}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[s.dateNavBtn, selectedLogDate >= todayStr && s.disabledBtn]}
+                    disabled={selectedLogDate >= todayStr}
+                    onPress={() => {
+                      const next = new Date(selectedLogDate);
+                      next.setDate(next.getDate() + 1);
+                      const nStr = next.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+                      void openDailyPunchLog(nStr);
+                    }}
+                  >
+                    <Text style={s.dateNavBtnText}>Next Day ▶</Text>
+                  </TouchableOpacity>
+                  {selectedLogDate !== todayStr && (
+                    <TouchableOpacity
+                      style={s.todayNavBtn}
+                      onPress={() => void openDailyPunchLog(todayStr)}
+                    >
+                      <Text style={s.todayNavBtnText}>Today</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Quick Search */}
+                <View style={s.dailyLogSearchBox}>
+                  <Text style={s.searchIcon}>🔍</Text>
+                  <TextInput
+                    style={s.searchInput}
+                    placeholder="Search staff by name or ID..."
+                    placeholderTextColor="#94a3b8"
+                    value={logSearchQuery}
+                    onChangeText={setLogSearchQuery}
+                  />
+                  {logSearchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setLogSearchQuery('')}>
+                      <Text style={s.clearSearchText}>✕</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
+              {/* KPI Counters */}
+              <View style={s.kpiRow}>
+                <View style={[s.kpiCard, { borderColor: '#0284c7' }]}>
+                  <Text style={s.kpiVal}>{logStaffList.length}</Text>
+                  <Text style={s.kpiLabel}>Total Staff</Text>
+                </View>
+                <View style={[s.kpiCard, { borderColor: '#16a34a' }]}>
+                  <Text style={[s.kpiVal, { color: '#16a34a' }]}>
+                    {logStaffList.filter(s => s.punch_in).length}
+                  </Text>
+                  <Text style={s.kpiLabel}>Punched IN</Text>
+                </View>
+                <View style={[s.kpiCard, { borderColor: '#059669' }]}>
+                  <Text style={[s.kpiVal, { color: '#059669' }]}>
+                    {logStaffList.filter(s => s.punch_in && !s.punch_out).length}
+                  </Text>
+                  <Text style={s.kpiLabel}>In Campus Now</Text>
+                </View>
+                <View style={[s.kpiCard, { borderColor: '#dc2626' }]}>
+                  <Text style={[s.kpiVal, { color: '#dc2626' }]}>
+                    {logStaffList.filter(s => s.punch_out).length}
+                  </Text>
+                  <Text style={s.kpiLabel}>Punched OUT</Text>
+                </View>
+                <View style={[s.kpiCard, { borderColor: '#64748b' }]}>
+                  <Text style={[s.kpiVal, { color: '#64748b' }]}>
+                    {logStaffList.filter(s => s.status === 'Absent').length}
+                  </Text>
+                  <Text style={s.kpiLabel}>Absent</Text>
+                </View>
+              </View>
+
+              {/* Table */}
+              {loadingLog ? (
+                <View style={s.centerLoading}>
+                  <ActivityIndicator size="large" color="#0d6efd" />
+                  <Text style={s.loadingText}>Loading punch log for {selectedLogDate}...</Text>
+                </View>
+              ) : (
+                <ScrollView style={s.dailyLogTableScroll} horizontal showsHorizontalScrollIndicator>
+                  <View style={{ minWidth: 960 }}>
+                    {/* Table Header */}
+                    <View style={s.dailyLogThRow}>
+                      <Text style={[s.dailyLogTh, { width: 44 }]}>#</Text>
+                      <Text style={[s.dailyLogTh, { width: 70 }]}>ID</Text>
+                      <Text style={[s.dailyLogTh, { width: 200, textAlign: 'left', paddingLeft: 8 }]}>Staff Name</Text>
+                      <Text style={[s.dailyLogTh, { width: 140, textAlign: 'left', paddingLeft: 8 }]}>Designation</Text>
+                      <Text style={[s.dailyLogTh, { width: 85 }]}>Status</Text>
+                      <Text style={[s.dailyLogTh, { width: 110 }]}>🟢 Punch IN</Text>
+                      <Text style={[s.dailyLogTh, { width: 110 }]}>🔴 Punch OUT</Text>
+                      <Text style={[s.dailyLogTh, { width: 95 }]}>⏱️ Duration</Text>
+                      <Text style={[s.dailyLogTh, { width: 90 }]}>📍 Distance</Text>
+                      <Text style={[s.dailyLogTh, { width: 110 }]}>Source</Text>
+                    </View>
+
+                    {/* Table Body */}
+                    <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator>
+                      {filteredDailyLog.map((person: any, idx: number) => {
+                        const hasIn = Boolean(person.punch_in);
+                        const hasOut = Boolean(person.punch_out);
+                        const isInside = hasIn && !hasOut;
+                        return (
+                          <View key={`log-${person.id}`} style={[s.dailyLogTdRow, idx % 2 === 1 && s.rowOdd]}>
+                            <Text style={[s.dailyLogTd, { width: 44 }]}>{idx + 1}</Text>
+                            <Text style={[s.dailyLogTd, { width: 70, fontWeight: '700' }]}>{person.staff_id}</Text>
+                            <View style={[{ width: 200, paddingLeft: 8, justifyContent: 'center' }]}>
+                              <Text style={s.dailyLogNameText} numberOfLines={1}>{person.name}</Text>
+                            </View>
+                            <View style={[{ width: 140, paddingLeft: 8, justifyContent: 'center' }]}>
+                              <Text style={s.dailyLogDesigText} numberOfLines={1}>{person.designation || 'Staff'}</Text>
+                            </View>
+                            <View style={[{ width: 85, alignItems: 'center', justifyContent: 'center' }]}>
+                              <View style={[
+                                s.statusPill,
+                                person.status === 'Present' && s.pillPresent,
+                                person.status === 'Absent' && s.pillAbsent,
+                                (person.status === 'Late' || person.status === 'Leave') && s.pillLate,
+                              ]}>
+                                <Text style={s.statusPillText}>{person.status || 'Unmarked'}</Text>
+                              </View>
+                            </View>
+                            <Text style={[s.dailyLogTd, { width: 110, color: hasIn ? '#16a34a' : '#94a3b8', fontWeight: hasIn ? '700' : '400' }]}>
+                              {formatPunchTime(person.punch_in)}
+                            </Text>
+                            <Text style={[s.dailyLogTd, { width: 110, color: hasOut ? '#dc2626' : isInside ? '#0284c7' : '#94a3b8', fontWeight: hasOut || isInside ? '700' : '400' }]}>
+                              {hasOut ? formatPunchTime(person.punch_out) : isInside ? '🟢 In Campus' : '--'}
+                            </Text>
+                            <Text style={[s.dailyLogTd, { width: 95, fontWeight: '700' }]}>
+                              {formatPunchDuration(person.punch_in, person.punch_out)}
+                            </Text>
+                            <Text style={[s.dailyLogTd, { width: 90 }]}>
+                              {person.distance_meters != null ? `${person.distance_meters}m` : '--'}
+                            </Text>
+                            <View style={[{ width: 110, alignItems: 'center', justifyContent: 'center' }]}>
+                              {hasIn || hasOut ? (
+                                <View style={s.sourceMobileBadge}>
+                                  <Text style={s.sourceMobileBadgeText}>📱 Mobile App</Text>
+                                </View>
+                              ) : (
+                                <Text style={s.sourceManualText}>Manual</Text>
+                              )}
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                </ScrollView>
+              )}
+
+              {/* Modal Footer */}
+              <View style={s.dailyLogFooter}>
+                <Text style={s.dailyLogFooterInfo}>
+                  Total records: {filteredDailyLog.length} staff members
+                </Text>
+                <TouchableOpacity
+                  style={s.detailModalCloseActionBtn}
+                  onPress={() => setDailyPunchLogModalOpen(false)}
+                >
+                  <Text style={s.detailModalCloseActionBtnText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
           </Pressable>
         </Modal>
       </ScrollView>
@@ -1867,5 +2374,533 @@ const s = StyleSheet.create({
   modalOptionTextSelected: {
     color: '#0284c7',
     fontWeight: '800',
+  },
+
+  // Punch Timings Header Button
+  punchLogHeaderBtn: {
+    backgroundColor: '#0284c7',
+    paddingHorizontal: 12,
+    height: 36,
+    borderRadius: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#0284c7',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  punchLogHeaderBtnIcon: {
+    fontSize: 14,
+  },
+  punchLogHeaderBtnText: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+
+  // Mode Toggle
+  modeToggleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  modeToggleLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  modeToggleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 4,
+    padding: 2,
+    gap: 2,
+  },
+  modeToggleBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 3,
+  },
+  modeToggleBtnActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
+  },
+  modeToggleText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  modeToggleTextActive: {
+    color: '#0f172a',
+    fontWeight: '800',
+  },
+
+  // Punch Indicator Dot
+  punchDot: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#16a34a',
+  },
+  punchDotLegend: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#16a34a',
+    marginRight: 4,
+  },
+
+  // Punch Details Modal
+  detailModalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 20,
+    width: '94%',
+    maxWidth: 520,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  detailModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  detailModalAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  detailModalAvatarPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  detailModalAvatarLetter: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  detailModalName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  detailModalSub: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 2,
+  },
+  detailModalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  detailModalCloseText: {
+    fontSize: 16,
+    color: '#475569',
+    fontWeight: '700',
+  },
+  detailDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginVertical: 12,
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  detailDateText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  detailStatusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+  },
+  badgePresent: {
+    backgroundColor: '#dcfce7',
+  },
+  badgeAbsent: {
+    backgroundColor: '#fee2e2',
+  },
+  badgeLate: {
+    backgroundColor: '#fef3c7',
+  },
+  detailStatusBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  punchInfoCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 14,
+    marginBottom: 16,
+  },
+  punchInfoCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#334155',
+    marginBottom: 10,
+  },
+  punchTimesGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  punchTimeBox: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    padding: 10,
+    alignItems: 'center',
+  },
+  punchTimeLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+    marginBottom: 4,
+  },
+  punchTimeVal: {
+    fontSize: 17,
+    fontWeight: '900',
+    marginBottom: 2,
+  },
+  punchSubText: {
+    fontSize: 10,
+    color: '#94a3b8',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  punchMetaRow: {
+    borderTopWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingTop: 10,
+    gap: 6,
+  },
+  punchMetaItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  punchMetaLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  punchMetaValue: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  statusChangeSection: {
+    marginBottom: 16,
+  },
+  statusChangeTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 8,
+  },
+  statusButtonsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  statusBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#ffffff',
+  },
+  statusBtnSelected: {
+    borderColor: '#0f172a',
+    borderWidth: 2,
+  },
+  btnPresent: {
+    backgroundColor: '#dcfce7',
+    borderColor: '#86efac',
+  },
+  btnAbsent: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#fca5a5',
+  },
+  btnLate: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#fde047',
+  },
+  btnLeave: {
+    backgroundColor: '#f3e8ff',
+    borderColor: '#d8b4fe',
+  },
+  btnClear: {
+    backgroundColor: '#f1f5f9',
+    borderColor: '#cbd5e1',
+  },
+  statusBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  detailModalCloseActionBtn: {
+    backgroundColor: '#0f172a',
+    paddingVertical: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  detailModalCloseActionBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  // Daily Log Modal
+  dailyLogModalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    width: '96%',
+    maxWidth: 1100,
+    maxHeight: '92%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  dailyLogHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  dailyLogTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  dailyLogSubtitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+    marginTop: 2,
+  },
+  dailyLogToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  dateNavGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dateNavBtn: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  dateNavBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  currentDateBadge: {
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+  },
+  currentDateBadgeText: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  todayNavBtn: {
+    backgroundColor: '#0284c7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 4,
+  },
+  todayNavBtnText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  dailyLogSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    height: 34,
+    minWidth: 220,
+  },
+  kpiRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+    flexWrap: 'wrap',
+  },
+  kpiCard: {
+    flex: 1,
+    minWidth: 90,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1.5,
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+  },
+  kpiVal: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  kpiLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+    marginTop: 1,
+  },
+  dailyLogTableScroll: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    backgroundColor: '#ffffff',
+  },
+  dailyLogThRow: {
+    flexDirection: 'row',
+    backgroundColor: '#caa98a',
+    borderBottomWidth: 1,
+    borderColor: '#71717a',
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  dailyLogTh: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#000000',
+    textAlign: 'center',
+  },
+  dailyLogTdRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 0.5,
+    borderColor: '#e2e8f0',
+    paddingVertical: 6,
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+  },
+  dailyLogTd: {
+    fontSize: 12,
+    color: '#0f172a',
+    textAlign: 'center',
+  },
+  dailyLogNameText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  dailyLogDesigText: {
+    fontSize: 11,
+    color: '#64748b',
+  },
+  statusPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+  },
+  pillPresent: {
+    backgroundColor: '#dcfce7',
+  },
+  pillAbsent: {
+    backgroundColor: '#fee2e2',
+  },
+  pillLate: {
+    backgroundColor: '#fef3c7',
+  },
+  statusPillText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  sourceMobileBadge: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  sourceMobileBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#065f46',
+  },
+  sourceManualText: {
+    fontSize: 11,
+    color: '#94a3b8',
+    fontWeight: '600',
+  },
+  rowOdd: {
+    backgroundColor: '#f8fafc',
+  },
+  dailyLogFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderColor: '#e2e8f0',
+    marginTop: 8,
+  },
+  dailyLogFooterInfo: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
   },
 });

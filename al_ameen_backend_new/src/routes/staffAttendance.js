@@ -12,7 +12,12 @@ function schema() {
       status TEXT NOT NULL CHECK(status IN ('Present','Absent','Late','Leave')),
       marked_by INTEGER REFERENCES users(id), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY(teacher_id,attendance_date)
-    )
+    );
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS distance_meters DOUBLE PRECISION;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS punch_in TIMESTAMPTZ;
+    ALTER TABLE staff_attendance ADD COLUMN IF NOT EXISTS punch_out TIMESTAMPTZ;
   `).catch(error => { ready = null; throw error; });
   return ready;
 }
@@ -30,7 +35,11 @@ router.get('/', asyncHandler(async(req,res) => {
   await schema();
   const result = await pool.query(`SELECT t.id,t.staff_id,t.name,t.photo_url,
     COALESCE(NULLIF(t.profile_details->>'staff_type',''), NULLIF(t.designation,''), 'Staff') AS designation,
-    a.status
+    a.status,
+    a.punch_in,
+    a.punch_out,
+    a.distance_meters,
+    a.marked_by
     FROM teachers t
     LEFT JOIN staff_attendance a ON a.teacher_id=t.id AND a.attendance_date=$1
     WHERE t.is_active=TRUE
@@ -215,7 +224,14 @@ router.get('/monthly-grid', asyncHandler(async(req,res) => {
     FROM generate_series($1::date, $1::date + INTERVAL '1 month - 1 day', INTERVAL '1 day') d`, [month+'-01']);
   const staff = await pool.query(`SELECT t.id,t.staff_id,t.name,t.photo_url,
     COALESCE(NULLIF(t.profile_details->>'staff_type',''), NULLIF(t.designation,''), 'Staff') AS designation,
-    COALESCE(json_object_agg(to_char(a.attendance_date,'YYYY-MM-DD'),a.status) FILTER(WHERE a.attendance_date IS NOT NULL),'{}'::json) AS attendance
+    COALESCE(json_object_agg(to_char(a.attendance_date,'YYYY-MM-DD'),a.status) FILTER(WHERE a.attendance_date IS NOT NULL),'{}'::json) AS attendance,
+    COALESCE(json_object_agg(to_char(a.attendance_date,'YYYY-MM-DD'),json_build_object(
+      'status', a.status,
+      'punch_in', a.punch_in,
+      'punch_out', a.punch_out,
+      'distance', a.distance_meters,
+      'marked_by', a.marked_by
+    )) FILTER(WHERE a.attendance_date IS NOT NULL),'{}'::json) AS details
     FROM teachers t
     LEFT JOIN staff_attendance a ON a.teacher_id=t.id AND a.attendance_date >= $1::date AND a.attendance_date < $1::date + INTERVAL '1 month'
     WHERE t.is_active=TRUE
