@@ -63,7 +63,13 @@ async function ensureStaffAvailability(){
 router.get('/me/availability',auth,allow('teacher', 'admin', 'super_admin'),asyncHandler(async(req,res)=>{
   const date=String(req.query.date||new Date().toISOString().slice(0,10));
   await ensureStaffAvailability();
-  const r=await pool.query(`SELECT t.id as teacher_id, COALESCE(a.status,'Present') status, a.punch_in, a.punch_out, a.distance_meters FROM teachers t LEFT JOIN staff_attendance a ON a.teacher_id=t.id AND a.attendance_date=$1 WHERE t.user_id=$2 LIMIT 1`,[date,req.user.userId]);
+  const r=await pool.query(`SELECT t.id as teacher_id,
+    CASE
+      WHEN a.punch_out IS NOT NULL THEN 'Absent'
+      WHEN a.punch_in IS NOT NULL THEN 'Present'
+      ELSE COALESCE(a.status,'Present')
+    END status,
+    a.punch_in, a.punch_out, a.distance_meters FROM teachers t LEFT JOIN staff_attendance a ON a.teacher_id=t.id AND a.attendance_date=$1 WHERE t.user_id=$2 LIMIT 1`,[date,req.user.userId]);
   if (!r.rowCount) {
     return res.json({success:true, has_staff_profile:false, status:'Present', date});
   }
@@ -106,7 +112,10 @@ router.post('/me/availability',auth,allow('teacher', 'admin', 'super_admin'),asy
       NOW()
     )
     ON CONFLICT(teacher_id, attendance_date) DO UPDATE SET
-      status = EXCLUDED.status,
+      status = CASE
+        WHEN EXCLUDED.status = 'Absent' AND staff_attendance.punch_in IS NOT NULL THEN 'Present'
+        ELSE EXCLUDED.status
+      END,
       marked_by = EXCLUDED.marked_by,
       latitude = EXCLUDED.latitude,
       longitude = EXCLUDED.longitude,
@@ -123,7 +132,11 @@ router.get('/availability',auth,allow('super_admin','admin'),asyncHandler(async(
   await ensureStaffAvailability();
   const r=await pool.query(`
     SELECT t.id, t.staff_id, t.name, t.subject, t.mobile, t.designation, t.profile_details,
-           COALESCE(a.status,'Present') status, a.punch_in, a.punch_out
+           CASE
+             WHEN a.punch_out IS NOT NULL THEN 'Absent'
+             ELSE COALESCE(a.status,'Present')
+           END status,
+           a.punch_in, a.punch_out, a.distance_meters
     FROM teachers t
     LEFT JOIN staff_attendance a ON a.teacher_id=t.id AND a.attendance_date=$1
     WHERE t.is_active=TRUE
