@@ -1164,6 +1164,171 @@ async function getCashBookPaymentData({ dateStr = '', branchId = MEMARI_BRANCH_I
   };
 }
 
+const TARGET_PAYMENT_BANKS = [
+  { id: '9705', key: 'axis_43880', name: 'Axis - 43880', short: 'Axis-3880', full_name: 'Axis Bank A/C NO - 921010046243880' },
+  { id: '16513', key: 'sbi_19665', name: 'SBI - 19665', short: 'SBI-9665', full_name: 'S.B.I. A/c - 43718419665' },
+];
+
+async function getBankBookPaymentData({ dateStr = '', branchId = MEMARI_BRANCH_ID } = {}) {
+  let cookie = await ensureValidCookie();
+  const d = dateStr || toYmd(new Date());
+  const fyInfo = getFinancialYearInfo(d);
+
+  const bankPromises = TARGET_PAYMENT_BANKS.map(async b => {
+    const bankForm = new URLSearchParams({
+      branch_id: String(branchId || MEMARI_BRANCH_ID),
+      financial_year_id: String(fyInfo.id || '4097'),
+      bank_id: b.id,
+      sdate: d,
+      edate: d,
+      search: ''
+    });
+
+    try {
+      let res = await fetchPortalPage(ACCOUNTS_BASE_URL + '?action=bank_book', 'POST', bankForm, cookie);
+      if (res.text && (res.text.includes('id="login_form"') || res.text.includes('Administrator Login'))) {
+        const creds = await getPortalCredentials();
+        cookie = await loginToPortal(creds.username, creds.password);
+        res = await fetchPortalPage(ACCOUNTS_BASE_URL + '?action=bank_book', 'POST', bankForm, cookie);
+      }
+
+      const html = res.text || '';
+      const tableMatch = html.match(/<table[^>]*id=["']fee_report["'][\s\S]*?<\/table>/i) ||
+        html.match(/<table[^>]*class=["'][^"']*data_table[^"']*["'][\s\S]*?<\/table>/i) ||
+        html.match(/<table[\s\S]*?<\/table>/i);
+
+      if (!tableMatch) {
+        return { bank: b, total: 0, payments: [] };
+      }
+
+      const trs = [...tableMatch[0].matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)];
+      const payments = [];
+
+      for (const tr of trs) {
+        const cells = [...tr[1].matchAll(/<t[hd]\b[^>]*>([\s\S]*?)<\/t[hd]>/gi)]
+          .map(m => cleanText(m[1]));
+        if (cells.length < 6) continue;
+
+        const rowText = cells.join(' ').toLowerCase();
+        if (rowText.includes('opening balance') ||
+            rowText.includes('total amount') ||
+            rowText.includes('closing balance') ||
+            rowText.includes('particulars') ||
+            rowText.includes('cancelled') ||
+            rowText.includes('canceled') ||
+            rowText.includes('বাতিল')) {
+          continue;
+        }
+
+        const len = cells.length;
+        let vchType = '';
+        let vchNo = '';
+        let instNo = '';
+        let particulars = cells[2] || '';
+        let txnDate = cells[1] || '';
+
+        for (let c = 2; c < Math.min(len, 6); c++) {
+          const lower = cells[c].toLowerCase();
+          if (lower === 'payment' || lower === 'receipt' || lower === 'contra' || lower === 'journal') {
+            vchType = cells[c];
+            vchNo = cells[c + 1] || '';
+            instNo = cells[c + 2] || '';
+            break;
+          }
+        }
+        if (!vchType) {
+          vchType = cells[len - 6] || '';
+          vchNo = cells[len - 5] || '';
+          instNo = cells[len - 4] || '';
+        }
+
+        let credit = cleanNum(cells[len - 2]);
+        let debit = cleanNum(cells[len - 3]);
+
+        if (cells[len - 1] && !isNaN(cleanNum(cells[len - 1])) && cleanNum(cells[len - 1]) > 0 && credit === 0) {
+          credit = cleanNum(cells[len - 1]);
+          debit = cleanNum(cells[len - 2]);
+        }
+
+        const isPayment = vchType.toLowerCase().includes('payment') || credit > 0;
+        if (isPayment && credit > 0) {
+          payments.push({
+            bank_id: b.id,
+            bank_name: b.name,
+            bank_short: b.short,
+            full_bank_name: b.full_name,
+            date: txnDate,
+            particulars,
+            vch_type: 'Payment',
+            vch_no: String(vchNo).replace(/\s*\([^)]*\)/g, '').trim(),
+            inst_no: String(instNo).trim(),
+            cheque_no: String(instNo).trim(),
+            amount: Number(credit.toFixed(2)),
+            debit: Number(credit.toFixed(2)),
+            credit: 0,
+            payment_mode: 'bank'
+          });
+        }
+      }
+
+      const total = payments.reduce((sum, p) => sum + p.amount, 0);
+      return {
+        bank: b,
+        total: Number(total.toFixed(2)),
+        payments
+      };
+    } catch (err) {
+      console.error(`Error fetching bank book payments for ${b.name}:`, err.message);
+      return {
+        bank: b,
+        total: 0,
+        payments: []
+      };
+    }
+  });
+
+  const results = await Promise.all(bankPromises);
+  const allPayments = [];
+  let grandTotal = 0;
+
+  for (const r of results) {
+    grandTotal += r.total;
+    allPayments.push(...r.payments);
+  }
+
+  allPayments.sort((a, b) => {
+    const na = parseInt(String(a.vch_no).replace(/\D/g, ''), 10);
+    const nb = parseInt(String(b.vch_no).replace(/\D/g, ''), 10);
+    if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+    return String(a.vch_no).localeCompare(String(b.vch_no));
+  });
+
+  const uniqueVchs = Array.from(new Set(allPayments.map(p => p.vch_no).filter(Boolean)));
+  const pvBill = uniqueVchs.join(', ');
+  const pvBillRange = uniqueVchs.length > 1
+    ? `${uniqueVchs[0]}-${uniqueVchs[uniqueVchs.length - 1]}`
+    : (uniqueVchs[0] || '');
+
+  return {
+    success: true,
+    date: d,
+    financial_year: fyInfo.label,
+    bank_payment_total: Number(grandTotal.toFixed(2)),
+    total_payments: allPayments.length,
+    payments: allPayments,
+    pv_bill: pvBill,
+    pv_bill_range: pvBillRange,
+    vouchers: uniqueVchs,
+    bank_breakdown: results.map(r => ({
+      bank_id: r.bank.id,
+      bank_name: r.bank.name,
+      bank_short: r.bank.short,
+      total: r.total,
+      count: r.payments.length
+    }))
+  };
+}
+
 module.exports = {
   getPortalCredentials,
   savePortalCredentials,
@@ -1171,6 +1336,8 @@ module.exports = {
   getFeesReportData,
   getHostelFeeReceiptVouchers,
   getCashBookPaymentData,
+  getBankBookPaymentData,
+  TARGET_PAYMENT_BANKS,
   getReceiptPaymentReportData,
   getDueListData,
   FEES_REPORT_URL,

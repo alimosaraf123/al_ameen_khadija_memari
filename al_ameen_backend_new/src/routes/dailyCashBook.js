@@ -3,7 +3,7 @@ const ExcelJS = require('exceljs');
 const pool = require('../db');
 const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
-const { getFeesReportData, getHostelFeeReceiptVouchers, getCashBookPaymentData } = require('../utils/alAmeenAccounts');
+const { getFeesReportData, getHostelFeeReceiptVouchers, getCashBookPaymentData, getBankBookPaymentData } = require('../utils/alAmeenAccounts');
 
 const router = express.Router();
 
@@ -371,17 +371,103 @@ router.post('/fetch-portal', asyncHandler(async (req, res) => {
     console.error(`[DailyCashBook] Cash book payment sync error for ${entryDate}:`, err.message);
   }
 
-  // Bank Payment = Voucher Payment Total - Cash Payment (voucher total minus cash payment)
-  const netBankPayment = Math.max(0, Number((voucherPaymentTotal - cashPaymentTotal).toFixed(2)));
+  // Fetch Bank Book Payments strictly from action=bank_book for Axis-3880 and SBI-9665
+  let bankPaymentTotal = 0;
+  let bankBookPayments = [];
+  let bankPvList = [];
+  let bankBreakdown = [];
+  try {
+    const bankBookRes = await getBankBookPaymentData({ dateStr: entryDate });
+    if (bankBookRes?.success) {
+      bankPaymentTotal = Number(bankBookRes.bank_payment_total || 0);
+      bankBookPayments = bankBookRes.payments || [];
+      bankPvList = bankBookRes.vouchers || [];
+      bankBreakdown = bankBookRes.bank_breakdown || [];
+    }
+  } catch (err) {
+    console.error(`[DailyCashBook] Bank book payment sync error for ${entryDate}:`, err.message);
+  }
 
-  const cashVchNos = new Set(cashBookPayments.map(p => String(p.vch_no).trim()));
-  const enrichedPayments = ((vchData && vchData.raw_payments) || []).map(p => {
-    const cleanNo = String(p.vch_no || '').replace(/\s*\([^)]*\)/g, '').trim();
-    const isCash = cashVchNos.has(cleanNo) || cashVchNos.has(String(p.vch_no).trim());
-    return {
-      ...p,
-      payment_mode: p.is_cancelled ? 'cancelled' : (isCash ? 'cash' : 'bank')
-    };
+  // Combine payment voucher numbers for cash_pv_bill
+  const cashVchNosList = cashBookPayments.map(p => String(p.vch_no).trim()).filter(Boolean);
+  const combinedPaymentVchs = Array.from(new Set([...bankPvList, ...cashVchNosList]));
+  combinedPaymentVchs.sort((a, b) => {
+    const na = parseInt(a.replace(/\D/g, ''), 10);
+    const nb = parseInt(b.replace(/\D/g, ''), 10);
+    if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+    return a.localeCompare(b);
+  });
+  if (combinedPaymentVchs.length > 0) {
+    pvBillList = combinedPaymentVchs;
+    pvBill = combinedPaymentVchs.join(', ');
+    pvBillRange = combinedPaymentVchs.length > 1
+      ? `${combinedPaymentVchs[0]}-${combinedPaymentVchs[combinedPaymentVchs.length - 1]}`
+      : (combinedPaymentVchs[0] || '');
+  }
+
+  // Build unified payment voucher details list
+  const seenPaymentVchs = new Set();
+  const allPaymentDetails = [];
+
+  for (const bp of bankBookPayments) {
+    const no = String(bp.vch_no).trim();
+    seenPaymentVchs.add(no);
+    allPaymentDetails.push({
+      voucher_id: bp.vch_no,
+      date: bp.date,
+      particulars: bp.particulars,
+      vch_type: 'Payment',
+      vch_no: no,
+      debit: bp.amount,
+      credit: 0,
+      amount: bp.amount,
+      payment_mode: 'bank',
+      bank_id: bp.bank_id,
+      bank_name: bp.bank_name,
+      bank_short: bp.bank_short,
+      inst_no: bp.inst_no,
+      is_cancelled: false
+    });
+  }
+
+  for (const cp of cashBookPayments) {
+    const no = String(cp.vch_no).trim();
+    if (!seenPaymentVchs.has(no)) {
+      seenPaymentVchs.add(no);
+      allPaymentDetails.push({
+        voucher_id: cp.vch_no,
+        date: cp.date,
+        particulars: cp.ledger || cp.particulars,
+        vch_type: 'Payment',
+        vch_no: no,
+        debit: cp.amount,
+        credit: 0,
+        amount: cp.amount,
+        payment_mode: 'cash',
+        narration: cp.narration,
+        is_cancelled: false
+      });
+    }
+  }
+
+  for (const vp of (vchData?.raw_payments || [])) {
+    const no = String(vp.vch_no).replace(/\s*\([^)]*\)/g, '').trim();
+    if (vp.is_cancelled && !seenPaymentVchs.has(no)) {
+      seenPaymentVchs.add(no);
+      allPaymentDetails.push({
+        ...vp,
+        vch_no: no,
+        payment_mode: 'cancelled',
+        is_cancelled: true
+      });
+    }
+  }
+
+  allPaymentDetails.sort((a, b) => {
+    const na = parseInt(String(a.vch_no).replace(/\D/g, ''), 10);
+    const nb = parseInt(String(b.vch_no).replace(/\D/g, ''), 10);
+    if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+    return String(a.vch_no).localeCompare(String(b.vch_no));
   });
 
   res.json({
@@ -410,15 +496,17 @@ router.post('/fetch-portal', asyncHandler(async (req, res) => {
     cash_pv_bill: pvBill,
     cash_pv_bill_list: pvBillList,
     cash_pv_bill_range: pvBillRange,
-    voucher_payment_count: voucherPaymentCount,
-    voucher_payment_total: Number(voucherPaymentTotal.toFixed(2)),
+    voucher_payment_count: allPaymentDetails.filter(p => !p.is_cancelled).length,
+    voucher_payment_total: Number((bankPaymentTotal + cashPaymentTotal).toFixed(2)),
     cancelled_payments_count: vchData?.cancelled_payments_count || 0,
     cancelled_receipts_count: vchData?.cancelled_receipts_count || 0,
-    bank_payment: netBankPayment,
+    bank_payment: bankPaymentTotal,
     cash_payment: Number(cashPaymentTotal.toFixed(2)),
     cash_payment_count: cashBookPayments.length,
-    cash_voucher_payment: netBankPayment,
-    payment_vouchers_details: enrichedPayments,
+    bank_payment_count: bankBookPayments.length,
+    cash_voucher_payment: bankPaymentTotal,
+    bank_breakdown: bankBreakdown,
+    payment_vouchers_details: allPaymentDetails,
     receipt_vouchers_details: (vchData && vchData.raw_vouchers) || [],
     cash_book_payments_details: cashBookPayments,
     total_amount: Number((bankGateway + bankCheque + bankSwipeCard + cashFees).toFixed(2)),
@@ -490,21 +578,87 @@ router.get('/vouchers', asyncHandler(async (req, res) => {
       console.error(`[DailyCashBook] Error fetching cash payments in /vouchers for ${dateStr}:`, err.message);
     }
 
-    const voucherPaymentTotal = Number(vchData.voucher_payment_total || 0);
-    const netBankPayment = Math.max(0, Number((voucherPaymentTotal - cashPaymentTotal).toFixed(2)));
+    let bankPaymentTotal = 0;
+    let bankBookPayments = [];
+    let bankBreakdown = [];
+    try {
+      const bankBookRes = await getBankBookPaymentData({ dateStr });
+      if (bankBookRes?.success) {
+        bankPaymentTotal = Number(bankBookRes.bank_payment_total || 0);
+        bankBookPayments = bankBookRes.payments || [];
+        bankBreakdown = bankBookRes.bank_breakdown || [];
+      }
+    } catch (err) {
+      console.error(`[DailyCashBook] Error fetching bank payments in /vouchers for ${dateStr}:`, err.message);
+    }
 
-    const cashVchNos = new Set(cashBookPayments.map(p => String(p.vch_no).trim()));
-    const enrichedPayments = (vchData.raw_payments || []).map(p => {
-      const cleanNo = String(p.vch_no || '').replace(/\s*\([^)]*\)/g, '').trim();
-      const isCash = cashVchNos.has(cleanNo) || cashVchNos.has(String(p.vch_no).trim());
-      return {
-        ...p,
-        payment_mode: p.is_cancelled ? 'cancelled' : (isCash ? 'cash' : 'bank')
-      };
+    // Build unified payment voucher details list
+    const seenPaymentVchs = new Set();
+    const allPaymentDetails = [];
+
+    for (const bp of bankBookPayments) {
+      const no = String(bp.vch_no).trim();
+      seenPaymentVchs.add(no);
+      allPaymentDetails.push({
+        voucher_id: bp.vch_no,
+        date: bp.date,
+        particulars: bp.particulars,
+        vch_type: 'Payment',
+        vch_no: no,
+        debit: bp.amount,
+        credit: 0,
+        amount: bp.amount,
+        payment_mode: 'bank',
+        bank_id: bp.bank_id,
+        bank_name: bp.bank_name,
+        bank_short: bp.bank_short,
+        inst_no: bp.inst_no,
+        is_cancelled: false
+      });
+    }
+
+    for (const cp of cashBookPayments) {
+      const no = String(cp.vch_no).trim();
+      if (!seenPaymentVchs.has(no)) {
+        seenPaymentVchs.add(no);
+        allPaymentDetails.push({
+          voucher_id: cp.vch_no,
+          date: cp.date,
+          particulars: cp.ledger || cp.particulars,
+          vch_type: 'Payment',
+          vch_no: no,
+          debit: cp.amount,
+          credit: 0,
+          amount: cp.amount,
+          payment_mode: 'cash',
+          narration: cp.narration,
+          is_cancelled: false
+        });
+      }
+    }
+
+    for (const vp of (vchData?.raw_payments || [])) {
+      const no = String(vp.vch_no).replace(/\s*\([^)]*\)/g, '').trim();
+      if (vp.is_cancelled && !seenPaymentVchs.has(no)) {
+        seenPaymentVchs.add(no);
+        allPaymentDetails.push({
+          ...vp,
+          vch_no: no,
+          payment_mode: 'cancelled',
+          is_cancelled: true
+        });
+      }
+    }
+
+    allPaymentDetails.sort((a, b) => {
+      const na = parseInt(String(a.vch_no).replace(/\D/g, ''), 10);
+      const nb = parseInt(String(b.vch_no).replace(/\D/g, ''), 10);
+      if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+      return String(a.vch_no).localeCompare(String(b.vch_no));
     });
 
-    const bankPaymentsCount = enrichedPayments.filter(p => p.payment_mode === 'bank').length;
-    const cashPaymentsCount = enrichedPayments.filter(p => p.payment_mode === 'cash').length;
+    const bankPaymentsCount = bankBookPayments.length;
+    const cashPaymentsCount = cashBookPayments.length;
 
     res.json({
       success: true,
@@ -516,18 +670,19 @@ router.get('/vouchers', asyncHandler(async (req, res) => {
       rv_bill_range: vchData.rv_bill_range || '',
       receipt_vouchers: vchData.vouchers || [],
       receipt_vouchers_details: vchData.raw_vouchers || [],
-      total_payments: vchData.total_payments || 0,
+      total_payments: allPaymentDetails.filter(p => !p.is_cancelled).length,
       cancelled_payments_count: vchData.cancelled_payments_count || 0,
       cancelled_receipts_count: vchData.cancelled_receipts_count || 0,
       pv_bill: vchData.pv_bill || '',
       pv_bill_range: vchData.pv_bill_range || '',
       payment_vouchers: vchData.payment_vouchers || [],
-      voucher_payment_total: voucherPaymentTotal,
-      bank_payment: netBankPayment,
+      voucher_payment_total: Number((bankPaymentTotal + cashPaymentTotal).toFixed(2)),
+      bank_payment: bankPaymentTotal,
       cash_payment: Number(cashPaymentTotal.toFixed(2)),
       bank_payments_count: bankPaymentsCount,
       cash_payments_count: cashPaymentsCount,
-      payment_vouchers_details: enrichedPayments
+      bank_breakdown: bankBreakdown,
+      payment_vouchers_details: allPaymentDetails
     });
   } catch (err) {
     console.error(`[DailyCashBook] Error fetching vouchers for ${dateStr}:`, err);

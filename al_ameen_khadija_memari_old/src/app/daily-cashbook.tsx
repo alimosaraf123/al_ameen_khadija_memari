@@ -105,6 +105,10 @@ type PaymentVoucherItem = {
   is_cancelled?: boolean;
   original_debit?: string | number;
   payment_mode?: 'bank' | 'cash' | 'cancelled';
+  bank_id?: string;
+  bank_name?: string;
+  bank_short?: string;
+  inst_no?: string;
 };
 
 type CashPaymentItem = {
@@ -910,7 +914,7 @@ export default function DailyCashBookScreen() {
           <View style={s.heroLeft}>
             <Text style={s.title}>📒 Daily Cash Book (Bank & Cash Register)</Text>
             <Text style={s.subtitle}>
-              alameenmission.net/alameen/accounts/?action=fees_report থেকে Last 2 Sessions চেক করে Fees Bill, Dev. Bill, Gateway (EDC), ও Cash Fees অটো-ফিল হয়।
+              alameenmission.net/alameen/accounts/?action=fees_report থেকে Fees Bill, Dev. Bill, Gateway, ও Cash Fees অটো-ফিল হয়। Bank Payment সরাসরি Bank Book (Axis-3880 ও SBI-9665) থেকে আসে।
             </Text>
           </View>
           <View style={s.heroActions}>
@@ -1884,7 +1888,9 @@ export default function DailyCashBookScreen() {
                           </View>
                         ) : (
                           <View style={{ backgroundColor: '#dbeafe', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start' }}>
-                            <Text style={{ color: '#1d4ed8', fontSize: 10.5, fontWeight: '800' }}>🏦 Bank</Text>
+                            <Text style={{ color: '#1d4ed8', fontSize: 10.5, fontWeight: '800' }}>
+                              🏦 {v.bank_short || v.bank_name || 'Bank'}
+                            </Text>
                           </View>
                         )}
                       </View>
@@ -1928,7 +1934,7 @@ export default function DailyCashBookScreen() {
                     </Text>
                     <View style={{ flexDirection: 'row', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
                       <Text style={{ fontSize: 12, fontWeight: '700', color: '#1d4ed8' }}>
-                        🏦 Bank Payment: {fmtInr(bankTot)} ({bankVchs.length}টি)
+                        🏦 Bank Payment (Axis-3880 / SBI-9665): {fmtInr(bankTot)} ({bankVchs.length}টি)
                       </Text>
                       <Text style={{ fontSize: 12, fontWeight: '700', color: '#15803d' }}>
                         💵 Cash Payment: {fmtInr(cashTot)} ({cashVchs.length}টি)
