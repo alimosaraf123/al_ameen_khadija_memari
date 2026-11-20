@@ -34,16 +34,16 @@ const exitSchemaReady = pool.query(`
 
 async function exitClearance(studentId) {
   await exitSchemaReady;
-  const student=(await pool.query(`SELECT s.*,r.room_name FROM students s LEFT JOIN rooms r ON r.id=s.room_id WHERE s.id=$1`,[studentId])).rows[0];
-  if(!student)return null;
-  const dues=(await pool.query(`SELECT id,due_title,amount,due_date,remarks FROM student_dues WHERE student_id=$1 AND status='due' AND amount>0 ORDER BY due_date NULLS LAST,created_at`,[studentId])).rows;
-  const isSdf=x=>Boolean(x.session_name)||/\bs\.?d\.?f\b|student development fund|bus fare|admission fee|registration fee/i.test(String(x.due_title||''));
-  const isLibrary=x=>/library|book/i.test(String(x.due_title||''));
-  const isMonthly=x=>/monthly|tuition|school fee|fees?/i.test(String(x.due_title||''))&&!isSdf(x);
-  const libraryLoans=(await pool.query(`SELECT l.id,b.accession_no,b.title,l.issued_at,l.due_date,'Library Book: '||b.title AS due_title FROM library_loans l JOIN library_books b ON b.id=l.book_id WHERE l.student_id=$1 AND l.returned_at IS NULL ORDER BY l.due_date`,[studentId])).rows;
-  const sdfDues=dues.filter(isSdf),libraryDues=[...dues.filter(isLibrary),...libraryLoans],monthlyDues=dues.filter(isMonthly);
-  const exit=(await pool.query('SELECT * FROM student_exit_records WHERE student_id=$1',[studentId])).rows[0]||null;
-  return {student,exit,dues,sdf_dues:sdfDues,library_dues:libraryDues,monthly_fee_dues:monthlyDues,monthly_fee_due_total:monthlyDues.reduce((n,x)=>n+Number(x.amount||0),0),tc_blocked:sdfDues.length>0||libraryDues.length>0};
+  const student = (await pool.query(`SELECT s.*,r.room_name FROM students s LEFT JOIN rooms r ON r.id=s.room_id WHERE s.id=$1`, [studentId])).rows[0];
+  if (!student) return null;
+  const dues = (await pool.query(`SELECT id,due_title,amount,due_date,remarks FROM student_dues WHERE student_id=$1 AND status='due' AND amount>0 ORDER BY due_date NULLS LAST,created_at`, [studentId])).rows;
+  const isSdf = x => Boolean(x.session_name) || /\bs\.?d\.?f\b|student development fund|bus fare|admission fee|registration fee/i.test(String(x.due_title || ''));
+  const isLibrary = x => /library|book/i.test(String(x.due_title || ''));
+  const isMonthly = x => /monthly|tuition|school fee|fees?/i.test(String(x.due_title || '')) && !isSdf(x);
+  const libraryLoans = (await pool.query(`SELECT l.id,b.accession_no,b.title,l.issued_at,l.due_date,'Library Book: '||b.title AS due_title FROM library_loans l JOIN library_books b ON b.id=l.book_id WHERE l.student_id=$1 AND l.returned_at IS NULL ORDER BY l.due_date`, [studentId])).rows;
+  const sdfDues = dues.filter(isSdf), libraryDues = [...dues.filter(isLibrary), ...libraryLoans], monthlyDues = dues.filter(isMonthly);
+  const exit = (await pool.query('SELECT * FROM student_exit_records WHERE student_id=$1', [studentId])).rows[0] || null;
+  return { student, exit, dues, sdf_dues: sdfDues, library_dues: libraryDues, monthly_fee_dues: monthlyDues, monthly_fee_due_total: monthlyDues.reduce((n, x) => n + Number(x.amount || 0), 0), tc_blocked: sdfDues.length > 0 || libraryDues.length > 0 };
 }
 
 async function deactivateGuardiansWhenNoActiveStudent(client, studentId) {
@@ -60,20 +60,20 @@ async function deactivateGuardiansWhenNoActiveStudent(client, studentId) {
   `, [studentId]);
 }
 
-router.get('/:id/exit-clearance',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{const data=await exitClearance(req.params.id);if(!data)return res.status(404).json({success:false,message:'Student not found'});res.json({success:true,...data});}));
-router.post('/:id/dropout',auth,allow('super_admin'),asyncHandler(async(req,res)=>{await exitSchemaReady;const date=String(req.body?.dropout_date||'').trim(),reason=String(req.body?.dropout_reason||'').trim();if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!reason)return res.status(400).json({success:false,message:'Dropout date and reason are required'});const client=await pool.connect();try{await client.query('BEGIN');const student=(await client.query('UPDATE students SET is_active=FALSE,updated_at=NOW() WHERE id=$1 RETURNING id,student_name',[req.params.id])).rows[0];if(!student){await client.query('ROLLBACK');return res.status(404).json({success:false,message:'Student not found'});}const exit=(await client.query(`INSERT INTO student_exit_records(student_id,dropout_date,dropout_reason,created_by) VALUES($1,$2,$3,$4) ON CONFLICT(student_id) DO UPDATE SET dropout_date=EXCLUDED.dropout_date,dropout_reason=EXCLUDED.dropout_reason,tc_issued_at=NULL,tc_issued_by=NULL,reactivated_at=NULL,reactivated_by=NULL,updated_at=NOW() RETURNING *`,[req.params.id,date,reason,req.user.userId])).rows[0];await deactivateGuardiansWhenNoActiveStudent(client,req.params.id);await client.query('COMMIT');res.json({success:true,student,exit});}catch(e){await client.query('ROLLBACK');throw e}finally{client.release();}}));
-router.post('/:id/transfer-certificate',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{const data=await exitClearance(req.params.id);if(!data)return res.status(404).json({success:false,message:'Student not found'});if(!data.exit)return res.status(409).json({success:false,message:'Save dropout date and reason before issuing TC'});if(data.student.is_active)return res.status(409).json({success:false,message:'TC can only be issued for a dropout/inactive student'});if(data.tc_blocked)return res.status(409).json({success:false,message:'TC cannot be issued until SDF and Library Book dues are cleared',sdf_dues:data.sdf_dues,library_dues:data.library_dues});const exit=(await pool.query('UPDATE student_exit_records SET tc_issued_at=COALESCE(tc_issued_at,NOW()),tc_issued_by=COALESCE(tc_issued_by,$1),updated_at=NOW() WHERE student_id=$2 RETURNING *',[req.user.userId,req.params.id])).rows[0];res.json({success:true,...data,exit});}));
+router.get('/:id/exit-clearance', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => { const data = await exitClearance(req.params.id); if (!data) return res.status(404).json({ success: false, message: 'Student not found' }); res.json({ success: true, ...data }); }));
+router.post('/:id/dropout', auth, allow('super_admin'), asyncHandler(async (req, res) => { await exitSchemaReady; const date = String(req.body?.dropout_date || '').trim(), reason = String(req.body?.dropout_reason || '').trim(); if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !reason) return res.status(400).json({ success: false, message: 'Dropout date and reason are required' }); const client = await pool.connect(); try { await client.query('BEGIN'); const student = (await client.query('UPDATE students SET is_active=FALSE,updated_at=NOW() WHERE id=$1 RETURNING id,student_name', [req.params.id])).rows[0]; if (!student) { await client.query('ROLLBACK'); return res.status(404).json({ success: false, message: 'Student not found' }); } const exit = (await client.query(`INSERT INTO student_exit_records(student_id,dropout_date,dropout_reason,created_by) VALUES($1,$2,$3,$4) ON CONFLICT(student_id) DO UPDATE SET dropout_date=EXCLUDED.dropout_date,dropout_reason=EXCLUDED.dropout_reason,tc_issued_at=NULL,tc_issued_by=NULL,reactivated_at=NULL,reactivated_by=NULL,updated_at=NOW() RETURNING *`, [req.params.id, date, reason, req.user.userId])).rows[0]; await deactivateGuardiansWhenNoActiveStudent(client, req.params.id); await client.query('COMMIT'); res.json({ success: true, student, exit }); } catch (e) { await client.query('ROLLBACK'); throw e } finally { client.release(); } }));
+router.post('/:id/transfer-certificate', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => { const data = await exitClearance(req.params.id); if (!data) return res.status(404).json({ success: false, message: 'Student not found' }); if (!data.exit) return res.status(409).json({ success: false, message: 'Save dropout date and reason before issuing TC' }); if (data.student.is_active) return res.status(409).json({ success: false, message: 'TC can only be issued for a dropout/inactive student' }); if (data.tc_blocked) return res.status(409).json({ success: false, message: 'TC cannot be issued until SDF and Library Book dues are cleared', sdf_dues: data.sdf_dues, library_dues: data.library_dues }); const exit = (await pool.query('UPDATE student_exit_records SET tc_issued_at=COALESCE(tc_issued_at,NOW()),tc_issued_by=COALESCE(tc_issued_by,$1),updated_at=NOW() WHERE student_id=$2 RETURNING *', [req.user.userId, req.params.id])).rows[0]; res.json({ success: true, ...data, exit }); }));
 
 
 const { studentFields, normalizeValue, prepareBody } = require('../utils/studentData');
 
 function validateStudentInput(body) {
   const aadhaarFields = [['aadhaar_no', 'Student Aadhaar'], ['father_aadhaar_no', 'Father Aadhaar'], ['mother_aadhaar_no', 'Mother Aadhaar']];
-  for (const [field, label] of aadhaarFields) { const value=String(body[field]||'').trim(); if(value&&!/^\d{12}$/.test(value)){const error=new Error(label+' number must be exactly 12 digits');error.status=400;throw error;} }
-  const mobileFields = [['mobile_number','Student mobile'],['whatsapp_number','WhatsApp'],['father_mobile','Father mobile'],['mother_mobile','Mother mobile'],['guardian_mobile','Guardian mobile'],['alternate_mobile','Alternate mobile']];
-  for (const [field, label] of mobileFields) { const value=String(body[field]||'').trim(); if(value&&!/^\d{10}$/.test(value)){const error=new Error(label+' number must be exactly 10 digits');error.status=400;throw error;} }
-  for (const visitor of [body.visitor1,body.visitor2]) { const value=String(visitor?.mobile_number||'').trim(); if(value&&!/^\d{10}$/.test(value)){const error=new Error('Visitor mobile number must be exactly 10 digits');error.status=400;throw error;} }
-  if(body.session_from||body.session_to){const from=Number(body.session_from),to=Number(body.session_to);if(!/^\d{4}$/.test(String(body.session_from))||!/^\d{4}$/.test(String(body.session_to))||![from,from+1].includes(to)){const error=new Error('Admission session must use same-year or next-year format');error.status=400;throw error;}}
+  for (const [field, label] of aadhaarFields) { const value = String(body[field] || '').trim(); if (value && !/^\d{12}$/.test(value)) { const error = new Error(label + ' number must be exactly 12 digits'); error.status = 400; throw error; } }
+  const mobileFields = [['mobile_number', 'Student mobile'], ['whatsapp_number', 'WhatsApp'], ['father_mobile', 'Father mobile'], ['mother_mobile', 'Mother mobile'], ['guardian_mobile', 'Guardian mobile'], ['alternate_mobile', 'Alternate mobile']];
+  for (const [field, label] of mobileFields) { const value = String(body[field] || '').trim(); if (value && !/^\d{10}$/.test(value)) { const error = new Error(label + ' number must be exactly 10 digits'); error.status = 400; throw error; } }
+  for (const visitor of [body.visitor1, body.visitor2]) { const value = String(visitor?.mobile_number || '').trim(); if (value && !/^\d{10}$/.test(value)) { const error = new Error('Visitor mobile number must be exactly 10 digits'); error.status = 400; throw error; } }
+  if (body.session_from || body.session_to) { const from = Number(body.session_from), to = Number(body.session_to); if (!/^\d{4}$/.test(String(body.session_from)) || !/^\d{4}$/.test(String(body.session_to)) || ![from, from + 1].includes(to)) { const error = new Error('Admission session must use same-year or next-year format'); error.status = 400; throw error; } }
 }
 
 function visitorValue(value) {
@@ -235,9 +235,9 @@ router.get(
     const where = [];
     if (req.query.session) {
       const session = String(req.query.session).trim();
-      if (!/^\d{4}-\d{4}$/.test(session)) return res.status(400).json({success:false,message:'Select a valid session (YYYY-YYYY)'});
-      const [from,to] = session.split('-');
-      values.push(from,to);
+      if (!/^\d{4}-\d{4}$/.test(session)) return res.status(400).json({ success: false, message: 'Select a valid session (YYYY-YYYY)' });
+      const [from, to] = session.split('-');
+      values.push(from, to);
       where.push(`s.session_from::text=$1 AND s.session_to::text=$2`);
     }
 
@@ -283,10 +283,9 @@ router.get(
       LEFT JOIN rooms r
       ON r.id=s.room_id
 
-      ${
-        where.length
-          ? 'WHERE ' + where.join(' AND ')
-          : ''
+      ${where.length
+        ? 'WHERE ' + where.join(' AND ')
+        : ''
       }
 
       ORDER BY
@@ -313,11 +312,11 @@ router.get(
 // =========================
 
 router.get('/bank/ifsc/:ifsc', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
-  const ifsc=String(req.params.ifsc||'').trim().toUpperCase();
-  if(!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) return res.status(400).json({success:false,message:'Enter a valid 11-character IFSC code'});
-  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);
-  try { const response=await fetch('https://ifsc.razorpay.com/'+encodeURIComponent(ifsc),{signal:controller.signal}); if(response.status===404)return res.status(404).json({success:false,message:'IFSC code not found'}); if(!response.ok)throw new Error('IFSC service unavailable'); const bank=await response.json(); res.json({success:true,ifsc,bank_name:bank.BANK||'',branch_name:bank.BRANCH||'',branch_address:bank.ADDRESS||'',city:bank.CITY||'',district:bank.DISTRICT||'',state:bank.STATE||''}); }
-  catch(error){if(error.name==='AbortError')return res.status(504).json({success:false,message:'IFSC lookup timed out; enter bank details manually'});throw error;} finally{clearTimeout(timeout);}
+  const ifsc = String(req.params.ifsc || '').trim().toUpperCase();
+  if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) return res.status(400).json({ success: false, message: 'Enter a valid 11-character IFSC code' });
+  const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 8000);
+  try { const response = await fetch('https://ifsc.razorpay.com/' + encodeURIComponent(ifsc), { signal: controller.signal }); if (response.status === 404) return res.status(404).json({ success: false, message: 'IFSC code not found' }); if (!response.ok) throw new Error('IFSC service unavailable'); const bank = await response.json(); res.json({ success: true, ifsc, bank_name: bank.BANK || '', branch_name: bank.BRANCH || '', branch_address: bank.ADDRESS || '', city: bank.CITY || '', district: bank.DISTRICT || '', state: bank.STATE || '' }); }
+  catch (error) { if (error.name === 'AbortError') return res.status(504).json({ success: false, message: 'IFSC lookup timed out; enter bank details manually' }); throw error; } finally { clearTimeout(timeout); }
 }));
 
 // =========================
@@ -325,7 +324,7 @@ router.get('/bank/ifsc/:ifsc', auth, allow('super_admin', 'admin'), asyncHandler
 // =========================
 
 router.get('/kanyashree/list', auth, allow('super_admin', 'admin', 'office', 'teacher'), asyncHandler(async (req, res) => {
-  const { class_name, status, gender, q } = req.query;
+  const { class_name, status, gender, school_name, q } = req.query;
   const conditions = ['s.is_active = TRUE'];
   const values = [];
 
@@ -337,6 +336,15 @@ router.get('/kanyashree/list', auth, allow('super_admin', 'admin', 'office', 'te
   if (gender && gender !== 'all') {
     values.push(gender);
     conditions.push(`s.gender = $${values.length}`);
+  }
+
+  if (school_name && school_name !== 'all') {
+    if (school_name === 'no_school') {
+      conditions.push(`(s.admitted_school_name IS NULL OR TRIM(s.admitted_school_name) = '')`);
+    } else {
+      values.push(school_name);
+      conditions.push(`s.admitted_school_name = $${values.length}`);
+    }
   }
 
   if (status) {
@@ -358,7 +366,8 @@ router.get('/kanyashree/list', auth, allow('super_admin', 'admin', 'office', 'te
       s.student_name ILIKE $${values.length} OR
       s.registration_no ILIKE $${values.length} OR
       CAST(s.roll_no AS TEXT) ILIKE $${values.length} OR
-      COALESCE(s.kanyashree_id, '') ILIKE $${values.length}
+      COALESCE(s.kanyashree_id, '') ILIKE $${values.length} OR
+      COALESCE(s.admitted_school_name, '') ILIKE $${values.length}
     )`);
   }
 
@@ -374,6 +383,7 @@ router.get('/kanyashree/list', auth, allow('super_admin', 'admin', 'office', 'te
       s.student_type,
       s.room_id,
       r.room_name,
+      s.admitted_school_name,
       s.kanyashree_id,
       s.kanyashree_status,
       s.kanyashree_date,
@@ -396,21 +406,27 @@ router.patch('/kanyashree/:id', auth, allow('super_admin', 'admin', 'office'), a
     return res.status(400).json({ success: false, message: 'Invalid student ID' });
   }
 
-  const { kanyashree_id, kanyashree_status, kanyashree_date } = req.body;
+  const { kanyashree_id, kanyashree_status, kanyashree_date, admitted_school_name } = req.body;
+
+  const hasSchoolUpdate = admitted_school_name !== undefined;
+  const schoolVal = admitted_school_name ? String(admitted_school_name).trim() : null;
 
   const result = await pool.query(
     `UPDATE students
      SET kanyashree_id = $1,
          kanyashree_status = $2,
          kanyashree_date = $3,
+         admitted_school_name = CASE WHEN $5::boolean THEN $6 ELSE admitted_school_name END,
          updated_at = NOW()
      WHERE id = $4 AND is_active = TRUE
-     RETURNING id, registration_no, student_name, class_name, roll_no, kanyashree_id, kanyashree_status, kanyashree_date`,
+     RETURNING id, registration_no, student_name, class_name, roll_no, admitted_school_name, kanyashree_id, kanyashree_status, kanyashree_date`,
     [
       kanyashree_id !== undefined ? (kanyashree_id ? String(kanyashree_id).trim() : null) : null,
       kanyashree_status !== undefined ? (kanyashree_status ? String(kanyashree_status).trim() : null) : null,
       kanyashree_date !== undefined ? (kanyashree_date ? String(kanyashree_date).trim() : null) : null,
       studentId,
+      hasSchoolUpdate,
+      schoolVal,
     ]
   );
 
@@ -857,7 +873,7 @@ router.delete(
       });
     }
 
-    await deactivateGuardiansWhenNoActiveStudent(pool,req.params.id);
+    await deactivateGuardiansWhenNoActiveStudent(pool, req.params.id);
     res.json({
       success: true,
       message:
