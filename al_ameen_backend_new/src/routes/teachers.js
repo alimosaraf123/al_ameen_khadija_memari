@@ -24,7 +24,7 @@ function firstNameLogin(name) {
     .replace(/[^a-z0-9]/g, '');
 }
 
-router.get('/me', auth, allow('teacher'), asyncHandler(async(req,res)=>{await teacherDetailsSchemaReady;const result=await pool.query(`SELECT t.*,u.full_name,u.login_id FROM teachers t JOIN users u ON u.id=t.user_id WHERE t.user_id=$1 LIMIT 1`,[req.user.userId]);if(!result.rowCount)return res.status(404).json({success:false,message:'Teacher profile not found'});res.json({success:true,teacher:result.rows[0],profile_edit_count:result.rows[0].profile_edit_count||0,profile_edits_remaining:Math.max(0,2-(result.rows[0].profile_edit_count||0))});}));
+router.get('/me', auth, allow('teacher', 'admin', 'super_admin'), asyncHandler(async(req,res)=>{await teacherDetailsSchemaReady;const result=await pool.query(`SELECT t.*,u.full_name,u.login_id FROM teachers t JOIN users u ON u.id=t.user_id WHERE t.user_id=$1 LIMIT 1`,[req.user.userId]);if(!result.rowCount)return res.status(404).json({success:false,message:'Teacher profile not found'});res.json({success:true,teacher:result.rows[0],profile_edit_count:result.rows[0].profile_edit_count||0,profile_edits_remaining:Math.max(0,2-(result.rows[0].profile_edit_count||0))});}));
 const MISSION_LOCATION = {
   latitude: 23.186813165763375,
   longitude: 88.11163491185468,
@@ -144,7 +144,7 @@ router.get('/availability',auth,allow('super_admin','admin'),asyncHandler(async(
   `,[date]);
   res.json({success:true,date,staff:r.rows});
 }));
-router.patch('/me', auth, allow('teacher'), asyncHandler(async(req,res)=>{
+router.patch('/me', auth, allow('teacher', 'admin', 'super_admin'), asyncHandler(async(req,res)=>{
   await teacherDetailsSchemaReady;
   const b=req.body||{};
   const allowed=['staff_id','name','designation','qualification','mobile','whatsapp','email','address','gender','date_of_birth','joining_date','subject','profile_details','education_details','residential_type'];
