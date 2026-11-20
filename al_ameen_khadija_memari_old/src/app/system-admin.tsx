@@ -127,6 +127,7 @@ export const MENU_PERMISSION_GROUPS: MenuGroup[] = [
       { key: 'receipt_payment', label: 'Receipt & Payment', route: '/fees?tab=receipt_payment', desc: 'Cash receipts and expenses' },
       { key: 'bank_matcher', label: 'Bank Matcher', route: '/bank-statement-matcher', desc: 'Bank statement reconciliation' },
       { key: 'hostel_fees', label: 'Hostel Fees (Class-wise)', route: '/hostel-fees', desc: 'Class-wise hostel fees synced on demand from portal' },
+      { key: 'daily_cashbook', label: 'Daily Cash Book', route: '/daily-cashbook', desc: 'Daily Bank & Cash register synced with portal fees report' },
       { key: 'deposit_fund', label: 'Deposit Fund', route: '/deposit-fund', desc: 'Student personal deposit fund' },
     ],
   },

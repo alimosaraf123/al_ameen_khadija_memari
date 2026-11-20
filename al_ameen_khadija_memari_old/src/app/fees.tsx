@@ -714,6 +714,15 @@ export default function Fees() {
               </Text>
             </NavTabLink>
           )}
+
+          <NavTabLink
+            path="/daily-cashbook"
+            style={[styles.tabBtn, { backgroundColor: '#fffbeb', borderColor: '#d97706', borderWidth: 1 }]}
+          >
+            <Text style={[styles.tabBtnText, { color: '#b45309' }]}>
+              📒 Daily Cash Book
+            </Text>
+          </NavTabLink>
         </View>
 
         {/* Date Filter & Search Actions */}
@@ -3148,6 +3157,24 @@ const styles = StyleSheet.create({
   },
 
   tableScroll: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10 },
+  // Watermark overlay for the entire page
+  watermark: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0.05,
+    transform: [{ rotate: '-30deg' }],
+    pointerEvents: 'none',
+  },
+  watermarkText: {
+    fontSize: 48,
+    color: '#000',
+    fontWeight: '800',
+  },
   table: { minWidth: 1200 },
   tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#e2e8f0', minHeight: 40, alignItems: 'center' },
   tableHead: { backgroundColor: '#e2e8f0' },

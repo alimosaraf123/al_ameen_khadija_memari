@@ -106,6 +106,7 @@ app.use('/api/terminal-exams',...moduleAccess(['terminal_exams','marks','publish
 app.use('/api/dues',...moduleAccess(['dues','students','deposit_fund']),require('./src/routes/dues'));
 app.use('/api/bank-matcher',...moduleAccess(['dues','deposit_fund','fees'],null,req=>req.method==='GET'&&req.path.startsWith('/download/')),require('./src/routes/bankStatementMatcher'));
 app.use('/api/hostel-fees',...moduleAccess(['fees','dues','hostel_fees']),require('./src/routes/hostelFees'));
+app.use('/api/daily-cashbook',...moduleAccess(['fees','dues','receipt_payment','daily_cashbook']),require('./src/routes/dailyCashBook'));
 app.use('/api/documents',...moduleAccess(['documents','students']),require('./src/routes/documents'));
 app.use('/api/assets',...moduleAccess('asset_register'),require('./src/routes/assetRegister'));
 app.use('/api/omr',require('./src/routes/omr'));

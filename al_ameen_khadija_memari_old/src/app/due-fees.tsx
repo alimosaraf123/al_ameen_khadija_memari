@@ -541,6 +541,13 @@ export default function DueFeesScreen() {
               <Text style={styles.tabBtnText}>🏠 Hostel Fees</Text>
             </NavTabLink>
           )}
+
+          <NavTabLink
+            path="/daily-cashbook"
+            style={styles.tabBtn}
+          >
+            <Text style={styles.tabBtnText}>📒 Daily Cash Book</Text>
+          </NavTabLink>
         </View>
 
         {/* Filter Controls Bar */}

@@ -73,6 +73,7 @@ const menuPermission: Record<string, string | string[]> = {
   '/due-fees': ['dues', 'fees'],
   '/bank-statement-matcher': 'fees',
   '/hostel-fees': ['fees', 'due_fees', 'hostel_fees'],
+  '/daily-cashbook': ['fees', 'receipt_payment', 'daily_cashbook'],
   '/deposit-fund': ['deposit_fund', 'fees'],
   '/audit-log': 'audit_log',
 };
@@ -580,7 +581,7 @@ export default function Dashboard() {
             </TouchableOpacity>
           )}
 
-          {canAccessGroup(['/fees', '/due-fees', '/bank-statement-matcher', '/hostel-fees', '/deposit-fund']) && (
+          {canAccessGroup(['/fees', '/due-fees', '/bank-statement-matcher', '/hostel-fees', '/daily-cashbook', '/deposit-fund']) && (
             <TouchableOpacity style={s.navBtn} onPress={() => setAccountsMenu(true)}>
               <Text style={s.navBtnIcon}>💳</Text>
               <Text style={s.navBtnText}>Accounts ▾</Text>
@@ -1250,6 +1251,7 @@ export default function Dashboard() {
                 ['Receipt & Payment', '/fees?tab=receipt_payment'],
                 ['Bank Matcher', '/bank-statement-matcher'],
                 ['Hostel Fees (Class-wise)', '/hostel-fees'],
+                ['Daily Cash Book', '/daily-cashbook'],
                 ['Student Deposit Fund', '/deposit-fund'],
               ].filter(([_, path]) => canAccess(path)).map(([label, path]) => (
                 <AdminLink
@@ -1347,6 +1349,7 @@ export default function Dashboard() {
                     ['Receipt & Payment', '/fees?tab=receipt_payment'],
                     ['Bank Matcher', '/bank-statement-matcher'],
                     ['Hostel Fees (Class-wise)', '/hostel-fees'],
+                    ['Daily Cash Book', '/daily-cashbook'],
                     ['Student Deposit Fund', '/deposit-fund'],
                   ],
                 },

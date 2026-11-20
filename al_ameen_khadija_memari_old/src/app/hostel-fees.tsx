@@ -245,6 +245,9 @@ export default function HostelFeesScreen() {
           <TouchableOpacity style={[s.tabBtn, s.tabBtnActive]} onPress={() => {}}>
             <Text style={[s.tabBtnText, s.tabBtnTextActive]}>🏠 Hostel Fees</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={s.tabBtn} onPress={() => router.push('/daily-cashbook' as any)}>
+            <Text style={s.tabBtnText}>📒 Daily Cash Book</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Title & Manual Refresh Controls */}

@@ -1044,6 +1044,13 @@ export default function BankStatementMatcherScreen() {
             </NavTabLink>
           )}
 
+          <NavTabLink
+            path="/daily-cashbook"
+            style={styles.tabBtn}
+          >
+            <Text style={styles.tabBtnText}>📒 Daily Cash Book</Text>
+          </NavTabLink>
+
           <TouchableOpacity
             onPress={() => setMasterModalOpen(true)}
             style={[styles.tabBtn, styles.studentMasterTabBtn]}

@@ -35,6 +35,7 @@ export function canOpenRoute(route: string, user: any) {
   if (route === 'teacher-settings') return ['teacher', 'admin', 'super_admin'].includes(user.role);
   if (route === 'asset-register') return ['admin', 'super_admin'].includes(user.role);
   if (route === 'hostel-fees') return ['office', 'admin', 'super_admin'].includes(user.role) && !isHostelFeesBlockedUser(user);
+  if (route === 'daily-cashbook') return ['office', 'admin', 'super_admin'].includes(user.role);
   if (route === 'system-admin') return user.role === 'super_admin';
   if (['guardian', 'guardian-student'].includes(route)) return user.role === 'guardian';
   if (route === 'teacher') return ['teacher', 'admin', 'super_admin'].includes(user.role);
