@@ -842,6 +842,12 @@ export default function KanyashreePortal() {
                             <Text style={styles.badgeClassText}>Class {s.class_name || '-'}</Text>
                           </View>
 
+                          {Boolean(s.roll_no) && (
+                            <View style={styles.badgeRoll}>
+                              <Text style={styles.badgeRollText}>Roll: {s.roll_no}</Text>
+                            </View>
+                          )}
+
                           {Boolean(s.admitted_school_name && String(s.admitted_school_name).trim()) ? (
                             <View style={styles.badgeSchool}>
                               <Text style={styles.badgeSchoolText}>🏫 {String(s.admitted_school_name).trim()}</Text>
