@@ -129,6 +129,7 @@ export default function Dashboard() {
   const [studentMenu, setStudentMenu] = useState(false);
   const [accountsMenu, setAccountsMenu] = useState(false);
   const [allMenusDrawer, setAllMenusDrawer] = useState(false);
+  const [menuSearchQuery, setMenuSearchQuery] = useState('');
   const [genericMenu, setGenericMenu] = useState<{ title: string; path: string } | null>(null);
 
   const [restricted, setRestricted] = useState(false);
@@ -1273,119 +1274,195 @@ export default function Dashboard() {
       </Modal>
 
       {/* All Menus Overview Modal */}
-      <Modal visible={allMenusDrawer} transparent animationType="fade" onRequestClose={() => setAllMenusDrawer(false)}>
+      <Modal visible={allMenusDrawer} transparent animationType="fade" onRequestClose={() => { setAllMenusDrawer(false); setMenuSearchQuery(''); }}>
         <View style={s.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setAllMenusDrawer(false)} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => { setAllMenusDrawer(false); setMenuSearchQuery(''); }} />
           <View style={[s.teacherModal, { maxWidth: 960, maxHeight: '90%' }]}>
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>All Institution Menus & Portals</Text>
-              <TouchableOpacity onPress={() => setAllMenusDrawer(false)}>
+            <View style={[s.modalHeader, { flexWrap: 'wrap', gap: 10, alignItems: 'center' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                <Text style={s.modalTitle}>All Institution Menus & Portals</Text>
+              </View>
+
+              {/* Menu Search Box */}
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#ffffff',
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                paddingVertical: Platform.OS === 'web' ? 5 : 2,
+                borderWidth: 1.5,
+                borderColor: '#cbd5e1',
+                minWidth: 260,
+                maxWidth: 380,
+                flex: 1,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.05,
+                shadowRadius: 2,
+                elevation: 1,
+              }}>
+                <Text style={{ marginRight: 6, fontSize: 13, color: '#64748b' }}>🔍</Text>
+                <TextInput
+                  value={menuSearchQuery}
+                  onChangeText={setMenuSearchQuery}
+                  placeholder="Search menu or portal..."
+                  placeholderTextColor="#94a3b8"
+                  style={{
+                    flex: 1,
+                    fontSize: 13,
+                    fontWeight: '600',
+                    color: '#0f172a',
+                    padding: 0,
+                    ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}),
+                  } as any}
+                />
+                {menuSearchQuery.trim().length > 0 && (
+                  <TouchableOpacity onPress={() => setMenuSearchQuery('')} style={{ padding: 4 }}>
+                    <Text style={{ fontSize: 13, color: '#64748b', fontWeight: 'bold' }}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <TouchableOpacity onPress={() => { setAllMenusDrawer(false); setMenuSearchQuery(''); }} style={{ padding: 4 }}>
                 <Text style={s.closeText}>×</Text>
               </TouchableOpacity>
             </View>
+
             <ScrollView contentContainerStyle={{ padding: 18, gap: 16 }}>
-              {[
-                {
-                  category: '🎓 Student Management',
-                  items: [
-                    ['Student Details', '/students'],
-                    ['Student Entry', '/student-entry'],
-                    ['Daily Student Attendance', '/daily-attendance'],
-                    ['Student ID Cards & Form', '/id-cards'],
-                    ['Document Upload', '/documents'],
-                    ['Promotion / TC (Lifecycle)', '/student-lifecycle'],
-                    ['Excel & Bulk Documents', '/student-transfer'],
-                    ['Kanyashree Portal (K1/K2)', '/kanyashree'],
-                    ['Student Behavior', '/behavior'],
-                    ['Student Gate Pass', '/gate-pass'],
-                    ['Visit Permission', '/visits'],
-                    ['Guardians & Passwords', '/guardians'],
-                  ],
-                },
-                {
-                  category: '👥 Staff & Administration',
-                  items: [
-                    ['View Staff', '/teachers?mode=view'],
-                    ['Add Staff', '/teachers?mode=add'],
-                    ['I-Card, Form & Download', '/teachers?mode=icard'],
-                    ['Staff Attendance', '/teacher-attendance'],
-                    ['Staff Summary', '/staff-summary'],
-                    ['Gateman Sheet (Excel)', '/teachers?action=gateman_sheet'],
-                    ['Gateman & Service Staff', '/service-staff'],
-                    ['Gateman Portal', '/gateman'],
-                  ],
-                },
-                {
-                  category: '📚 Academic & Examination',
-                  items: [
-                    ['Weekly Marks', '/marks'],
-                    ['OMR Exam & Evaluation', '/omr-evaluation'],
-                    ['Terminal Exam', '/terminal-exams'],
-                    ['Print Terminal Result', '/class-results'],
-                    ['Teacher Routine', '/routines'],
-                    ['Projector Display Control', '/display-control'],
-                    ['Notice Board', '/notices'],
-                    ['Library Portal', '/library'],
-                    ['Student Behaviour', '/behavior'],
-                    ['Student Illness', '/illness'],
-                    ['Room Problems', '/problems'],
-                  ],
-                },
-                {
-                  category: '🏢 Hostel & Mess',
-                  items: [
-                    ['Rooms List', '/rooms'],
-                    ['Teacher Room Assignment', '/room-assignments'],
-                    ['Evening Room Attendance', '/attendance'],
-                    ['Dining Stock Inventory', '/dining-stock'],
-                    ['Asset Register', '/asset-register'],
-                  ],
-                },
-                {
-                  category: '💳 Accounts & Finance',
-                  items: [
-                    ['Fee Collection', '/fees?tab=fees_collection'],
-                    ['Due Fees Tracker', '/due-fees'],
-                    ['Receipt & Payment', '/fees?tab=receipt_payment'],
-                    ['Bank Matcher', '/bank-statement-matcher'],
-                    ['Hostel Fees (Class-wise)', '/hostel-fees'],
-                    ['Daily Cash Book', '/daily-cashbook'],
-                    ['Student Deposit Fund', '/deposit-fund'],
-                  ],
-                },
-                {
-                  category: '🚪 Gate Pass & Visitors',
-                  items: [
-                    ['Student Gate Pass', '/gate-pass'],
-                    ['Visiting Day Record / Permission', '/visits'],
-                    ['Guardians Directory', '/guardians'],
-                  ],
-                },
-                {
-                  category: '⚙️ Governance & System',
-                  items: [
-                    ['Asset Register', '/asset-register'],
-                    ['Activity Audit Log', '/audit-log'],
-                    ['Projector Display Control', '/display-control'],
-                    ...(userRole === 'super_admin' ? [['System Administration', '/system-admin']] : []),
-                  ],
-                },
-              ].map((grp) => {
-                const visibleItems = grp.items.filter(([_, path]) => canAccess(path));
-                if (!visibleItems.length) return null;
-                return (
+              {(() => {
+                const q = menuSearchQuery.trim().toLowerCase();
+                const allGroups = [
+                  {
+                    category: '🎓 Student Management',
+                    items: [
+                      ['Student Details', '/students'],
+                      ['Student Entry', '/student-entry'],
+                      ['Daily Student Attendance', '/daily-attendance'],
+                      ['Student ID Cards & Form', '/id-cards'],
+                      ['Document Upload', '/documents'],
+                      ['Promotion / TC (Lifecycle)', '/student-lifecycle'],
+                      ['Excel & Bulk Documents', '/student-transfer'],
+                      ['Kanyashree Portal (K1/K2)', '/kanyashree'],
+                      ['Student Behavior', '/behavior'],
+                      ['Student Gate Pass', '/gate-pass'],
+                      ['Visit Permission', '/visits'],
+                      ['Guardians & Passwords', '/guardians'],
+                    ],
+                  },
+                  {
+                    category: '👥 Staff & Administration',
+                    items: [
+                      ['View Staff', '/teachers?mode=view'],
+                      ['Add Staff', '/teachers?mode=add'],
+                      ['I-Card, Form & Download', '/teachers?mode=icard'],
+                      ['Staff Attendance', '/teacher-attendance'],
+                      ['Staff Summary', '/staff-summary'],
+                      ['Gateman Sheet (Excel)', '/teachers?action=gateman_sheet'],
+                      ['Gateman & Service Staff', '/service-staff'],
+                      ['Gateman Portal', '/gateman'],
+                    ],
+                  },
+                  {
+                    category: '📚 Academic & Examination',
+                    items: [
+                      ['Weekly Marks', '/marks'],
+                      ['OMR Exam & Evaluation', '/omr-evaluation'],
+                      ['Terminal Exam', '/terminal-exams'],
+                      ['Print Terminal Result', '/class-results'],
+                      ['Teacher Routine', '/routines'],
+                      ['Projector Display Control', '/display-control'],
+                      ['Notice Board', '/notices'],
+                      ['Library Portal', '/library'],
+                      ['Student Behaviour', '/behavior'],
+                      ['Student Illness', '/illness'],
+                      ['Room Problems', '/problems'],
+                    ],
+                  },
+                  {
+                    category: '🏢 Hostel & Mess',
+                    items: [
+                      ['Rooms List', '/rooms'],
+                      ['Teacher Room Assignment', '/room-assignments'],
+                      ['Evening Room Attendance', '/attendance'],
+                      ['Dining Stock Inventory', '/dining-stock'],
+                      ['Asset Register', '/asset-register'],
+                    ],
+                  },
+                  {
+                    category: '💳 Accounts & Finance',
+                    items: [
+                      ['Fee Collection', '/fees?tab=fees_collection'],
+                      ['Due Fees Tracker', '/due-fees'],
+                      ['Receipt & Payment', '/fees?tab=receipt_payment'],
+                      ['Bank Matcher', '/bank-statement-matcher'],
+                      ['Hostel Fees (Class-wise)', '/hostel-fees'],
+                      ['Daily Cash Book', '/daily-cashbook'],
+                      ['Student Deposit Fund', '/deposit-fund'],
+                    ],
+                  },
+                  {
+                    category: '🚪 Gate Pass & Visitors',
+                    items: [
+                      ['Student Gate Pass', '/gate-pass'],
+                      ['Visiting Day Record / Permission', '/visits'],
+                      ['Guardians Directory', '/guardians'],
+                    ],
+                  },
+                  {
+                    category: '⚙️ Governance & System',
+                    items: [
+                      ['Asset Register', '/asset-register'],
+                      ['Activity Audit Log', '/audit-log'],
+                      ['Projector Display Control', '/display-control'],
+                      ...(userRole === 'super_admin' ? [['System Administration', '/system-admin'] as [string, string]] : []),
+                    ],
+                  },
+                ];
+
+                const filtered = allGroups.map(grp => {
+                  const visibleItems = grp.items.filter(([label, path]) => {
+                    if (!canAccess(path)) return false;
+                    if (!q) return true;
+                    return label.toLowerCase().includes(q) || grp.category.toLowerCase().includes(q) || path.toLowerCase().includes(q);
+                  });
+                  return { ...grp, visibleItems };
+                }).filter(grp => grp.visibleItems.length > 0);
+
+                if (filtered.length === 0 && q) {
+                  return (
+                    <View style={{ alignItems: 'center', paddingVertical: 40, gap: 10 }}>
+                      <Text style={{ fontSize: 32 }}>🔍</Text>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: '#334155' }}>
+                        No menus found matching "{menuSearchQuery}"
+                      </Text>
+                      <Text style={{ fontSize: 13, color: '#64748b' }}>
+                        Try searching with another keyword (e.g. cash, exam, staff, hostel, fees, attendance)
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => setMenuSearchQuery('')}
+                        style={{ marginTop: 8, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#0f172a', borderRadius: 6 }}
+                      >
+                        <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 13 }}>Clear Search</Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                }
+
+                return filtered.map((grp) => (
                   <View key={grp.category} style={{ gap: 8 }}>
                     <Text style={{ fontSize: 15, fontWeight: '800', color: '#0f172a', borderBottomWidth: 1, borderBottomColor: '#e2e8f0', paddingBottom: 4 }}>
-                      {grp.category}
+                      {grp.category} {q ? `(${grp.visibleItems.length})` : ''}
                     </Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                      {visibleItems.map(([label, path]) => (
+                      {grp.visibleItems.map(([label, path]) => (
                         <AdminLink
                           path={path}
                           key={label}
                           style={[s.modalItem, { minWidth: 200, width: '31%', minHeight: 48, paddingVertical: 8 }]}
                           onPress={() => {
                             setAllMenusDrawer(false);
+                            setMenuSearchQuery('');
                             navigateToPath(path);
                           }}
                         >
@@ -1395,8 +1472,8 @@ export default function Dashboard() {
                       ))}
                     </View>
                   </View>
-                );
-              })}
+                ));
+              })()}
             </ScrollView>
           </View>
         </View>
