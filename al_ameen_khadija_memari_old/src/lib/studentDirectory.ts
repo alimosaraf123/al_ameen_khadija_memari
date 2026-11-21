@@ -13,16 +13,67 @@ export function studentSession(student: any): string {
   return /^\d{4}$/.test(from) && /^\d{4}$/.test(to) ? `${from}-${to}` : '';
 }
 
+export function isPassoutStudent(student: any): boolean {
+  if (!student || student.is_active) return false;
+  const reason = String(student.dropout_reason || '').toLowerCase();
+  if (reason.includes('pass') && reason.includes('out')) return true;
+  const from = parseInt(String(student.session_from ?? '').trim(), 10);
+  const to = parseInt(String(student.session_to ?? '').trim(), 10);
+  if (!Number.isNaN(from) && from <= 2025) return true;
+  if (!Number.isNaN(to) && to <= 2025) return true;
+  return false;
+}
+
+export function studentStatusLabel(student: any): 'Active' | 'Passout' | 'Dropout' {
+  if (student?.is_active) return 'Active';
+  return isPassoutStudent(student) ? 'Passout' : 'Dropout';
+}
+
+export const STUDENT_SEARCH_FIELDS = [
+  'student_name',
+  'registration_no',
+  'admission_no',
+  'roll_no',
+  'father_name',
+  'mother_name',
+  'guardian_name',
+  'mobile_number',
+  'guardian_mobile',
+  'whatsapp_number',
+  'aadhaar_no',
+  'room_name',
+  'session_from',
+  'session_to',
+  'academic_session',
+  'class_name',
+  'present_village',
+  'permanent_village',
+  'present_district',
+];
+
 export function filterStudents(students: any[], filters: StudentFilters) {
   const query = filters.search.trim().toLowerCase();
+  const hasQuery = Boolean(query);
   return students.filter(student => {
     const gender = String(student.gender || '').trim().toLowerCase();
     const normalizedGender = gender === 'm' ? 'male' : gender === 'f' ? 'female' : gender;
+    const isPastSessionSelected = filters.year !== 'all' && filters.year !== '2026-2027' && filters.year !== '2026-2026';
+    const matchesStatus =
+      filters.status === 'all' ||
+      hasQuery ||
+      (isPastSessionSelected && filters.status === 'active') ||
+      (filters.status === 'active'
+        ? student.is_active === true
+        : filters.status === 'passout'
+          ? isPassoutStudent(student)
+          : filters.status === 'dropout'
+            ? student.is_active === false && !isPassoutStudent(student)
+            : student.is_active === false);
     return (filters.year === 'all' || studentSession(student) === filters.year)
       && (filters.className === 'all' || normalizeStudentClass(student.class_name) === normalizeStudentClass(filters.className))
       && (filters.gender === 'all' || normalizedGender === filters.gender)
-      && (filters.status === 'all' || (filters.year !== 'all' && filters.year !== '2026-2027' && filters.status === 'active') || (filters.status === 'active' ? student.is_active === true : student.is_active === false))
-      && (!query || ['student_name', 'registration_no', 'mobile_number', 'guardian_mobile', 'whatsapp_number', 'room_name']
+      && matchesStatus
+      && (!query || STUDENT_SEARCH_FIELDS
         .some(key => String(student[key] ?? '').toLowerCase().includes(query)));
   });
 }

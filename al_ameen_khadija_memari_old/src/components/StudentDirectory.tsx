@@ -7,7 +7,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { api, API_BASE } from '../lib/api';
 import { getToken, getUser } from '../lib/auth';
 import { STUDENT_CLASSES, isVisibleStudentClass } from '../lib/studentClasses';
-import { filterStudents, studentSession, normalizeStudentClass } from '../lib/studentDirectory';
+import { filterStudents, studentSession, normalizeStudentClass, studentStatusLabel } from '../lib/studentDirectory';
 
 type Option = { value: string; label: string; shortLabel?: string; keywords?: string[] };
 export function Select({ label, value, options, onChange, searchable = false, style, textStyle, placeholderTextStyle, chevron, panelWidth, panelMaxHeight }: { label: string; value: string; options: Option[]; onChange: (value: string) => void; searchable?: boolean; style?: any; textStyle?: any; placeholderTextStyle?: any; chevron?: string; panelWidth?: number; panelMaxHeight?: number }) {
@@ -320,9 +320,17 @@ const columns: [string, string, number][] = [
   ['mobile_number', 'Mobile', 125], ['whatsapp_number', 'WhatsApp', 125], ['room_name', 'Room No.', 105], ['is_active', 'Status', 90], ['action', 'Action', 195],
 ];
 
-export default function StudentDirectory({ students, loading, error, onEdit, onRefresh, onDeactivate, canDeactivate }: {
+export default function StudentDirectory({
+  students, loading, error, onEdit, onRefresh, onDeactivate, canDeactivate,
+  initialStatus = 'all',
+  initialSearch = '',
+  initialYear = 'all',
+}: {
   students: any[]; loading: boolean; error: string; onEdit: (student: any) => void; onRefresh: () => void; onDeactivate: (student: any) => void;
   canDeactivate?: boolean;
+  initialStatus?: string;
+  initialSearch?: string;
+  initialYear?: string;
 }) {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   useEffect(() => {
@@ -337,11 +345,22 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
       return [key, title, width] as [string, string, number];
     });
   }, [allowDeactivate]);
-  const [year, setYear] = useState('all');
+  const [year, setYear] = useState(initialYear || 'all');
   const [className, setClassName] = useState('all');
   const [gender, setGender] = useState('all');
-  const [status, setStatus] = useState('active');
-  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState(initialStatus || 'all');
+  const [search, setSearch] = useState(initialSearch || '');
+
+  useEffect(() => {
+    if (initialStatus) setStatus(initialStatus);
+  }, [initialStatus]);
+  useEffect(() => {
+    if (initialSearch !== undefined) setSearch(initialSearch);
+  }, [initialSearch]);
+  useEffect(() => {
+    if (initialYear) setYear(initialYear);
+  }, [initialYear]);
+
   const [size, setSize] = useState('10');
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState({ key: 'student_name', ascending: true });
@@ -356,7 +375,21 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
   const [documentsError, setDocumentsError] = useState('');
   const [documentBusy, setDocumentBusy] = useState<string | null>(null);
   const [pendingDocuments, setPendingDocuments] = useState<Record<string, any>>({});
-  const sessions = useMemo(() => [...new Set(students.map(studentSession).filter(Boolean))].sort().reverse(), [students]);
+
+  const defaultSessions = useMemo(() => {
+    const list: string[] = [];
+    const currentYear = new Date().getFullYear();
+    for (let y = currentYear + 1; y >= 2018; y--) {
+      list.push(`${y}-${y + 1}`);
+      list.push(`${y}-${y}`);
+    }
+    return list;
+  }, []);
+
+  const sessions = useMemo(() => {
+    const fromStudents = students.map(studentSession).filter(Boolean);
+    return [...new Set([...fromStudents, ...defaultSessions])].sort().reverse();
+  }, [students, defaultSessions]);
   const classes = useMemo(() => [...new Set<string>([
     ...STUDENT_CLASSES,
     ...students.map(student => normalizeStudentClass(student.class_name)).filter(Boolean).filter(isVisibleStudentClass),
@@ -817,11 +850,11 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
       <Select label="Session" value={year} onChange={setYear} options={[{ value: 'all', label: 'All Sessions' }, ...sessions.map(session => ({ value: session, label: session }))]} />
       <Select label="Class" value={className} onChange={setClassName} options={[{ value: 'all', label: 'All Classes' }, ...classes.map(c => ({ value: c, label: c }))]} />
       <Select label="Gender" value={gender} onChange={setGender} options={[{ value: 'all', label: 'All Genders' }, { value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }]} />
-      <Select label="Status" value={status} onChange={setStatus} options={[{ value: 'active', label: 'Active' }, { value: 'dropout', label: 'Dropout / Passout' }, { value: 'all', label: 'All Statuses' }]} />
+      <Select label="Status" value={status} onChange={setStatus} options={[{ value: 'all', label: 'All Statuses' }, { value: 'active', label: 'Active' }, { value: 'passout', label: 'Passout' }, { value: 'dropout', label: 'Dropout' }, { value: 'inactive', label: 'Dropout / Passout' }]} />
     </View>
     <View style={s.toolbar}>
       <View style={s.inline}><Text>Show</Text><Select label="Entries per page" value={size} onChange={setSize} options={['10', '25', '50', '100', 'all'].map(value => ({ value, label: value === 'all' ? 'All' : value }))} /><Text>Entries</Text></View>
-      <View style={s.inline}><Text>Search:</Text><TextInput accessibilityLabel="Search students" value={search} onChangeText={setSearch} style={s.search} placeholder="Name, Reg. or mobile" /></View>
+      <View style={s.inline}><Text>Search:</Text><TextInput accessibilityLabel="Search students" value={search} onChangeText={setSearch} style={s.search} placeholder="Name, Reg, Mobile, Father..." /></View>
       <TouchableOpacity accessibilityRole="button" onPress={onRefresh} style={s.select}><Text>Refresh</Text></TouchableOpacity>
     </View>
     {loading ? <ActivityIndicator style={{ margin: 20 }} /> : error ? <Text style={s.error}>{error}</Text> : <>
@@ -835,7 +868,7 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel={`View ${student.student_name}`} style={[s.action, s.view]} onPress={() => openDetails(student)}><Text>View</Text></TouchableOpacity>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel={'Documents for ' + student.student_name} style={[s.action, s.documents]} onPress={() => openDocuments(student)}><Text style={s.documentIcon}>{String.fromCodePoint(0x1F4C4)}</Text></TouchableOpacity>
                 {student.is_active && allowDeactivate && <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Mark ${student.student_name} as dropout`} style={[s.action, s.remove]} onPress={() => onDeactivate(student)}><Text style={{ color: '#fff' }}>-</Text></TouchableOpacity>}
-              </View> : key === 'is_active' ? <Text style={{ color: student.is_active ? '#166534' : '#b91c1c', fontWeight: '700' }}>{student.is_active ? 'Active' : 'Dropout'}</Text>
+              </View> : key === 'is_active' ? (() => { const lbl = studentStatusLabel(student); const clr = lbl === 'Active' ? '#166534' : lbl === 'Passout' ? '#1d4ed8' : '#b91c1c'; return <Text style={{ color: clr, fontWeight: '700' }}>{lbl}</Text>; })()
                 : <Text selectable style={[s.cellText, ['registration_no', 'monthly_fees', 'mobile_number', 'whatsapp_number', 'room_name'].includes(key) && s.numberText]}>{String(student[key] ?? '-')}</Text>}
             </View>)}
           </View>)}
@@ -919,13 +952,17 @@ function RecordDetails({ record }: { record: any }) {
       school_reg_no: 'School / MP Reg No',
       council_reg_no: 'Council / HS Reg No',
       banglarshiksha_id: 'Banglarshiksha ID',
+      kanyashree_id: 'Kanyashree ID',
+      kanyashree_status: 'Kanyashree Status',
+      aikyashree_id: 'Aikyashree ID',
       aadhaar_no: 'Aadhaar No',
       father_aadhaar_no: 'Father Aadhaar No',
+      is_active: 'Status',
       mother_aadhaar_no: 'Mother Aadhaar No',
     };
     return custom[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   };
-  return <>{Object.entries(record).filter(([key, value]) => !['id', 'room_id', 'room_name', 'photo_url', 'created_at', 'updated_at', 'user_id', 'visitor1', 'visitor2'].includes(key) && value !== null && value !== '').map(([key, value]) => <View key={key} style={s.detailRow}><Text style={s.detailLabel}>{getFieldLabel(key)}</Text><Text selectable style={{ flex: 1 }}>{typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}</Text></View>)}
+  return <>{Object.entries(record).filter(([key, value]) => !['id', 'room_id', 'room_name', 'photo_url', 'created_at', 'updated_at', 'user_id', 'visitor1', 'visitor2'].includes(key) && value !== null && value !== '').map(([key, value]) => <View key={key} style={s.detailRow}><Text style={s.detailLabel}>{getFieldLabel(key)}</Text><Text selectable style={{ flex: 1 }}>{key === 'is_active' ? studentStatusLabel(record) : typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}</Text></View>)}
     {(record.room_number || record.room_name) && <View style={s.detailRow}><Text style={s.detailLabel}>Room Number</Text><Text selectable style={{ flex: 1 }}>{record.room_number || record.room_name}</Text></View>}
     {['visitor1', 'visitor2'].map((key, index) => record[key] && <View key={key}><Text style={s.panelTitle}>Visitor {index + 1}</Text><RecordDetails record={record[key]} /></View>)}
   </>;
