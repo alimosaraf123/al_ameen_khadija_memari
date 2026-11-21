@@ -34,7 +34,7 @@ export default function DisplayBoard() {
       if (!item) return <Text style={s.empty}>সব display বন্ধ আছে বা কোনো সক্রিয় নোটিশ নেই।</Text>;
       if (item.mode === 'routine') return <Routine routine={item.routine} date={data.date} group={item.group} tick={playlistIndex} />;
       if (item.mode === 'notice') return <Notice notice={item.notices?.[0]} count={items.length} index={playlistIndex} />;
-      if (item.mode === 'weekly_exam') return <WeeklyExam items={item.weekly_exam_items || []} />;
+      if (item.mode === 'weekly_exam') return <WeeklyExam items={item.weekly_exam_items || []} date={item.date || data.weekly_test_date || data.config?.weekly_test_date || data.date} />;
       if (item.mode === 'result') {
         const pages = Math.max(1, Math.ceil((item.result?.students?.length || 0) / 12));
         return <Result result={item.result} page={Math.floor(playlistTick / 5_000) % pages} />;
@@ -42,7 +42,7 @@ export default function DisplayBoard() {
     }
     if (data.mode === 'routine') return <Routine routine={data.routine} routines={data.routines} date={data.date} group={data.config?.routine_group} tick={routineTick} />;
     if (data.mode === 'notice') return <Notice notice={(data.notices || [])[noticeIndex]} count={(data.notices || []).length} index={noticeIndex} />;
-    if (data.mode === 'weekly_exam') return <WeeklyExam items={data.weekly_exam_items || []} />;
+    if (data.mode === 'weekly_exam') return <WeeklyExam items={data.weekly_exam_items || []} date={data.weekly_test_date || data.config?.weekly_test_date || data.date} />;
     if (data.mode === 'result') return <Result result={data.result} page={resultPage} />;
     return <Text style={s.empty}>Display mode is not selected.</Text>;
   }, [data, noticeIndex, resultPage, routineTick, playlistTick]);
@@ -117,10 +117,35 @@ function Notice({ notice, count, index }: any) {
   );
 }
 
-function WeeklyExam({ items }: any) {
+function formatExamDate(val?: string) {
+  if (!val) return '';
+  try {
+    const raw = String(val).trim();
+    if (!raw) return '';
+    const d = new Date(raw.length === 10 ? raw + 'T00:00:00' : raw);
+    if (!Number.isNaN(d.getTime())) {
+      const dmy = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+      const dayName = new Intl.DateTimeFormat('en-IN', { weekday: 'long' }).format(d);
+      return `${dmy} (${dayName})`;
+    }
+  } catch {}
+  return String(val);
+}
+
+function WeeklyExam({ items, date }: any) {
+  const formattedDate = formatExamDate(date);
   return (
     <View style={{ flex: 1 }}>
-      <Text style={s.modeTitle}>WEEKLY TEST • CLASS-WISE EXAM &amp; SYLLABUS</Text>
+      <Text style={s.modeTitle}>
+        WEEKLY TEST {formattedDate ? `• DATE: ${formattedDate.toUpperCase()} ` : ''}• CLASS-WISE EXAM &amp; SYLLABUS
+      </Text>
+      {Boolean(formattedDate) && (
+        <View style={{ alignItems: 'center', marginBottom: 14 }}>
+          <View style={s.examDateBanner}>
+            <Text style={s.examDateText}>EXAM DATE: {formattedDate.toUpperCase()}</Text>
+          </View>
+        </View>
+      )}
       <ScrollView contentContainerStyle={s.examGrid}>
         {items.length ? (
           items.map((item: any, i: number) => (
@@ -156,4 +181,6 @@ function Result({ result, page }: any) {
 
 const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: '#071a33', padding: 18 }, top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 2, borderColor: '#d7ad3b', paddingBottom: 12, gap: 12 }, school: { color: '#fff', fontSize: 27, fontWeight: '900' }, subtitle: { color: '#f9d56d', fontSize: 14, fontWeight: '800', letterSpacing: 2 }, clock: { color: '#fff', fontSize: 18, fontWeight: '700', textAlign: 'right' }, full: { backgroundColor: '#f9d56d', padding: 10, borderRadius: 6 }, fullText: { color: '#14233a', fontWeight: '900' }, content: { flex: 1, paddingTop: 16 }, footer: { color: '#9fb4cc', textAlign: 'center', paddingTop: 10 }, modeTitle: { color: '#f9d56d', fontSize: 25, fontWeight: '900', textAlign: 'center', marginBottom: 14 }, empty: { color: '#fff', fontSize: 25, textAlign: 'center', marginTop: 80 }, error: { color: '#fecaca', fontSize: 20, textAlign: 'center', marginTop: 80 }, retry: { alignSelf: 'center', backgroundColor: '#f9d56d', padding: 12, borderRadius: 6, marginTop: 16 }, retryText: { fontWeight: '900' }, table: { borderWidth: 1, borderColor: '#7186a0', alignSelf: 'flex-start', backgroundColor: '#fff' }, tableRow: { flexDirection: 'row' }, cell: { width: 172, minHeight: 78, borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#9eb0c5', justifyContent: 'center', alignItems: 'center', padding: 6, color: '#0b2340', fontSize: 16 }, first: { width: 145 }, head: { backgroundColor: '#bfd8ee', color: '#102a45', fontWeight: '900', textAlign: 'center' }, rowHead: { backgroundColor: '#dbeaf7', fontWeight: '900', fontSize: 19 }, alt: { backgroundColor: '#f0f7fc' }, tiffin: { backgroundColor: '#ffefae' }, tiffinText: { color: '#8a5d00', fontWeight: '900' }, subject: { color: '#0b2340', fontWeight: '900', textAlign: 'center', fontSize: 16 }, teacher: { color: '#174f75', fontWeight: '700', textAlign: 'center', marginTop: 4 }, notice: { flex: 1, alignItems: 'center', paddingHorizontal: '8%' }, noticeTitle: { color: '#fff', fontSize: 40, fontWeight: '900', textAlign: 'center', marginTop: 18 }, noticeBody: { color: '#e4edf7', fontSize: 27, lineHeight: 40, textAlign: 'center', marginTop: 24 }, noticeImage: { width: '80%', height: 350, marginTop: 18 }, slide: { color: '#f9d56d', fontWeight: '800', marginTop: 15, fontSize: 16 }, examGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 18, justifyContent: 'center', padding: 8 }, examCard: { width: 360, minHeight: 225, backgroundColor: '#fff', borderRadius: 12, borderLeftWidth: 9, borderLeftColor: '#f9d56d', padding: 20 }, marksBadge: { backgroundColor: '#174f75', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }, marksText: { color: '#fff', fontWeight: '900', fontSize: 14 }, examClass: { color: '#174f75', fontSize: 23, fontWeight: '900' }, examSubject: { color: '#102a45', fontSize: 29, fontWeight: '900', marginTop: 12 }, examTime: { color: '#b45309', fontSize: 21, fontWeight: '900', marginTop: 12 }, examSyllabus: { color: '#243b53', fontSize: 18, lineHeight: 26, marginTop: 13 }, resultTable: { borderWidth: 1, borderColor: '#8ba0b5', backgroundColor: '#fff' }, resultCell: { width: 125, minHeight: 47, borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#aebdcb', color: '#112b45', fontSize: 15, textAlign: 'center', padding: 7, textAlignVertical: 'center' }, resultHead: { backgroundColor: '#bfd8ee', fontWeight: '900', color: '#102a45' }, pageText: { color: '#f9d56d', fontSize: 17, fontWeight: '900', textAlign: 'center', marginTop: 12 },
+  examDateBanner: { backgroundColor: '#f9d56d', paddingHorizontal: 22, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: '#e5b83b', alignSelf: 'center' },
+  examDateText: { color: '#071a33', fontSize: 20, fontWeight: '900', letterSpacing: 1 },
 });

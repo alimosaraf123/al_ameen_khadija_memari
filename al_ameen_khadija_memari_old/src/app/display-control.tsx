@@ -13,6 +13,7 @@ import {
 import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import AcademyHeader from '../components/AcademyHeader';
+import DatePickerField from '../components/DatePickerField';
 import { api, imageUrl } from '../lib/api';
 
 const MODES = [
@@ -128,6 +129,7 @@ const DEFAULTS: any = {
   coaching_end_time: '21:15',
   weekly_start_time: '06:00',
   weekly_end_time: '13:00',
+  weekly_test_date: null,
   result_start_time: '06:00',
   result_end_time: '13:00',
 };
@@ -144,6 +146,7 @@ const initial = {
   xi_xii_end_time: '13:00',
   weekly_start_time: '06:00',
   weekly_end_time: '13:00',
+  weekly_test_date: '',
   result_start_time: '06:00',
   result_end_time: '13:00',
   result_type: 'weekly',
@@ -849,8 +852,27 @@ export default function DisplayControl() {
 
     return (
       <>
-        <View style={s.head}>
+        <View style={[s.head, { flexWrap: 'wrap', gap: 12 }]}>
           <Text style={s.label}>Weekly Test display timing</Text>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: '#173f77' }}>Date:</Text>
+            <View style={{ width: 170 }}>
+              <DatePickerField
+                label=""
+                value={settings.weekly_test_date || ''}
+                onChange={v => {
+                  const next = { ...settingsRef.current, weekly_test_date: v };
+                  settingsRef.current = next;
+                  setSettings(next);
+                  void put(next);
+                }}
+                style={{ marginBottom: 0, minWidth: 150, height: 38 }}
+                optional
+              />
+            </View>
+          </View>
+
           <TouchableOpacity
             disabled={busy}
             onPress={() => void toggleRoutine('weekly_start_time', 'weekly_end_time', 'Weekly Test')}
