@@ -717,11 +717,6 @@ export default function Dashboard() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.topNavScroll}
         >
-          <TouchableOpacity style={[s.navBtn, { backgroundColor: '#0f172a', borderColor: '#334155' }]} onPress={() => setAllMenusDrawer(true)}>
-            <Text style={s.navBtnIcon}>☰</Text>
-            <Text style={[s.navBtnText, { color: '#ffffff', fontWeight: '800' }]}>All Menus</Text>
-          </TouchableOpacity>
-
           {canAccessGroup(['/students', '/student-entry', '/student-registration-form', '/daily-attendance', '/id-cards', '/documents', '/student-lifecycle', '/student-transfer', '/behavior', '/gate-pass', '/visits', '/guardians']) && (
             <TouchableOpacity style={s.navBtn} onPress={() => setStudentMenu(true)}>
               <Text style={s.navBtnIcon}>🎓</Text>
