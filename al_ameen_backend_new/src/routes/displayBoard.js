@@ -6,7 +6,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const router = express.Router();
 const MODES = new Set(['display', 'auto', 'routine', 'notice', 'result', 'weekly_exam']);
 const GROUPS = new Set(['all', 'v_x', 'xi_xii', 'coaching']);
-const DEFAULTS = { mode: 'auto', routine_group: 'all', class_end_time: '15:00', coaching_start_time: '18:00', coaching_end_time: '21:15', v_x_start_time: '10:00', v_x_end_time: '15:00', xi_xii_start_time: '06:00', xi_xii_end_time: '13:00', weekly_start_time: '06:00', weekly_end_time: '13:00', result_start_time: '06:00', result_end_time: '13:00', result_type: 'terminal', result_exam_id: null, weekly_result_batch_id: null, notice_ids: [], display_notices: [], weekly_exam_items: [] };
+const DEFAULTS = { mode: 'auto', routine_group: 'all', class_end_time: '15:00', coaching_start_time: '18:00', coaching_end_time: '21:15', v_x_start_time: '10:00', v_x_end_time: '15:00', xi_xii_start_time: '06:00', xi_xii_end_time: '13:00', weekly_start_time: '06:00', weekly_end_time: '13:00', weekly_test_date: null, result_start_time: '06:00', result_end_time: '13:00', result_type: 'terminal', result_exam_id: null, weekly_result_batch_id: null, notice_ids: [], display_notices: [], weekly_exam_items: [] };
 
 const ready = pool.query(`
   CREATE TABLE IF NOT EXISTS display_board_settings (
@@ -22,6 +22,7 @@ const ready = pool.query(`
     xi_xii_end_time TEXT NOT NULL DEFAULT '13:00',
     weekly_start_time TEXT NOT NULL DEFAULT '06:00',
     weekly_end_time TEXT NOT NULL DEFAULT '13:00',
+    weekly_test_date TEXT NULL,
     result_start_time TEXT NOT NULL DEFAULT '06:00',
     result_end_time TEXT NOT NULL DEFAULT '13:00',
     result_exam_id INTEGER NULL,
@@ -31,7 +32,7 @@ const ready = pool.query(`
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_by INTEGER NULL
   )
-`).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS weekly_exam_items JSONB NOT NULL DEFAULT '[]'::jsonb`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS notice_ids JSONB NOT NULL DEFAULT '[]'::jsonb`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS display_notices JSONB NOT NULL DEFAULT '[]'::jsonb`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS coaching_start_time TEXT NOT NULL DEFAULT '18:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS coaching_end_time TEXT NOT NULL DEFAULT '21:15'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS v_x_start_time TEXT NOT NULL DEFAULT '10:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS v_x_end_time TEXT NOT NULL DEFAULT '15:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS xi_xii_start_time TEXT NOT NULL DEFAULT '06:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS xi_xii_end_time TEXT NOT NULL DEFAULT '13:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS weekly_start_time TEXT NOT NULL DEFAULT '06:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS weekly_end_time TEXT NOT NULL DEFAULT '13:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS result_start_time TEXT NOT NULL DEFAULT '06:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS result_end_time TEXT NOT NULL DEFAULT '13:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS result_type TEXT NOT NULL DEFAULT 'terminal'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS weekly_result_batch_id INTEGER NULL`)).then(() => pool.query(`
+`).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS weekly_exam_items JSONB NOT NULL DEFAULT '[]'::jsonb`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS notice_ids JSONB NOT NULL DEFAULT '[]'::jsonb`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS display_notices JSONB NOT NULL DEFAULT '[]'::jsonb`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS coaching_start_time TEXT NOT NULL DEFAULT '18:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS coaching_end_time TEXT NOT NULL DEFAULT '21:15'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS v_x_start_time TEXT NOT NULL DEFAULT '10:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS v_x_end_time TEXT NOT NULL DEFAULT '15:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS xi_xii_start_time TEXT NOT NULL DEFAULT '06:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS xi_xii_end_time TEXT NOT NULL DEFAULT '13:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS weekly_start_time TEXT NOT NULL DEFAULT '06:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS weekly_end_time TEXT NOT NULL DEFAULT '13:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS weekly_test_date TEXT NULL`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS result_start_time TEXT NOT NULL DEFAULT '06:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS result_end_time TEXT NOT NULL DEFAULT '13:00'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS result_type TEXT NOT NULL DEFAULT 'terminal'`)).then(() => pool.query(`ALTER TABLE display_board_settings ADD COLUMN IF NOT EXISTS weekly_result_batch_id INTEGER NULL`)).then(() => pool.query(`
   INSERT INTO display_board_settings (id, mode, routine_group, class_end_time)
   VALUES (1, 'auto', 'all', '15:00') ON CONFLICT (id) DO NOTHING
 `));
@@ -43,7 +44,7 @@ const istTime = () => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata
 
 async function settings() {
   await ready;
-  const row = (await pool.query('SELECT mode,routine_group,class_end_time,coaching_start_time,coaching_end_time,v_x_start_time,v_x_end_time,xi_xii_start_time,xi_xii_end_time,weekly_start_time,weekly_end_time,result_start_time,result_end_time,result_type,result_exam_id,weekly_result_batch_id,notice_ids,display_notices,weekly_exam_items,updated_at FROM display_board_settings WHERE id=1')).rows[0];
+  const row = (await pool.query('SELECT mode,routine_group,class_end_time,coaching_start_time,coaching_end_time,v_x_start_time,v_x_end_time,xi_xii_start_time,xi_xii_end_time,weekly_start_time,weekly_end_time,weekly_test_date,result_start_time,result_end_time,result_type,result_exam_id,weekly_result_batch_id,notice_ids,display_notices,weekly_exam_items,updated_at FROM display_board_settings WHERE id=1')).rows[0];
   return { ...DEFAULTS, ...(row || {}) };
 }
 
@@ -141,7 +142,7 @@ router.get('/public', asyncHandler(async (req, res) => {
       playlist.push({ mode: 'notice', notices: [notice] });
     }
     if (isTimingActive(config.weekly_start_time, config.weekly_end_time) && Array.isArray(config.weekly_exam_items) && config.weekly_exam_items.length) {
-      playlist.push({ mode: 'weekly_exam', weekly_exam_items: config.weekly_exam_items });
+      playlist.push({ mode: 'weekly_exam', weekly_exam_items: config.weekly_exam_items, date: config.weekly_test_date || date });
     }
     if (isTimingActive(config.result_start_time, config.result_end_time)) {
       const item = config.result_type === 'weekly' ? await weeklyResult(config.weekly_result_batch_id) : await result(config.result_exam_id);
@@ -160,12 +161,13 @@ router.get('/public', asyncHandler(async (req, res) => {
     xi_xii_end_time: config.xi_xii_end_time,
     weekly_start_time: config.weekly_start_time,
     weekly_end_time: config.weekly_end_time,
+    weekly_test_date: config.weekly_test_date || null,
     result_start_time: config.result_start_time,
     result_end_time: config.result_end_time,
   };
 
   if (isAutoOrDisplay && playlist.length >= 1) {
-    return res.json({ success: true, mode: 'playlist', playlist, config: configPayload, date, server_time: now });
+    return res.json({ success: true, mode: 'playlist', playlist, config: configPayload, date, weekly_test_date: config.weekly_test_date || null, server_time: now });
   }
 
   let effectiveMode = config.mode, routineGroup = config.routine_group;
@@ -185,6 +187,7 @@ router.get('/public', asyncHandler(async (req, res) => {
     mode: effectiveMode,
     config: { ...configPayload, routine_group: routineGroup },
     date,
+    weekly_test_date: config.weekly_test_date || null,
     server_time: now,
   };
 
@@ -210,7 +213,10 @@ router.get('/public', asyncHandler(async (req, res) => {
     payload.notices = displayNotices;
   }
   if (effectiveMode === 'result') payload.result = now >= config.result_start_time && now <= config.result_end_time ? (config.result_type === 'weekly' ? await weeklyResult(config.weekly_result_batch_id) : await result(config.result_exam_id)) : null;
-  if (effectiveMode === 'weekly_exam') payload.weekly_exam_items = now >= config.weekly_start_time && now <= config.weekly_end_time && Array.isArray(config.weekly_exam_items) ? config.weekly_exam_items : [];
+  if (effectiveMode === 'weekly_exam') {
+    payload.weekly_exam_items = now >= config.weekly_start_time && now <= config.weekly_end_time && Array.isArray(config.weekly_exam_items) ? config.weekly_exam_items : [];
+    payload.weekly_test_date = config.weekly_test_date || null;
+  }
   res.json(payload);
 }));
 
@@ -270,6 +276,7 @@ router.put('/control', auth, allow('super_admin', 'admin'), asyncHandler(async (
     end_time: normTime(notice?.end_time, '23:59'),
     active: notice?.active !== false,
   })).filter(notice => notice.title || notice.notice_text || notice.attachment_url) : [];
+  const weeklyTestDate = body.weekly_test_date ? String(body.weekly_test_date).trim() : null;
   const weeklyItems = Array.isArray(body.weekly_exam_items) ? body.weekly_exam_items.map(item => ({
     class_name: String(item?.class_name || '').trim(),
     subject: String(item?.subject || '').trim(),
@@ -295,8 +302,8 @@ router.put('/control', auth, allow('super_admin', 'admin'), asyncHandler(async (
     return res.status(400).json({ success: false, message: 'Selected terminal result is not published.' });
   }
 
-  console.log('[PUT /control] Updating DB with:', { mode, group, vxStart, vxEnd, xiStart, xiEnd, coachingStart, coachingEnd });
-  await pool.query(`UPDATE display_board_settings SET mode=$1,routine_group=$2,class_end_time=$3,coaching_start_time=$4,coaching_end_time=$5,v_x_start_time=$6,v_x_end_time=$7,xi_xii_start_time=$8,xi_xii_end_time=$9,weekly_start_time=$10,weekly_end_time=$11,result_start_time=$12,result_end_time=$13,result_type=$14,result_exam_id=$15,weekly_result_batch_id=$16,notice_ids=$17::jsonb,display_notices=$18::jsonb,weekly_exam_items=$19::jsonb,updated_at=NOW(),updated_by=$20 WHERE id=1`, [mode, group, endTime, coachingStart, coachingEnd, vxStart, vxEnd, xiStart, xiEnd, weeklyStart, weeklyEnd, resultStart, resultEnd, resultType, resultId, weeklyResultBatchId, JSON.stringify(noticeIds), JSON.stringify(displayNotices), JSON.stringify(weeklyItems), req.user.userId]);
+  console.log('[PUT /control] Updating DB with:', { mode, group, vxStart, vxEnd, xiStart, xiEnd, coachingStart, coachingEnd, weeklyTestDate });
+  await pool.query(`UPDATE display_board_settings SET mode=$1,routine_group=$2,class_end_time=$3,coaching_start_time=$4,coaching_end_time=$5,v_x_start_time=$6,v_x_end_time=$7,xi_xii_start_time=$8,xi_xii_end_time=$9,weekly_start_time=$10,weekly_end_time=$11,weekly_test_date=$12,result_start_time=$13,result_end_time=$14,result_type=$15,result_exam_id=$16,weekly_result_batch_id=$17,notice_ids=$18::jsonb,display_notices=$19::jsonb,weekly_exam_items=$20::jsonb,updated_at=NOW(),updated_by=$21 WHERE id=1`, [mode, group, endTime, coachingStart, coachingEnd, vxStart, vxEnd, xiStart, xiEnd, weeklyStart, weeklyEnd, weeklyTestDate, resultStart, resultEnd, resultType, resultId, weeklyResultBatchId, JSON.stringify(noticeIds), JSON.stringify(displayNotices), JSON.stringify(weeklyItems), req.user.userId]);
   console.log('[PUT /control] DB updated successfully');
   res.json({ success: true, settings: await settings() });
 }));
