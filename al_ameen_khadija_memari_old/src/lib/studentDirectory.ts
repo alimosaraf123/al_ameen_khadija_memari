@@ -29,14 +29,38 @@ export function studentStatusLabel(student: any): 'Active' | 'Passout' | 'Dropou
   return isPassoutStudent(student) ? 'Passout' : 'Dropout';
 }
 
+export const STUDENT_SEARCH_FIELDS = [
+  'student_name',
+  'registration_no',
+  'admission_no',
+  'roll_no',
+  'father_name',
+  'mother_name',
+  'guardian_name',
+  'mobile_number',
+  'guardian_mobile',
+  'whatsapp_number',
+  'aadhaar_no',
+  'room_name',
+  'session_from',
+  'session_to',
+  'academic_session',
+  'class_name',
+  'present_village',
+  'permanent_village',
+  'present_district',
+];
+
 export function filterStudents(students: any[], filters: StudentFilters) {
   const query = filters.search.trim().toLowerCase();
+  const hasQuery = Boolean(query);
   return students.filter(student => {
     const gender = String(student.gender || '').trim().toLowerCase();
     const normalizedGender = gender === 'm' ? 'male' : gender === 'f' ? 'female' : gender;
     const isPastSessionSelected = filters.year !== 'all' && filters.year !== '2026-2027' && filters.year !== '2026-2026';
     const matchesStatus =
       filters.status === 'all' ||
+      hasQuery ||
       (isPastSessionSelected && filters.status === 'active') ||
       (filters.status === 'active'
         ? student.is_active === true
@@ -49,7 +73,7 @@ export function filterStudents(students: any[], filters: StudentFilters) {
       && (filters.className === 'all' || normalizeStudentClass(student.class_name) === normalizeStudentClass(filters.className))
       && (filters.gender === 'all' || normalizedGender === filters.gender)
       && matchesStatus
-      && (!query || ['student_name', 'registration_no', 'mobile_number', 'guardian_mobile', 'whatsapp_number', 'room_name']
+      && (!query || STUDENT_SEARCH_FIELDS
         .some(key => String(student[key] ?? '').toLowerCase().includes(query)));
   });
 }

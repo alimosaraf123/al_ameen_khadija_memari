@@ -112,7 +112,7 @@ const DigitField = ({ label, field, value, onChangeText, length }: any) => {
 };
 
 const BLOOD_GROUPS = ['', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
-const SESSION_OPTIONS = Array.from({ length: 25 }, (_, index) => 2026 + index).flatMap(year => [year + '-' + year, year + '-' + (year + 1)]);
+const SESSION_OPTIONS = Array.from({ length: 25 }, (_, index) => 2018 + index).flatMap(year => [year + '-' + year, year + '-' + (year + 1)]);
 
 const SectionTitle = ({ children }: any) => (
   <View style={styles.sectionHeader}>
@@ -249,7 +249,7 @@ const asDate = (value: any) =>
   value ? String(value).slice(0, 10) : '';
 
 export default function Students({ initialScreen }: { initialScreen?: 'details' | 'entry' } = {}) {
-  const params = useLocalSearchParams<{ screen?: string; mode?: string }>();
+  const params = useLocalSearchParams<{ screen?: string; mode?: string; status?: string; search?: string; year?: string }>();
 
   const getInitialScreen = (): 'details' | 'entry' => {
     if (initialScreen) return initialScreen;
@@ -890,6 +890,9 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
           onEdit={startEdit}
           onDeactivate={deleteStudent}
           canDeactivate={userRole === 'super_admin'}
+          initialStatus={params?.status || 'all'}
+          initialSearch={params?.search || ''}
+          initialYear={params?.year || 'all'}
         />
       </ScrollView>
       <ScrollNavigationButtons scrollRef={detailsScrollRef} />

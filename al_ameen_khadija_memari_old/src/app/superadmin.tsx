@@ -818,7 +818,7 @@ export default function Dashboard() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => router.push('/students' as any)}
+              onPress={() => router.push('/students?status=all' as any)}
               style={s.searchPill}
             >
               <Text style={s.searchPillText}>🔍 Student Search</Text>

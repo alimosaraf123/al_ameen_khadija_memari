@@ -320,9 +320,17 @@ const columns: [string, string, number][] = [
   ['mobile_number', 'Mobile', 125], ['whatsapp_number', 'WhatsApp', 125], ['room_name', 'Room No.', 105], ['is_active', 'Status', 90], ['action', 'Action', 195],
 ];
 
-export default function StudentDirectory({ students, loading, error, onEdit, onRefresh, onDeactivate, canDeactivate }: {
+export default function StudentDirectory({
+  students, loading, error, onEdit, onRefresh, onDeactivate, canDeactivate,
+  initialStatus = 'all',
+  initialSearch = '',
+  initialYear = 'all',
+}: {
   students: any[]; loading: boolean; error: string; onEdit: (student: any) => void; onRefresh: () => void; onDeactivate: (student: any) => void;
   canDeactivate?: boolean;
+  initialStatus?: string;
+  initialSearch?: string;
+  initialYear?: string;
 }) {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   useEffect(() => {
@@ -337,11 +345,22 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
       return [key, title, width] as [string, string, number];
     });
   }, [allowDeactivate]);
-  const [year, setYear] = useState('all');
+  const [year, setYear] = useState(initialYear || 'all');
   const [className, setClassName] = useState('all');
   const [gender, setGender] = useState('all');
-  const [status, setStatus] = useState('active');
-  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState(initialStatus || 'all');
+  const [search, setSearch] = useState(initialSearch || '');
+
+  useEffect(() => {
+    if (initialStatus) setStatus(initialStatus);
+  }, [initialStatus]);
+  useEffect(() => {
+    if (initialSearch !== undefined) setSearch(initialSearch);
+  }, [initialSearch]);
+  useEffect(() => {
+    if (initialYear) setYear(initialYear);
+  }, [initialYear]);
+
   const [size, setSize] = useState('10');
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState({ key: 'student_name', ascending: true });
@@ -356,7 +375,21 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
   const [documentsError, setDocumentsError] = useState('');
   const [documentBusy, setDocumentBusy] = useState<string | null>(null);
   const [pendingDocuments, setPendingDocuments] = useState<Record<string, any>>({});
-  const sessions = useMemo(() => [...new Set(students.map(studentSession).filter(Boolean))].sort().reverse(), [students]);
+
+  const defaultSessions = useMemo(() => {
+    const list: string[] = [];
+    const currentYear = new Date().getFullYear();
+    for (let y = currentYear + 1; y >= 2018; y--) {
+      list.push(`${y}-${y + 1}`);
+      list.push(`${y}-${y}`);
+    }
+    return list;
+  }, []);
+
+  const sessions = useMemo(() => {
+    const fromStudents = students.map(studentSession).filter(Boolean);
+    return [...new Set([...fromStudents, ...defaultSessions])].sort().reverse();
+  }, [students, defaultSessions]);
   const classes = useMemo(() => [...new Set<string>([
     ...STUDENT_CLASSES,
     ...students.map(student => normalizeStudentClass(student.class_name)).filter(Boolean).filter(isVisibleStudentClass),
@@ -817,11 +850,11 @@ export default function StudentDirectory({ students, loading, error, onEdit, onR
       <Select label="Session" value={year} onChange={setYear} options={[{ value: 'all', label: 'All Sessions' }, ...sessions.map(session => ({ value: session, label: session }))]} />
       <Select label="Class" value={className} onChange={setClassName} options={[{ value: 'all', label: 'All Classes' }, ...classes.map(c => ({ value: c, label: c }))]} />
       <Select label="Gender" value={gender} onChange={setGender} options={[{ value: 'all', label: 'All Genders' }, { value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }]} />
-      <Select label="Status" value={status} onChange={setStatus} options={[{ value: 'active', label: 'Active' }, { value: 'passout', label: 'Passout' }, { value: 'dropout', label: 'Dropout' }, { value: 'inactive', label: 'Dropout / Passout' }, { value: 'all', label: 'All Statuses' }]} />
+      <Select label="Status" value={status} onChange={setStatus} options={[{ value: 'all', label: 'All Statuses' }, { value: 'active', label: 'Active' }, { value: 'passout', label: 'Passout' }, { value: 'dropout', label: 'Dropout' }, { value: 'inactive', label: 'Dropout / Passout' }]} />
     </View>
     <View style={s.toolbar}>
       <View style={s.inline}><Text>Show</Text><Select label="Entries per page" value={size} onChange={setSize} options={['10', '25', '50', '100', 'all'].map(value => ({ value, label: value === 'all' ? 'All' : value }))} /><Text>Entries</Text></View>
-      <View style={s.inline}><Text>Search:</Text><TextInput accessibilityLabel="Search students" value={search} onChangeText={setSearch} style={s.search} placeholder="Name, Reg. or mobile" /></View>
+      <View style={s.inline}><Text>Search:</Text><TextInput accessibilityLabel="Search students" value={search} onChangeText={setSearch} style={s.search} placeholder="Name, Reg, Mobile, Father..." /></View>
       <TouchableOpacity accessibilityRole="button" onPress={onRefresh} style={s.select}><Text>Refresh</Text></TouchableOpacity>
     </View>
     {loading ? <ActivityIndicator style={{ margin: 20 }} /> : error ? <Text style={s.error}>{error}</Text> : <>
