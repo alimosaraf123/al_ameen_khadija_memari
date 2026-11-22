@@ -66,23 +66,23 @@ export function buildDocumentViewerHtml(options: {
     }
     .toolbar {
       position: fixed;
-      bottom: 10px;
-      right: 12px;
-      background: rgba(15, 23, 42, 0.78);
+      bottom: 8px;
+      right: 8px;
+      background: rgba(15, 23, 42, 0.82);
       backdrop-filter: blur(6px);
       -webkit-backdrop-filter: blur(6px);
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 6px;
-      padding: 2px 5px;
+      padding: 2px 4px;
       display: flex;
       align-items: center;
-      gap: 3px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+      gap: 2px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
       z-index: 9999;
       opacity: 0.6;
       transition: opacity 0.2s ease;
       font-size: 11px;
-      transform: scale(0.85);
+      transform: scale(0.5);
       transform-origin: bottom right;
     }
     .toolbar:hover {
@@ -124,20 +124,25 @@ export function buildDocumentViewerHtml(options: {
     .toolbar-toggle {
       display: none;
       position: fixed;
-      bottom: 10px;
-      right: 12px;
-      width: 26px;
-      height: 26px;
+      bottom: 8px;
+      right: 8px;
+      width: 22px;
+      height: 22px;
       border-radius: 50%;
       background: rgba(15, 23, 42, 0.75);
       backdrop-filter: blur(4px);
       border: 1px solid rgba(255, 255, 255, 0.2);
       color: #fff;
-      font-size: 12px;
+      font-size: 11px;
       cursor: pointer;
       z-index: 9999;
       align-items: center;
       justify-content: center;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+      opacity: 0.6;
+      transform: scale(0.7);
+      transform-origin: bottom right;
+    }
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
       opacity: 0.7;
     }
