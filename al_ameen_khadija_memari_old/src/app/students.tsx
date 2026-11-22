@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import AcademyHeader from '../components/AcademyHeader';
+import TopInstitutionNav from '../components/TopInstitutionNav';
 import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import {
   ScrollView,
@@ -872,6 +873,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     return <SafeAreaView style={styles.container}>
       <ScrollView ref={detailsScrollRef} contentContainerStyle={styles.content}>
         <AcademyHeader />
+        <TopInstitutionNav />
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
           <H1>Students</H1>
           <StudentMenuActions
@@ -913,6 +915,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
           keyboardShouldPersistTaps="handled"
         >
           <AcademyHeader />
+          <TopInstitutionNav />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
             <H1>{editingId !== null ? 'Edit Student' : 'Student Entry'}</H1>
             <StudentMenuActions

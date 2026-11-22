@@ -700,6 +700,39 @@ export default function StudentDirectory({
   };
 
   return <View style={s.directory}>
+    {/* Global Student Directory Search Card (Matching Image 2) */}
+    <View style={s.globalSearchCard}>
+      <View style={s.globalSearchHeader}>
+        <View style={s.globalSearchIconBadge}>
+          <Text style={{ fontSize: 16 }}>🔍</Text>
+        </View>
+        <Text style={s.globalSearchTitle}>Global Student Directory Search</Text>
+      </View>
+      <View style={s.globalSearchRow}>
+        <View style={s.globalSearchInputWrapper}>
+          <Text style={s.globalSearchInputIcon}>🔍</Text>
+          <TextInput
+            accessibilityLabel="Search by student name or details"
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search by Student Name, 10-digit Mobile, Registration No, Student ID or Email..."
+            placeholderTextColor="#94a3b8"
+            style={s.globalSearchInput}
+            returnKeyType="search"
+            onSubmitEditing={() => setPage(1)}
+          />
+          {!!search && (
+            <TouchableOpacity onPress={() => setSearch('')} style={s.globalClearBtn}>
+              <Text style={{ color: '#64748b', fontSize: 16, fontWeight: '700' }}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <TouchableOpacity style={s.globalSearchButton} onPress={() => setPage(1)}>
+          <Text style={s.globalSearchButtonText}>🔍 Search</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+
     <View style={s.filters}>
       <Select label="Session" value={year} onChange={setYear} options={[{ value: 'all', label: 'All Sessions' }, ...sessions.map(session => ({ value: session, label: session }))]} />
       <Select label="Class" value={className} onChange={setClassName} options={[{ value: 'all', label: 'All Classes' }, ...classes.map(c => ({ value: c, label: c }))]} />
@@ -728,7 +761,15 @@ export default function StudentDirectory({
           </View>)}
         </View>
       </ScrollView>
-      {!rows.length && <Text style={s.empty}>No students match these filters.</Text>}
+      {!rows.length && (
+        <View style={s.findStudentPromptCard}>
+          <Text style={{ fontSize: 44, marginBottom: 8 }}>🎓</Text>
+          <Text style={s.findStudentPromptTitle}>Find Any Student Instantly</Text>
+          <Text style={s.findStudentPromptSubtitle}>
+            Enter A Student's Name, Mobile Number, Registration Number, Alphanumeric ID, Or Email Above And Press Enter.
+          </Text>
+        </View>
+      )}
       <View style={s.toolbar}><Text>Showing {filtered.length ? start + 1 : 0} to {Math.min(start + pageSize, filtered.length)} of {filtered.length} entries</Text>
         <View style={s.inline}><TouchableOpacity accessibilityRole="button" disabled={currentPage === 1} onPress={() => setPage(currentPage - 1)} style={[s.select, currentPage === 1 && s.disabled]}><Text>Previous</Text></TouchableOpacity><Text>{currentPage} / {pages}</Text><TouchableOpacity accessibilityRole="button" disabled={currentPage === pages} onPress={() => setPage(currentPage + 1)} style={[s.select, currentPage === pages && s.disabled]}><Text>Next</Text></TouchableOpacity></View>
       </View>
@@ -852,4 +893,120 @@ const s = StyleSheet.create({
   busyText: { textAlign: 'center', color: '#1565c0', fontWeight: '700', padding: 8 },
   documentTopBar: { minHeight: 44, marginHorizontal: 14, marginTop: 12, backgroundColor: '#eef6fc', borderWidth: 1, borderColor: '#64748b', borderRadius: 5, padding: 5, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, documentCloseButton: { backgroundColor: '#dc3545', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 4 }, lastUpdated: { fontSize: 9, textAlign: 'right', color: '#475569' }, registrationLine: { paddingHorizontal: 16, paddingTop: 8, color: '#475569', fontSize: 16 }, documentGrid: { padding: 14, flexDirection: 'row', flexWrap: 'wrap', gap: 18, justifyContent: 'space-around', alignItems: 'flex-start' }, documentTile: { width: 210, minHeight: 270, borderWidth: 1, borderColor: '#aeb7c1', borderRadius: 7, backgroundColor: '#f8fafc', overflow: 'hidden' }, tileTitle: { textAlign: 'center', fontSize: 17, paddingVertical: 4, color: '#111827', backgroundColor: '#fff' }, previewBox: { height: 172, marginHorizontal: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }, documentPreview: { width: '100%', height: '100%' }, noPreview: { color: '#94a3b8', fontSize: 12 }, chooseButton: { height: 29, backgroundColor: '#60a5fa', justifyContent: 'center', paddingHorizontal: 6 }, chooseText: { fontSize: 11, color: '#0f172a' }, tileActions: { minHeight: 43, backgroundColor: '#d1d5db', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', padding: 4 }, iconButton: { minWidth: 36, height: 32, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 4 }, viewIcon: { backgroundColor: '#0d6efd' }, printIcon: { backgroundColor: '#059669' }, downloadIcon: { backgroundColor: '#06b6d4' }, shareIcon: { backgroundColor: '#25D366' }, waIconImg: { width: 19, height: 19 }, iconText: { color: '#fff', fontSize: 19, fontWeight: '800', lineHeight: 21 }, uploadAllButton: { alignSelf: 'center', backgroundColor: '#0d6efd', paddingHorizontal: 18, paddingVertical: 11, borderRadius: 6, marginBottom: 14 },
   modalHeader: { backgroundColor: '#11101e', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, modalTitle: { color: '#fff', fontSize: 16, fontWeight: '700' }, close: { color: '#fff', fontSize: 28, paddingHorizontal: 8 }, detailRow: { flexDirection: 'row', gap: 12, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }, detailLabel: { width: '42%', color: '#475569', fontWeight: '600' },
+
+  // Global Student Directory Search (Image 2 style)
+  globalSearchCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  globalSearchHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+  },
+  globalSearchIconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#eff6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  globalSearchTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: 0.2,
+  },
+  globalSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  globalSearchInputWrapper: {
+    flex: 1,
+    minWidth: 260,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#818cf8',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'web' ? 6 : 2,
+  },
+  globalSearchInputIcon: {
+    fontSize: 16,
+    color: '#6366f1',
+    marginRight: 8,
+  },
+  globalSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#0f172a',
+    fontWeight: '600',
+    padding: 0,
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}),
+  } as any,
+  globalClearBtn: {
+    padding: 4,
+  },
+  globalSearchButton: {
+    backgroundColor: '#4f46e5',
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#4f46e5',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  globalSearchButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  findStudentPromptCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  findStudentPromptTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1e293b',
+    marginBottom: 6,
+  },
+  findStudentPromptSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+    maxWidth: 500,
+    lineHeight: 18,
+  },
 });
