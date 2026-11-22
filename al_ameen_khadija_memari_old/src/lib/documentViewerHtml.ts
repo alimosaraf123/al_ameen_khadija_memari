@@ -66,52 +66,83 @@ export function buildDocumentViewerHtml(options: {
     }
     .toolbar {
       position: fixed;
-      bottom: 16px;
-      right: 20px;
-      background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      border-radius: 8px;
-      padding: 4px 8px;
+      bottom: 10px;
+      right: 12px;
+      background: rgba(15, 23, 42, 0.78);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      padding: 2px 5px;
       display: flex;
       align-items: center;
-      gap: 6px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+      gap: 3px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
       z-index: 9999;
-      opacity: 0.85;
+      opacity: 0.6;
       transition: opacity 0.2s ease;
-      font-size: 13px;
+      font-size: 11px;
+      transform: scale(0.85);
+      transform-origin: bottom right;
     }
     .toolbar:hover {
       opacity: 1;
     }
     .toolbar button {
-      background: rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.12);
       border: 1px solid rgba(255, 255, 255, 0.2);
       color: #ffffff;
-      font-size: 13px;
+      font-size: 11px;
       font-weight: 700;
-      padding: 4px 8px;
+      padding: 0;
       border-radius: 4px;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 26px;
-      height: 26px;
+      width: 22px;
+      height: 22px;
       line-height: 1;
     }
+    .toolbar button.text-btn {
+      width: auto;
+      padding: 0 5px;
+      font-size: 10px;
+    }
     .toolbar button:hover {
-      background: rgba(255, 255, 255, 0.35);
+      background: rgba(255, 255, 255, 0.3);
     }
     .toolbar span#zoomLevel {
       color: #38bdf8;
-      font-size: 12px;
+      font-size: 10px;
       font-weight: 700;
-      min-width: 42px;
+      min-width: 34px;
       text-align: center;
       cursor: pointer;
-      padding: 2px 4px;
+      padding: 0 2px;
+    }
+    .toolbar-toggle {
+      display: none;
+      position: fixed;
+      bottom: 10px;
+      right: 12px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      font-size: 12px;
+      cursor: pointer;
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+      opacity: 0.7;
+    }
+    .toolbar-toggle:hover {
+      opacity: 1;
     }
     @media print {
       html, body {
@@ -120,7 +151,7 @@ export function buildDocumentViewerHtml(options: {
         overflow: visible !important;
         background: #ffffff !important;
       }
-      .toolbar {
+      .toolbar, .toolbar-toggle {
         display: none !important;
       }
       .viewport {
@@ -151,13 +182,15 @@ export function buildDocumentViewerHtml(options: {
       <img id="docImg" src="${imageUrl}" alt="${title}" onload="onImgLoad()" />
     </div>
   </div>
+  <button class="toolbar-toggle" id="btnToggleShow" title="Show Toolbar">🔍</button>
   <div class="toolbar" id="toolbar">
-    <button id="btnZoomOut" title="Zoom Out (Scroll Down / -)">−</button>
+    <button id="btnZoomOut" title="Zoom Out (−)">−</button>
     <span id="zoomLevel" title="Click to Reset (100%)">100%</span>
-    <button id="btnZoomIn" title="Zoom In (Scroll Up / +)">+</button>
-    <button id="btnFit" title="Fit to Screen">Fit</button>
+    <button id="btnZoomIn" title="Zoom In (+)">+</button>
+    <button id="btnFit" class="text-btn" title="Fit to Screen">Fit</button>
     <button id="btnRotate" title="Rotate (R)">↻</button>
     <button id="btnPrint" title="Print Document">🖨️</button>
+    <button id="btnMinimize" title="Hide Toolbar" style="opacity: 0.6; margin-left: 2px;">✕</button>
   </div>
   <script>
     let scale = 1;
@@ -284,6 +317,17 @@ export function buildDocumentViewerHtml(options: {
     });
     document.getElementById('btnPrint').addEventListener('click', () => {
       window.print();
+    });
+
+    const toolbarEl = document.getElementById('toolbar');
+    const toggleBtnEl = document.getElementById('btnToggleShow');
+    document.getElementById('btnMinimize').addEventListener('click', () => {
+      toolbarEl.style.display = 'none';
+      toggleBtnEl.style.display = 'inline-flex';
+    });
+    toggleBtnEl.addEventListener('click', () => {
+      toolbarEl.style.display = 'flex';
+      toggleBtnEl.style.display = 'none';
     });
 
     // Keyboard shortcuts
