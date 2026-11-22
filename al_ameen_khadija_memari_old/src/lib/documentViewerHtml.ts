@@ -8,7 +8,7 @@ export function buildDocumentViewerHtml(options: {
 <html>
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>${title}</title>
   <style>
     @page {
@@ -27,9 +27,9 @@ export function buildDocumentViewerHtml(options: {
       width: 100vw !important;
       height: 100vh !important;
       overflow: hidden !important;
-      background: #0f172a !important;
-      color: #f8fafc !important;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #e2e8f0 !important;
+      color: #0f172a !important;
+      font-family: system-ui, -apple-system, sans-serif;
       user-select: none;
       -webkit-user-select: none;
     }
@@ -49,90 +49,69 @@ export function buildDocumentViewerHtml(options: {
     }
     .img-container {
       transform-origin: center center;
-      transition: transform 0.05s ease-out;
+      transition: transform 0.04s ease-out;
       display: inline-block;
       will-change: transform;
     }
     img {
-      max-width: 90vw;
-      max-height: 86vh;
+      max-width: 95vw;
+      max-height: 94vh;
       object-fit: contain;
       display: block;
       margin: auto;
       background: #ffffff !important;
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
       pointer-events: none;
-      border-radius: 4px;
+      border: 1px solid #cbd5e1;
     }
     .toolbar {
       position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(15, 23, 42, 0.9);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 40px;
-      padding: 6px 16px;
+      bottom: 16px;
+      right: 20px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 8px;
+      padding: 4px 8px;
       display: flex;
       align-items: center;
-      gap: 10px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-      z-index: 10000;
+      gap: 6px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+      z-index: 9999;
+      opacity: 0.85;
+      transition: opacity 0.2s ease;
+      font-size: 13px;
+    }
+    .toolbar:hover {
+      opacity: 1;
     }
     .toolbar button {
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.2);
       color: #ffffff;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 700;
-      padding: 7px 13px;
-      border-radius: 20px;
+      padding: 4px 8px;
+      border-radius: 4px;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.15s ease;
+      min-width: 26px;
+      height: 26px;
       line-height: 1;
     }
     .toolbar button:hover {
-      background: rgba(255, 255, 255, 0.25);
-      transform: translateY(-1px);
-    }
-    .toolbar button:active {
-      transform: translateY(1px);
+      background: rgba(255, 255, 255, 0.35);
     }
     .toolbar span#zoomLevel {
       color: #38bdf8;
-      font-size: 14px;
-      font-weight: 800;
-      min-width: 52px;
+      font-size: 12px;
+      font-weight: 700;
+      min-width: 42px;
       text-align: center;
       cursor: pointer;
-      padding: 6px 8px;
-      border-radius: 6px;
-    }
-    .toolbar span#zoomLevel:hover {
-      background: rgba(255, 255, 255, 0.1);
-    }
-    .zoom-hint {
-      position: fixed;
-      top: 16px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(8px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      color: #e2e8f0;
-      font-size: 12px;
-      font-weight: 600;
-      padding: 6px 16px;
-      border-radius: 20px;
-      pointer-events: none;
-      z-index: 9999;
-      opacity: 0.95;
-      letter-spacing: 0.4px;
+      padding: 2px 4px;
     }
     @media print {
       html, body {
@@ -140,9 +119,8 @@ export function buildDocumentViewerHtml(options: {
         height: 100% !important;
         overflow: visible !important;
         background: #ffffff !important;
-        color: #000000 !important;
       }
-      .toolbar, .zoom-hint {
+      .toolbar {
         display: none !important;
       }
       .viewport {
@@ -160,6 +138,7 @@ export function buildDocumentViewerHtml(options: {
         max-width: 100% !important;
         max-height: 98vh !important;
         box-shadow: none !important;
+        border: none !important;
         page-break-inside: avoid;
         margin: auto !important;
       }
@@ -167,7 +146,6 @@ export function buildDocumentViewerHtml(options: {
   </style>
 </head>
 <body>
-  <div class="zoom-hint">Ctrl + Mouse Scroll to Zoom • Drag to Move • Double Click to 2x</div>
   <div class="viewport" id="viewport">
     <div class="img-container" id="imgContainer">
       <img id="docImg" src="${imageUrl}" alt="${title}" onload="onImgLoad()" />
@@ -177,10 +155,9 @@ export function buildDocumentViewerHtml(options: {
     <button id="btnZoomOut" title="Zoom Out (Scroll Down / -)">−</button>
     <span id="zoomLevel" title="Click to Reset (100%)">100%</span>
     <button id="btnZoomIn" title="Zoom In (Scroll Up / +)">+</button>
-    <button id="btnFit" title="Fit to Screen (0)">Fit</button>
-    <button id="btnRotateLeft" title="Rotate Counter-Clockwise">↺</button>
-    <button id="btnRotateRight" title="Rotate Clockwise (R)">↻</button>
-    <button id="btnPrint" title="Print Document (Ctrl+P)">🖨️ Print</button>
+    <button id="btnFit" title="Fit to Screen">Fit</button>
+    <button id="btnRotate" title="Rotate (R)">↻</button>
+    <button id="btnPrint" title="Print Document">🖨️</button>
   </div>
   <script>
     let scale = 1;
@@ -201,8 +178,8 @@ export function buildDocumentViewerHtml(options: {
     }
 
     function setScale(newScale, clientX, clientY) {
-      const minScale = 0.2;
-      const maxScale = 7.0;
+      const minScale = 0.3;
+      const maxScale = 6.0;
       const clamped = Math.min(Math.max(newScale, minScale), maxScale);
       if (clamped === scale) return;
 
@@ -224,7 +201,7 @@ export function buildDocumentViewerHtml(options: {
       updateTransform();
     }
 
-    // Ctrl + mouse wheel OR standard mouse wheel zoom
+    // Ctrl + Mouse Wheel OR regular Mouse Wheel: smooth zoom
     window.addEventListener('wheel', function(e) {
       e.preventDefault();
       const factor = e.deltaY < 0 ? 1.15 : 0.87;
@@ -252,7 +229,7 @@ export function buildDocumentViewerHtml(options: {
       viewport.classList.remove('dragging');
     });
 
-    // Touch support for mobile browsers (pinch zoom & pan)
+    // Touch support (mobile pinch zoom & drag)
     let initialTouchDist = 0;
     let initialScale = 1;
     viewport.addEventListener('touchstart', function(e) {
@@ -286,13 +263,13 @@ export function buildDocumentViewerHtml(options: {
       initialTouchDist = 0;
     });
 
-    // Double click to zoom 2.2x or reset
+    // Double click to zoom in 2x or reset
     viewport.addEventListener('dblclick', function(e) {
       if (e.target.closest('#toolbar')) return;
       if (scale > 1.2) {
         resetZoom();
       } else {
-        setScale(2.2, e.clientX, e.clientY);
+        setScale(2.0, e.clientX, e.clientY);
       }
     });
 
@@ -301,12 +278,8 @@ export function buildDocumentViewerHtml(options: {
     document.getElementById('btnZoomOut').addEventListener('click', () => setScale(scale / 1.25));
     document.getElementById('zoomLevel').addEventListener('click', resetZoom);
     document.getElementById('btnFit').addEventListener('click', resetZoom);
-    document.getElementById('btnRotateRight').addEventListener('click', () => {
+    document.getElementById('btnRotate').addEventListener('click', () => {
       rotation = (rotation + 90) % 360;
-      updateTransform();
-    });
-    document.getElementById('btnRotateLeft').addEventListener('click', () => {
-      rotation = (rotation - 90 + 360) % 360;
       updateTransform();
     });
     document.getElementById('btnPrint').addEventListener('click', () => {

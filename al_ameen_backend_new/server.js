@@ -41,14 +41,15 @@ app.use((req, res, next) => {
   }
 
   // 2. HTTP Strict Transport Security (HSTS) & Complete Transport Encryption Headers
-  res.set({
-    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
-    'Content-Security-Policy': 'upgrade-insecure-requests',
-    'X-Content-Type-Options': 'nosniff',
-    'X-Frame-Options': 'DENY',
-    'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
-  });
+  if (isHttps && process.env.NODE_ENV === 'production') {
+    res.set({
+      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+      'Content-Security-Policy': 'upgrade-insecure-requests',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+    });
+  }
   next();
 });
 app.use(express.json({limit:'20mb'}));
