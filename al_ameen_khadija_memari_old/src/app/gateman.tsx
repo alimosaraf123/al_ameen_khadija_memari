@@ -33,6 +33,16 @@ const PERSON_OPTIONS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((n) => 
   label: n,
 }));
 
+const formatDuration = (mins: number | string | undefined | null) => {
+  const m = Math.max(0, Math.round(Number(mins) || 0));
+  const hrs = Math.floor(m / 60);
+  const remMin = m % 60;
+  if (hrs > 0) {
+    return `${hrs}hrs ${remMin} min`;
+  }
+  return `${remMin} min`;
+};
+
 const safeImageUrl = (url?: string | null) => {
   if (!url) return DEFAULT_GATEMAN_PHOTO_URL;
   let finalUrl = url;
@@ -693,7 +703,7 @@ export default function Gateman() {
                       <Text style={{ color: '#64748b', fontSize: 11, marginTop: 2 }}>
                         Entered: {new Date(v.entered_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         {(v.entered_by_name || v.entered_by_login) ? ` (By: ${v.entered_by_name || v.entered_by_login})` : ''}
-                        {v.exited_at ? ` · Exited: ${new Date(v.exited_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${(v.exited_by_name || v.exited_by_login) ? ` (By: ${v.exited_by_name || v.exited_by_login})` : ''}` : ` · ${v.duration_minutes || 0}m inside`}
+                        {v.exited_at ? ` · Exited: ${new Date(v.exited_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${(v.exited_by_name || v.exited_by_login) ? ` (By: ${v.exited_by_name || v.exited_by_login})` : ''}` : ` · ${formatDuration(v.duration_minutes)} inside`}
                       </Text>
                     </TouchableOpacity>
                   </View>
