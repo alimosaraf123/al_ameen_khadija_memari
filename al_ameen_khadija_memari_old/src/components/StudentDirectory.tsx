@@ -8,6 +8,7 @@ import { api, API_BASE } from '../lib/api';
 import { getToken, getUser } from '../lib/auth';
 import { STUDENT_CLASSES, isVisibleStudentClass } from '../lib/studentClasses';
 import { filterStudents, studentSession, normalizeStudentClass, studentStatusLabel } from '../lib/studentDirectory';
+import { buildDocumentViewerHtml } from '../lib/documentViewerHtml';
 
 type Option = { value: string; label: string; shortLabel?: string; keywords?: string[] };
 export function Select({ label, value, options, onChange, searchable = false, style, textStyle, placeholderTextStyle, chevron, panelWidth, panelMaxHeight }: { label: string; value: string; options: Option[]; onChange: (value: string) => void; searchable?: boolean; style?: any; textStyle?: any; placeholderTextStyle?: any; chevron?: string; panelWidth?: number; panelMaxHeight?: number }) {
@@ -579,84 +580,11 @@ export default function StudentDirectory({
           if (!browserWindow) throw new Error('Browser blocked the new window');
           const title = `${documentStudent?.student_name || 'student'}-photo`;
           browserWindow.document.open();
-          browserWindow.document.write(`<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>${title}</title>
-  <style>
-    @page {
-      margin: 8mm;
-      size: auto;
-      background: #ffffff !important;
-    }
-    *, *::before, *::after {
-      box-sizing: border-box;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-    html, body {
-      margin: 0 !important;
-      padding: 0 !important;
-      width: 100% !important;
-      min-height: 100% !important;
-      background: #ffffff !important;
-      background-color: #ffffff !important;
-      color: #000000 !important;
-    }
-    .img-wrap {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      width: 100%;
-      min-height: 100vh;
-      background: #ffffff !important;
-      background-color: #ffffff !important;
-      padding: 10px;
-    }
-    img {
-      max-width: 96vw;
-      max-height: 94vh;
-      object-fit: contain;
-      display: block;
-      margin: auto;
-      background: #ffffff !important;
-      background-color: #ffffff !important;
-    }
-    @media print {
-      html, body, .img-wrap {
-        margin: 0 !important;
-        padding: 0 !important;
-        background: #ffffff !important;
-        background-color: #ffffff !important;
-        min-height: auto !important;
-      }
-      img {
-        max-width: 100% !important;
-        max-height: 98vh !important;
-        page-break-inside: avoid;
-        background: #ffffff !important;
-        background-color: #ffffff !important;
-      }
-    }
-  </style>
-</head>
-<body>
-  <div class="img-wrap">
-    <img src="${url}" alt="${title}" onload="onImgLoad()" />
-  </div>
-  <script>
-    function onImgLoad() {
-      ${mode === 'print' ? `setTimeout(function() {
-        try {
-          window.focus();
-          window.print();
-        } catch (e) {}
-      }, 400);` : ''}
-    }
-  </script>
-</body>
-</html>`);
+          browserWindow.document.write(buildDocumentViewerHtml({
+            title,
+            imageUrl: url,
+            autoPrint: mode === 'print',
+          }));
           browserWindow.document.close();
         }
       } else {
@@ -740,87 +668,13 @@ export default function StudentDirectory({
             }, 1000);
           }
         } else {
-          // Render HTML page with pure white background to avoid browser dark viewer & black margins on print
           const title = documentFileName(doc);
           browserWindow.document.open();
-          browserWindow.document.write(`<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>${title}</title>
-  <style>
-    @page {
-      margin: 8mm;
-      size: auto;
-      background: #ffffff !important;
-    }
-    *, *::before, *::after {
-      box-sizing: border-box;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-    html, body {
-      margin: 0 !important;
-      padding: 0 !important;
-      width: 100% !important;
-      min-height: 100% !important;
-      background: #ffffff !important;
-      background-color: #ffffff !important;
-      color: #000000 !important;
-    }
-    .img-wrap {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      width: 100%;
-      min-height: 100vh;
-      background: #ffffff !important;
-      background-color: #ffffff !important;
-      padding: 10px;
-    }
-    img {
-      max-width: 96vw;
-      max-height: 94vh;
-      object-fit: contain;
-      display: block;
-      margin: auto;
-      background: #ffffff !important;
-      background-color: #ffffff !important;
-    }
-    @media print {
-      html, body, .img-wrap {
-        margin: 0 !important;
-        padding: 0 !important;
-        background: #ffffff !important;
-        background-color: #ffffff !important;
-        min-height: auto !important;
-      }
-      img {
-        max-width: 100% !important;
-        max-height: 98vh !important;
-        page-break-inside: avoid;
-        background: #ffffff !important;
-        background-color: #ffffff !important;
-      }
-    }
-  </style>
-</head>
-<body>
-  <div class="img-wrap">
-    <img src="${objectUrl}" alt="${title}" onload="onImgLoad()" />
-  </div>
-  <script>
-    function onImgLoad() {
-      ${mode === 'print' ? `setTimeout(function() {
-        try {
-          window.focus();
-          window.print();
-        } catch (e) {}
-      }, 400);` : ''}
-    }
-  </script>
-</body>
-</html>`);
+          browserWindow.document.write(buildDocumentViewerHtml({
+            title,
+            imageUrl: objectUrl,
+            autoPrint: mode === 'print',
+          }));
           browserWindow.document.close();
         }
         setTimeout(() => URL.revokeObjectURL(objectUrl), 180000);
