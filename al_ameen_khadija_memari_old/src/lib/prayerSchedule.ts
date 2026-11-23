@@ -95,20 +95,73 @@ export const ARABIC_DAYS = [
   'আস-সাবত (السبت)',     // Saturday
 ];
 
+// Arabic Islamic months in Bengali
+export const HIJRI_MONTHS = [
+  'মহররম', 'সফর', 'রবিউল আউয়াল', 'রবিউস সানি',
+  'জমাদিউল আউয়াল', 'জমাদিউস সানি', 'রজব', 'শাবান',
+  'রমজান', 'শাওয়াল', 'জিলকদ', 'জিলহজ'
+];
+
+function getAlgorithmicHijriDate(date = new Date()): { day: number; monthName: string; year: number } {
+  const gYear = date.getFullYear();
+  const gMonth = date.getMonth();
+  const gDay = date.getDate();
+
+  let m = gMonth + 1;
+  let y = gYear;
+  if (m < 3) {
+    y -= 1;
+    m += 12;
+  }
+
+  let a = Math.floor(y / 100);
+  let b = 2 - a + Math.floor(a / 4);
+  if (y < 1583) b = 0;
+  if (y === 1582) {
+    if (m > 10) b = -10;
+    if (m === 10) {
+      b = 0;
+      if (gDay > 4) b = -10;
+    }
+  }
+
+  let jd = Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + gDay + b - 1524;
+  jd += 1; // Subcontinent / Umm al-Qura lunar sighting offset
+
+  let z = jd;
+  let l = z - 1948440 + 10632;
+  let n = Math.floor((l - 1) / 10631);
+  l = l - 10631 * n + 354;
+  let j = (Math.floor((10985 - l) / 5316)) * (Math.floor((50 * l) / 17719)) + (Math.floor(l / 5670)) * (Math.floor((43 * l) / 15238));
+  l = l - (Math.floor((30 - j) / 15)) * (Math.floor((17719 * j) / 50)) - (Math.floor(j / 16)) * (Math.floor((15238 * j) / 43)) + 29;
+  m = Math.floor((24 * l) / 709);
+  let d = l - Math.floor((709 * m) / 24);
+  y = 30 * n + j - 30;
+
+  const monthIdx = Math.max(0, Math.min(11, m - 1));
+  return { day: d, monthName: HIJRI_MONTHS[monthIdx] || 'জমাদিউস সানি', year: y };
+}
+
 // Hijri / Islamic Date with Arabic Day, Month, and Year
 export function getHijriDate(date = new Date()): string {
+  const dayName = ARABIC_DAYS[date.getDay()] || '';
   try {
-    const dayName = ARABIC_DAYS[date.getDay()] || '';
     const formatter = new Intl.DateTimeFormat('bn-u-ca-islamic-umalqura', {
       day: 'numeric',
       month: 'long',
       year: 'numeric',
     });
     const formatted = formatter.format(date).replace(/\s*যুগ\s*$/, '').trim();
-    return `${dayName}, ${formatted} হিজরি`;
-  } catch {
-    return 'হিজরি ক্যালেন্ডার';
-  }
+    // Validate that Intl didn't fall back to Gregorian months like "জুন", "নভেম্বর" or "খ্রিস্টপূর্ব"
+    const isBadFallback = /জুন|জানুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে|জুলাই|আগস্ট|সেপ্টেম্বর|অক্টোবর|নভেম্বর|ডিসেম্বর|খ্রিস্টপূর্ব/i.test(formatted);
+    if (!isBadFallback && formatted.length > 5) {
+      return `${dayName}, ${formatted} হিজরি`;
+    }
+  } catch {}
+
+  // Pure standalone algorithmic calculation fallback
+  const h = getAlgorithmicHijriDate(date);
+  return `${dayName}, ${toBanglaDigits(h.day)} ${h.monthName}, ${toBanglaDigits(h.year)} হিজরি`;
 }
 
 export function getDaySchedule(date = new Date(), adjustments = { fajr: -3, sunrise: -2, dhuhr: 3, asr: 1, maghrib: 5, isha: 0 }): DaySchedule {
