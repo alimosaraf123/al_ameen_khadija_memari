@@ -83,16 +83,28 @@ export function getBengaliDate(date = new Date()): string {
   return `${dayName}, ${toBanglaDigits(bDay)} ${banglaMonths[bMonth]}, ${toBanglaDigits(bYear)} বঙ্গাব্দ`;
 }
 
-// Hijri / Islamic Date with Arabic/Bengali localized format
+// Arabic day of week (রবিবার থেকে শনিবার)
+export const ARABIC_DAYS = [
+  'আল-আহাদ (الأحد)',     // Sunday
+  'আল-ইছনাইন (الإثنين)',   // Monday
+  'আস-সুলাসা (الثلاثاء)',  // Tuesday
+  'আল-আরবাআ (الأربعاء)',  // Wednesday
+  'আল-খামিস (الخميس)',    // Thursday
+  'আল-জুমুআ (الجمعة)',    // Friday
+  'আস-সাবত (السبت)',     // Saturday
+];
+
+// Hijri / Islamic Date with Arabic Day, Month, and Year
 export function getHijriDate(date = new Date()): string {
   try {
+    const dayName = ARABIC_DAYS[date.getDay()] || '';
     const formatter = new Intl.DateTimeFormat('bn-u-ca-islamic-umalqura', {
       day: 'numeric',
       month: 'long',
       year: 'numeric',
     });
-    const formatted = formatter.format(date);
-    return `${formatted} হিজরি`;
+    const formatted = formatter.format(date).replace(/\s*যুগ\s*$/, '').trim();
+    return `${dayName}, ${formatted} হিজরি`;
   } catch {
     return 'হিজরি ক্যালেন্ডার';
   }
