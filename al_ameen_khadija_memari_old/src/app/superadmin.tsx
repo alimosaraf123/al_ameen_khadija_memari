@@ -835,13 +835,6 @@ export default function Dashboard() {
               <Text style={s.searchPillText}>🔍 Student Search</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => setPrayerModal(true)}
-              style={[s.searchPill, { backgroundColor: '#047857' }]}
-            >
-              <Text style={s.searchPillText}>🕌 নামাজের সময়সূচি</Text>
-            </TouchableOpacity>
-
             <TouchableOpacity onPress={openNotifications} style={s.notificationPill}>
               <Text style={s.notificationPillText}>🔔 Notifications</Text>
               {unread > 0 && (
