@@ -30,6 +30,8 @@ import {
   getGuardianBiometricToken,
 } from '../lib/guardianDevice';
 import { Field, Button, Muted } from '../components/ui';
+import PrayerTimeModal from '../components/PrayerTimeModal';
+import { getDaySchedule } from '../lib/prayerSchedule';
 
 type TabName = 'home' | 'result' | 'gatepass' | 'visits' | 'details' | 'documents' | 'library' | 'notifications' | 'settings';
 
@@ -56,6 +58,8 @@ const resultImageUri = (title: string, headers: string[], rows: string[][]) => {
 export default function Guardian() {
   const params = useLocalSearchParams<{tab?: string}>();
   const [tab, setTab] = useState<TabName>('home');
+  const [prayerModal, setPrayerModal] = useState(false);
+  const prayerSchedule = React.useMemo(() => getDaySchedule(new Date()), []);
   useEffect(() => { if (params.tab === 'result' || params.tab === 'notifications') setTab(params.tab as TabName); }, [params.tab]);
   useEffect(() => {
     if (tab === 'notifications' || tab === 'result') {
@@ -622,6 +626,10 @@ export default function Guardian() {
           <Text style={styles.brandName}>Al-Ameen Mission Academy Memari</Text>
           <Text style={styles.phoneContact}>{'\u260E'} 7479020073  |  {'\u260E'} 7479020091</Text>
         </View>
+        <TouchableOpacity style={styles.prayerHeaderBtn} onPress={() => setPrayerModal(true)}>
+          <Text style={styles.prayerHeaderBtnIcon}>🕌</Text>
+          <Text style={styles.prayerHeaderBtnText}>নামাজ</Text>
+        </TouchableOpacity>
       </View>
       {/* STUDENT HEADER */}
       <View style={styles.studentHeader}>
@@ -640,6 +648,23 @@ export default function Guardian() {
           </Text>
         </View>
       </View>
+
+      {/* PRAYER TIMETABLE BANNER */}
+      <TouchableOpacity style={styles.prayerBanner} onPress={() => setPrayerModal(true)}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+          <Text style={{ fontSize: 22 }}>🕌</Text>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <Text style={styles.prayerBannerTitle}>নামাজের সময়সূচি (হানাফী মাযহাব)</Text>
+              <Text style={styles.prayerBadge}>{prayerSchedule.currentWaqt.split(' ')[1] || 'ওয়াক্ত'}</Text>
+            </View>
+            <Text style={styles.prayerBannerSub}>{prayerSchedule.bengaliDate} · {prayerSchedule.hijriDate}</Text>
+          </View>
+        </View>
+        <View style={styles.prayerBannerBtn}>
+          <Text style={styles.prayerBannerBtnText}>সময় দেখুন →</Text>
+        </View>
+      </TouchableOpacity>
 
       {/* MAIN TABS */}
       <View style={styles.menuWrap}>
@@ -668,6 +693,9 @@ export default function Guardian() {
                 <Text style={styles.moreModalTitle}>More Menu</Text>
                 <TouchableOpacity onPress={() => setShowMoreMenu(false)}><Text style={styles.moreModalClose}>X</Text></TouchableOpacity>
               </View>
+              <Pressable style={[styles.moreModalItem, { backgroundColor: '#f0fdf4', borderColor: '#86efac' }]} onPress={() => { setShowMoreMenu(false); setPrayerModal(true); }}>
+                <Text style={[styles.moreModalItemText, { color: '#166534', fontWeight: '800' }]}>🕌 নামাজের সময়সূচি (হানাফী)</Text>
+              </Pressable>
               {[
                 ['Visit Permission', 'visits'],
                 ['Student Details', 'details'],
@@ -1386,6 +1414,7 @@ export default function Guardian() {
         )}
       </ScrollView>
       <ScrollNavigationButtons scrollRef={mainScrollRef} />
+      <PrayerTimeModal visible={prayerModal} onClose={() => setPrayerModal(false)} />
     </SafeAreaView>
   );
 }
@@ -1457,6 +1486,69 @@ function Info({ label, value }: { label: string; value: any }) {
 }
 
 const styles = StyleSheet.create({
+  prayerHeaderBtn: {
+    backgroundColor: '#047857',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  prayerHeaderBtnIcon: {
+    fontSize: 14,
+  },
+  prayerHeaderBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  prayerBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1.5,
+    borderColor: '#86efac',
+    borderRadius: 12,
+    padding: 12,
+    marginHorizontal: 12,
+    marginVertical: 8,
+    elevation: 2,
+  },
+  prayerBannerTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#166534',
+  },
+  prayerBadge: {
+    backgroundColor: '#dcfce7',
+    color: '#15803d',
+    fontSize: 10,
+    fontWeight: '800',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  prayerBannerSub: {
+    fontSize: 11,
+    color: '#334155',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  prayerBannerBtn: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 7,
+  },
+  prayerBannerBtnText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800',
+  },
   brandHeader: {
     flexDirection: 'row',
     alignItems: 'center',

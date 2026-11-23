@@ -6,6 +6,7 @@
     "@expo/ui": "~57.0.22",
     "@react-native-community/datetimepicker": "9.1.0",
     "@types/jsbarcode": "^3.11.4",
+    "adhan": "^4.4.6",
     "agora-rtc-sdk-ng": "^4.24.9",
     "expo": "~57.0.27",
     "expo-camera": "~57.0.6",
