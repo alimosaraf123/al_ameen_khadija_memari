@@ -43,44 +43,45 @@ const formatTime12 = (d: Date, toBangla = true) => {
   return toBangla ? toBanglaDigits(timeStr) : timeStr;
 };
 
-// Accurate Bengali Date Calculator (West Bengal revised calendar)
+// Accurate Bengali Date Calculator (West Bengal Solar Panjika / সূর্যসিদ্ধান্ত পঞ্জিকা)
+const WB_MONTH_TRANSITIONS = [
+  { gMonth: 0, gDay: 15, bMonth: 'মাঘ', prevMonth: 'পৌষ', prevDays: 30 },
+  { gMonth: 1, gDay: 14, bMonth: 'ফাল্গুন', prevMonth: 'মাঘ', prevDays: 30 },
+  { gMonth: 2, gDay: 15, bMonth: 'চৈত্র', prevMonth: 'ফাল্গুন', prevDays: 30 },
+  { gMonth: 3, gDay: 15, bMonth: 'বৈশাখ', prevMonth: 'চৈত্র', prevDays: 30 },
+  { gMonth: 4, gDay: 16, bMonth: 'জ্যৈষ্ঠ', prevMonth: 'বৈশাখ', prevDays: 31 },
+  { gMonth: 5, gDay: 16, bMonth: 'আষাঢ়', prevMonth: 'জ্যৈষ্ঠ', prevDays: 31 },
+  { gMonth: 6, gDay: 17, bMonth: 'শ্রাবণ', prevMonth: 'আষাঢ়', prevDays: 31 },
+  { gMonth: 7, gDay: 18, bMonth: 'ভাদ্র', prevMonth: 'শ্রাবণ', prevDays: 31 },
+  { gMonth: 8, gDay: 18, bMonth: 'আশ্বিন', prevMonth: 'ভাদ্র', prevDays: 31 },
+  { gMonth: 9, gDay: 18, bMonth: 'কার্তিক', prevMonth: 'আশ্বিন', prevDays: 30 },
+  { gMonth: 10, gDay: 18, bMonth: 'অগ্রহায়ণ', prevMonth: 'কার্তিক', prevDays: 30 },
+  { gMonth: 11, gDay: 17, bMonth: 'পৌষ', prevMonth: 'অগ্রহায়ণ', prevDays: 30 },
+];
+
 export function getBengaliDate(date = new Date()): string {
-  const d = date.getDate();
-  const m = date.getMonth(); // 0 = Jan, 10 = Nov
-  const y = date.getFullYear();
+  const gYear = date.getFullYear();
+  const gMonth = date.getMonth();
+  const gDate = date.getDate();
+  const trans = WB_MONTH_TRANSITIONS[gMonth];
 
-  const banglaMonths = [
-    'বৈশাখ', 'জ্যৈষ্ঠ', 'আষাঢ়', 'শ্রাবণ',
-    'ভাদ্র', 'আশ্বিন', 'কার্তিক', 'অগ্রহায়ণ',
-    'পৌষ', 'মাঘ', 'ফাল্গুন', 'চৈত্র'
-  ];
   const banglaDays = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
-
-  const isLeapYear = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
-  const startDay = 14; // April 14 is 1st Boishakh
-
-  const bYear = (m < 3 || (m === 3 && d < startDay)) ? y - 594 : y - 593;
-
-  const startOfBanglaYear = new Date(y, 3, startDay);
-  if (date < startOfBanglaYear) {
-    startOfBanglaYear.setFullYear(y - 1);
-  }
-  const diffDays = Math.floor((date.getTime() - startOfBanglaYear.getTime()) / (1000 * 60 * 60 * 24));
-
-  const monthLengths = [31, 31, 31, 31, 31, 30, 30, 30, 30, 30, isLeapYear ? 30 : 29, 30];
-  let remDays = Math.max(0, diffDays);
-  let bMonth = 0;
-  for (let i = 0; i < 12; i++) {
-    if (remDays < monthLengths[i]) {
-      bMonth = i;
-      break;
-    }
-    remDays -= monthLengths[i];
-  }
-  const bDay = remDays + 1;
   const dayName = banglaDays[date.getDay()];
 
-  return `${dayName}, ${toBanglaDigits(bDay)} ${banglaMonths[bMonth]}, ${toBanglaDigits(bYear)} বঙ্গাব্দ`;
+  const bYear = (gMonth < 3 || (gMonth === 3 && gDate < 15)) ? gYear - 594 : gYear - 593;
+
+  let bDay: number;
+  let bMonthName: string;
+
+  if (gDate >= trans.gDay) {
+    bDay = gDate - trans.gDay + 1;
+    bMonthName = trans.bMonth;
+  } else {
+    bDay = trans.prevDays - (trans.gDay - gDate - 1);
+    bMonthName = trans.prevMonth;
+  }
+
+  return `${dayName}, ${toBanglaDigits(bDay)} ${bMonthName}, ${toBanglaDigits(bYear)} বঙ্গাব্দ`;
 }
 
 // Arabic day of week (রবিবার থেকে শনিবার)
