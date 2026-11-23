@@ -28,11 +28,11 @@ export default function PrayerTimeModal({ visible, onClose }: Props) {
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={{ fontSize: 24 }}>🕌</Text>
-              <View>
-                <Text style={styles.headerTitle}>দৈনিক নামাজের সময়সূচি (হানাফী মাযহাব)</Text>
-                <Text style={styles.headerSubtitle}>আল-আমীন মিশন একাডেমি মেমারি</Text>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0, paddingRight: 8 }}>
+              <Text style={{ fontSize: 22, flexShrink: 0 }}>🕌</Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.headerTitle} numberOfLines={2}>দৈনিক নামাজের সময়সূচি (হানাফী মাযহাব)</Text>
+                <Text style={styles.headerSubtitle} numberOfLines={1}>আল-আমীন মিশন একাডেমি মেমারি</Text>
               </View>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close">
@@ -79,9 +79,9 @@ export default function PrayerTimeModal({ visible, onClose }: Props) {
             {/* Prayer Times Table */}
             <View style={styles.tableCard}>
               <View style={styles.tableHeader}>
-                <Text style={[styles.th, { flex: 1.6 }]}>ওয়াক্ত / পর্যায়</Text>
-                <Text style={[styles.th, { flex: 1.2, textAlign: 'center' }]}>আরম্ভ</Text>
-                <Text style={[styles.th, { flex: 1.2, textAlign: 'center' }]}>শেষ</Text>
+                <Text style={[styles.th, { flex: 1.5 }]}>ওয়াক্ত / পর্যায়</Text>
+                <Text style={[styles.th, { flex: 1, textAlign: 'center' }]}>আরম্ভ</Text>
+                <Text style={[styles.th, { flex: 1, textAlign: 'center' }]}>শেষ</Text>
               </View>
 
               {schedule.rows.map((row) => {
@@ -97,8 +97,8 @@ export default function PrayerTimeModal({ visible, onClose }: Props) {
                       isCurr && styles.rowCurrent,
                     ]}
                   >
-                    <View style={{ flex: 1.6 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ flex: 1.5, minWidth: 0, paddingRight: 4 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
                         <Text style={[
                           styles.rowName,
                           isProh && styles.nameProhibited,
@@ -116,7 +116,7 @@ export default function PrayerTimeModal({ visible, onClose }: Props) {
 
                     <Text style={[
                       styles.rowTime,
-                      { flex: 1.2, textAlign: 'center' },
+                      { flex: 1, textAlign: 'center' },
                       isProh && styles.timeProhibited,
                       isCurr && styles.timeCurrent,
                     ]}>
@@ -125,7 +125,7 @@ export default function PrayerTimeModal({ visible, onClose }: Props) {
 
                     <Text style={[
                       styles.rowTime,
-                      { flex: 1.2, textAlign: 'center' },
+                      { flex: 1, textAlign: 'center' },
                       isProh && styles.timeProhibited,
                       isCurr && styles.timeCurrent,
                     ]}>
@@ -163,40 +163,44 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 12,
+    padding: 8,
+    width: '100%',
   },
   container: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
     width: '100%',
-    maxWidth: 620,
-    maxHeight: '92%',
+    maxWidth: 540,
+    maxHeight: '94%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25,
     shadowRadius: 16,
     elevation: 12,
     overflow: 'hidden',
+    alignSelf: 'center',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingVertical: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     backgroundColor: '#064e3b',
     borderBottomWidth: 1,
     borderBottomColor: '#047857',
   },
   headerTitle: {
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '900',
+    flexShrink: 1,
   },
   headerSubtitle: {
     color: '#a7f3d0',
-    fontSize: 12,
+    fontSize: 11,
     marginTop: 2,
+    flexShrink: 1,
   },
   closeBtn: {
     width: 32,
@@ -205,6 +209,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
   closeBtnText: {
     color: '#ffffff',
@@ -212,15 +217,15 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   scrollContent: {
-    padding: 16,
-    gap: 12,
+    padding: 12,
+    gap: 10,
   },
   dateCard: {
     backgroundColor: '#f0fdf4',
     borderWidth: 1.5,
     borderColor: '#bbf7d0',
     borderRadius: 12,
-    padding: 12,
+    padding: 10,
     gap: 8,
   },
   dateRow: {
@@ -274,19 +279,19 @@ const styles = StyleSheet.create({
   tableHeader: {
     flexDirection: 'row',
     backgroundColor: '#0f766e',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
   },
   th: {
     color: '#ffffff',
     fontWeight: '800',
-    fontSize: 13,
+    fontSize: 12,
   },
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 9,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
   },
@@ -301,7 +306,7 @@ const styles = StyleSheet.create({
     borderLeftColor: '#16a34a',
   },
   rowName: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
     color: '#1e293b',
   },
@@ -314,17 +319,17 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   arabicName: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#059669',
     fontWeight: '700',
   },
   rowNote: {
-    fontSize: 10,
+    fontSize: 9.5,
     color: '#64748b',
-    marginTop: 2,
+    marginTop: 1,
   },
   rowTime: {
-    fontSize: 13,
+    fontSize: 11.5,
     fontWeight: '800',
     color: '#334155',
   },
