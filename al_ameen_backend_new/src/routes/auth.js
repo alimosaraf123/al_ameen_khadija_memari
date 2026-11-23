@@ -92,12 +92,17 @@ router.post(
         u.role,
         u.is_active,
         u.password_change_required,
-        COALESCE(u.photo_url, sp.photo_url, tp.photo_url, gp.photo_url) AS photo_url
+        COALESCE(u.photo_url, sp.photo_url, tp.photo_url, gp.photo_url) AS photo_url,
+        tp.id AS teacher_id,
+        tp.staff_id
       FROM users u
       LEFT JOIN service_staff_profiles sp ON sp.user_id = u.id
       LEFT JOIN teachers tp ON tp.user_id = u.id
       LEFT JOIN guardian_profiles gp ON gp.user_id = u.id
-      WHERE u.login_id=$1 OR u.id IN (SELECT user_id FROM teachers WHERE staff_id=$1)
+      WHERE u.login_id=$1 
+         OR u.login_id='office_' || $1 
+         OR regexp_replace(u.login_id, '^office_', '')=$1 
+         OR u.id IN (SELECT user_id FROM teachers WHERE staff_id=$1)
       LIMIT 1
       `,
       [String(login_id).trim()]
@@ -158,15 +163,24 @@ router.post(
 
     // Record login audit event
     try {
-      const { getClientIp, resolveIpLocation } = require('../middleware/governance');
+      const { getClientIp, resolveLocation } = require('../middleware/governance');
       const clientIp = getClientIp(req);
-      resolveIpLocation(clientIp).then((loc) => {
+      resolveLocation(req, clientIp).then((locObj) => {
         const ua = String(req.headers['user-agent'] || '');
         const isMobile = /mobile|android|iphone|ipad/i.test(ua);
         const platform = isMobile ? 'Mobile App' : 'Web Browser';
+        const details = {
+          platform,
+          user_agent: ua.slice(0, 100),
+          latitude: locObj.latitude,
+          longitude: locObj.longitude,
+          accuracy: locObj.accuracy,
+          maps_url: locObj.maps_url,
+          location_source: locObj.source
+        };
         return pool.query(
           'INSERT INTO admin_audit_logs(user_id, method, path, status_code, details, ip_address, location) VALUES($1, $2, $3, $4, $5, $6, $7)',
-          [user.id, 'POST', '/api/auth/login', 200, JSON.stringify({ platform, user_agent: ua.slice(0, 100) }), clientIp, loc]
+          [user.id, 'POST', '/api/auth/login', 200, JSON.stringify(details), clientIp, locObj.location]
         );
       }).catch(() => {});
     } catch {}
@@ -183,6 +197,8 @@ router.post(
         role: user.role,
         photo_url: user.photo_url || null,
         password_change_required: !!user.password_change_required,
+        teacher_id: user.teacher_id || null,
+        staff_id: user.staff_id || null,
       },
     });
 
@@ -208,7 +224,9 @@ router.get(
         u.role,
         u.is_active,
         u.password_change_required,
-        COALESCE(u.photo_url, sp.photo_url, tp.photo_url, gp.photo_url) AS photo_url
+        COALESCE(u.photo_url, sp.photo_url, tp.photo_url, gp.photo_url) AS photo_url,
+        tp.id AS teacher_id,
+        tp.staff_id
       FROM users u
       LEFT JOIN service_staff_profiles sp ON sp.user_id = u.id
       LEFT JOIN teachers tp ON tp.user_id = u.id
@@ -618,15 +636,24 @@ router.post(
 
     // Record login audit event
     try {
-      const { getClientIp, resolveIpLocation } = require('../middleware/governance');
+      const { getClientIp, resolveLocation } = require('../middleware/governance');
       const clientIp = getClientIp(req);
-      resolveIpLocation(clientIp).then((loc) => {
+      resolveLocation(req, clientIp).then((locObj) => {
         const ua = String(req.headers['user-agent'] || '');
         const isMobile = /mobile|android|iphone|ipad/i.test(ua);
         const platform = isMobile ? 'Mobile App' : 'Web Browser';
+        const details = {
+          platform,
+          user_agent: ua.slice(0, 100),
+          latitude: locObj.latitude,
+          longitude: locObj.longitude,
+          accuracy: locObj.accuracy,
+          maps_url: locObj.maps_url,
+          location_source: locObj.source
+        };
         return pool.query(
           'INSERT INTO admin_audit_logs(user_id, method, path, status_code, details, ip_address, location) VALUES($1, $2, $3, $4, $5, $6, $7)',
-          [user.id, 'POST', '/api/auth/login', 200, JSON.stringify({ platform, user_agent: ua.slice(0, 100) }), clientIp, loc]
+          [user.id, 'POST', '/api/auth/login', 200, JSON.stringify(details), clientIp, locObj.location]
         );
       }).catch(() => {});
     } catch {}

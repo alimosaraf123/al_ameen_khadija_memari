@@ -3,6 +3,7 @@ import * as Device from 'expo-device';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { router } from 'expo-router';
 import { api } from './api';
+import { displayIncomingCall, setupCallKeep } from './callkeep';
 
 const isExpoGo =
   Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
@@ -84,6 +85,21 @@ export async function registerPushNotifications() {
       showBadge: true,
     });
 
+    // High-priority channel for incoming VoIP Audio/Video calls
+    await Notifications.setNotificationChannelAsync('call', {
+      name: 'Incoming Calls',
+      importance: Notifications.AndroidImportance.MAX,
+      sound: 'default',
+      vibrationPattern: [0, 500, 250, 500, 250, 500],
+      lightColor: '#22c55e',
+      enableLights: true,
+      enableVibrate: true,
+      showBadge: true,
+    });
+
+    // Initialize CallKeep for native Incoming Call screen
+    await setupCallKeep();
+
     const projectId = Constants.expoConfig?.extra?.eas?.projectId;
     const token = (await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)).data;
     await api('/api/push/register', {
@@ -101,12 +117,43 @@ export function subscribeToPushNavigation() {
   if (!Notifications) return () => { };
 
   try {
-    const response = Notifications.addNotificationResponseReceivedListener((resp: any) => {
+    // 1. Foreground notification received handler
+    const foregroundSub = Notifications.addNotificationReceivedListener((notification: any) => {
+      const data = notification?.request?.content?.data as any;
+      if (data?.type === 'call_invite') {
+        displayIncomingCall(data.call_id, data.caller_name || 'Incoming Call', {
+          callId: data.call_id,
+          callerName: data.caller_name,
+          callerRole: data.caller_role,
+          channelName: data.channel_name,
+          token: data.token,
+          uid: data.uid,
+          agoraAppId: data.agora_app_id,
+          callType: data.call_type || 'audio',
+        });
+      }
+    });
+
+    // 2. User tapped notification
+    const responseSub = Notifications.addNotificationResponseReceivedListener((resp: any) => {
       const data = resp?.notification?.request?.content?.data as any;
       // Clear badge count and dismiss notification when opened
       void clearNotificationBadge();
 
-      if (data?.type === 'routine') {
+      if (data?.type === 'call_invite') {
+        router.push({
+          pathname: '/call/[id]' as any,
+          params: {
+            id: data.call_id,
+            role: 'callee',
+            channel: data.channel_name,
+            token: data.token,
+            uid: data.uid,
+            callerName: data.caller_name,
+            appId: data.agora_app_id,
+          },
+        });
+      } else if (data?.type === 'routine') {
         router.push('/routines' as any);
       } else if (data?.role === 'teacher' || data?.type === 'notice_teacher') {
         router.push('/notices' as any);
@@ -116,7 +163,11 @@ export function subscribeToPushNavigation() {
         router.push('/guardian?tab=notifications' as any);
       }
     });
-    return () => response.remove();
+
+    return () => {
+      foregroundSub.remove();
+      responseSub.remove();
+    };
   } catch {
     return () => { };
   }

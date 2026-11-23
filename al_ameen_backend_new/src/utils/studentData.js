@@ -54,6 +54,8 @@ const studentFields = [
   'previous_branch_name',
   'banglarshiksha_id',
   'kanyashree_id',
+  'kanyashree_status',
+  'kanyashree_date',
   'aikyashree_id',
 
   'father_aadhaar_no',

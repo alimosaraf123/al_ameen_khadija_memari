@@ -123,10 +123,57 @@ export default function Office() {
     }
   };
 
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
   useEffect(() => {
-    void getUser<any>().then((u) => setAdminView(['admin', 'super_admin'].includes(u?.role)));
+    void getUser<any>().then((u) => {
+      setAdminView(['admin', 'super_admin'].includes(u?.role));
+      setIsSuperAdmin(u?.role === 'super_admin');
+    });
     void load();
   }, []);
+
+  const deleteTransaction = async (tx: any) => {
+    if (!isSuperAdmin) {
+      Alert.alert('Permission Denied', 'Only Super Admin can delete stock transactions.');
+      return;
+    }
+
+    const performDelete = async () => {
+      try {
+        await api(`/api/service-panels/dining/transactions/${tx.id}`, { method: 'DELETE' });
+        await load();
+        if (Platform.OS === 'web') {
+          window.alert('Stock transaction deleted successfully.');
+        } else {
+          Alert.alert('Success', 'Stock transaction deleted successfully.');
+        }
+      } catch (e: any) {
+        Alert.alert('Delete Failed', e.message);
+      }
+    };
+
+    const confirmMsg = `Delete this ${tx.transaction_type === 'in' ? 'Stock In' : 'Stock Out'} transaction?\n\n` +
+      `Item: ${tx.item_name}\n` +
+      `Quantity: ${tx.quantity} ${tx.unit}\n` +
+      `Date: ${tx.transaction_date || String(tx.created_at || '').slice(0, 10)}`;
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMsg + '\n\nAre you sure you want to permanently delete this transaction?')) {
+        void performDelete();
+      }
+      return;
+    }
+
+    Alert.alert(
+      'Delete Stock Transaction',
+      confirmMsg,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => void performDelete() },
+      ]
+    );
+  };
 
   const history = useMemo(() => {
     return transactions.filter((x) => {
@@ -986,7 +1033,12 @@ export default function Office() {
                   }
                   out={mode === 'out'}
                 >
-                  <TransactionTable rows={history} type={mode} />
+                  <TransactionTable
+                    rows={history}
+                    type={mode}
+                    onDelete={deleteTransaction}
+                    isSuperAdmin={isSuperAdmin}
+                  />
                 </Panel>
               </>
             ) : (
@@ -1003,6 +1055,8 @@ export default function Office() {
                 setReorder={setReorder}
                 add={addItem}
                 onEdit={startEditItem}
+                onDelete={deleteTransaction}
+                isSuperAdmin={isSuperAdmin}
               />
             )}
           </>
@@ -1449,6 +1503,8 @@ const RecordPanel = ({
   setReorder,
   add,
   onEdit,
+  onDelete,
+  isSuperAdmin,
 }: any) => {
   const [tab, setTab] = useState('current');
   const [from, setFrom] = useState('');
@@ -1638,7 +1694,12 @@ const RecordPanel = ({
       {tab === 'date' && (
         <Panel title="Date Wise Report">
           <ReportFilter from={from} setFrom={setFrom} to={to} setTo={setTo} />
-          <TransactionTable rows={ranged} type="record" />
+          <TransactionTable
+            rows={ranged}
+            type="record"
+            onDelete={onDelete}
+            isSuperAdmin={isSuperAdmin}
+          />
         </Panel>
       )}
       {tab === 'ledger' && (
@@ -1676,6 +1737,8 @@ const RecordPanel = ({
             rows={ranged.filter(
               (x: any) => ledgerItem && String(x.stock_id) === ledgerItem
             )}
+            onDelete={onDelete}
+            isSuperAdmin={isSuperAdmin}
           />
         </Panel>
       )}
@@ -1693,7 +1756,7 @@ const ReportFilter = ({ from, setFrom, to, setTo }: any) => (
   </View>
 );
 
-const LedgerTable = ({ rows }: any) => (
+const LedgerTable = ({ rows, onDelete, isSuperAdmin }: any) => (
   <ScrollView horizontal>
     <View style={s.table}>
       <View style={[s.tr, s.th]}>
@@ -1705,8 +1768,9 @@ const LedgerTable = ({ rows }: any) => (
           'Opening',
           'Closing',
           'Remarks',
+          ...(isSuperAdmin && onDelete ? ['Action'] : []),
         ].map((h) => (
-          <Text key={h} style={s.cellHead}>
+          <Text key={h} style={[s.cellHead, h === 'Action' && s.cellActionHead]}>
             {h}
           </Text>
         ))}
@@ -1723,6 +1787,16 @@ const LedgerTable = ({ rows }: any) => (
             <Text style={s.cell}>{fmt(x.opening_quantity)}</Text>
             <Text style={s.cell}>{fmt(x.closing_quantity)}</Text>
             <Text style={s.cell}>{x.note || '-'}</Text>
+            {isSuperAdmin && onDelete && (
+              <View style={[s.cell, s.cellAction]}>
+                <TouchableOpacity
+                  style={s.deleteTxBtn}
+                  onPress={() => onDelete(x)}
+                >
+                  <Text style={s.deleteTxBtnText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         ))
       ) : (
@@ -1732,7 +1806,7 @@ const LedgerTable = ({ rows }: any) => (
   </ScrollView>
 );
 
-const TransactionTable = ({ rows, type }: any) => (
+const TransactionTable = ({ rows, type, onDelete, isSuperAdmin }: any) => (
   <ScrollView horizontal>
     <View style={s.table}>
       <View style={[s.tr, s.th]}>
@@ -1745,8 +1819,9 @@ const TransactionTable = ({ rows, type }: any) => (
           'Opening',
           'Closing',
           'Remarks',
+          ...(isSuperAdmin && onDelete ? ['Action'] : []),
         ].map((h) => (
-          <Text key={h} style={s.cellHead}>
+          <Text key={h} style={[s.cellHead, h === 'Action' && s.cellActionHead]}>
             {h}
           </Text>
         ))}
@@ -1768,6 +1843,16 @@ const TransactionTable = ({ rows, type }: any) => (
             <Text style={s.cell}>{fmt(x.opening_quantity)}</Text>
             <Text style={s.cell}>{fmt(x.closing_quantity)}</Text>
             <Text style={s.cell}>{x.note || '-'}</Text>
+            {isSuperAdmin && onDelete && (
+              <View style={[s.cell, s.cellAction]}>
+                <TouchableOpacity
+                  style={s.deleteTxBtn}
+                  onPress={() => onDelete(x)}
+                >
+                  <Text style={s.deleteTxBtnText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         ))
       ) : (
@@ -2483,7 +2568,22 @@ const s = StyleSheet.create({
   tr: { flexDirection: 'row', borderBottomWidth: 1, borderColor: '#d8dde5' },
   th: { backgroundColor: '#f2f4f7' },
   cellHead: { width: 135, padding: 12, fontWeight: '900' },
+  cellActionHead: { width: 90, padding: 12, fontWeight: '900', color: '#b02a37', textAlign: 'center' },
   cell: { width: 135, padding: 12 },
+  cellAction: { width: 90, padding: 6, justifyContent: 'center', alignItems: 'center' },
+  deleteTxBtn: {
+    backgroundColor: '#dc3545',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteTxBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
   empty: { padding: 18, color: '#667085' },
   balanceRow: {
     flexDirection: 'row',

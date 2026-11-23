@@ -67,6 +67,7 @@ const CATEGORIES: CategoryDef[] = [
       { key: 'is_orphan', label: 'Orphan' },
       { key: 'banglarshiksha_id', label: 'Banglarshiksha ID' },
       { key: 'kanyashree_id', label: 'Kanyashree ID' },
+      { key: 'kanyashree_status', label: 'Kanyashree Status' },
       { key: 'aikyashree_id', label: 'Aikyashree ID' },
       { key: 'school_reg_no', label: 'School Reg No' },
       { key: 'council_reg_no', label: 'Council Reg No' },

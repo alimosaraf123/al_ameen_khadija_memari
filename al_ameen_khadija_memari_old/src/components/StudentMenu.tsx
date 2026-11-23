@@ -5,6 +5,7 @@ import { router, usePathname } from 'expo-router';
 export const STUDENT_MENU_ITEMS: [string, string][] = [
   ['Student Details', '/students'],
   ['Student Entry', '/student-entry'],
+  ['Student Registration Form', '/student-registration-form'],
   ['Daily Student Attendance', '/daily-attendance'],
   ['Student ID Cards & Form', '/id-cards'],
   ['Document Upload', '/documents'],

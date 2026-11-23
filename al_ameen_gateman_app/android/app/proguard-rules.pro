@@ -11,4 +11,19 @@
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
 
+# React Native core rules
+-keep class com.facebook.react.** { *; }
+-keep class com.facebook.hermes.** { *; }
+-dontwarn com.facebook.react.**
+-dontwarn com.facebook.hermes.**
+
+# Expo modules
+-keep class expo.modules.** { *; }
+-dontwarn expo.modules.**
+
+# Keep JavaScript interface methods
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
 # Add any project specific keep options here:

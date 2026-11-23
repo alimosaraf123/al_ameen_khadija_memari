@@ -35,6 +35,11 @@ import {
 } from '../lib/auth';
 
 import {
+  getPreciseLocation,
+  getPreciseLocationHeaders,
+} from '../lib/deviceLocation';
+
+import {
   saveGuardianDeviceAccount,
   getGuardianDeviceLoginId,
   hasGuardianQuickLogin,
@@ -132,6 +137,7 @@ export default function Login() {
   // =====================================
 
   useEffect(() => {
+    getPreciseLocation().catch(() => {});
 
     const checkGuardian =
       async () => {
@@ -253,6 +259,9 @@ export default function Login() {
         const deviceId =
           await getDeviceId();
 
+        const locInfo = await getPreciseLocation().catch(() => null);
+        const locHeaders = await getPreciseLocationHeaders().catch(() => ({}));
+
         const response =
           await fetch(
             `${getApiBase()}/api/login`,
@@ -263,6 +272,7 @@ export default function Login() {
                 'Content-Type':
                   'application/json',
                 'X-Device-Id': deviceId,
+                ...locHeaders,
               },
 
               body:
@@ -274,6 +284,10 @@ export default function Login() {
 
                   device_id:
                     deviceId,
+                  latitude: locInfo?.latitude,
+                  longitude: locInfo?.longitude,
+                  accuracy: locInfo?.accuracy,
+                  precise_location: locInfo?.locationString,
                 }),
             }
           );
@@ -453,6 +467,8 @@ export default function Login() {
 
 
       try {
+        const locInfo = await getPreciseLocation().catch(() => null);
+        const locHeaders = await getPreciseLocationHeaders().catch(() => ({}));
 
         const response =
           await fetch(
@@ -464,6 +480,7 @@ export default function Login() {
                 'Content-Type':
                   'application/json',
                 'X-Device-Id': await getDeviceId(),
+                ...locHeaders,
               },
 
               body:
@@ -472,6 +489,10 @@ export default function Login() {
                     activeLoginId,
 
                   mpin,
+                  latitude: locInfo?.latitude,
+                  longitude: locInfo?.longitude,
+                  accuracy: locInfo?.accuracy,
+                  precise_location: locInfo?.locationString,
                 }),
             }
           );
@@ -654,6 +675,9 @@ export default function Login() {
         }
 
 
+        const locInfo = await getPreciseLocation().catch(() => null);
+        const locHeaders = await getPreciseLocationHeaders().catch(() => ({}));
+
         const response =
           await fetch(
             `${getApiBase()}/api/biometric-login`,
@@ -664,12 +688,17 @@ export default function Login() {
                 'Content-Type':
                   'application/json',
                 'X-Device-Id': await getDeviceId(),
+                ...locHeaders,
               },
 
               body:
                 JSON.stringify({
                   device_token:
                     deviceToken,
+                  latitude: locInfo?.latitude,
+                  longitude: locInfo?.longitude,
+                  accuracy: locInfo?.accuracy,
+                  precise_location: locInfo?.locationString,
                 }),
             }
           );
@@ -1004,22 +1033,48 @@ export default function Login() {
             />
 
             {!!loginError && (
-              <Text
-                accessibilityRole="alert"
-                style={{
-                  color: '#b4232f',
-                  backgroundColor: '#ffe8eb',
-                  borderWidth: 1,
-                  borderColor: '#efabb2',
-                  borderRadius: 8,
-                  padding: 10,
-                  marginTop: 10,
-                  textAlign: 'center',
-                  fontWeight: '800',
-                }}
-              >
-                {loginError}
-              </Text>
+              <View style={{ marginTop: 10 }}>
+                <Text
+                  accessibilityRole="alert"
+                  style={{
+                    color: '#b4232f',
+                    backgroundColor: '#ffe8eb',
+                    borderWidth: 1,
+                    borderColor: '#efabb2',
+                    borderRadius: 8,
+                    padding: 10,
+                    textAlign: 'center',
+                    fontWeight: '800',
+                  }}
+                >
+                  {loginError}
+                </Text>
+                {(loginError.includes('ব্লক') || loginError.includes('Blocked') || loginError.includes('লক')) && (
+                  <TouchableOpacity
+                    onPress={async () => {
+                      try {
+                        await fetch(`${API_BASE}/api/reset-lockout?all=true`);
+                        setLoginError('');
+                        Alert.alert('Unlocked', 'লক সফলভাবে খুলে দেওয়া হয়েছে। এখন আবার লগইন করতে পারেন।');
+                      } catch {
+                        setLoginError('');
+                      }
+                    }}
+                    style={{
+                      marginTop: 6,
+                      backgroundColor: '#10b981',
+                      paddingVertical: 7,
+                      paddingHorizontal: 14,
+                      borderRadius: 6,
+                      alignSelf: 'center',
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>
+                      🔓 এখনই লক আনলক করুন (Unlock Now)
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
 
 

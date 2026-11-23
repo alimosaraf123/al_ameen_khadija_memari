@@ -82,6 +82,7 @@ export default function Layout() {
  if(!session.checked)return <View style={{flex:1,alignItems:'center',justifyContent:'center'}}><ActivityIndicator size="large" accessibilityLabel="Checking login"/></View>;
  return <GestureHandlerRootView style={{flex:1}}><Stack screenOptions={{headerShown:false}}>
   <Stack.Screen name="index"/>
+  <Stack.Screen name="display-board"/>
   {PRIVATE_ROUTES.map(name=><Stack.Protected key={name} guard={canOpenRoute(name,session.user)}><Stack.Screen name={name}/></Stack.Protected>)}
  </Stack></GestureHandlerRootView>;
 }

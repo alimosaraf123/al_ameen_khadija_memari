@@ -279,6 +279,38 @@ router.post('/dining/transactions-batch',auth,allow('office','super_admin','admi
     c.release();
   }
 }));
+
+router.delete('/dining/transactions/:id',auth,allow('super_admin'),asyncHandler(async(req,res)=>{
+  await schemaReady;
+  const txId=Number(req.params.id);
+  if(!txId)return res.status(400).json({success:false,message:'Valid transaction ID is required'});
+  const c=await pool.connect();
+  try{
+    await c.query('BEGIN');
+    const tx=(await c.query('SELECT * FROM dining_stock_transactions WHERE id=$1 FOR UPDATE',[txId])).rows[0];
+    if(!tx){
+      await c.query('ROLLBACK');
+      return res.status(404).json({success:false,message:'Stock transaction not found'});
+    }
+    const st=(await c.query('SELECT * FROM dining_stock WHERE id=$1 FOR UPDATE',[tx.stock_id])).rows[0];
+    let nextQty=0;
+    if(st){
+      const qty=Number(tx.quantity);
+      // If deleted tx was 'in', stock decreases by qty; if 'out', stock increases by qty
+      const rawNext=Number(st.current_quantity)+(tx.transaction_type==='in'?-qty:qty);
+      nextQty=Math.max(0,Number(rawNext.toFixed(2)));
+      await c.query('UPDATE dining_stock SET current_quantity=$1, updated_at=NOW() WHERE id=$2',[nextQty,st.id]);
+    }
+    await c.query('DELETE FROM dining_stock_transactions WHERE id=$1',[txId]);
+    await c.query('COMMIT');
+    res.json({success:true,message:'Stock transaction deleted successfully',deleted_id:txId,current_quantity:nextQty});
+  }catch(e){
+    await c.query('ROLLBACK');
+    throw e;
+  }finally{
+    c.release();
+  }
+}));
 router.get('/library/status',auth,allow('library','super_admin','admin'),asyncHandler(async(req,res)=>{
   await schemaReady;
   const status=String(req.query.status||'issued'),search='%'+String(req.query.q||'').trim()+'%';

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import AcademyHeader from '../components/AcademyHeader';
+import TopInstitutionNav from '../components/TopInstitutionNav';
 import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import {
   ScrollView,
@@ -181,6 +182,7 @@ const EMPTY_FORM: any = {
   previous_branch_name: '',
   banglarshiksha_id: '',
   kanyashree_id: '',
+  kanyashree_status: '',
   aikyashree_id: '',
 
   father_name: '',
@@ -871,6 +873,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     return <SafeAreaView style={styles.container}>
       <ScrollView ref={detailsScrollRef} contentContainerStyle={styles.content}>
         <AcademyHeader />
+        <TopInstitutionNav />
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
           <H1>Students</H1>
           <StudentMenuActions
@@ -912,6 +915,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
           keyboardShouldPersistTaps="handled"
         >
           <AcademyHeader />
+          <TopInstitutionNav />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
             <H1>{editingId !== null ? 'Edit Student' : 'Student Entry'}</H1>
             <StudentMenuActions
@@ -1201,15 +1205,21 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
               />
             </FormCol>
             <FormCol>
-              <LabeledField label="Kanyashree ID" field="kanyashree_id" />
+              <LabeledField label="Aikyashree ID" field="aikyashree_id" />
             </FormCol>
           </FormRow>
 
           <FormRow>
             <FormCol>
-              <LabeledField label="Aikyashree ID" field="aikyashree_id" />
+              <LabeledField label="Kanyashree ID" field="kanyashree_id" />
             </FormCol>
-            <FormCol />
+            <FormCol>
+              <LabeledField
+                label="Kanyashree Status"
+                field="kanyashree_status"
+                placeholder="e.g. জমা হয়েছে / K1 Added (Date) / K2 Applied (Date)"
+              />
+            </FormCol>
           </FormRow>
 
           <SectionTitle>Parents Information</SectionTitle>

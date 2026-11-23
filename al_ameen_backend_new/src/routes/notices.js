@@ -4,8 +4,35 @@ router.post('/',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
 
 router.delete('/:id',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{const r=await pool.query('UPDATE notices SET is_active=FALSE WHERE id=$1 AND is_active=TRUE RETURNING id',[req.params.id]);if(!r.rowCount)return res.status(404).json({success:false,message:'Active notice not found'});res.json({success:true});}));
 
-const imageUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:5*1024*1024}}).single('image');
-router.post('/image',auth,allow('super_admin','admin'),(req,res,next)=>imageUpload(req,res,error=>error?res.status(400).json({success:false,message:'JPG must be under 5 MB'}):next()),asyncHandler(async(req,res)=>{if(!req.file||!['image/jpeg','image/jpg'].includes(req.file.mimetype))return res.status(400).json({success:false,message:'Choose a JPG image'});const compressed=await sharp(req.file.buffer).rotate().resize({width:1600,height:1600,fit:'inside',withoutEnlargement:true}).webp({quality:82,effort:4}).toBuffer();const uploaded=await uploadBuffer(compressed,{folder:'al-ameen/notices',resourceType:'image',format:'webp'});res.json({success:true,url:uploaded.url});}));
+const noticeUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const isImage = file.mimetype.startsWith('image/');
+    const isPdf = file.mimetype === 'application/pdf' || String(file.originalname || '').toLowerCase().endsWith('.pdf');
+    if (isImage || isPdf) cb(null, true);
+    else cb(new Error('Only JPG/PNG images and PDF files under 10 MB are allowed'), false);
+  }
+}).fields([{ name: 'image', maxCount: 1 }, { name: 'file', maxCount: 1 }]);
+
+router.post('/image', auth, allow('super_admin', 'admin'), (req, res, next) => {
+  noticeUpload(req, res, error => error ? res.status(400).json({ success: false, message: error.message || 'File upload error' }) : next());
+}, asyncHandler(async (req, res) => {
+  const file = req.file || (req.files && (req.files.image?.[0] || req.files.file?.[0]));
+  if (!file) return res.status(400).json({ success: false, message: 'Choose a JPG/PNG image or PDF file' });
+  const isPdf = file.mimetype === 'application/pdf' || String(file.originalname || '').toLowerCase().endsWith('.pdf');
+  if (isPdf) {
+    const uploaded = await uploadBuffer(file.buffer, {
+      folder: 'al-ameen/notices',
+      resourceType: 'raw',
+      extension: '.pdf',
+    });
+    return res.json({ success: true, url: uploaded.url, fileType: 'pdf' });
+  }
+  const compressed = await sharp(file.buffer).rotate().resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true }).webp({ quality: 82, effort: 4 }).toBuffer();
+  const uploaded = await uploadBuffer(compressed, { folder: 'al-ameen/notices', resourceType: 'image', format: 'webp' });
+  res.json({ success: true, url: uploaded.url, fileType: 'image' });
+}));
 
 router.get('/counter',auth,asyncHandler(async(req,res)=>{
  const admin=['admin','super_admin'].includes(req.user.role);
