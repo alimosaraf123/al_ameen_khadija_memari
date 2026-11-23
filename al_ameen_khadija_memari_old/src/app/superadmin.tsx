@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { clearSession, getUser } from '../lib/auth';
 import AcademyHeader from '../components/AcademyHeader';
+import PrayerTimeModal from '../components/PrayerTimeModal';
 import { api } from '../lib/api';
 import { isHostelFeesBlockedUser } from '../lib/routeAccess';
 import { initiateAudioCall } from '../lib/callManager';
@@ -207,6 +208,7 @@ export default function Dashboard() {
   const [studentMenu, setStudentMenu] = useState(false);
   const [accountsMenu, setAccountsMenu] = useState(false);
   const [allMenusDrawer, setAllMenusDrawer] = useState(false);
+  const [prayerModal, setPrayerModal] = useState(false);
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
   const [genericMenu, setGenericMenu] = useState<{ title: string; path: string } | null>(null);
 
@@ -781,6 +783,14 @@ export default function Dashboard() {
             <Text style={[s.navBtnText, { color: '#047857', fontWeight: '800' }]}>Calling</Text>
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={[s.navBtn, { borderColor: '#047857', backgroundColor: '#ecfdf5' }]}
+            onPress={() => setPrayerModal(true)}
+          >
+            <Text style={s.navBtnIcon}>🕌</Text>
+            <Text style={[s.navBtnText, { color: '#047857', fontWeight: '800' }]}>নামাজ</Text>
+          </TouchableOpacity>
+
           {userRole === 'super_admin' && (
             <TouchableOpacity style={[s.navBtn, s.navBtnAdmin]} onPress={() => router.push('/system-admin' as any)}>
               <Text style={s.navBtnIcon}>⚙️</Text>
@@ -822,6 +832,13 @@ export default function Dashboard() {
               style={s.searchPill}
             >
               <Text style={s.searchPillText}>🔍 Student Search</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setPrayerModal(true)}
+              style={[s.searchPill, { backgroundColor: '#047857' }]}
+            >
+              <Text style={s.searchPillText}>🕌 নামাজের সময়সূচি</Text>
             </TouchableOpacity>
 
             <TouchableOpacity onPress={openNotifications} style={s.notificationPill}>
@@ -1450,6 +1467,16 @@ export default function Dashboard() {
                   <Text style={s.modalItemText}>{label}</Text>
                 </AdminLink>
               ))}
+              <TouchableOpacity
+                style={[s.modalItem, { borderLeftWidth: 4, borderLeftColor: '#047857', backgroundColor: '#ecfdf5' }]}
+                onPress={() => {
+                  setAcademyMenu(false);
+                  setPrayerModal(true);
+                }}
+              >
+                <Text style={[s.arrow, { color: '#047857' }]}>🕌</Text>
+                <Text style={[s.modalItemText, { color: '#047857', fontWeight: '800' }]}>দৈনিক নামাজের সময়সূচি</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -2168,6 +2195,9 @@ export default function Dashboard() {
           </View>
         </View>
       </Modal>
+
+      {/* Daily Hanafi Prayer Time Schedule Modal */}
+      <PrayerTimeModal visible={prayerModal} onClose={() => setPrayerModal(false)} />
     </SafeAreaView>
   );
 }
