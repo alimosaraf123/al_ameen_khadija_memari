@@ -164,10 +164,14 @@ async function resolveLocation(req, fallbackIp = null) {
   const clientAcc = (req?.headers ? req.headers['x-client-accuracy'] : null) || req?.body?.accuracy;
 
   if (clientLoc && String(clientLoc).trim()) {
+    let rawLoc = String(clientLoc).trim();
+    if (rawLoc.includes('%')) {
+      try { rawLoc = decodeURIComponent(rawLoc); } catch {}
+    }
     const lat = clientLat ? parseFloat(clientLat) : null;
     const lon = clientLon ? parseFloat(clientLon) : null;
     return {
-      location: String(clientLoc).trim(),
+      location: rawLoc,
       latitude: lat,
       longitude: lon,
       accuracy: clientAcc ? parseFloat(clientAcc) : null,

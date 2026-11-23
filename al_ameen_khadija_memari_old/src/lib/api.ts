@@ -71,12 +71,21 @@ export async function api(
 
   const activeApiBase = Platform.OS === 'web' ? getApiBase() : API_BASE;
 
+  // Sanitize all header values to prevent "non ISO-8859-1 code point" browser fetch error
+  const sanitizedHeaders: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    if (v !== undefined && v !== null) {
+      const sv = String(v);
+      sanitizedHeaders[k] = /[^\x00-\xFF]/.test(sv) ? encodeURIComponent(sv) : sv;
+    }
+  }
+
   try {
     const response = await fetch(
       `${activeApiBase}${path}`,
       {
         ...options,
-        headers,
+        headers: sanitizedHeaders,
         signal: controller.signal,
       }
     );

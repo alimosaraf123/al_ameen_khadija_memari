@@ -70,6 +70,17 @@ const offlineMessage = (e: any) => {
     : (m || 'Unable to login');
 };
 
+const safeHeaders = (raw: Record<string, any>): Record<string, string> => {
+  const clean: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (v !== undefined && v !== null) {
+      const sv = String(v);
+      clean[k] = /[^\x00-\xFF]/.test(sv) ? encodeURIComponent(sv) : sv;
+    }
+  }
+  return clean;
+};
+
 export default function Login() {
 
   // NORMAL LOGIN
@@ -268,12 +279,12 @@ export default function Login() {
             {
               method: 'POST',
 
-              headers: {
+              headers: safeHeaders({
                 'Content-Type':
                   'application/json',
                 'X-Device-Id': deviceId,
                 ...locHeaders,
-              },
+              }),
 
               body:
                 JSON.stringify({
@@ -476,12 +487,12 @@ export default function Login() {
             {
               method: 'POST',
 
-              headers: {
+              headers: safeHeaders({
                 'Content-Type':
                   'application/json',
                 'X-Device-Id': await getDeviceId(),
                 ...locHeaders,
-              },
+              }),
 
               body:
                 JSON.stringify({
@@ -684,12 +695,12 @@ export default function Login() {
             {
               method: 'POST',
 
-              headers: {
+              headers: safeHeaders({
                 'Content-Type':
                   'application/json',
                 'X-Device-Id': await getDeviceId(),
                 ...locHeaders,
-              },
+              }),
 
               body:
                 JSON.stringify({

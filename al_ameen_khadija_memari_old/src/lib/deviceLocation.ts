@@ -170,14 +170,20 @@ export async function getPreciseLocation(forceRefresh = false): Promise<PreciseL
   return inFlightPromise;
 }
 
+function safeHeaderValue(val: string | null | undefined): string {
+  if (!val) return '';
+  const s = String(val);
+  return /[^\x00-\xFF]/.test(s) ? encodeURIComponent(s) : s;
+}
+
 function formatHeaders(loc: PreciseLocationInfo | null): Record<string, string> {
   if (!loc || !loc.locationString) return {};
   return {
-    'X-Client-Location': loc.locationString,
+    'X-Client-Location': safeHeaderValue(loc.locationString),
     'X-Client-Lat': loc.latitude !== null ? String(loc.latitude) : '',
     'X-Client-Lon': loc.longitude !== null ? String(loc.longitude) : '',
     'X-Client-Accuracy': loc.accuracy !== null ? String(loc.accuracy) : '',
-    'X-Client-Source': loc.source,
+    'X-Client-Source': safeHeaderValue(loc.source),
   };
 }
 
