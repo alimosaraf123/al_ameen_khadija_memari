@@ -81,7 +81,7 @@ app.use('/api/rooms',...moduleAccess(['rooms','rooms_support'],(req,all)=>{
   if(all&&all.includes('rooms'))return true;
   return req.method==='GET'&&['/accessible','/','/list'].includes(req.path);
 }),require('./src/routes/rooms'));
-app.use('/api/students',...moduleAccess(['students','student_transfer','student_lifecycle']),require('./src/routes/students'));
+app.use('/api/students',...moduleAccess(['students','student_transfer','student_lifecycle','kanyashree']),require('./src/routes/students'));
 app.use('/api/student-transfer',...moduleAccess(['student_transfer','students']),require('./src/routes/studentTransfer').createTransferRouter(pool));
 app.use('/api/teachers/attendance',...moduleAccess(['teachers','teachers_support','attendance']),require('./src/routes/staffAttendance'));
 app.use('/api/teachers',...moduleAccess(['teachers','teachers_support','routines'],(req,all)=>{

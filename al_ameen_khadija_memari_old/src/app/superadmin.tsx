@@ -102,7 +102,7 @@ const menuPermission: Record<string, string | string[]> = {
   '/documents': ['documents', 'students'],
   '/student-lifecycle': ['student_lifecycle', 'students'],
   '/student-transfer': ['student_transfer', 'students'],
-  '/kanyashree': ['students'],
+  '/kanyashree': ['kanyashree', 'students'],
   '/behavior': ['behavior', 'students'],
   '/gate-pass': ['gate_passes', 'gate_pass_generate', 'gate_pass_bulk', 'gate_pass_execute', 'gate_pass_ready', 'gate_pass_records'],
   '/visits': ['visits', 'students'],
@@ -720,7 +720,7 @@ export default function Dashboard() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.topNavScroll}
         >
-          {canAccessGroup(['/students', '/student-entry', '/student-registration-form', '/daily-attendance', '/id-cards', '/documents', '/student-lifecycle', '/student-transfer', '/behavior', '/gate-pass', '/visits', '/guardians']) && (
+          {canAccessGroup(['/students', '/student-entry', '/student-registration-form', '/daily-attendance', '/id-cards', '/documents', '/student-lifecycle', '/student-transfer', '/kanyashree', '/behavior', '/gate-pass', '/visits', '/guardians']) && (
             <TouchableOpacity style={s.navBtn} onPress={() => setStudentMenu(true)}>
               <Text style={s.navBtnIcon}>🎓</Text>
               <Text style={s.navBtnText}>Students ▾</Text>
