@@ -719,16 +719,6 @@ export default function CallingScheduleScreen() {
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={[styles.tabBtn, activeTab === 'dialer' && styles.activeTabBtn]}
-              onPress={() => {
-                setActiveTab('dialer');
-                setDialStep(1);
-                setActiveCallStatus(null);
-              }}
-            >
-              <Text style={[styles.tabBtnText, activeTab === 'dialer' && styles.activeTabText]}>IVR Dialer Test</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
               style={[styles.tabBtn, activeTab === 'logs' && styles.activeTabBtn]}
               onPress={() => {
                 setActiveTab('logs');
