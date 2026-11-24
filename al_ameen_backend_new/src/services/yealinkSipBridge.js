@@ -655,14 +655,16 @@ function startSipBridge() {
       if (rinfo.address === GATEWAY_IP) {
         let incomingAllowed = false;
         try {
-          if (typeof callingScheduleRouter.isIncomingCallsEnabled === 'function') {
-            incomingAllowed = callingScheduleRouter.isIncomingCallsEnabled();
-          } else {
+          if (typeof callingScheduleRouter.getBoothSettings === 'function') {
             const s = await callingScheduleRouter.getBoothSettings();
             incomingAllowed = Boolean(s && s.incoming_calls_enabled);
+          } else if (typeof callingScheduleRouter.isIncomingCallsEnabled === 'function') {
+            incomingAllowed = callingScheduleRouter.isIncomingCallsEnabled();
           }
         } catch (e) {
-          incomingAllowed = false;
+          incomingAllowed = typeof callingScheduleRouter.isIncomingCallsEnabled === 'function'
+            ? callingScheduleRouter.isIncomingCallsEnabled()
+            : false;
         }
 
         if (!incomingAllowed) {

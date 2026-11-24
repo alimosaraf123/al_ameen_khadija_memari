@@ -531,25 +531,7 @@ router.get('/logs', auth, asyncHandler(async (req, res) => {
   res.json({ success: true, calls: rows });
 }));
 
-/**
- * GET /api/calls/logs/export
- * Download filtered Call Logs as Excel (.xlsx)
- */
-router.get('/logs/export', auth, asyncHandler(async (req, res) => {
-  const fromDate = req.query.from_date ? String(req.query.from_date).trim() : '';
-  const toDate = req.query.to_date ? String(req.query.to_date).trim() : '';
-
-  const rows = await queryFilteredCallLogs({
-    fromDate,
-    toDate,
-    regNo: req.query.reg_no,
-    student: req.query.student,
-    relation: req.query.relation,
-    toNumber: req.query.to_number,
-    status: req.query.status,
-    limit: 5000,
-  });
-
+async function sendLogsExcel(res, rows, fromDate = '', toDate = '') {
   const fmtIstDateTime = (dt) => {
     if (!dt) return '-';
     try {
@@ -675,6 +657,46 @@ router.get('/logs/export', auth, asyncHandler(async (req, res) => {
 
   await workbook.xlsx.write(res);
   res.end();
+}
+
+/**
+ * GET /api/calls/logs/export
+ * Download filtered Call Logs as Excel (.xlsx)
+ */
+router.get('/logs/export', auth, asyncHandler(async (req, res) => {
+  const fromDate = req.query.from_date ? String(req.query.from_date).trim() : '';
+  const toDate = req.query.to_date ? String(req.query.to_date).trim() : '';
+
+  const rows = await queryFilteredCallLogs({
+    fromDate,
+    toDate,
+    regNo: req.query.reg_no,
+    student: req.query.student,
+    relation: req.query.relation,
+    toNumber: req.query.to_number,
+    status: req.query.status,
+    limit: 5000,
+  });
+
+  await sendLogsExcel(res, rows, fromDate, toDate);
+}));
+
+/**
+ * POST /api/calls/logs/export
+ * Download exact client-filtered & sorted Call Logs as Excel (.xlsx)
+ */
+router.post('/logs/export', auth, asyncHandler(async (req, res) => {
+  const fromDate = req.body?.from_date ? String(req.body.from_date).trim() : '';
+  const toDate = req.body?.to_date ? String(req.body.to_date).trim() : '';
+  const records = Array.isArray(req.body?.records) ? req.body.records : null;
+
+  const rows = records || await queryFilteredCallLogs({
+    fromDate,
+    toDate,
+    limit: 5000,
+  });
+
+  await sendLogsExcel(res, rows, fromDate, toDate);
 }));
 
 // Wire IVR routes from callingBooth
