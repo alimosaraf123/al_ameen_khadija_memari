@@ -10,13 +10,16 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
-  Pressable
+  Pressable,
+  Linking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import AcademyHeader from '../components/AcademyHeader';
 import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
-import { api } from '../lib/api';
+import DatePickerField from '../components/DatePickerField';
+import { api, getApiBase } from '../lib/api';
+import { getToken } from '../lib/auth';
 import { STUDENT_CLASSES } from '../lib/studentClasses';
 
 interface Schedule {
@@ -150,6 +153,14 @@ export default function CallingScheduleScreen() {
   // Call Logs State
   const [callLogs, setCallLogs] = useState<CallLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [logsFromDate, setLogsFromDate] = useState('');
+  const [logsToDate, setLogsToDate] = useState('');
+  const [logRegFilter, setLogRegFilter] = useState('');
+  const [logStudentFilter, setLogStudentFilter] = useState('');
+  const [logRelationFilter, setLogRelationFilter] = useState('');
+  const [logMobileFilter, setLogMobileFilter] = useState('');
+  const [logStatusFilter, setLogStatusFilter] = useState<'all' | 'completed' | 'missed' | 'cancelled'>('all');
+  const [exportingLogs, setExportingLogs] = useState(false);
 
   // Interactive IVR Dialer Simulator State
   const [dialRegNo, setDialRegNo] = useState('');
@@ -300,11 +311,18 @@ export default function CallingScheduleScreen() {
     }
   };
 
-  // Fetch Call Logs
-  const fetchLogs = async () => {
+  // Fetch Call Logs (with optional From Date / To Date)
+  const fetchLogs = async (fromOverride?: string, toOverride?: string) => {
     try {
       setLogsLoading(true);
-      const res = await api('/api/calls/logs?limit=50');
+      const fDate = fromOverride !== undefined ? fromOverride : logsFromDate;
+      const tDate = toOverride !== undefined ? toOverride : logsToDate;
+      const params = new URLSearchParams();
+      params.set('limit', (fDate || tDate) ? '1000' : '100');
+      if (fDate) params.set('from_date', fDate);
+      if (tDate) params.set('to_date', tDate);
+
+      const res = await api(`/api/calls/logs?${params.toString()}`);
       if (res && res.calls) {
         setCallLogs(res.calls || []);
       }
@@ -312,6 +330,68 @@ export default function CallingScheduleScreen() {
       console.error('Failed to load call logs:', err);
     } finally {
       setLogsLoading(false);
+    }
+  };
+
+  // Filtered Call Logs (Heading Column Filters)
+  const filteredCallLogs = useMemo(() => {
+    const regQ = logRegFilter.trim().toLowerCase();
+    const stuQ = logStudentFilter.trim().toLowerCase();
+    const relQ = logRelationFilter.trim().toLowerCase();
+    const mobQ = logMobileFilter.trim().toLowerCase();
+    return callLogs.filter((log) => {
+      if (regQ && !String(log.reg_no || '').toLowerCase().includes(regQ)) return false;
+      if (stuQ && !String(log.student_name || '').toLowerCase().includes(stuQ)) return false;
+      if (relQ && !String(log.called_relation || '').toLowerCase().includes(relQ)) return false;
+      if (mobQ && !String(log.to_number || '').toLowerCase().includes(mobQ)) return false;
+      if (logStatusFilter !== 'all' && String(log.status || '').toLowerCase() !== logStatusFilter) return false;
+      return true;
+    });
+  }, [callLogs, logRegFilter, logStudentFilter, logRelationFilter, logMobileFilter, logStatusFilter]);
+
+  // Download Call Logs as Excel (.xlsx)
+  const handleExportLogsExcel = async () => {
+    if (exportingLogs) return;
+    try {
+      setExportingLogs(true);
+      const base = getApiBase();
+      const token = await getToken();
+      const params = new URLSearchParams();
+      if (logsFromDate) params.set('from_date', logsFromDate);
+      if (logsToDate) params.set('to_date', logsToDate);
+      if (logRegFilter.trim()) params.set('reg_no', logRegFilter.trim());
+      if (logStudentFilter.trim()) params.set('student', logStudentFilter.trim());
+      if (logRelationFilter.trim()) params.set('relation', logRelationFilter.trim());
+      if (logMobileFilter.trim()) params.set('to_number', logMobileFilter.trim());
+      if (logStatusFilter !== 'all') params.set('status', logStatusFilter);
+
+      const downloadUrl = `${base}/api/calls/logs/export?${params.toString()}`;
+      const dateTag = (logsFromDate || logsToDate) ? `${logsFromDate || 'start'}_to_${logsToDate || 'today'}` : 'all';
+      const filename = `Hostel_Call_Logs_${dateTag}.xlsx`;
+
+      if (Platform.OS === 'web') {
+        const res = await fetch(downloadUrl, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) {
+          throw new Error(`Export failed (${res.status})`);
+        }
+        const blob = await res.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+      } else {
+        await Linking.openURL(downloadUrl);
+      }
+    } catch (err: any) {
+      Alert.alert('Download Error', err?.message || 'Failed to download Excel file.');
+    } finally {
+      setExportingLogs(false);
     }
   };
 
@@ -1359,25 +1439,70 @@ export default function CallingScheduleScreen() {
         {/* ========================================================= */}
         {activeTab === 'logs' && (
           <View style={styles.card}>
-            <View style={styles.cardHeader}>
+            <View style={[styles.cardHeader, { flexWrap: 'wrap', gap: 12 }]}>
               <View>
                 <Text style={styles.cardHeading}>Hostel Call Logs & History</Text>
-                <Text style={styles.cardSub}>Recorded calls, duration, and status updates via Exotel</Text>
+                <Text style={styles.cardSub}>Filter by date range, search columns in heading, or download Excel</Text>
               </View>
-              <TouchableOpacity style={styles.primaryBtn} onPress={fetchLogs}>
-                <Text style={styles.primaryBtnText}>🔄 Refresh</Text>
-              </TouchableOpacity>
+
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+                <DatePickerField
+                  label="From Date"
+                  value={logsFromDate}
+                  onChange={(val) => {
+                    setLogsFromDate(val);
+                    fetchLogs(val, logsToDate);
+                  }}
+                  style={{ minWidth: 145, height: 38, marginBottom: 0 }}
+                />
+                <DatePickerField
+                  label="To Date"
+                  value={logsToDate}
+                  onChange={(val) => {
+                    setLogsToDate(val);
+                    fetchLogs(logsFromDate, val);
+                  }}
+                  style={{ minWidth: 145, height: 38, marginBottom: 0 }}
+                />
+                {(logsFromDate || logsToDate || logRegFilter || logStudentFilter || logRelationFilter || logMobileFilter || logStatusFilter !== 'all') && (
+                  <TouchableOpacity
+                    style={[styles.btnBackOutline, { height: 38, justifyContent: 'center', paddingHorizontal: 12 }]}
+                    onPress={() => {
+                      setLogsFromDate('');
+                      setLogsToDate('');
+                      setLogRegFilter('');
+                      setLogStudentFilter('');
+                      setLogRelationFilter('');
+                      setLogMobileFilter('');
+                      setLogStatusFilter('all');
+                      fetchLogs('', '');
+                    }}
+                  >
+                    <Text style={styles.btnBackOutlineText}>✕ Clear</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[styles.primaryBtn, { backgroundColor: '#15803d', height: 38, justifyContent: 'center', opacity: exportingLogs ? 0.6 : 1 }]}
+                  onPress={handleExportLogsExcel}
+                  disabled={exportingLogs}
+                >
+                  <Text style={styles.primaryBtnText}>{exportingLogs ? '⏳ Exporting...' : '📥 Excel Download'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryBtn, { height: 38, justifyContent: 'center' }]}
+                  onPress={() => fetchLogs()}
+                >
+                  <Text style={styles.primaryBtnText}>🔄 Refresh</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {logsLoading ? (
               <ActivityIndicator size="large" color="#1768c5" style={{ marginVertical: 32 }} />
-            ) : callLogs.length === 0 ? (
-              <View style={styles.emptyBox}>
-                <Text style={styles.emptyText}>No call history recorded yet.</Text>
-              </View>
             ) : (
               <ScrollView horizontal showsHorizontalScrollIndicator={true}>
                 <View style={styles.table}>
+                  {/* Table Heading Row */}
                   <View style={styles.tableHead}>
                     <Text style={[styles.th, { width: 45 }]}>#</Text>
                     <Text style={[styles.th, { width: 75 }]}>Reg No</Text>
@@ -1392,50 +1517,125 @@ export default function CallingScheduleScreen() {
                     <Text style={[styles.th, { width: 100 }]}>Recording</Text>
                   </View>
 
-                  {callLogs.map((log, idx) => (
-                    <View key={log.call_sid ? `${log.call_sid}-${idx}` : `log-${log.id || 'x'}-${idx}`} style={[styles.tableRow, idx % 2 === 1 && styles.tableRowAlt]}>
-                      <Text style={[styles.td, { width: 45 }]}>{idx + 1}</Text>
-                      <Text style={[styles.td, { width: 75, fontWeight: '700', color: '#173f77' }]}>{log.reg_no || '-'}</Text>
-                      <Text style={[styles.td, { width: 140 }]}>{log.student_name || '-'}</Text>
-                      <Text style={[styles.td, { width: 100, fontWeight: '600' }]}>{log.called_relation || 'Manual'}</Text>
-                      <Text style={[styles.td, { width: 115 }]}>{log.to_number}</Text>
-                      <View style={{ width: 95 }}>
-                        <Text style={[
-                          styles.badgeText,
-                          log.status === 'completed' ? styles.badgeTextActive : styles.badgeTextInactive,
-                          { fontWeight: '700' }
-                        ]}>
-                          {log.status === 'completed' ? '✓ Completed' : log.status === 'no_answer' ? '✕ No Answer' : log.status}
-                        </Text>
-                      </View>
-                      <Text style={[styles.td, { width: 160, fontSize: 12, color: '#334155' }]}>
-                        {formatStartDateTime(log.started_at || log.created_at)}
-                      </Text>
-                      <Text style={[styles.td, { width: 110, fontSize: 12, color: '#475569' }]}>
-                        {formatEndTime(log.started_at || log.created_at, log.ended_at, log.duration)}
-                      </Text>
-                      <Text style={[styles.td, { width: 95, fontWeight: '800', color: (log.duration && log.duration > 0) ? '#16a34a' : '#64748b' }]}>
-                        {formatDurationDisplay(log.duration, log.status)}
-                      </Text>
-                      <Text style={[styles.td, { width: 90, color: '#0969da' }]}>
-                        {log.allowed_talk_time ? `${log.allowed_talk_time} min` : '8 min'}
-                      </Text>
-                      <View style={{ width: 100 }}>
-                        {log.recording_url ? (
-                          <TouchableOpacity
-                            onPress={() => {
-                              if (Platform.OS === 'web') window.open(log.recording_url!, '_blank');
-                              else Alert.alert('Recording URL', log.recording_url!);
-                            }}
-                          >
-                            <Text style={{ color: '#1768c5', textDecorationLine: 'underline', fontSize: 12 }}>▶ Listen</Text>
-                          </TouchableOpacity>
-                        ) : (
-                          <Text style={{ fontSize: 12, color: '#999' }}>None</Text>
-                        )}
-                      </View>
+                  {/* Heading Filter Row */}
+                  <View style={[styles.tableRow, { backgroundColor: '#f1f5f9', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#cbd5e1' }]}>
+                    <Text style={[styles.td, { width: 45, fontSize: 13, color: '#475569', textAlign: 'center' }]}>🔍</Text>
+                    <View style={{ width: 75, paddingRight: 4 }}>
+                      <TextInput
+                        value={logRegFilter}
+                        onChangeText={setLogRegFilter}
+                        placeholder="Reg..."
+                        placeholderTextColor="#94a3b8"
+                        style={{ height: 30, backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 5, paddingHorizontal: 6, fontSize: 12, color: '#0f172a' }}
+                      />
                     </View>
-                  ))}
+                    <View style={{ width: 140, paddingRight: 4 }}>
+                      <TextInput
+                        value={logStudentFilter}
+                        onChangeText={setLogStudentFilter}
+                        placeholder="Student name..."
+                        placeholderTextColor="#94a3b8"
+                        style={{ height: 30, backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 5, paddingHorizontal: 6, fontSize: 12, color: '#0f172a' }}
+                      />
+                    </View>
+                    <View style={{ width: 100, paddingRight: 4 }}>
+                      <TextInput
+                        value={logRelationFilter}
+                        onChangeText={setLogRelationFilter}
+                        placeholder="Relation..."
+                        placeholderTextColor="#94a3b8"
+                        style={{ height: 30, backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 5, paddingHorizontal: 6, fontSize: 12, color: '#0f172a' }}
+                      />
+                    </View>
+                    <View style={{ width: 115, paddingRight: 4 }}>
+                      <TextInput
+                        value={logMobileFilter}
+                        onChangeText={setLogMobileFilter}
+                        placeholder="Mobile..."
+                        placeholderTextColor="#94a3b8"
+                        style={{ height: 30, backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 5, paddingHorizontal: 6, fontSize: 12, color: '#0f172a' }}
+                      />
+                    </View>
+                    <View style={{ width: 95, paddingRight: 4 }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          const order: Array<'all' | 'completed' | 'missed' | 'cancelled'> = ['all', 'completed', 'missed', 'cancelled'];
+                          const next = order[(order.indexOf(logStatusFilter) + 1) % order.length];
+                          setLogStatusFilter(next);
+                        }}
+                        style={{
+                          height: 30,
+                          backgroundColor: logStatusFilter === 'all' ? '#fff' : '#dbeafe',
+                          borderWidth: 1,
+                          borderColor: logStatusFilter === 'all' ? '#cbd5e1' : '#3b82f6',
+                          borderRadius: 5,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          paddingHorizontal: 4,
+                        }}
+                      >
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: logStatusFilter === 'all' ? '#475569' : '#1d4ed8' }}>
+                          {logStatusFilter === 'all' ? 'Status: All ▾' : logStatusFilter.toUpperCase()}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={{ width: 555, justifyContent: 'center', paddingLeft: 8 }}>
+                      <Text style={{ fontSize: 12, color: '#475569', fontWeight: '600' }}>
+                        Showing {filteredCallLogs.length} of {callLogs.length} records
+                      </Text>
+                    </View>
+                  </View>
+
+                  {filteredCallLogs.length === 0 ? (
+                    <View style={[styles.emptyBox, { width: 1120 }]}>
+                      <Text style={styles.emptyText}>No call history matches the selected date or filters.</Text>
+                    </View>
+                  ) : (
+                    filteredCallLogs.map((log, idx) => (
+                      <View key={log.call_sid ? `${log.call_sid}-${idx}` : `log-${log.id || 'x'}-${idx}`} style={[styles.tableRow, idx % 2 === 1 && styles.tableRowAlt]}>
+                        <Text style={[styles.td, { width: 45 }]}>{idx + 1}</Text>
+                        <Text style={[styles.td, { width: 75, fontWeight: '700', color: '#173f77' }]}>{log.reg_no || '-'}</Text>
+                        <Text style={[styles.td, { width: 140 }]}>{log.student_name || '-'}</Text>
+                        <Text style={[styles.td, { width: 100, fontWeight: '600' }]}>{log.called_relation || 'Manual'}</Text>
+                        <Text style={[styles.td, { width: 115 }]}>{log.to_number}</Text>
+                        <View style={{ width: 95 }}>
+                          <Text style={[
+                            styles.badgeText,
+                            log.status === 'completed' ? styles.badgeTextActive : styles.badgeTextInactive,
+                            { fontWeight: '700' }
+                          ]}>
+                            {log.status === 'completed' ? '✓ Completed' : log.status === 'no_answer' ? '✕ No Answer' : log.status}
+                          </Text>
+                        </View>
+                        <Text style={[styles.td, { width: 160, fontSize: 12, color: '#334155' }]}>
+                          {formatStartDateTime(log.started_at || log.created_at)}
+                        </Text>
+                        <Text style={[styles.td, { width: 110, fontSize: 12, color: '#475569' }]}>
+                          {formatEndTime(log.started_at || log.created_at, log.ended_at, log.duration)}
+                        </Text>
+                        <Text style={[styles.td, { width: 95, fontWeight: '800', color: (log.duration && log.duration > 0) ? '#16a34a' : '#64748b' }]}>
+                          {formatDurationDisplay(log.duration, log.status)}
+                        </Text>
+                        <Text style={[styles.td, { width: 90, color: '#0969da' }]}>
+                          {log.allowed_talk_time ? `${log.allowed_talk_time} min` : '8 min'}
+                        </Text>
+                        <View style={{ width: 100 }}>
+                          {log.recording_url ? (
+                            <TouchableOpacity
+                              onPress={() => {
+                                if (Platform.OS === 'web') window.open(log.recording_url!, '_blank');
+                                else Alert.alert('Recording URL', log.recording_url!);
+                              }}
+                            >
+                              <Text style={{ color: '#1768c5', textDecorationLine: 'underline', fontSize: 12 }}>▶ Listen</Text>
+                            </TouchableOpacity>
+                          ) : (
+                            <Text style={{ fontSize: 12, color: '#999' }}>None</Text>
+                          )}
+                        </View>
+                      </View>
+                    ))
+                  )}
                 </View>
               </ScrollView>
             )}
