@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import AcademyHeader from '../components/AcademyHeader';
+import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import { api } from '../lib/api';
 
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -85,6 +86,7 @@ const formatDate = (v: any) => {
 type AuditTab = 'action_history' | 'office' | 'guardian';
 
 export default function AuditLog() {
+  const mainScrollRef = useRef<ScrollView>(null);
   const [activeTab, setActiveTab] = useState<AuditTab>('action_history');
   const [loading, setLoading] = useState(true);
 
@@ -160,7 +162,7 @@ export default function AuditLog() {
 
   return (
     <View style={s.page}>
-      <ScrollView contentContainerStyle={s.body}>
+      <ScrollView ref={mainScrollRef} contentContainerStyle={s.body}>
         <AcademyHeader />
 
         {/* Top Header */}
@@ -453,6 +455,7 @@ export default function AuditLog() {
           </View>
         )}
       </ScrollView>
+      <ScrollNavigationButtons scrollRef={mainScrollRef} bottomOffset={80} rightOffset={20} />
     </View>
   );
 }
