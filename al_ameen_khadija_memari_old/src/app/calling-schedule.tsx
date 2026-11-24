@@ -108,6 +108,7 @@ export default function CallingScheduleScreen() {
   const [loading, setLoading] = useState(false);
   const [incomingEnabled, setIncomingEnabled] = useState(false);
   const [incomingBusy, setIncomingBusy] = useState(false);
+  const [incomingToast, setIncomingToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // Filters
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('All');
@@ -324,9 +325,20 @@ export default function CallingScheduleScreen() {
   };
 
   const handleToggleIncoming = async () => {
+    if (incomingBusy) return;
     const nextVal = !incomingEnabled;
+    // Instant optimistic update
+    setIncomingEnabled(nextVal);
+    setIncomingBusy(true);
+    setIncomingToast({
+      message: nextVal
+        ? '📞 ইনকামিং কল সক্রিয় করা হয়েছে (Incoming Calls: ON - Handset will ring)'
+        : '📵 ইনকামিং কল সম্পূর্ণ বন্ধ করা হয়েছে (Incoming Calls: OFF - Calls blocked)',
+      type: 'success',
+    });
+    setTimeout(() => setIncomingToast(null), 4000);
+
     try {
-      setIncomingBusy(true);
       const res = await api('/api/calling-schedules/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -336,6 +348,13 @@ export default function CallingScheduleScreen() {
         setIncomingEnabled(Boolean(res.settings.incoming_calls_enabled));
       }
     } catch (err: any) {
+      // Revert if error
+      setIncomingEnabled(!nextVal);
+      setIncomingToast({
+        message: err?.message || 'Failed to update incoming call setting',
+        type: 'error',
+      });
+      setTimeout(() => setIncomingToast(null), 4000);
       Alert.alert('Error', err?.message || 'Failed to update incoming call setting');
     } finally {
       setIncomingBusy(false);
@@ -735,17 +754,56 @@ export default function CallingScheduleScreen() {
                 <TouchableOpacity
                   disabled={incomingBusy}
                   onPress={handleToggleIncoming}
-                  style={{
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    backgroundColor: incomingEnabled ? '#dcfce7' : '#fee2e2',
-                    borderColor: incomingEnabled ? '#16a34a' : '#dc2626',
-                    opacity: incomingBusy ? 0.6 : 1,
-                  }}
+                  activeOpacity={0.7}
+                  style={[
+                    {
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 20,
+                      borderWidth: 1.5,
+                      backgroundColor: incomingEnabled ? '#ecfdf5' : '#fef2f2',
+                      borderColor: incomingEnabled ? '#10b981' : '#ef4444',
+                      opacity: incomingBusy ? 0.7 : 1,
+                      shadowColor: incomingEnabled ? '#10b981' : '#ef4444',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.15,
+                      shadowRadius: 3,
+                      elevation: 2,
+                    },
+                    (Platform.OS === 'web' ? ({ cursor: incomingBusy ? 'wait' : 'pointer', userSelect: 'none' } as any) : {})
+                  ]}
                 >
-                  <Text style={{ fontWeight: '800', fontSize: 12.5, color: incomingEnabled ? '#166534' : '#991b1b' }}>
+                  {/* Switch Pill & Slider */}
+                  <View
+                    style={{
+                      width: 36,
+                      height: 20,
+                      borderRadius: 10,
+                      backgroundColor: incomingEnabled ? '#10b981' : '#cbd5e1',
+                      padding: 2,
+                      justifyContent: 'center',
+                      alignItems: incomingEnabled ? 'flex-end' : 'flex-start',
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 16,
+                        height: 16,
+                        borderRadius: 8,
+                        backgroundColor: '#ffffff',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.25,
+                        shadowRadius: 2,
+                        elevation: 2,
+                      }}
+                    />
+                  </View>
+
+                  <Text style={{ fontWeight: '800', fontSize: 13, color: incomingEnabled ? '#065f46' : '#991b1b' }}>
                     {incomingEnabled ? '📞 Incoming Calls: ON' : '📵 Incoming Calls: OFF (Blocked)'}
                   </Text>
                 </TouchableOpacity>
@@ -754,6 +812,36 @@ export default function CallingScheduleScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Incoming Status Toast / Alert Banner */}
+            {incomingToast && (
+              <View
+                style={{
+                  marginHorizontal: 16,
+                  marginTop: 4,
+                  marginBottom: 10,
+                  paddingHorizontal: 14,
+                  paddingVertical: 9,
+                  borderRadius: 8,
+                  backgroundColor: incomingToast.type === 'success' ? '#dcfce7' : '#fee2e2',
+                  borderColor: incomingToast.type === 'success' ? '#86efac' : '#fca5a5',
+                  borderWidth: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <Text
+                  style={{
+                    fontWeight: '700',
+                    fontSize: 13,
+                    color: incomingToast.type === 'success' ? '#166534' : '#991b1b',
+                  }}
+                >
+                  {incomingToast.message}
+                </Text>
+              </View>
+            )}
 
             {/* Filter Bar */}
             <View style={styles.filterRow}>
@@ -872,6 +960,24 @@ export default function CallingScheduleScreen() {
                   Days: {Array.isArray(selectedSchedule.days) ? selectedSchedule.days.join(', ') : selectedSchedule.days} | Hours: {selectedSchedule.start_time} - {selectedSchedule.end_time} | Max Talk Time: {selectedSchedule.allowed_talk_time} min
                 </Text>
               </View>
+            </View>
+
+            {/* Dialing Guide Banner */}
+            <View style={{
+              backgroundColor: '#eff6ff',
+              borderColor: '#93c5fd',
+              borderWidth: 1,
+              borderRadius: 8,
+              padding: 12,
+              marginBottom: 14,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10
+            }}>
+              <Text style={{ fontSize: 22 }}>📞</Text>
+              <Text style={{ fontSize: 13, color: '#1e40af', flex: 1, lineHeight: 21 }}>
+                <Text style={{ fontWeight: '700' }}>কীভাবে ডায়াল করবেন:</Text> হ্যান্ডসেট তুলে ছাত্রের <Text style={{ fontWeight: '700', color: '#0969da' }}>৫-ডিজিট রেজি নম্বর</Text> ডায়াল করলেই ভয়েস মেনু শোনা যাবে—<Text style={{ fontWeight: '700' }}>বাবার জন্য ১</Text>, <Text style={{ fontWeight: '700' }}>মায়ের জন্য ২</Text>, <Text style={{ fontWeight: '700' }}>অভিভাবকের জন্য ৩, ৪, ৫</Text> চাপুন। (সাপ্তাহিক সর্বোচ্চ টকটাইম <Text style={{ fontWeight: '700', color: '#b91c1c' }}>৮ মিনিট</Text>, ৮ মিনিট পূর্ণ হলে কল স্বয়ংক্রিয়ভাবে ডিসকানেক্ট হবে)।
+              </Text>
             </View>
 
             {/* Search Bar */}

@@ -17,12 +17,23 @@ const boothSettingsReady = pool.query(`
   ON CONFLICT (id) DO NOTHING;
 `);
 
+let cachedIncomingCallsEnabled = false;
+
 async function getBoothSettings() {
   await boothSettingsReady;
   const q = await pool.query(
     `SELECT incoming_calls_enabled, updated_at FROM calling_booth_settings WHERE id = 1`
   );
-  return q.rows[0] || { incoming_calls_enabled: false, updated_at: null };
+  const row = q.rows[0] || { incoming_calls_enabled: false, updated_at: null };
+  cachedIncomingCallsEnabled = Boolean(row.incoming_calls_enabled);
+  return row;
+}
+
+// Initial fetch on boot
+getBoothSettings().catch(err => console.error('[BoothSettings] Init error:', err.message));
+
+function isIncomingCallsEnabled() {
+  return cachedIncomingCallsEnabled;
 }
 
 /**
@@ -38,9 +49,10 @@ router.get('/settings', auth, staffRoles, asyncHandler(async (req, res) => {
  * PATCH /api/calling-schedules/settings
  * Toggle incoming calls OFF (default) or ON
  */
-router.patch('/settings', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
+router.patch('/settings', auth, staffRoles, asyncHandler(async (req, res) => {
   await boothSettingsReady;
   const incomingEnabled = Boolean(req.body?.incoming_calls_enabled);
+  cachedIncomingCallsEnabled = incomingEnabled;
   const q = await pool.query(
     `INSERT INTO calling_booth_settings (id, incoming_calls_enabled, updated_at)
      VALUES (1, $1, NOW())
@@ -48,6 +60,7 @@ router.patch('/settings', auth, allow('super_admin', 'admin'), asyncHandler(asyn
      RETURNING incoming_calls_enabled, updated_at`,
     [incomingEnabled]
   );
+  console.log(`[Yealink SIP] Incoming Calls setting updated via Web UI: ${incomingEnabled ? 'ENABLED (ON)' : 'BLOCKED (OFF)'}`);
   res.json({ success: true, settings: q.rows[0] });
 }));
 
@@ -478,5 +491,6 @@ router.get('/logs', auth, staffRoles, asyncHandler(async (req, res) => {
 }));
 
 router.getBoothSettings = getBoothSettings;
+router.isIncomingCallsEnabled = isIncomingCallsEnabled;
 module.exports = router;
 

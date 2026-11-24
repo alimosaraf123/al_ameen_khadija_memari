@@ -64,12 +64,13 @@ async function checkStudentCallingSchedule(studentId, regNo) {
     `SELECT id, allowed_talk_time, days, start_time, end_time
      FROM calling_schedules
      WHERE class_name = $1
+       AND (gender IS NULL OR gender = '' OR gender = $2)
        AND is_active = TRUE
        AND days ? trim(to_char(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata', 'Dy'))
        AND (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::time BETWEEN start_time AND end_time
      ORDER BY allowed_talk_time DESC
      LIMIT 1`,
-    [student.class_name]
+    [student.class_name, student.gender || 'Female']
   );
 
   if (!schedRes.rowCount) {
