@@ -1032,24 +1032,6 @@ export default function CallingScheduleScreen() {
               </View>
             </View>
 
-            {/* Dialing Guide Banner */}
-            <View style={{
-              backgroundColor: '#eff6ff',
-              borderColor: '#93c5fd',
-              borderWidth: 1,
-              borderRadius: 8,
-              padding: 12,
-              marginBottom: 14,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 10
-            }}>
-              <Text style={{ fontSize: 22 }}>📞</Text>
-              <Text style={{ fontSize: 13, color: '#1e40af', flex: 1, lineHeight: 21 }}>
-                <Text style={{ fontWeight: '700' }}>কীভাবে ডায়াল করবেন:</Text> হ্যান্ডসেট তুলে ছাত্রের <Text style={{ fontWeight: '700', color: '#0969da' }}>৫-ডিজিট রেজি নম্বর</Text> ডায়াল করলেই ভয়েস মেনু শোনা যাবে—<Text style={{ fontWeight: '700' }}>বাবার জন্য ১</Text>, <Text style={{ fontWeight: '700' }}>মায়ের জন্য ২</Text>, <Text style={{ fontWeight: '700' }}>অভিভাবকের জন্য ৩, ৪, ৫</Text> চাপুন। (সাপ্তাহিক সর্বোচ্চ টকটাইম <Text style={{ fontWeight: '700', color: '#b91c1c' }}>৮ মিনিট</Text>, ৮ মিনিট পূর্ণ হলে কল স্বয়ংক্রিয়ভাবে ডিসকানেক্ট হবে)।
-              </Text>
-            </View>
-
             {/* Search Bar */}
             <View style={styles.searchRow}>
               <TextInput
