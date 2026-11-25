@@ -5,7 +5,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { API_BASE } from '../lib/api';
 
 type SessionInfo = {
-  status: 'pending' | 'completed' | 'expired';
+  status: 'pending' | 'awaiting_confirm' | 'completed' | 'expired';
   target: string;
   target_label: string;
   student_name: string;
@@ -43,6 +43,8 @@ export default function MobileCaptureScreen() {
         if (active) {
           setInfo(data);
           if (data.status === 'completed' && data.uploaded_url) {
+            setDoneUrl(data.uploaded_url);
+          } else if (data.status === 'awaiting_confirm' && data.uploaded_url) {
             setDoneUrl(data.uploaded_url);
           }
         }
@@ -104,7 +106,7 @@ export default function MobileCaptureScreen() {
         throw new Error(data.message || 'Upload failed. Please try again.');
       }
       setDoneUrl(data.uploaded_url || previewUri);
-      setInfo((prev) => (prev ? { ...prev, status: 'completed' } : prev));
+      setInfo((prev) => (prev ? { ...prev, status: data.status || 'awaiting_confirm' } : prev));
     } catch (err: any) {
       setError(err.message || 'Upload failed.');
     } finally {
@@ -143,15 +145,25 @@ export default function MobileCaptureScreen() {
             <Text style={st.errorTitle}>Link Expired</Text>
             <Text style={st.errorText}>This QR link has expired. Please generate a fresh QR code on the computer.</Text>
           </View>
-        ) : doneUrl || info?.status === 'completed' ? (
+        ) : doneUrl || info?.status === 'completed' || info?.status === 'awaiting_confirm' ? (
           <View style={st.center}>
-            <Text style={st.successBadge}>UPLOADED</Text>
-            <Text style={st.successTitle}>Photo Uploaded Successfully!</Text>
+            <Text style={st.successBadge}>
+              {info?.status === 'completed' ? 'SAVED' : 'SENT FOR CONFIRMATION'}
+            </Text>
+            <Text style={st.successTitle}>
+              {info?.status === 'completed' ? 'Photo Saved Successfully!' : 'Sent to Office PC!'}
+            </Text>
             <Text style={st.muted}>
-              {info?.target_label} for {info?.student_name} (Reg. {info?.registration_no}) has been saved to the system.
+              {info?.status === 'completed'
+                ? `${info?.target_label} for ${info?.student_name} (Reg. ${info?.registration_no}) has been saved.`
+                : `${info?.target_label} for ${info?.student_name} (Reg. ${info?.registration_no}) is waiting for Office confirmation on the computer.`}
             </Text>
             {!!doneUrl && <Image source={{ uri: doneUrl }} style={st.previewImg} resizeMode="contain" />}
-            <Text style={st.closeHint}>You can close this page now. The computer screen will update automatically.</Text>
+            <Text style={st.closeHint}>
+              {info?.status === 'completed'
+                ? 'You can close this page now.'
+                : 'If Office rejects the photo, tap Retake below or refresh this page.'}
+            </Text>
           </View>
         ) : (
           <>

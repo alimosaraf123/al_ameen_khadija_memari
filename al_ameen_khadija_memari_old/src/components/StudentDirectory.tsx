@@ -383,7 +383,9 @@ export default function StudentDirectory({
   const [qrLink, setQrLink] = useState('');
   const [qrImageUri, setQrImageUri] = useState('');
   const [qrTargetLabel, setQrTargetLabel] = useState('');
-  const [qrStatus, setQrStatus] = useState<'pending' | 'completed' | 'expired'>('pending');
+  const [qrStatus, setQrStatus] = useState<'pending' | 'awaiting_confirm' | 'completed' | 'expired'>('pending');
+  const [qrPreviewUrl, setQrPreviewUrl] = useState('');
+  const [qrConfirmBusy, setQrConfirmBusy] = useState(false);
   const [qrCopied, setQrCopied] = useState(false);
   const [qrError, setQrError] = useState('');
 
@@ -446,6 +448,8 @@ export default function StudentDirectory({
     setQrError('');
     setQrCopied(false);
     setQrStatus('pending');
+    setQrPreviewUrl('');
+    setQrConfirmBusy(false);
     setQrTargetLabel(targetLabel);
     setQrImageUri('');
     setQrLink('');
@@ -488,7 +492,10 @@ export default function StudentDirectory({
     const timer = setInterval(async () => {
       try {
         const res = await api(`/api/mobile-capture/session/${encodeURIComponent(qrToken)}/status`);
-        if (res.status === 'completed') {
+        if (res.status === 'awaiting_confirm') {
+          setQrPreviewUrl(res.uploaded_url || '');
+          setQrStatus('awaiting_confirm');
+        } else if (res.status === 'completed') {
           setQrStatus('completed');
           clearInterval(timer);
           const [refreshedStu, refreshedDocs] = await Promise.all([
@@ -509,6 +516,43 @@ export default function StudentDirectory({
     }, 2500);
     return () => clearInterval(timer);
   }, [qrModalOpen, qrToken, qrStatus, documentStudent?.id]);
+
+  const confirmMobileCapture = async () => {
+    if (!qrToken || !documentStudent) return;
+    setQrConfirmBusy(true);
+    setQrError('');
+    try {
+      await api(`/api/mobile-capture/session/${encodeURIComponent(qrToken)}/confirm`, { method: 'POST' });
+      setQrStatus('completed');
+      const [refreshedStu, refreshedDocs] = await Promise.all([
+        api(`/api/students/${documentStudent.id}`),
+        api(`/api/documents/student/${documentStudent.id}`),
+      ]);
+      if (refreshedStu?.student) setDocumentStudent(refreshedStu.student);
+      if (refreshedDocs?.documents) setDocuments(refreshedDocs.documents);
+      onRefresh();
+      setTimeout(() => setQrModalOpen(false), 1200);
+    } catch (err: any) {
+      setQrError(err.message || 'Could not confirm photo.');
+    } finally {
+      setQrConfirmBusy(false);
+    }
+  };
+
+  const rejectMobileCapture = async () => {
+    if (!qrToken) return;
+    setQrConfirmBusy(true);
+    setQrError('');
+    try {
+      await api(`/api/mobile-capture/session/${encodeURIComponent(qrToken)}/reject`, { method: 'POST' });
+      setQrPreviewUrl('');
+      setQrStatus('pending');
+    } catch (err: any) {
+      setQrError(err.message || 'Could not reject photo.');
+    } finally {
+      setQrConfirmBusy(false);
+    }
+  };
 
   const chooseDocument = async (type: string) => {
     const picked = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'], copyToCacheDirectory: true });
@@ -882,6 +926,35 @@ export default function StudentDirectory({
               <ActivityIndicator size="large" style={{ marginVertical: 30 }} />
             ) : qrError ? (
               <Text style={s.error}>{qrError}</Text>
+            ) : qrStatus === 'awaiting_confirm' ? (
+              <View style={{ width: '100%', alignItems: 'center', gap: 12 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#1d4ed8', textAlign: 'center' }}>
+                  Photo received from mobile! Review & confirm before saving:
+                </Text>
+                {!!qrPreviewUrl && (
+                  <Image
+                    source={{ uri: qrPreviewUrl }}
+                    style={{ width: 240, height: 240, borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#f8fafc' }}
+                    resizeMode="contain"
+                  />
+                )}
+                <View style={s.qrBtnRow}>
+                  <TouchableOpacity
+                    disabled={qrConfirmBusy}
+                    style={[s.qrActionBtn, { backgroundColor: '#16a34a', opacity: qrConfirmBusy ? 0.6 : 1 }]}
+                    onPress={confirmMobileCapture}
+                  >
+                    <Text style={s.whiteText}>{qrConfirmBusy ? 'Saving...' : 'Confirm & Save'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    disabled={qrConfirmBusy}
+                    style={[s.qrActionBtn, { backgroundColor: '#dc2626', opacity: qrConfirmBusy ? 0.6 : 1 }]}
+                    onPress={rejectMobileCapture}
+                  >
+                    <Text style={s.whiteText}>Reject & Retake</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             ) : qrStatus === 'completed' ? (
               <View style={{ paddingVertical: 20, alignItems: 'center', gap: 8 }}>
                 <Text style={{ fontSize: 28 }}>✅</Text>
