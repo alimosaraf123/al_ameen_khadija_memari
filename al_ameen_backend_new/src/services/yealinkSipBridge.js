@@ -123,6 +123,167 @@ function detectDtmfAudio(rawAudioBytes, codec = 'alaw') {
   return DTMF_MAP[key] || null;
 }
 
+// -----------------------------------------------------------------------------
+// Local Call Recording Helpers (8kHz 16-bit Mono WAV Stream Mixer)
+// -----------------------------------------------------------------------------
+async function isCallRecordingActive() {
+  try {
+    if (typeof callingScheduleRouter.getBoothSettings === 'function') {
+      const s = await callingScheduleRouter.getBoothSettings();
+      return Boolean(s && s.call_recording_enabled);
+    }
+    if (typeof callingScheduleRouter.isCallRecordingEnabled === 'function') {
+      return callingScheduleRouter.isCallRecordingEnabled();
+    }
+  } catch (_) {}
+  return typeof callingScheduleRouter.isCallRecordingEnabled === 'function'
+    ? callingScheduleRouter.isCallRecordingEnabled()
+    : false;
+}
+
+function decodeRtpToPcm16(msg) {
+  if (!msg || msg.length < 13) return null;
+  const pt = msg[1] & 0x7F;
+  if (pt !== 8 && pt !== 0) return null; // Only PCMA (8) and PCMU (0)
+  const payload = msg.subarray(12);
+  const lut = pt === 0 ? uLawToLinear : aLawToLinear;
+  const pcm = new Int16Array(payload.length);
+  for (let i = 0; i < payload.length; i++) {
+    pcm[i] = lut[payload[i]];
+  }
+  return pcm;
+}
+
+function rewriteSdpIpAndPort(sdp, newIp, newPort) {
+  if (!sdp) return sdp;
+  return sdp
+    .replace(/c=IN\s+IP4\s+[0-9.]+/i, `c=IN IP4 ${newIp}`)
+    .replace(/m=audio\s+\d+/i, `m=audio ${newPort}`);
+}
+
+function startCallRecording(session) {
+  if (!session || session.recordingActive) return;
+  try {
+    const dateFolder = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const recDir = path.resolve(__dirname, '..', '..', 'recordings', dateFolder);
+    fs.mkdirSync(recDir, { recursive: true });
+
+    const safeReg = String(session.regNo || 'call').replace(/[^a-zA-Z0-9_-]/g, '');
+    const safeRel = String(session.relation || 'Guardian').replace(/[^a-zA-Z0-9_-]/g, '');
+    const stamp = Date.now();
+    const fileName = `${safeReg}_${safeRel}_${stamp}.wav`;
+    const fullWavPath = path.join(recDir, fileName);
+    const tempPcmPath = `${fullWavPath}.pcm`;
+
+    session.recordingActive = true;
+    session.recordedPcmBytes = 0;
+    session.ylAudioQueue = [];
+    session.gwAudioQueue = [];
+    session.pcmStream = fs.createWriteStream(tempPcmPath);
+    session.recordingMeta = {
+      dateFolder,
+      fileName,
+      fullWavPath,
+      tempPcmPath,
+      apiPath: `/api/calls/recordings/${dateFolder}/${fileName}`,
+    };
+
+    session.recordInterval = setInterval(() => {
+      if (!session.recordingActive || !session.pcmStream) return;
+      const f1 = session.ylAudioQueue.length > 0 ? session.ylAudioQueue.shift() : null;
+      const f2 = session.gwAudioQueue.length > 0 ? session.gwAudioQueue.shift() : null;
+      const len = Math.max(f1 ? f1.length : 0, f2 ? f2.length : 0) || 160;
+      const out = Buffer.allocUnsafe(len * 2);
+
+      for (let i = 0; i < len; i++) {
+        const s1 = f1 && i < f1.length ? f1[i] : 0;
+        const s2 = f2 && i < f2.length ? f2[i] : 0;
+        let mixed = s1 + s2;
+        if (mixed > 32767) mixed = 32767;
+        else if (mixed < -32768) mixed = -32768;
+        out.writeInt16LE(mixed, i * 2);
+      }
+
+      session.pcmStream.write(out);
+      session.recordedPcmBytes += out.length;
+    }, 20);
+
+    console.log(`[Yealink SIP] Call recording STARTED: ${session.recordingMeta.apiPath}`);
+  } catch (err) {
+    console.error('[Yealink SIP] Failed to start call recording:', err.message);
+    session.recordingActive = false;
+  }
+}
+
+function pushAudioFrame(session, side, msg) {
+  if (!session || !session.recordingActive) return;
+  const pcm = decodeRtpToPcm16(msg);
+  if (!pcm) return;
+  const q = side === 'yl' ? session.ylAudioQueue : session.gwAudioQueue;
+  if (!q) return;
+  if (q.length >= 50) q.shift();
+  q.push(pcm);
+}
+
+async function finalizeCallRecording(session) {
+  if (!session || !session.recordingMeta) return null;
+  if (session.recordingFinalized) return session.savedRecordingUrl || null;
+  session.recordingFinalized = true;
+  session.recordingActive = false;
+
+  if (session.recordInterval) {
+    clearInterval(session.recordInterval);
+    session.recordInterval = null;
+  }
+
+  const meta = session.recordingMeta;
+  if (session.pcmStream) {
+    await new Promise((resolve) => {
+      session.pcmStream.end(resolve);
+    });
+    session.pcmStream = null;
+  }
+
+  try {
+    if (!fs.existsSync(meta.tempPcmPath)) return null;
+    const stats = fs.statSync(meta.tempPcmPath);
+    const dataSize = stats.size;
+    if (dataSize < 1600) {
+      fs.unlinkSync(meta.tempPcmPath);
+      return null;
+    }
+
+    // Build 44-byte RIFF/WAV header for 8000Hz, 16-bit, Mono PCM
+    const header = Buffer.alloc(44);
+    header.write('RIFF', 0);
+    header.writeUInt32LE(36 + dataSize, 4);
+    header.write('WAVE', 8);
+    header.write('fmt ', 12);
+    header.writeUInt32LE(16, 16); // PCM chunk size
+    header.writeUInt16LE(1, 20);  // AudioFormat = 1 (PCM)
+    header.writeUInt16LE(1, 22);  // NumChannels = 1 (Mono)
+    header.writeUInt32LE(8000, 24); // SampleRate = 8000
+    header.writeUInt32LE(16000, 28); // ByteRate = 8000 * 1 * 2
+    header.writeUInt16LE(2, 32);  // BlockAlign = 2
+    header.writeUInt16LE(16, 34); // BitsPerSample = 16
+    header.write('data', 36);
+    header.writeUInt32LE(dataSize, 40);
+
+    const pcmData = fs.readFileSync(meta.tempPcmPath);
+    const wavOut = Buffer.concat([header, pcmData]);
+    fs.writeFileSync(meta.fullWavPath, wavOut);
+    fs.unlinkSync(meta.tempPcmPath);
+
+    session.savedRecordingUrl = meta.apiPath;
+    console.log(`[Yealink SIP] Call recording SAVED: ${meta.fullWavPath} (${(wavOut.length / 1024).toFixed(1)} KB)`);
+    return meta.apiPath;
+  } catch (err) {
+    console.error('[Yealink SIP] Failed to finalize recording WAV:', err.message);
+    try { if (fs.existsSync(meta.tempPcmPath)) fs.unlinkSync(meta.tempPcmPath); } catch (_) {}
+    return null;
+  }
+}
+
 function extractAudioPortAndIp(sdp, defaultIp) {
   if (!sdp) return { port: 0, ip: defaultIp };
   const mMatch = sdp.match(/m=audio\s+(\d+)/i);
@@ -283,6 +444,7 @@ function triggerIvrChoice(session, choiceDigit) {
     session.gwRtpSocket.on('message', (msg, rinfo) => {
       session.gwRtpRemotePort = rinfo.port;
       session.gwRtpRemoteIp = rinfo.address;
+      pushAudioFrame(session, 'gw', msg);
       if (session.ylRtpSocket && session.ylRtpRemotePort) {
         session.ylRtpSocket.send(msg, session.ylRtpRemotePort, session.ylRtpRemoteIp);
       }
@@ -491,6 +653,9 @@ function startSipBridge() {
           if (statusCode === 200 && !session.answeredAt) {
             session.answeredAt = new Date();
             console.log(`[Yealink SIP] Parent answered! Talk timer started (${session.timeLimitSeconds}s limit = ${(session.timeLimitSeconds/60).toFixed(1)} mins)...`);
+            isCallRecordingActive().then((recOn) => {
+              if (recOn && session.state === 'BRIDGED') startCallRecording(session);
+            }).catch(() => {});
             if (session.timeLimitSeconds && session.timeLimitSeconds > 0) {
               session.timer = setTimeout(async () => {
                 console.log(`[Yealink SIP] Auto-cutting call for student ${session.regNo}: weekly limit ${session.timeLimitSeconds}s reached.`);
@@ -518,9 +683,17 @@ function startSipBridge() {
           yealinkResp += `Record-Route: ${session.yealinkHeaders['record-route']}\r\n`;
         }
 
-        if (sdpBody) {
+        let outSdp = sdpBody;
+        if (session.isRecordingProxy && sdpBody) {
+          const gwMedia = extractAudioPortAndIp(sdpBody, GATEWAY_IP);
+          session.gwRtpRemotePort = gwMedia.port;
+          session.gwRtpRemoteIp = gwMedia.ip;
+          outSdp = rewriteSdpIpAndPort(sdpBody, localIp, session.ylLocalRtpPort);
+        }
+
+        if (outSdp) {
           yealinkResp += `Content-Type: application/sdp\r\n`;
-          yealinkResp += `Content-Length: ${Buffer.byteLength(sdpBody)}\r\n\r\n` + sdpBody;
+          yealinkResp += `Content-Length: ${Buffer.byteLength(outSdp)}\r\n\r\n` + outSdp;
         } else {
           yealinkResp += `Content-Length: 0\r\n\r\n`;
         }
@@ -531,6 +704,9 @@ function startSipBridge() {
         if (statusCode === 200 && !session.answeredAt) {
           session.answeredAt = new Date();
           console.log(`[Yealink SIP] Call answered by parent/callee!`);
+          if (session.isRecordingProxy) {
+            startCallRecording(session);
+          }
 
           // Apply talk time limit auto-cut
           if (session.timeLimitSeconds && session.timeLimitSeconds > 0) {
@@ -909,6 +1085,7 @@ function startSipBridge() {
                     }
                   }
                 } else if (session.state === 'BRIDGED') {
+                  pushAudioFrame(session, 'yl', msg);
                   if (session.gwRtpSocket && session.gwRtpRemotePort) {
                     session.gwRtpSocket.send(msg, session.gwRtpRemotePort, session.gwRtpRemoteIp);
                   }
@@ -1065,24 +1242,68 @@ function startSipBridge() {
       const fromTag = Math.floor(Math.random() * 1000000);
       const gwFromHeader = `<sip:8001@${localIp}>;tag=${fromTag}`;
       session.gwFromHeader = gwFromHeader;
+      session.gwPlaced = true;
 
-      const gwInvite = 
-        `INVITE sip:${dialDigitsForGw}@${GATEWAY_IP}:${GATEWAY_PORT} SIP/2.0\r\n` +
-        `Via: SIP/2.0/UDP ${localIp}:${SIP_PORT};branch=z9hG4bK${Math.floor(Math.random() * 1000000)}\r\n` +
-        `From: ${gwFromHeader}\r\n` +
-        `To: <sip:${dialDigitsForGw}@${GATEWAY_IP}:${GATEWAY_PORT}>\r\n` +
-        `Call-ID: ${gwCallId}\r\n` +
-        `CSeq: 1 INVITE\r\n` +
-        `Contact: <sip:8001@${localIp}:${SIP_PORT}>\r\n` +
-        `User-Agent: Al-Ameen-SIP-Bridge\r\n` +
-        `Content-Type: application/sdp\r\n` +
-        `Content-Length: ${Buffer.byteLength(sdpBody)}\r\n\r\n` +
-        sdpBody;
+      const sendDirectGwInvite = (inviteSdp) => {
+        session.sdpBody = inviteSdp;
+        const gwInvite = 
+          `INVITE sip:${dialDigitsForGw}@${GATEWAY_IP}:${GATEWAY_PORT} SIP/2.0\r\n` +
+          `Via: SIP/2.0/UDP ${localIp}:${SIP_PORT};branch=z9hG4bK${Math.floor(Math.random() * 1000000)}\r\n` +
+          `From: ${gwFromHeader}\r\n` +
+          `To: <sip:${dialDigitsForGw}@${GATEWAY_IP}:${GATEWAY_PORT}>\r\n` +
+          `Call-ID: ${gwCallId}\r\n` +
+          `CSeq: 1 INVITE\r\n` +
+          `Contact: <sip:8001@${localIp}:${SIP_PORT}>\r\n` +
+          `User-Agent: Al-Ameen-SIP-Bridge\r\n` +
+          `Content-Type: application/sdp\r\n` +
+          `Content-Length: ${Buffer.byteLength(inviteSdp)}\r\n\r\n` +
+          inviteSdp;
 
-      serverSocket.send(Buffer.from(gwInvite), GATEWAY_PORT, GATEWAY_IP, (err) => {
-        if (err) console.error('[Yealink SIP] Error sending to Gateway:', err.message);
-        else console.log(`[Yealink SIP] Successfully sent INVITE to ${GATEWAY_IP}:${GATEWAY_PORT}`);
-      });
+        serverSocket.send(Buffer.from(gwInvite), GATEWAY_PORT, GATEWAY_IP, (err) => {
+          if (err) console.error('[Yealink SIP] Error sending to Gateway:', err.message);
+          else console.log(`[Yealink SIP] Successfully sent INVITE to ${GATEWAY_IP}:${GATEWAY_PORT}`);
+        });
+      };
+
+      const recOn = await isCallRecordingActive();
+      if (recOn && sdpBody) {
+        session.isRecordingProxy = true;
+        const ylMedia = extractAudioPortAndIp(sdpBody, rinfo.address);
+        session.ylRtpRemoteIp = ylMedia.ip;
+        session.ylRtpRemotePort = ylMedia.port;
+
+        session.ylRtpSocket = dgram.createSocket('udp4');
+        session.gwRtpSocket = dgram.createSocket('udp4');
+
+        session.ylRtpSocket.bind(0, () => {
+          session.ylLocalRtpPort = session.ylRtpSocket.address().port;
+          session.ylRtpSocket.on('message', (msg, remoteRinfo) => {
+            session.ylRtpRemotePort = remoteRinfo.port;
+            session.ylRtpRemoteIp = remoteRinfo.address;
+            pushAudioFrame(session, 'yl', msg);
+            if (session.gwRtpSocket && session.gwRtpRemotePort) {
+              session.gwRtpSocket.send(msg, session.gwRtpRemotePort, session.gwRtpRemoteIp);
+            }
+          });
+
+          session.gwRtpSocket.bind(0, () => {
+            session.gwLocalRtpPort = session.gwRtpSocket.address().port;
+            session.gwRtpSocket.on('message', (msg, remoteRinfo) => {
+              session.gwRtpRemotePort = remoteRinfo.port;
+              session.gwRtpRemoteIp = remoteRinfo.address;
+              pushAudioFrame(session, 'gw', msg);
+              if (session.ylRtpSocket && session.ylRtpRemotePort) {
+                session.ylRtpSocket.send(msg, session.ylRtpRemotePort, session.ylRtpRemoteIp);
+              }
+            });
+
+            const proxiedSdp = rewriteSdpIpAndPort(sdpBody, localIp, session.gwLocalRtpPort);
+            sendDirectGwInvite(proxiedSdp);
+          });
+        });
+      } else {
+        sendDirectGwInvite(sdpBody);
+      }
       return;
     }
 
@@ -1219,6 +1440,9 @@ async function cleanupSession(session, reason) {
   activeSessions.delete(session.yealinkCallId);
   activeSessions.delete(session.gwCallId);
 
+  // Finalize call recording (if active) before saving log
+  const recordingUrl = await finalizeCallRecording(session);
+
   // Save to database
   const durationSec = session.answeredAt ? Math.round((Date.now() - session.answeredAt.getTime()) / 1000) : 0;
   const status = durationSec > 0 ? 'completed' : (reason === 'cancel' ? 'cancelled' : 'missed');
@@ -1231,8 +1455,8 @@ async function cleanupSession(session, reason) {
          student_id, student_name, registration_no, class_name,
          contact_person, phone_number, call_status,
          call_duration_seconds, max_allowed_seconds,
-         sim_slot, gateway_type, notes, started_at, ended_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())`,
+         sim_slot, gateway_type, recording_url, notes, started_at, ended_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())`,
       [
         session.studentId,
         session.studentName,
@@ -1245,6 +1469,7 @@ async function cleanupSession(session, reason) {
         session.timeLimitSeconds || 480,
         'SIM 1 (Port 2)',
         'VG204O + CCL FCT',
+        recordingUrl,
         `Ended via ${reason}${session.optionKey ? ` (Dial ${session.optionKey})` : ''}`,
         session.startedAt
       ]

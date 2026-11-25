@@ -10,22 +10,27 @@ const boothSettingsReady = pool.query(`
   CREATE TABLE IF NOT EXISTS calling_booth_settings (
     id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
     incoming_calls_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    call_recording_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
-  INSERT INTO calling_booth_settings (id, incoming_calls_enabled)
-  VALUES (1, FALSE)
+  ALTER TABLE calling_booth_settings ADD COLUMN IF NOT EXISTS call_recording_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+  ALTER TABLE hostel_call_logs ADD COLUMN IF NOT EXISTS recording_url TEXT;
+  INSERT INTO calling_booth_settings (id, incoming_calls_enabled, call_recording_enabled)
+  VALUES (1, FALSE, FALSE)
   ON CONFLICT (id) DO NOTHING;
 `);
 
 let cachedIncomingCallsEnabled = false;
+let cachedCallRecordingEnabled = false;
 
 async function getBoothSettings() {
   await boothSettingsReady;
   const q = await pool.query(
-    `SELECT incoming_calls_enabled, updated_at FROM calling_booth_settings WHERE id = 1`
+    `SELECT incoming_calls_enabled, COALESCE(call_recording_enabled, FALSE) AS call_recording_enabled, updated_at FROM calling_booth_settings WHERE id = 1`
   );
-  const row = q.rows[0] || { incoming_calls_enabled: false, updated_at: null };
+  const row = q.rows[0] || { incoming_calls_enabled: false, call_recording_enabled: false, updated_at: null };
   cachedIncomingCallsEnabled = Boolean(row.incoming_calls_enabled);
+  cachedCallRecordingEnabled = Boolean(row.call_recording_enabled);
   return row;
 }
 
@@ -36,9 +41,13 @@ function isIncomingCallsEnabled() {
   return cachedIncomingCallsEnabled;
 }
 
+function isCallRecordingEnabled() {
+  return cachedCallRecordingEnabled;
+}
+
 /**
  * GET /api/calling-schedules/settings
- * Returns global calling booth settings (incoming_calls_enabled defaults to FALSE / OFF)
+ * Returns global calling booth settings (incoming_calls_enabled & call_recording_enabled)
  */
 router.get('/settings', auth, staffRoles, asyncHandler(async (req, res) => {
   const settings = await getBoothSettings();
@@ -47,20 +56,36 @@ router.get('/settings', auth, staffRoles, asyncHandler(async (req, res) => {
 
 /**
  * PATCH /api/calling-schedules/settings
- * Toggle incoming calls OFF (default) or ON
+ * Toggle incoming calls and/or call recording OFF or ON
  */
 router.patch('/settings', auth, staffRoles, asyncHandler(async (req, res) => {
   await boothSettingsReady;
-  const incomingEnabled = Boolean(req.body?.incoming_calls_enabled);
+  const current = await getBoothSettings();
+  const hasIncoming = req.body && typeof req.body.incoming_calls_enabled === 'boolean';
+  const hasRecording = req.body && typeof req.body.call_recording_enabled === 'boolean';
+
+  const incomingEnabled = hasIncoming ? Boolean(req.body.incoming_calls_enabled) : Boolean(current.incoming_calls_enabled);
+  const recordingEnabled = hasRecording ? Boolean(req.body.call_recording_enabled) : Boolean(current.call_recording_enabled);
+
   cachedIncomingCallsEnabled = incomingEnabled;
+  cachedCallRecordingEnabled = recordingEnabled;
+
   const q = await pool.query(
-    `INSERT INTO calling_booth_settings (id, incoming_calls_enabled, updated_at)
-     VALUES (1, $1, NOW())
-     ON CONFLICT (id) DO UPDATE SET incoming_calls_enabled = $1, updated_at = NOW()
-     RETURNING incoming_calls_enabled, updated_at`,
-    [incomingEnabled]
+    `INSERT INTO calling_booth_settings (id, incoming_calls_enabled, call_recording_enabled, updated_at)
+     VALUES (1, $1, $2, NOW())
+     ON CONFLICT (id) DO UPDATE SET
+       incoming_calls_enabled = $1,
+       call_recording_enabled = $2,
+       updated_at = NOW()
+     RETURNING incoming_calls_enabled, call_recording_enabled, updated_at`,
+    [incomingEnabled, recordingEnabled]
   );
-  console.log(`[Yealink SIP] Incoming Calls setting updated via Web UI: ${incomingEnabled ? 'ENABLED (ON)' : 'BLOCKED (OFF)'}`);
+  if (hasIncoming) {
+    console.log(`[Yealink SIP] Incoming Calls setting updated via Web UI: ${incomingEnabled ? 'ENABLED (ON)' : 'BLOCKED (OFF)'}`);
+  }
+  if (hasRecording) {
+    console.log(`[Yealink SIP] Call Recording setting updated via Web UI: ${recordingEnabled ? 'ENABLED (ON)' : 'DISABLED (OFF)'}`);
+  }
   res.json({ success: true, settings: q.rows[0] });
 }));
 
@@ -492,5 +517,6 @@ router.get('/logs', auth, staffRoles, asyncHandler(async (req, res) => {
 
 router.getBoothSettings = getBoothSettings;
 router.isIncomingCallsEnabled = isIncomingCallsEnabled;
+router.isCallRecordingEnabled = isCallRecordingEnabled;
 module.exports = router;
 
