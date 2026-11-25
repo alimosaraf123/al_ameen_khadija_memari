@@ -6,6 +6,7 @@ const path = require('path');
 const pool = require('../db');
 const { checkStudentCallingSchedule, getStudentGuardianOptions } = require('../routes/callingBooth');
 const callingScheduleRouter = require('../routes/callingSchedule');
+const { uploadBuffer } = require('../utils/cloudStorage');
 
 const SIP_PORT = parseInt(process.env.SIP_PORT || '5060', 10);
 const GATEWAY_IP = process.env.VOIP_GATEWAY_IP || '192.168.0.240';
@@ -274,9 +275,25 @@ async function finalizeCallRecording(session) {
     fs.writeFileSync(meta.fullWavPath, wavOut);
     fs.unlinkSync(meta.tempPcmPath);
 
-    session.savedRecordingUrl = meta.apiPath;
+    let finalUrl = meta.apiPath;
+    try {
+      const publicId = meta.fileName.replace(/\.wav$/i, '');
+      const cloudRes = await uploadBuffer(wavOut, {
+        resourceType: 'video',
+        folder: `call-recordings/${meta.dateFolder}`,
+        publicId,
+      });
+      if (cloudRes && cloudRes.url) {
+        finalUrl = cloudRes.url;
+        console.log(`[Yealink SIP] Call recording UPLOADED to Cloud: ${finalUrl}`);
+      }
+    } catch (cloudErr) {
+      console.warn('[Yealink SIP] Cloud upload failed (using local URL fallback):', cloudErr.message);
+    }
+
+    session.savedRecordingUrl = finalUrl;
     console.log(`[Yealink SIP] Call recording SAVED: ${meta.fullWavPath} (${(wavOut.length / 1024).toFixed(1)} KB)`);
-    return meta.apiPath;
+    return finalUrl;
   } catch (err) {
     console.error('[Yealink SIP] Failed to finalize recording WAV:', err.message);
     try { if (fs.existsSync(meta.tempPcmPath)) fs.unlinkSync(meta.tempPcmPath); } catch (_) {}

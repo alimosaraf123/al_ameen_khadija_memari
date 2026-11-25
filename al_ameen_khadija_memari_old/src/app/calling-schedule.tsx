@@ -19,7 +19,7 @@ import AcademyHeader from '../components/AcademyHeader';
 import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import DatePickerField from '../components/DatePickerField';
 import { api, getApiBase } from '../lib/api';
-import { getToken } from '../lib/auth';
+import { getToken, getUser } from '../lib/auth';
 import { STUDENT_CLASSES } from '../lib/studentClasses';
 
 interface Schedule {
@@ -106,6 +106,8 @@ const RELATIONS_LIST = [
 
 export default function CallingScheduleScreen() {
   const scrollRef = useRef<any>(null);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState<'schedules' | 'details' | 'logs' | 'dialer'>('schedules');
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(false);
@@ -581,8 +583,25 @@ export default function CallingScheduleScreen() {
   };
 
   useEffect(() => {
-    fetchSchedules();
-    fetchBoothSettings();
+    let mounted = true;
+    (async () => {
+      try {
+        const u: any = await getUser();
+        if (!mounted) return;
+        if (u && u.role === 'super_admin') {
+          setIsSuperAdmin(true);
+          fetchSchedules();
+          fetchBoothSettings();
+        } else {
+          setIsSuperAdmin(false);
+        }
+      } catch {
+        if (mounted) setIsSuperAdmin(false);
+      } finally {
+        if (mounted) setAuthChecking(false);
+      }
+    })();
+    return () => { mounted = false; };
   }, []);
 
   // Filtered schedules
@@ -910,6 +929,39 @@ export default function CallingScheduleScreen() {
       setIvrLoading(false);
     }
   };
+
+  if (authChecking) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <AcademyHeader />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <ActivityIndicator size="large" color="#1768c5" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!isSuperAdmin) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <AcademyHeader />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <View style={[styles.card, { maxWidth: 440, alignItems: 'center', padding: 28 }]}>
+            <Text style={{ fontSize: 36, marginBottom: 10 }}>🔒</Text>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#991b1b', marginBottom: 8, textAlign: 'center' }}>
+              Access Restricted (Super Admin Only)
+            </Text>
+            <Text style={{ fontSize: 13.5, color: '#475569', textAlign: 'center', marginBottom: 18, lineHeight: 20 }}>
+              Calling Schedule and Call Recordings are restricted to Super Admin login only.
+            </Text>
+            <TouchableOpacity onPress={() => router.replace('/')} style={styles.primaryBtn}>
+              <Text style={styles.primaryBtnText}>← Go Back Home</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>

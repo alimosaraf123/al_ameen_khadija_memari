@@ -4,7 +4,7 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const ExcelJS = require('exceljs');
 const pool = require('../db');
-const { auth } = require('../middleware/auth');
+const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
 const { getAgoraConfig, generateRtcToken, RtcRole } = require('../utils/agora');
 const { sendExpoPushMessages } = require('../utils/pushNotifications');
@@ -514,7 +514,7 @@ async function queryFilteredCallLogs({
  * GET /api/calls/logs
  * Booth and system call logs for admin panel & calling-schedule.tsx
  */
-router.get('/logs', auth, asyncHandler(async (req, res) => {
+router.get('/logs', auth, allow('super_admin'), asyncHandler(async (req, res) => {
   const fromDate = req.query.from_date ? String(req.query.from_date).trim() : '';
   const toDate = req.query.to_date ? String(req.query.to_date).trim() : '';
   const defaultLimit = (fromDate || toDate) ? 1000 : 100;
@@ -666,7 +666,7 @@ async function sendLogsExcel(res, rows, fromDate = '', toDate = '') {
  * GET /api/calls/logs/export
  * Download filtered Call Logs as Excel (.xlsx)
  */
-router.get('/logs/export', auth, asyncHandler(async (req, res) => {
+router.get('/logs/export', auth, allow('super_admin'), asyncHandler(async (req, res) => {
   const fromDate = req.query.from_date ? String(req.query.from_date).trim() : '';
   const toDate = req.query.to_date ? String(req.query.to_date).trim() : '';
 
@@ -688,7 +688,7 @@ router.get('/logs/export', auth, asyncHandler(async (req, res) => {
  * POST /api/calls/logs/export
  * Download exact client-filtered & sorted Call Logs as Excel (.xlsx)
  */
-router.post('/logs/export', auth, asyncHandler(async (req, res) => {
+router.post('/logs/export', auth, allow('super_admin'), asyncHandler(async (req, res) => {
   const fromDate = req.body?.from_date ? String(req.body.from_date).trim() : '';
   const toDate = req.body?.to_date ? String(req.body.to_date).trim() : '';
   const records = Array.isArray(req.body?.records) ? req.body.records : null;
@@ -714,7 +714,10 @@ router.get('/recordings/:date/:filename', asyncHandler(async (req, res) => {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
   }
   try {
-    jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded?.role !== 'super_admin') {
+      return res.status(403).json({ success: false, message: 'Only Super Admin can access call recordings' });
+    }
   } catch {
     return res.status(401).json({ success: false, message: 'Invalid token' });
   }

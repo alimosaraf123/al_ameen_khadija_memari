@@ -4,31 +4,32 @@ const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
-const staffRoles = allow('super_admin', 'admin', 'teacher', 'office');
+const staffRoles = allow('super_admin');
 
 const boothSettingsReady = pool.query(`
   CREATE TABLE IF NOT EXISTS calling_booth_settings (
     id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
     incoming_calls_enabled BOOLEAN NOT NULL DEFAULT FALSE,
-    call_recording_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    call_recording_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
-  ALTER TABLE calling_booth_settings ADD COLUMN IF NOT EXISTS call_recording_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+  ALTER TABLE calling_booth_settings ADD COLUMN IF NOT EXISTS call_recording_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+  ALTER TABLE calling_booth_settings ALTER COLUMN call_recording_enabled SET DEFAULT TRUE;
   ALTER TABLE hostel_call_logs ADD COLUMN IF NOT EXISTS recording_url TEXT;
   INSERT INTO calling_booth_settings (id, incoming_calls_enabled, call_recording_enabled)
-  VALUES (1, FALSE, FALSE)
+  VALUES (1, FALSE, TRUE)
   ON CONFLICT (id) DO NOTHING;
 `);
 
 let cachedIncomingCallsEnabled = false;
-let cachedCallRecordingEnabled = false;
+let cachedCallRecordingEnabled = true;
 
 async function getBoothSettings() {
   await boothSettingsReady;
   const q = await pool.query(
-    `SELECT incoming_calls_enabled, COALESCE(call_recording_enabled, FALSE) AS call_recording_enabled, updated_at FROM calling_booth_settings WHERE id = 1`
+    `SELECT incoming_calls_enabled, COALESCE(call_recording_enabled, TRUE) AS call_recording_enabled, updated_at FROM calling_booth_settings WHERE id = 1`
   );
-  const row = q.rows[0] || { incoming_calls_enabled: false, call_recording_enabled: false, updated_at: null };
+  const row = q.rows[0] || { incoming_calls_enabled: false, call_recording_enabled: true, updated_at: null };
   cachedIncomingCallsEnabled = Boolean(row.incoming_calls_enabled);
   cachedCallRecordingEnabled = Boolean(row.call_recording_enabled);
   return row;
