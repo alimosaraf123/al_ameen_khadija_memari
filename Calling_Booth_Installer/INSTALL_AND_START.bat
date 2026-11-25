@@ -49,10 +49,10 @@ if not exist "%TARGET_DIR%\server.js" (
 echo [OK] Files copied to %TARGET_DIR%
 echo.
 
-:: 3. Install dependencies if node_modules missing
+:: 3. Install dependencies if node_modules or @breezystack/lamejs missing
 cd /d "%TARGET_DIR%"
-if not exist "%TARGET_DIR%\node_modules" (
-    echo [2/5] Installing Node.js packages ^(internet needed first time^)...
+if not exist "%TARGET_DIR%\node_modules\@breezystack\lamejs" (
+    echo [2/5] Installing/updating Node.js packages ^(internet needed^)...
     call npm install --omit=dev
     if %errorLevel% neq 0 (
         echo [ERROR] npm install failed! Check internet connection and try again.
@@ -60,7 +60,7 @@ if not exist "%TARGET_DIR%\node_modules" (
         exit /b 1
     )
 ) else (
-    echo [2/5] node_modules already present, skipping npm install.
+    echo [2/5] Dependencies already up-to-date, skipping npm install.
 )
 echo [OK] Dependencies ready.
 echo.
