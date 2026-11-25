@@ -19,7 +19,7 @@ import AcademyHeader from '../components/AcademyHeader';
 import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import DatePickerField from '../components/DatePickerField';
 import { api, getApiBase } from '../lib/api';
-import { getToken } from '../lib/auth';
+import { getToken, getUser } from '../lib/auth';
 import { STUDENT_CLASSES } from '../lib/studentClasses';
 
 interface Schedule {
@@ -106,11 +106,21 @@ const RELATIONS_LIST = [
 
 export default function CallingScheduleScreen() {
   const scrollRef = useRef<any>(null);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState<'schedules' | 'details' | 'logs' | 'dialer'>('schedules');
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(false);
   const [incomingEnabled, setIncomingEnabled] = useState(false);
   const [incomingBusy, setIncomingBusy] = useState(false);
+  const [recordingEnabled, setRecordingEnabled] = useState(false);
+  const [recordingBusy, setRecordingBusy] = useState(false);
+  const [playingRecording, setPlayingRecording] = useState<{
+    url: string;
+    downloadUrl: string;
+    title: string;
+    subtitle: string;
+  } | null>(null);
   const [incomingToast, setIncomingToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // Filters
@@ -469,8 +479,70 @@ export default function CallingScheduleScreen() {
       const res = await api('/api/calling-schedules/settings');
       if (res && res.settings) {
         setIncomingEnabled(Boolean(res.settings.incoming_calls_enabled));
+        setRecordingEnabled(Boolean(res.settings.call_recording_enabled));
       }
     } catch {}
+  };
+
+  const handleToggleRecording = async () => {
+    if (recordingBusy) return;
+    const nextVal = !recordingEnabled;
+    setRecordingEnabled(nextVal);
+    setRecordingBusy(true);
+    setIncomingToast({
+      message: nextVal
+        ? '🎙️ কল রেকর্ডিং সক্রিয় করা হয়েছে (Call Recording: ON - Saving locally)'
+        : '🔇 কল রেকর্ডিং বন্ধ করা হয়েছে (Call Recording: OFF)',
+      type: 'success',
+    });
+    setTimeout(() => setIncomingToast(null), 4000);
+
+    try {
+      const res = await api('/api/calling-schedules/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ call_recording_enabled: nextVal }),
+      });
+      if (res && res.settings) {
+        setRecordingEnabled(Boolean(res.settings.call_recording_enabled));
+      }
+    } catch (err: any) {
+      setRecordingEnabled(!nextVal);
+      setIncomingToast({
+        message: err?.message || 'Failed to update call recording setting',
+        type: 'error',
+      });
+      setTimeout(() => setIncomingToast(null), 4000);
+      Alert.alert('Error', err?.message || 'Failed to update call recording setting');
+    } finally {
+      setRecordingBusy(false);
+    }
+  };
+
+  const handleOpenRecording = async (log: CallLog) => {
+    if (!log.recording_url) return;
+    try {
+      const token = await getToken();
+      const base = getApiBase();
+      const isAbsolute = /^https?:\/\//i.test(log.recording_url);
+      const rawUrl = isAbsolute ? log.recording_url : `${base}${log.recording_url.startsWith('/') ? '' : '/'}${log.recording_url}`;
+      const sep = rawUrl.includes('?') ? '&' : '?';
+      const authUrl = token ? `${rawUrl}${sep}token=${encodeURIComponent(token)}` : rawUrl;
+      const downloadUrl = `${authUrl}${authUrl.includes('?') ? '&' : '?'}download=1`;
+
+      if (Platform.OS === 'web') {
+        setPlayingRecording({
+          url: authUrl,
+          downloadUrl,
+          title: `${log.student_name || 'Student'} (${log.reg_no || '-'})`,
+          subtitle: `${log.called_relation || 'Guardian'} • ${log.to_number} • ${formatStartDateTime(log.started_at || log.created_at)}`,
+        });
+      } else {
+        await Linking.openURL(authUrl);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not open recording');
+    }
   };
 
   const handleToggleIncoming = async () => {
@@ -511,8 +583,25 @@ export default function CallingScheduleScreen() {
   };
 
   useEffect(() => {
-    fetchSchedules();
-    fetchBoothSettings();
+    let mounted = true;
+    (async () => {
+      try {
+        const u: any = await getUser();
+        if (!mounted) return;
+        if (u && u.role === 'super_admin') {
+          setIsSuperAdmin(true);
+          fetchSchedules();
+          fetchBoothSettings();
+        } else {
+          setIsSuperAdmin(false);
+        }
+      } catch {
+        if (mounted) setIsSuperAdmin(false);
+      } finally {
+        if (mounted) setAuthChecking(false);
+      }
+    })();
+    return () => { mounted = false; };
   }, []);
 
   // Filtered schedules
@@ -841,6 +930,39 @@ export default function CallingScheduleScreen() {
     }
   };
 
+  if (authChecking) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <AcademyHeader />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <ActivityIndicator size="large" color="#1768c5" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!isSuperAdmin) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <AcademyHeader />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <View style={[styles.card, { maxWidth: 440, alignItems: 'center', padding: 28 }]}>
+            <Text style={{ fontSize: 36, marginBottom: 10 }}>🔒</Text>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#991b1b', marginBottom: 8, textAlign: 'center' }}>
+              Access Restricted (Super Admin Only)
+            </Text>
+            <Text style={{ fontSize: 13.5, color: '#475569', textAlign: 'center', marginBottom: 18, lineHeight: 20 }}>
+              Calling Schedule and Call Recordings are restricted to Super Admin login only.
+            </Text>
+            <TouchableOpacity onPress={() => router.replace('/')} style={styles.primaryBtn}>
+              <Text style={styles.primaryBtnText}>← Go Back Home</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <AcademyHeader />
@@ -944,6 +1066,60 @@ export default function CallingScheduleScreen() {
 
                   <Text style={{ fontWeight: '800', fontSize: 13, color: incomingEnabled ? '#065f46' : '#991b1b' }}>
                     {incomingEnabled ? '📞 Incoming Calls: ON' : '📵 Incoming Calls: OFF (Blocked)'}
+                  </Text>
+                </TouchableOpacity>
+                {/* Call Recording Toggle Switch */}
+                <TouchableOpacity
+                  onPress={handleToggleRecording}
+                  activeOpacity={0.7}
+                  style={[
+                    {
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 20,
+                      borderWidth: 1.5,
+                      backgroundColor: recordingEnabled ? '#eff6ff' : '#f8fafc',
+                      borderColor: recordingEnabled ? '#2563eb' : '#94a3b8',
+                      opacity: recordingBusy ? 0.7 : 1,
+                      shadowColor: recordingEnabled ? '#2563eb' : '#64748b',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.12,
+                      shadowRadius: 3,
+                      elevation: 2,
+                    },
+                    (Platform.OS === 'web' ? ({ cursor: recordingBusy ? 'wait' : 'pointer', userSelect: 'none' } as any) : {})
+                  ]}
+                >
+                  <View
+                    style={{
+                      width: 36,
+                      height: 20,
+                      borderRadius: 10,
+                      backgroundColor: recordingEnabled ? '#2563eb' : '#cbd5e1',
+                      padding: 2,
+                      justifyContent: 'center',
+                      alignItems: recordingEnabled ? 'flex-end' : 'flex-start',
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 16,
+                        height: 16,
+                        borderRadius: 8,
+                        backgroundColor: '#ffffff',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.25,
+                        shadowRadius: 2,
+                        elevation: 2,
+                      }}
+                    />
+                  </View>
+                  <Text style={{ fontWeight: '800', fontSize: 13, color: recordingEnabled ? '#1e40af' : '#475569' }}>
+                    {recordingEnabled ? '🎙️ Recording: ON' : '🔇 Recording: OFF'}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.primaryBtn} onPress={handleOpenNew}>
@@ -1659,12 +1835,18 @@ export default function CallingScheduleScreen() {
                         <View style={{ width: 105 }}>
                           {log.recording_url ? (
                             <TouchableOpacity
-                              onPress={() => {
-                                if (Platform.OS === 'web') window.open(log.recording_url!, '_blank');
-                                else Alert.alert('Recording URL', log.recording_url!);
+                              onPress={() => handleOpenRecording(log)}
+                              style={{
+                                backgroundColor: '#eff6ff',
+                                borderColor: '#93c5fd',
+                                borderWidth: 1,
+                                borderRadius: 6,
+                                paddingVertical: 4,
+                                paddingHorizontal: 8,
+                                alignSelf: 'flex-start',
                               }}
                             >
-                              <Text style={{ color: '#1768c5', textDecorationLine: 'underline', fontSize: 12 }}>▶ Listen</Text>
+                              <Text style={{ color: '#1d4ed8', fontWeight: '700', fontSize: 12 }}>▶ Listen</Text>
                             </TouchableOpacity>
                           ) : (
                             <Text style={{ fontSize: 12, color: '#999' }}>None</Text>
@@ -1872,6 +2054,72 @@ export default function CallingScheduleScreen() {
                   </View>
                 );
               })()}
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        {/* ========================================================= */}
+        {/* MODAL: CALL RECORDING AUDIO PLAYER                        */}
+        {/* ========================================================= */}
+        <Modal
+          visible={playingRecording !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setPlayingRecording(null)}
+        >
+          <Pressable
+            style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}
+            onPress={() => setPlayingRecording(null)}
+          >
+            <Pressable
+              style={[styles.modalContent, { width: 420, maxWidth: '94%', padding: 0, overflow: 'hidden' }]}
+              onPress={(e) => e.stopPropagation()}
+            >
+              {playingRecording && (
+                <View>
+                  <View style={[styles.modalHeader, { backgroundColor: '#0f172a', paddingVertical: 12, paddingHorizontal: 16 }]}>
+                    <Text style={[styles.modalTitle, { color: '#ffffff', fontSize: 15 }]}>
+                      🎙️ Call Recording Player
+                    </Text>
+                    <TouchableOpacity onPress={() => setPlayingRecording(null)}>
+                      <Text style={[styles.modalCloseText, { color: '#cbd5e1' }]}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={{ padding: 18 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#0f172a', marginBottom: 4 }}>
+                      {playingRecording.title}
+                    </Text>
+                    <Text style={{ fontSize: 12.5, color: '#475569', marginBottom: 14 }}>
+                      {playingRecording.subtitle}
+                    </Text>
+
+                    {Platform.OS === 'web' && React.createElement('audio', {
+                      controls: true,
+                      autoPlay: true,
+                      src: playingRecording.url,
+                      style: { width: '100%', marginBottom: 14 },
+                    })}
+
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (Platform.OS === 'web') window.open(playingRecording.downloadUrl, '_blank');
+                        }}
+                        style={[styles.primaryBtn, { backgroundColor: '#15803d', flex: 1, alignItems: 'center' }]}
+                      >
+                        <Text style={styles.primaryBtnText}>📥 Download (.wav)</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setPlayingRecording(null)}
+                        style={[styles.btnBackOutline, { paddingHorizontal: 18 }]}
+                      >
+                        <Text style={styles.btnBackOutlineText}>Close</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              )}
             </Pressable>
           </Pressable>
         </Modal>

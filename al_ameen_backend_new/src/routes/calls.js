@@ -1,7 +1,10 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const jwt = require('jsonwebtoken');
 const ExcelJS = require('exceljs');
 const pool = require('../db');
-const { auth } = require('../middleware/auth');
+const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
 const { getAgoraConfig, generateRtcToken, RtcRole } = require('../utils/agora');
 const { sendExpoPushMessages } = require('../utils/pushNotifications');
@@ -470,7 +473,7 @@ async function queryFilteredCallLogs({
         h.call_status AS status,
         COALESCE(h.call_duration_seconds, 0) AS duration,
         COALESCE(ROUND(h.max_allowed_seconds / 60), 8) AS allowed_talk_time,
-        NULL AS recording_url,
+        h.recording_url,
         h.started_at,
         h.ended_at,
         h.created_at
@@ -511,7 +514,7 @@ async function queryFilteredCallLogs({
  * GET /api/calls/logs
  * Booth and system call logs for admin panel & calling-schedule.tsx
  */
-router.get('/logs', auth, asyncHandler(async (req, res) => {
+router.get('/logs', auth, allow('super_admin'), asyncHandler(async (req, res) => {
   const fromDate = req.query.from_date ? String(req.query.from_date).trim() : '';
   const toDate = req.query.to_date ? String(req.query.to_date).trim() : '';
   const defaultLimit = (fromDate || toDate) ? 1000 : 100;
@@ -663,7 +666,7 @@ async function sendLogsExcel(res, rows, fromDate = '', toDate = '') {
  * GET /api/calls/logs/export
  * Download filtered Call Logs as Excel (.xlsx)
  */
-router.get('/logs/export', auth, asyncHandler(async (req, res) => {
+router.get('/logs/export', auth, allow('super_admin'), asyncHandler(async (req, res) => {
   const fromDate = req.query.from_date ? String(req.query.from_date).trim() : '';
   const toDate = req.query.to_date ? String(req.query.to_date).trim() : '';
 
@@ -685,7 +688,7 @@ router.get('/logs/export', auth, asyncHandler(async (req, res) => {
  * POST /api/calls/logs/export
  * Download exact client-filtered & sorted Call Logs as Excel (.xlsx)
  */
-router.post('/logs/export', auth, asyncHandler(async (req, res) => {
+router.post('/logs/export', auth, allow('super_admin'), asyncHandler(async (req, res) => {
   const fromDate = req.body?.from_date ? String(req.body.from_date).trim() : '';
   const toDate = req.body?.to_date ? String(req.body.to_date).trim() : '';
   const records = Array.isArray(req.body?.records) ? req.body.records : null;
@@ -697,6 +700,45 @@ router.post('/logs/export', auth, asyncHandler(async (req, res) => {
   });
 
   await sendLogsExcel(res, rows, fromDate, toDate);
+}));
+
+/**
+ * GET /api/calls/recordings/:date/:filename
+ * Stream or download a locally saved call recording (.wav)
+ */
+router.get('/recordings/:date/:filename', asyncHandler(async (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  const token = bearerToken || (req.query.token ? String(req.query.token).trim() : '');
+  if (!token) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded?.role !== 'super_admin') {
+      return res.status(403).json({ success: false, message: 'Only Super Admin can access call recordings' });
+    }
+  } catch {
+    return res.status(401).json({ success: false, message: 'Invalid token' });
+  }
+
+  const dateFolder = String(req.params.date || '');
+  const fileName = String(req.params.filename || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFolder) || !/^[a-zA-Z0-9_.-]+\.wav$/.test(fileName)) {
+    return res.status(400).json({ success: false, message: 'Invalid recording path' });
+  }
+
+  const recordingsRoot = path.resolve(__dirname, '..', '..', 'recordings');
+  const fullPath = path.resolve(recordingsRoot, dateFolder, fileName);
+  if (!fullPath.startsWith(recordingsRoot) || !fs.existsSync(fullPath)) {
+    return res.status(404).json({ success: false, message: 'Recording not found on this server' });
+  }
+
+  if (req.query.download === '1') {
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+  }
+  res.setHeader('Content-Type', 'audio/wav');
+  return res.sendFile(fullPath);
 }));
 
 // Wire IVR routes from callingBooth
