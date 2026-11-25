@@ -459,10 +459,18 @@ export default function StudentDirectory({
           target_label: targetLabel,
         }),
       });
-      const webOrigin =
+      let webOrigin =
         Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin
           ? window.location.origin
           : 'https://aammeamri.onrender.com';
+      if (
+        Platform.OS === 'web' &&
+        typeof window !== 'undefined' &&
+        ['localhost', '127.0.0.1'].includes(window.location?.hostname) &&
+        res.lan_ip
+      ) {
+        webOrigin = `${window.location.protocol}//${res.lan_ip}${window.location.port ? ':' + window.location.port : ''}`;
+      }
       const captureUrl = `${webOrigin}/mobile-capture?token=${encodeURIComponent(res.token)}`;
       const qrDataUrl = await QRCode.toDataURL(captureUrl, { width: 240, margin: 2 });
       setQrToken(res.token);
