@@ -145,6 +145,106 @@ router.get(
 );
 
 /**
+ * Office user confirms and saves the captured photo
+ * POST /api/mobile-capture/session/:token/confirm
+ */
+router.post(
+  '/session/:token/confirm',
+  auth,
+  allow('super_admin', 'admin', 'office'),
+  asyncHandler(async (req, res) => {
+    await schemaReady;
+    const token = String(req.params.token || '').trim();
+    const q = await pool.query(
+      `SELECT m.*, s.photo_url AS current_student_photo
+       FROM mobile_capture_sessions m
+       JOIN students s ON s.id = m.student_id
+       WHERE m.token = $1 LIMIT 1`,
+      [token]
+    );
+    if (!q.rowCount) {
+      return res.status(404).json({ success: false, message: 'Capture session not found' });
+    }
+    const session = q.rows[0];
+    if (session.status !== 'awaiting_confirm' || !session.uploaded_url) {
+      return res.status(409).json({ success: false, message: 'No photo waiting for confirmation.' });
+    }
+
+    const isStudentPhoto = session.target === 'photo';
+    if (isStudentPhoto) {
+      await pool.query(
+        `UPDATE students SET photo_url = $1, updated_at = NOW() WHERE id = $2`,
+        [session.uploaded_url, session.student_id]
+      );
+      if (session.current_student_photo && session.current_student_photo !== session.uploaded_url) {
+        await removeOldCloudFile(session.current_student_photo);
+      }
+    } else {
+      const existing = await pool.query(
+        `SELECT id, file_url FROM student_documents WHERE student_id = $1 AND document_type = $2 ORDER BY uploaded_at DESC LIMIT 1`,
+        [session.student_id, session.target]
+      );
+      if (existing.rowCount) {
+        const oldUrl = existing.rows[0].file_url;
+        await pool.query(
+          `UPDATE student_documents
+           SET file_url = $1, document_title = $2, uploaded_by = $3, uploaded_at = NOW()
+           WHERE id = $4`,
+          [session.uploaded_url, session.target_label, req.user?.userId || session.created_by, existing.rows[0].id]
+        );
+        if (oldUrl && oldUrl !== session.uploaded_url) await removeOldCloudFile(oldUrl);
+      } else {
+        await pool.query(
+          `INSERT INTO student_documents
+             (student_id, document_type, document_title, file_url, guardian_visible, guardian_download_allowed, uploaded_by)
+           VALUES ($1, $2, $3, $4, TRUE, TRUE, $5)`,
+          [session.student_id, session.target, session.target_label, session.uploaded_url, req.user?.userId || session.created_by]
+        );
+      }
+    }
+
+    await pool.query(
+      `UPDATE mobile_capture_sessions SET status = 'completed', completed_at = NOW() WHERE id = $1`,
+      [session.id]
+    );
+
+    res.json({ success: true, message: 'Photo confirmed and saved.', uploaded_url: session.uploaded_url });
+  })
+);
+
+/**
+ * Office user rejects captured photo so mobile can retake
+ * POST /api/mobile-capture/session/:token/reject
+ */
+router.post(
+  '/session/:token/reject',
+  auth,
+  allow('super_admin', 'admin', 'office'),
+  asyncHandler(async (req, res) => {
+    await schemaReady;
+    const token = String(req.params.token || '').trim();
+    const q = await pool.query(
+      `SELECT id, status, uploaded_url FROM mobile_capture_sessions WHERE token = $1 LIMIT 1`,
+      [token]
+    );
+    if (!q.rowCount) {
+      return res.status(404).json({ success: false, message: 'Capture session not found' });
+    }
+    const session = q.rows[0];
+    if (session.uploaded_url) {
+      await removeOldCloudFile(session.uploaded_url);
+    }
+    await pool.query(
+      `UPDATE mobile_capture_sessions
+       SET status = 'pending', uploaded_url = NULL, expires_at = NOW() + INTERVAL '15 minutes'
+       WHERE id = $1`,
+      [session.id]
+    );
+    res.json({ success: true, message: 'Photo rejected. Waiting for retake from mobile.' });
+  })
+);
+
+/**
  * Public mobile page info (no login required, token-secured)
  * GET /api/mobile-capture/public/:token
  */
@@ -230,55 +330,19 @@ router.post(
       format: 'webp',
     });
 
-    try {
-      if (isStudentPhoto) {
-        await pool.query(
-          `UPDATE students SET photo_url = $1, updated_at = NOW() WHERE id = $2`,
-          [uploaded.url, session.student_id]
-        );
-        if (session.current_student_photo) {
-          await removeOldCloudFile(session.current_student_photo);
-        }
-      } else {
-        const existing = await pool.query(
-          `SELECT id, file_url FROM student_documents WHERE student_id = $1 AND document_type = $2 ORDER BY uploaded_at DESC LIMIT 1`,
-          [session.student_id, session.target]
-        );
-        if (existing.rowCount) {
-          const oldUrl = existing.rows[0].file_url;
-          await pool.query(
-            `UPDATE student_documents
-             SET file_url = $1, document_title = $2, uploaded_by = $3, uploaded_at = NOW()
-             WHERE id = $4`,
-            [uploaded.url, session.target_label, session.created_by, existing.rows[0].id]
-          );
-          if (oldUrl) await removeOldCloudFile(oldUrl);
-        } else {
-          await pool.query(
-            `INSERT INTO student_documents
-               (student_id, document_type, document_title, file_url, guardian_visible, guardian_download_allowed, uploaded_by)
-             VALUES ($1, $2, $3, $4, TRUE, TRUE, $5)`,
-            [session.student_id, session.target, session.target_label, uploaded.url, session.created_by]
-          );
-        }
-      }
+    await pool.query(
+      `UPDATE mobile_capture_sessions
+       SET status = 'awaiting_confirm', uploaded_url = $1
+       WHERE id = $2`,
+      [uploaded.url, session.id]
+    );
 
-      await pool.query(
-        `UPDATE mobile_capture_sessions
-         SET status = 'completed', uploaded_url = $1, completed_at = NOW()
-         WHERE id = $2`,
-        [uploaded.url, session.id]
-      );
-
-      res.json({
-        success: true,
-        message: 'Photo uploaded successfully!',
-        uploaded_url: uploaded.url,
-      });
-    } catch (err) {
-      await removeOldCloudFile(uploaded.url);
-      throw err;
-    }
+    res.json({
+      success: true,
+      status: 'awaiting_confirm',
+      message: 'Photo sent to Office PC for confirmation!',
+      uploaded_url: uploaded.url,
+    });
   })
 );
 

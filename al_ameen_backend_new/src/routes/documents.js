@@ -127,7 +127,7 @@ router.get(
 // UPLOAD NEW DOCUMENT
 // ========================================
 
-router.post('/student/:id', auth, allow('super_admin', 'admin'), upload.single('file'), asyncHandler(async (req, res) => {
+router.post('/student/:id', auth, allow('super_admin', 'admin', 'office'), upload.single('file'), asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, message: 'File required' });
   const studentId = req.params.id;
   const documentType = req.body.document_type || 'other';
@@ -187,7 +187,7 @@ router.post('/bulk/xi-registration', auth, allow('super_admin', 'admin'), bulkPd
 // CHANGE / REPLACE FILE
 // ========================================
 
-router.post('/:documentId/replace', auth, allow('super_admin', 'admin'), upload.single('file'), asyncHandler(async (req, res) => {
+router.post('/:documentId/replace', auth, allow('super_admin', 'admin', 'office'), upload.single('file'), asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, message: 'Please select a new file' });
   const oldResult = await pool.query('SELECT * FROM student_documents WHERE id=$1', [req.params.documentId]);
   if (!oldResult.rowCount) return res.status(404).json({ success: false, message: 'Document not found' });
@@ -312,13 +312,13 @@ router.put(
 // VIEW / DOWNLOAD FILE
 // ========================================
 
-router.get('/:documentId/file', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
+router.get('/:documentId/file', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
   const result = await pool.query('SELECT * FROM student_documents WHERE id=$1', [req.params.documentId]);
   if (!result.rowCount) return res.status(404).json({ success: false, message: 'Document not found' });
   return sendStoredFile(res, result.rows[0], false);
 }));
 
-router.get('/:documentId/download', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
+router.get('/:documentId/download', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
   const result = await pool.query('SELECT * FROM student_documents WHERE id=$1', [req.params.documentId]);
   if (!result.rowCount) return res.status(404).json({ success: false, message: 'Document not found' });
   return sendStoredFile(res, result.rows[0], true);
