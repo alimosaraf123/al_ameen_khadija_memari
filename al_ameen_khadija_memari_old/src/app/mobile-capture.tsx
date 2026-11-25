@@ -60,6 +60,34 @@ export default function MobileCaptureScreen() {
     };
   }, [token]);
 
+  // Live poll while waiting for Office confirmation so Reject & Retake or Confirm updates mobile automatically
+  useEffect(() => {
+    if (!token || info?.status !== 'awaiting_confirm') return;
+    const timer = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/mobile-capture/public/${encodeURIComponent(token)}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) return;
+        if (data.status === 'pending') {
+          // Office clicked Reject & Retake -> return mobile directly to Camera step
+          setPreviewUri('');
+          setSelectedFile(null);
+          setDoneUrl('');
+          setError('Office requested a retake. Please take a clearer photo.');
+          if (cameraInputRef.current) cameraInputRef.current.value = '';
+          if (galleryInputRef.current) galleryInputRef.current.value = '';
+          setInfo((prev) => (prev ? { ...prev, status: 'pending' } : prev));
+        } else if (data.status === 'completed') {
+          setDoneUrl(data.uploaded_url || doneUrl);
+          setInfo((prev) => (prev ? { ...prev, status: 'completed' } : prev));
+        }
+      } catch {
+        // Ignore transient poll errors
+      }
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [token, info?.status]);
+
   const handleWebFileChange = (e: any) => {
     const file = e?.target?.files?.[0];
     if (!file) return;
