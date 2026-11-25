@@ -155,6 +155,81 @@ function decodeRtpToPcm16(msg) {
   return pcm;
 }
 
+function markParentAnswered(session, reason = 'voice_detected') {
+  if (!session || session.answeredAt || session.state === 'ENDED') return;
+  if (session.answerFallbackTimer) {
+    clearTimeout(session.answerFallbackTimer);
+    session.answerFallbackTimer = null;
+  }
+  session.waitingForAnswer = false;
+  session.answeredAt = new Date();
+  console.log(`[Yealink SIP] Parent answered (${reason})! Talk timer started (${session.timeLimitSeconds}s limit = ${((session.timeLimitSeconds || 0) / 60).toFixed(1)} mins)...`);
+
+  isCallRecordingActive().then((recOn) => {
+    if (recOn && (session.state === 'BRIDGED' || session.isRecordingProxy)) {
+      startCallRecording(session);
+    }
+  }).catch(() => {});
+
+  if (session.timeLimitSeconds && session.timeLimitSeconds > 0) {
+    session.timer = setTimeout(async () => {
+      console.log(`[Yealink SIP] Auto-cutting call for student ${session.regNo}: limit ${session.timeLimitSeconds}s reached.`);
+      endCallSession(session, 'quota_reached');
+    }, session.timeLimitSeconds * 1000);
+  }
+}
+
+function beginWaitingForAnswer(session) {
+  if (!session || session.waitingForAnswer || session.answeredAt) return;
+  session.waitingForAnswer = true;
+  session.gw200Received = true;
+  session.gwDialedAt = Date.now();
+  session.nonRingSpeechFrames = 0;
+  console.log(`[Yealink SIP] Gateway connected (ringing/early media). Listening for parent pickup before starting talk timer...`);
+  session.answerFallbackTimer = setTimeout(() => {
+    if (!session.answeredAt && (session.state === 'BRIDGED' || session.gw200Received)) {
+      markParentAnswered(session, '45s_safety_fallback');
+    }
+  }, 45000);
+}
+
+function detectAnswerFromGatewayAudio(session, msg) {
+  if (!session || !session.waitingForAnswer || session.answeredAt) return;
+  // Wait 4.5s after gateway 200 OK so CCL FCT DTMF dialing & initial line clicks settle
+  if (!session.gwDialedAt || (Date.now() - session.gwDialedAt) < 4500) return;
+
+  const pcm = decodeRtpToPcm16(msg);
+  if (!pcm || pcm.length === 0) return;
+
+  let sumSq = 0;
+  for (let i = 0; i < pcm.length; i++) {
+    sumSq += pcm[i] * pcm[i];
+  }
+  const meanEnergy = sumSq / pcm.length;
+  // Ignore silence / low-level comfort noise between ringback bursts
+  if (meanEnergy < 12000) {
+    session.nonRingSpeechFrames = 0;
+    return;
+  }
+
+  const e400 = goertzel(pcm, 400, 8000);
+  const e425 = goertzel(pcm, 425, 8000);
+  const ringEnergy = Math.max(e400, e425);
+  const ringRatio = (2 * ringEnergy) / (pcm.length * sumSq);
+
+  if (ringRatio > 0.35) {
+    // Still hearing 400Hz/425Hz ringback tone
+    session.nonRingSpeechFrames = 0;
+    return;
+  }
+
+  // Broadband speech / voice energy detected
+  session.nonRingSpeechFrames = (session.nonRingSpeechFrames || 0) + 1;
+  if (session.nonRingSpeechFrames >= 8) {
+    markParentAnswered(session, 'voice_detected');
+  }
+}
+
 function rewriteSdpIpAndPort(sdp, newIp, newPort) {
   if (!sdp) return sdp;
   return sdp
@@ -461,6 +536,7 @@ function triggerIvrChoice(session, choiceDigit) {
     session.gwRtpSocket.on('message', (msg, rinfo) => {
       session.gwRtpRemotePort = rinfo.port;
       session.gwRtpRemoteIp = rinfo.address;
+      detectAnswerFromGatewayAudio(session, msg);
       pushAudioFrame(session, 'gw', msg);
       if (session.ylRtpSocket && session.ylRtpRemotePort) {
         session.ylRtpSocket.send(msg, session.ylRtpRemotePort, session.ylRtpRemoteIp);
@@ -668,17 +744,7 @@ function startSipBridge() {
           }
 
           if (statusCode === 200 && !session.answeredAt) {
-            session.answeredAt = new Date();
-            console.log(`[Yealink SIP] Parent answered! Talk timer started (${session.timeLimitSeconds}s limit = ${(session.timeLimitSeconds/60).toFixed(1)} mins)...`);
-            isCallRecordingActive().then((recOn) => {
-              if (recOn && session.state === 'BRIDGED') startCallRecording(session);
-            }).catch(() => {});
-            if (session.timeLimitSeconds && session.timeLimitSeconds > 0) {
-              session.timer = setTimeout(async () => {
-                console.log(`[Yealink SIP] Auto-cutting call for student ${session.regNo}: weekly limit ${session.timeLimitSeconds}s reached.`);
-                endCallSession(session, 'quota_reached');
-              }, session.timeLimitSeconds * 1000);
-            }
+            beginWaitingForAnswer(session);
           }
 
           if (statusCode >= 400 && statusCode !== 401) {
@@ -719,19 +785,7 @@ function startSipBridge() {
 
         // When call answered (200 OK)
         if (statusCode === 200 && !session.answeredAt) {
-          session.answeredAt = new Date();
-          console.log(`[Yealink SIP] Call answered by parent/callee!`);
-          if (session.isRecordingProxy) {
-            startCallRecording(session);
-          }
-
-          // Apply talk time limit auto-cut
-          if (session.timeLimitSeconds && session.timeLimitSeconds > 0) {
-            session.timer = setTimeout(async () => {
-              console.log(`[Yealink SIP] Auto-cutting call for student ${session.regNo}: limit ${session.timeLimitSeconds}s reached.`);
-              endCallSession(session, 'quota_reached');
-            }, session.timeLimitSeconds * 1000);
-          }
+          beginWaitingForAnswer(session);
         }
 
         // If call failed / rejected / busy (4xx, 5xx, 6xx)
@@ -1282,8 +1336,7 @@ function startSipBridge() {
         });
       };
 
-      const recOn = await isCallRecordingActive();
-      if (recOn && sdpBody) {
+      if (sdpBody) {
         session.isRecordingProxy = true;
         const ylMedia = extractAudioPortAndIp(sdpBody, rinfo.address);
         session.ylRtpRemoteIp = ylMedia.ip;
@@ -1308,6 +1361,7 @@ function startSipBridge() {
             session.gwRtpSocket.on('message', (msg, remoteRinfo) => {
               session.gwRtpRemotePort = remoteRinfo.port;
               session.gwRtpRemoteIp = remoteRinfo.address;
+              detectAnswerFromGatewayAudio(session, msg);
               pushAudioFrame(session, 'gw', msg);
               if (session.ylRtpSocket && session.ylRtpRemotePort) {
                 session.ylRtpSocket.send(msg, session.ylRtpRemotePort, session.ylRtpRemoteIp);
@@ -1394,6 +1448,7 @@ function startSipBridge() {
 async function endCallSession(session, reason = 'hangup') {
   if (!session) return;
   if (session.timer) clearTimeout(session.timer);
+  if (session.answerFallbackTimer) clearTimeout(session.answerFallbackTimer);
   if (session.ivrInterval) clearInterval(session.ivrInterval);
   if (session.ivrTimeout) clearTimeout(session.ivrTimeout);
 
@@ -1416,9 +1471,9 @@ async function endCallSession(session, reason = 'hangup') {
     }
   } catch (_) {}
 
-  // Send BYE to Yealink if call was answered or in IVR
+  // Send BYE to Yealink if call was answered, in IVR, or Gateway already sent 200 OK
   try {
-    if ((session.answeredAt || session.isIvr) && session.yealinkRinfo && session.yealinkHeaders) {
+    if ((session.answeredAt || session.isIvr || session.gw200Received) && session.yealinkRinfo && session.yealinkHeaders) {
       const ylReqUri = session.yealinkHeaders['contact'] 
         ? (session.yealinkHeaders['contact'].match(/<([^>]+)>/)?.[1] || session.yealinkHeaders['contact'])
         : `sip:101@${session.yealinkRinfo.address}:${session.yealinkRinfo.port}`;
@@ -1442,6 +1497,7 @@ async function endCallSession(session, reason = 'hangup') {
 
 async function cleanupSession(session, reason) {
   if (session.timer) clearTimeout(session.timer);
+  if (session.answerFallbackTimer) clearTimeout(session.answerFallbackTimer);
   if (session.ivrInterval) clearInterval(session.ivrInterval);
   if (session.ivrTimeout) clearTimeout(session.ivrTimeout);
 
