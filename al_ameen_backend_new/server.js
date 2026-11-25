@@ -109,6 +109,7 @@ app.use('/api/bank-matcher',...moduleAccess(['dues','deposit_fund','fees'],null,
 app.use('/api/hostel-fees',...moduleAccess(['dues','deposit_fund','fees','students']),require('./src/routes/hostelFees'));
 app.use('/api/daily-cashbook',...moduleAccess(['fees','dues','receipt_payment','daily_cashbook']),require('./src/routes/dailyCashBook'));
 app.use('/api/documents',...moduleAccess(['documents','students']),require('./src/routes/documents'));
+app.use('/api/mobile-capture',require('./src/routes/mobileCapture'));
 app.use('/api/assets',...moduleAccess('asset_register'),require('./src/routes/assetRegister'));
 app.use('/api/omr',require('./src/routes/omr'));
 app.use('/api/calls',require('./src/routes/calls'));

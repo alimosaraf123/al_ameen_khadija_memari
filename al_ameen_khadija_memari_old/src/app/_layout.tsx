@@ -83,6 +83,7 @@ export default function Layout() {
  return <GestureHandlerRootView style={{flex:1}}><Stack screenOptions={{headerShown:false}}>
   <Stack.Screen name="index"/>
   <Stack.Screen name="display-board"/>
+  <Stack.Screen name="mobile-capture"/>
   {PRIVATE_ROUTES.map(name=><Stack.Protected key={name} guard={canOpenRoute(name,session.user)}><Stack.Screen name={name}/></Stack.Protected>)}
  </Stack></GestureHandlerRootView>;
 }
