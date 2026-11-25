@@ -1,0 +1,3488 @@
+const {decryptTemporaryPassword,saveTemporaryPassword}=require('../utils/guardianTemporaryCredentials');
+const {generateGuardianPassword,revokeGuardianAccess,resetAllGuardianPasswords}=require('../utils/guardianCredentials');
+const {getMonthlyFeeDue}=require('../utils/monthlyFees');
+const {
+  getPortalCredentials,
+  savePortalCredentials,
+  loginToPortal,
+  getFeesReportData,
+  getReceiptPaymentReportData,
+  getDueListData,
+  FEES_REPORT_URL,
+  DUE_LIST_URL,
+} = require('../utils/alAmeenAccounts');
+const express = require('express');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const path = require('path');
+const fs = require('fs');
+
+const pool = require('../db');
+const { auth, allow } = require('../middleware/auth');
+const asyncHandler = require('../utils/asyncHandler');
+
+const router = express.Router();
+const temporarySchemaReady=pool.query(fs.readFileSync(path.join(__dirname,'../../sql/guardian-temporary-credentials.sql'),'utf8'));
+const depositFundSchemaReady = Promise.all([
+  pool.query('ALTER TABLE students ADD COLUMN IF NOT EXISTS sdf_book_no VARCHAR(100)'),
+  pool.query("ALTER TABLE student_deposit_transactions ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(20)"),
+  pool.query("ALTER TABLE student_deposit_transactions ADD COLUMN IF NOT EXISTS bill_number VARCHAR(50)")
+]);
+router.get('/temporary-passwords',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ await temporarySchemaReady;
+ const r=await pool.query("SELECT u.id,u.login_id,t.encrypted_password FROM guardian_temporary_credentials t JOIN users u ON u.id=t.user_id WHERE u.role='guardian' AND u.password_change_required=TRUE");
+ res.set('Cache-Control','no-store');
+ res.json({success:true,credentials:r.rows.map(x=>({login_id:x.login_id,password:decryptTemporaryPassword(x.encrypted_password,x.id)}))});
+}));
+router.post('/reset-all-passwords',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+  await temporarySchemaReady;
+  const result=await resetAllGuardianPasswords(pool,{createMissing:req.body?.create_missing===true});
+  res.set('Cache-Control','no-store');
+  res.json({success:true,...result});
+}));
+
+const uploadDir = path.join(
+  __dirname,
+  '../../uploads'
+);
+
+
+// ========================================
+// HELPERS
+// ========================================
+
+function getPhysicalPath(fileUrl) {
+  if (!fileUrl) return null;
+
+  return path.join(
+    uploadDir,
+    path.basename(fileUrl)
+  );
+}
+
+
+async function sendGuardianDocument(res, document, download = false) {
+  const fileUrl = document.file_url;
+  const safeTitle = (document.document_title || document.document_type || 'document').replace(/[\/:*?"<>|]/g, '_');
+  if (/^https?:\/\//i.test(fileUrl)) {
+    const response = await fetch(fileUrl);
+    if (!response.ok) return res.status(404).json({ success: false, message: 'Document file not found' });
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+    let extension = '';
+    try { extension = path.extname(new URL(fileUrl).pathname); } catch {}
+    res.set('Content-Type', contentType);
+    if (download) res.set('Content-Disposition', 'attachment; filename="' + safeTitle + extension + '"');
+    return res.send(buffer);
+  }
+  const physicalPath = getPhysicalPath(fileUrl);
+  if (!physicalPath || !fs.existsSync(physicalPath)) return res.status(404).json({ success: false, message: 'Document file not found' });
+  return download ? res.download(physicalPath, safeTitle + path.extname(physicalPath)) : res.sendFile(physicalPath);
+}
+
+
+async function guardianOwnsStudent(
+  userId,
+  studentId
+) {
+  const result =
+    await pool.query(
+      `
+      SELECT 1
+
+      FROM student_guardians sg
+
+      JOIN guardian_profiles g
+        ON g.id = sg.guardian_id
+
+      WHERE sg.student_id=$1
+        AND g.user_id=$2
+
+      LIMIT 1
+      `,
+      [
+        studentId,
+        userId
+      ]
+    );
+
+  return result.rowCount > 0;
+}
+
+
+const feeClassIds = new Map([
+  ['nursery', '1'], ['nursary', '1'], ['i', '2'], ['ii', '3'], ['iii', '4'],
+  ['iv', '5'], ['v', '6'], ['vi', '7'], ['vii', '8'], ['viii', '9'],
+  ['ix', '10'], ['x', '11'], ['xi science', '12'], ['xi sc', '12'],
+  ['xi arts', '13'], ['xii arts', '15'], ['xii science', '16'], ['xii sc', '16'],
+  ['neet', '18'], ['jee', '19'], ['jee engineering', '19'],
+  ['pre nursery', '34'], ['play group', '35'],
+]);
+
+function feeClassId(className) {
+  const normalized = String(className || '')
+    .trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\./g, '').replace(/\s+/g, ' ');
+  return feeClassIds.get(normalized) || null;
+}
+
+router.get(
+  '/student/:studentId/fee-payment-link',
+  auth,
+  allow('guardian'),
+  asyncHandler(async (req, res) => {
+
+    await depositFundSchemaReady;
+    if (!(await guardianOwnsStudent(req.user.userId, req.params.studentId))) {
+      return res.status(403).json({ success: false, message: 'This student is not linked to your Guardian account' });
+    }
+
+    const student = (await pool.query(
+      'SELECT id,registration_no,class_name FROM students WHERE id=$1 AND is_active=TRUE',
+      [req.params.studentId]
+    )).rows[0];
+
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+
+    const classId = feeClassId(student.class_name);
+    if (!classId) {
+      return res.status(400).json({ success: false, message: 'This student class is not mapped with the fee payment website' });
+    }
+
+    const token = jwt.sign(
+      { purpose: 'guardian_fee_payment', registrationNo: student.registration_no, classId },
+      process.env.JWT_SECRET,
+      { expiresIn: '2m' }
+    );
+
+    res.json({
+      success: true,
+      payment_path: '/api/guardians/fee-payment/open?token=' + encodeURIComponent(token),
+    });
+  })
+);
+
+router.get(
+  '/student/:studentId/fee-receipt-link',
+  auth,
+  allow('guardian'),
+  asyncHandler(async (req, res) => {
+    if (!(await guardianOwnsStudent(req.user.userId, req.params.studentId))) {
+      return res.status(403).json({ success: false, message: 'This student is not linked to your Guardian account' });
+    }
+
+    const student = (await pool.query(
+      'SELECT id,registration_no,class_name FROM students WHERE id=$1 AND is_active=TRUE',
+      [req.params.studentId]
+    )).rows[0];
+
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+
+    const classId = feeClassId(student.class_name);
+    if (!classId) {
+      return res.status(400).json({ success: false, message: 'This student class is not mapped with the fee receipt website' });
+    }
+
+    const token = jwt.sign(
+      { purpose: 'guardian_fee_receipt', registrationNo: student.registration_no, classId },
+      process.env.JWT_SECRET,
+      { expiresIn: '2m' }
+    );
+
+    res.json({
+      success: true,
+      receipt_path: '/api/guardians/fee-receipt/open?token=' + encodeURIComponent(token),
+    });
+  })
+);
+router.get('/fee-payment/open', asyncHandler(async (req, res) => {
+  let payload;
+
+  try {
+    payload = jwt.verify(String(req.query.token || ''), process.env.JWT_SECRET);
+  } catch {
+    return res.status(401).type('html').send('<h2>This fee-payment link has expired. Return to the Guardian Panel and tap Pay Monthly Fees again.</h2>');
+  }
+
+  if (payload.purpose !== 'guardian_fee_payment') {
+    return res.status(401).type('html').send('<h2>Invalid fee-payment link.</h2>');
+  }
+
+  const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[char]);
+
+  const registrationNo = escapeHtml(payload.registrationNo);
+  const classId = escapeHtml(payload.classId);
+  const html = '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>Opening Fee Payment</title></head><body>' +
+    '<p>Opening the student fee details...</p>' +
+    '<form id="fee-payment" method="post" action="https://alameenmission.net/fees_payment/fees_memari/">' +
+    '<input type="hidden" name="regno" value="' + registrationNo + '">' +
+    '<input type="hidden" name="classid" value="' + classId + '">' +
+    '<input type="hidden" name="search" value="SEARCH">' +
+    '<noscript><button type="submit">Open Fee Details</button></noscript></form>' +
+    '<script>document.getElementById("fee-payment").submit();</script></body></html>';
+
+  res.set('Cache-Control', 'no-store').type('html').send(html);
+}));
+
+router.get('/fee-receipt/open', asyncHandler(async (req, res) => {
+  let payload;
+
+  try {
+    payload = jwt.verify(String(req.query.token || ''), process.env.JWT_SECRET);
+  } catch {
+    return res.status(401).type('html').send('<h2>This fee-receipt link has expired. Return to the Guardian Panel and tap Download Fee Receipt again.</h2>');
+  }
+
+  if (payload.purpose !== 'guardian_fee_receipt') {
+    return res.status(401).type('html').send('<h2>Invalid fee-receipt link.</h2>');
+  }
+
+  const form = new URLSearchParams({
+    regno: String(payload.registrationNo || ''),
+    class: String(payload.classId || ''),
+    submit: 'Submit',
+  });
+  const receiptResponse = await fetch('https://alameenmission.net/fees_receipt/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: form.toString(),
+  });
+
+  if (!receiptResponse.ok) {
+    return res.status(502).type('html').send('<h2>The fee receipt website is unavailable. Please try again.</h2>');
+  }
+
+  let html = await receiptResponse.text();
+  const autoScroll = '<script>window.addEventListener("load",function(){var receipts=document.querySelectorAll("[id^=printData-]");if(receipts.length){receipts[receipts.length-1].scrollIntoView({behavior:"instant",block:"start"});}});</script>';
+  html = html.replace('</body>', autoScroll + '</body>');
+  res.set('Cache-Control', 'no-store').type('html').send(html);
+}));
+
+// ========================================
+// ADMIN / SUPER ADMIN
+// GUARDIAN LIST
+// ========================================
+
+router.get(
+  '/',
+
+  auth,
+
+  allow(
+    'super_admin',
+    'admin'
+  ),
+
+  asyncHandler(
+    async (req, res) => {
+
+      const result =
+        await pool.query(
+          `
+          SELECT
+            g.id,
+            g.user_id,
+            g.guardian_name,
+            g.mobile,
+            g.alternate_mobile,
+            g.email,
+            g.address,
+            g.photo_url,
+
+            u.login_id,
+            u.is_active AS user_active,
+
+            COALESCE(
+
+              json_agg(
+
+                json_build_object(
+
+                  'id',
+                  s.id,
+
+                  'registration_no',
+                  s.registration_no,
+
+                  'student_name',
+                  s.student_name,
+
+                  'class_name',
+                  s.class_name,
+
+                  'roll_no',
+                  s.roll_no,
+                  'whatsapp_number',s.whatsapp_number,
+                  'photo_url',s.photo_url
+
+                )
+
+                ORDER BY
+                  s.student_name
+
+              )
+
+              FILTER (
+                WHERE s.id
+                IS NOT NULL
+              ),
+
+              '[]'::json
+
+            ) AS students
+
+          FROM guardian_profiles g
+
+          JOIN users u
+            ON u.id =
+               g.user_id
+
+          LEFT JOIN student_guardians sg
+            ON sg.guardian_id =
+               g.id
+
+          LEFT JOIN students s
+            ON s.id =
+               sg.student_id
+
+          GROUP BY
+            g.id,
+            g.user_id,
+            g.guardian_name,
+            g.mobile,
+            g.alternate_mobile,
+            g.email,
+            g.address,
+            g.photo_url,
+            u.login_id,
+            u.is_active
+
+          ORDER BY
+            g.guardian_name
+          `
+        );
+
+
+      res.json({
+        success: true,
+        guardians:
+          result.rows,
+      });
+
+    }
+  )
+);
+
+
+// ========================================
+// CREATE GUARDIAN LOGIN
+// FROM STUDENT REGISTRATION NO
+//
+// USER ID = REGISTRATION NO
+// PASSWORD = FIRST PART OF STUDENT NAME + DOB (DDMMYYYY)
+// ========================================
+
+router.post(
+  '/create-for-student',
+
+  auth,
+
+  allow(
+    'super_admin',
+    'admin'
+  ),
+
+  asyncHandler(
+    async (req, res) => {
+
+      const registrationNo =
+        String(
+          req.body
+            ?.registration_no ||
+          ''
+        ).trim();
+
+
+      if (!registrationNo) {
+
+        return res
+          .status(400)
+          .json({
+
+            success: false,
+
+            message:
+              'Registration No is required',
+
+          });
+
+      }
+
+
+      const client =
+        await pool.connect();
+
+
+      try {
+
+        await client.query(
+          'BEGIN'
+        );
+
+
+        // ----------------------------
+        // FIND STUDENT
+        // ----------------------------
+
+        const studentResult =
+          await client.query(
+            `
+            SELECT *
+
+            FROM students
+
+            WHERE
+              LOWER(
+                TRIM(
+                  registration_no
+                )
+              )
+              =
+              LOWER(
+                TRIM($1)
+              )
+
+              AND
+              is_active=TRUE
+
+            LIMIT 1
+            `,
+            [
+              registrationNo
+            ]
+          );
+
+
+        if (
+          !studentResult
+            .rowCount
+        ) {
+
+          await client.query(
+            'ROLLBACK'
+          );
+
+          return res
+            .status(404)
+            .json({
+
+              success: false,
+
+              message:
+                'Student not found',
+
+            });
+
+        }
+
+
+        const student =
+          studentResult
+            .rows[0];
+
+
+        // ----------------------------
+        // CHECK EXISTING GUARDIAN
+        // FOR THIS STUDENT
+        // ----------------------------
+
+        const existingLink =
+          await client.query(
+            `
+            SELECT
+              g.id AS guardian_id,
+              u.login_id
+
+            FROM student_guardians sg
+
+            JOIN guardian_profiles g
+              ON g.id =
+                 sg.guardian_id
+
+            JOIN users u
+              ON u.id =
+                 g.user_id
+
+            WHERE
+              sg.student_id=$1
+
+            LIMIT 1
+            `,
+            [
+              student.id
+            ]
+          );
+
+
+        if (
+          existingLink
+            .rowCount
+        ) {
+
+          await client.query(
+            'ROLLBACK'
+          );
+
+
+          return res
+            .status(409)
+            .json({
+
+              success: false,
+
+              message:
+                'Guardian login already exists for this student',
+
+              login_id:
+                existingLink
+                  .rows[0]
+                  .login_id,
+
+            });
+
+        }
+
+
+        // ----------------------------
+        // CHECK LOGIN ID DUPLICATE
+        // ----------------------------
+
+        const duplicateLogin =
+          await client.query(
+            `
+            SELECT id
+
+            FROM users
+
+            WHERE login_id=$1
+
+            LIMIT 1
+            `,
+            [
+              student
+                .registration_no
+            ]
+          );
+
+
+        if (
+          duplicateLogin
+            .rowCount
+        ) {
+
+          await client.query(
+            'ROLLBACK'
+          );
+
+
+          return res
+            .status(409)
+            .json({
+
+              success: false,
+
+              message:
+                'This Registration No is already being used as a Login ID',
+
+            });
+
+        }
+
+
+        // ----------------------------
+        // GENERATE PASSWORD
+        // ----------------------------
+
+        const plainPassword = generateGuardianPassword(
+          student.student_name,
+          student.date_of_birth
+        );
+
+
+        const passwordHash =
+          await bcrypt.hash(
+            plainPassword,
+            12
+          );
+
+
+        // ----------------------------
+        // GUARDIAN NAME
+        // ----------------------------
+
+        const guardianName =
+
+          student
+            .guardian_name
+
+          ||
+
+          student
+            .father_name
+
+          ||
+
+          student
+            .mother_name
+
+          ||
+
+          `Guardian of ${student.student_name}`;
+
+
+        // ----------------------------
+        // GUARDIAN MOBILE
+        // ----------------------------
+
+        const guardianMobile =
+
+          student
+            .guardian_mobile
+
+          ||
+
+          student
+            .father_mobile
+
+          ||
+
+          student
+            .mobile_number
+
+          ||
+
+          null;
+
+
+        // ----------------------------
+        // CREATE USER
+        // ----------------------------
+
+        const userResult =
+          await client.query(
+            `
+            INSERT INTO users
+            (
+              login_id,
+              password_hash,
+              full_name,
+              password_change_required,
+              role
+            )
+
+            VALUES
+            (
+              $1,
+              $2,
+              $3,
+              TRUE,
+              'guardian'
+            )
+
+            RETURNING
+              id,
+              login_id
+            `,
+            [
+              student
+                .registration_no,
+
+              passwordHash,
+
+              guardianName,
+            ]
+          );
+
+
+        // ----------------------------
+        // CREATE GUARDIAN PROFILE
+        // ----------------------------
+
+        const guardianResult =
+          await client.query(
+            `
+            INSERT INTO guardian_profiles
+            (
+              user_id,
+              guardian_name,
+              mobile,
+              alternate_mobile,
+              email
+            )
+
+            VALUES
+            (
+              $1,$2,$3,$4,$5
+            )
+
+            RETURNING *
+            `,
+            [
+
+              userResult
+                .rows[0]
+                .id,
+
+              guardianName,
+
+              guardianMobile,
+
+              student
+                .guardian_alternate_mobile
+
+              ||
+
+              student
+                .alternate_mobile
+
+              ||
+
+              null,
+
+              student.email
+                || null,
+
+            ]
+          );
+
+
+        // ----------------------------
+        // LINK STUDENT
+        // ----------------------------
+
+        await client.query(
+          `
+          INSERT INTO student_guardians
+          (
+            student_id,
+            guardian_id,
+            relation_type,
+            is_primary
+          )
+
+          VALUES
+          (
+            $1,
+            $2,
+            $3,
+            TRUE
+          )
+          `,
+          [
+
+            student.id,
+
+            guardianResult
+              .rows[0]
+              .id,
+
+            'Guardian',
+
+          ]
+        );
+
+
+        await temporarySchemaReady;
+        await saveTemporaryPassword(client,userResult.rows[0].id,plainPassword);
+        await client.query(
+          'COMMIT'
+        );
+
+
+        // IMPORTANT:
+        // Password returned only now.
+        // Plain password is NOT stored.
+        res
+          .status(201)
+          .json({
+
+            success: true,
+
+            message:
+              'Guardian login created successfully',
+
+
+            student: {
+
+              id:
+                student.id,
+
+              registration_no:
+                student
+                  .registration_no,
+
+              student_name:
+                student
+                  .student_name,
+
+              class_name:
+                student
+                  .class_name,
+
+              roll_no:
+                student
+                  .roll_no,
+
+            },
+
+
+            guardian:
+              guardianResult
+                .rows[0],
+
+
+            credentials: {
+
+              login_id:
+                userResult
+                  .rows[0]
+                  .login_id,
+
+              password:
+                plainPassword,
+
+            },
+
+          });
+
+
+      } catch (error) {
+
+        await client.query(
+          'ROLLBACK'
+        );
+
+        throw error;
+
+
+      } finally {
+
+        client.release();
+
+      }
+
+    }
+  )
+);
+
+
+// ========================================
+// ADMIN / SUPER ADMIN
+// GENERATE NEW GUARDIAN PASSWORD
+// ========================================
+
+router.post('/:guardianId/reset-password', auth, allow('super_admin','admin'), asyncHandler(async(req,res)=>{
+ const client=await pool.connect();try{
+  await client.query('BEGIN');
+  const r=await client.query("SELECT g.user_id,u.login_id FROM guardian_profiles g JOIN users u ON u.id=g.user_id WHERE g.id=$1 AND u.role='guardian' FOR UPDATE OF u",[req.params.guardianId]);
+  if(!r.rowCount){await client.query('ROLLBACK');return res.status(404).json({success:false,message:'Guardian account not found'});}
+  const guardian=r.rows[0],password=generateGuardianPassword(),hash=await bcrypt.hash(password,12);
+  await client.query('UPDATE users SET password_hash=$1,password_change_required=TRUE,mpin_hash=NULL WHERE id=$2',[hash,guardian.user_id]);
+  await temporarySchemaReady;await saveTemporaryPassword(client,guardian.user_id,password);
+  await revokeGuardianAccess(client,guardian.user_id);await client.query('COMMIT');
+  res.json({success:true,credentials:{login_id:guardian.login_id,password}});
+ }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+}));
+router.patch('/:guardianId/lock',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ if(typeof req.body.locked!=='boolean')return res.status(400).json({success:false,message:'Locked must be true or false'});
+ const client=await pool.connect();try{await client.query('BEGIN');
+  const r=await client.query("UPDATE users u SET is_active=$2 FROM guardian_profiles g WHERE g.id=$1 AND g.user_id=u.id AND u.role='guardian' RETURNING u.id",[req.params.guardianId,!req.body.locked]);
+  if(!r.rowCount){await client.query('ROLLBACK');return res.status(404).json({success:false,message:'Guardian account not found'});}
+  if(req.body.locked)await revokeGuardianAccess(client,r.rows[0].id);
+  await client.query('COMMIT');res.json({success:true,locked:req.body.locked});
+ }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+}));
+router.delete('/:guardianId',auth,allow('super_admin','admin'),asyncHandler(async(req,res)=>{
+ const r=await pool.query("DELETE FROM users u USING guardian_profiles g WHERE g.id=$1 AND g.user_id=u.id AND u.role='guardian' RETURNING u.id",[req.params.guardianId]);
+ if(!r.rowCount)return res.status(404).json({success:false,message:'Guardian account not found'});
+ res.json({success:true});
+}));
+
+router.post(
+  '/',
+
+  auth,
+
+  allow(
+    'super_admin',
+    'admin'
+  ),
+
+  asyncHandler(
+    async (req, res) => {
+
+      const b =
+        req.body;
+
+
+      const client =
+        await pool.connect();
+
+
+      try {
+
+        await client.query(
+          'BEGIN'
+        );
+
+
+        const hash =
+          await bcrypt.hash(
+            b.password,
+            12
+          );
+
+
+        const userResult =
+          await client.query(
+            `
+            INSERT INTO users
+            (
+              login_id,
+              password_hash,
+              full_name,
+              password_change_required,
+              role
+            )
+
+            VALUES
+            (
+              $1,
+              $2,
+              $3,
+              TRUE,
+              'guardian'
+            )
+
+            RETURNING id
+            `,
+            [
+
+              b.login_id,
+
+              hash,
+
+              b.guardian_name,
+
+            ]
+          );
+
+
+        const guardianResult =
+          await client.query(
+            `
+            INSERT INTO guardian_profiles
+            (
+              user_id,
+              guardian_name,
+              mobile,
+              alternate_mobile,
+              email,
+              address,
+              photo_url
+            )
+
+            VALUES
+            (
+              $1,$2,$3,$4,$5,$6,$7
+            )
+
+            RETURNING *
+            `,
+            [
+
+              userResult
+                .rows[0]
+                .id,
+
+              b.guardian_name,
+
+              b.mobile
+                || null,
+
+              b.alternate_mobile
+                || null,
+
+              b.email
+                || null,
+
+              b.address
+                || null,
+
+              b.photo_url
+                || null,
+
+            ]
+          );
+
+
+        if (
+          Array.isArray(
+            b.student_ids
+          )
+        ) {
+
+          for (
+            const studentId
+            of b.student_ids
+          ) {
+
+            await client.query(
+              `
+              INSERT INTO student_guardians
+              (
+                student_id,
+                guardian_id,
+                relation_type,
+                is_primary
+              )
+
+              VALUES
+              (
+                $1,$2,$3,$4
+              )
+
+              ON CONFLICT
+              DO NOTHING
+              `,
+              [
+
+                studentId,
+
+                guardianResult
+                  .rows[0]
+                  .id,
+
+                b.relation_type
+                  || 'Guardian',
+
+                !!b.is_primary,
+
+              ]
+            );
+
+          }
+
+        }
+
+
+        await client.query(
+          'COMMIT'
+        );
+
+
+        res
+          .status(201)
+          .json({
+
+            success: true,
+
+            guardian:
+              guardianResult
+                .rows[0],
+
+          });
+
+
+      } catch (error) {
+
+        await client.query(
+          'ROLLBACK'
+        );
+
+        throw error;
+
+
+      } finally {
+
+        client.release();
+
+      }
+
+    }
+  )
+);
+
+
+// ========================================
+// GUARDIAN HOME
+// ========================================
+
+router.get(
+  '/home',
+
+  auth,
+
+  allow('guardian'),
+
+  asyncHandler(
+    async (req, res) => {
+
+      const guardianResult =
+        await pool.query(
+          `
+          SELECT *
+
+          FROM guardian_profiles
+
+          WHERE
+            user_id=$1
+          `,
+          [
+            req.user.userId
+          ]
+        );
+
+
+      if (
+        !guardianResult
+          .rowCount
+      ) {
+
+        return res
+          .status(404)
+          .json({
+
+            success: false,
+
+            message:
+              'Guardian profile not found',
+
+          });
+
+      }
+
+
+      const guardian =
+        guardianResult
+          .rows[0];
+
+
+      const students =
+        await pool.query(
+          `
+          SELECT
+
+            s.id,
+
+            s.registration_no,
+
+            s.student_name,
+
+            s.class_name,
+
+            s.roll_no,
+
+            r.room_name AS room_number,
+
+            s.photo_url
+
+          FROM students s
+
+          JOIN student_guardians sg
+            ON sg.student_id =
+               s.id
+
+          LEFT JOIN rooms r ON r.id=s.room_id
+
+          WHERE
+            sg.guardian_id=$1
+
+            AND
+            s.is_active=TRUE
+
+          ORDER BY
+            s.student_name
+          `,
+          [
+            guardian.id
+          ]
+        );
+
+
+      res.json({
+
+        success: true,
+
+        guardian,
+
+        students:
+          students.rows,
+
+      });
+
+    }
+  )
+);
+
+
+// ========================================
+// GUARDIAN CHILD DETAILS
+// ========================================
+
+router.get('/student/:studentId/visitor-entries', auth, allow('guardian'), asyncHandler(async (req, res) => {
+  const studentId = req.params.studentId;
+  if (!(await guardianOwnsStudent(req.user.userId, studentId))) {
+    return res.status(403).json({ success: false, message: 'Not allowed' });
+  }
+  const result = await pool.query(`
+    SELECT e.id,e.visitor_name,e.visitor_relation,e.entry_mode,e.is_active,e.entered_at,
+           s.registration_no,u.full_name entered_by_name
+    FROM gate_guardian_visit_entries e
+    JOIN students s ON s.id=e.student_id
+    LEFT JOIN users u ON u.id=e.entered_by
+    WHERE e.student_id=$1
+    ORDER BY e.entered_at DESC
+    LIMIT 100
+  `, [studentId]);
+  res.json({ success: true, entries: result.rows });
+}));
+
+router.get('/student/:studentId/visit-history', auth, allow('guardian'), asyncHandler(async (req, res) => {
+  const studentId = req.params.studentId;
+  if (!(await guardianOwnsStudent(req.user.userId, studentId))) {
+    return res.status(403).json({ success: false, message: 'Not allowed' });
+  }
+  const result = await pool.query(`
+    SELECT v.id,v.token_no,v.visitor_name,v.visitor_relation,v.visit_at,v.duration_minutes,v.purpose,
+           v.status,v.completed_at,v.cancelled_at,v.created_at,
+           to_char(v.visit_at,'DD-MM-YYYY HH24:MI') visit_text,
+           to_char(v.completed_at,'DD-MM-YYYY HH24:MI') completed_text,
+           e.entered_at,e.entry_mode,e.is_active,e.remarks,
+           to_char(e.entered_at,'DD-MM-YYYY HH24:MI') entered_text
+    FROM student_visits v
+    LEFT JOIN gate_guardian_visit_entries e ON e.permission_id=v.id
+    WHERE v.student_id=$1 AND v.status <> 'cancelled'
+    ORDER BY v.visit_at DESC
+    LIMIT 100
+  `, [studentId]);
+  res.json({ success: true, visits: result.rows });
+}));
+
+// Guardian sees only the selected child's published weekly-test marks.
+router.get(
+  '/student/:studentId/weekly-tests',
+  auth,
+  allow('guardian'),
+  asyncHandler(async (req, res) => {
+    const studentId = req.params.studentId;
+    if (!(await guardianOwnsStudent(req.user.userId, studentId))) {
+      return res.status(403).json({ success: false, message: 'Not allowed' });
+    }
+    const result = await pool.query(`
+      WITH published_marks AS (
+        SELECT
+          b.id AS batch_id,
+          e.exam_date,
+          su.subject_name,
+          b.full_marks,
+          sm.student_id,
+          sm.obtained_marks,
+          RANK() OVER (
+            PARTITION BY sm.exam_id, sm.subject_id
+            ORDER BY sm.obtained_marks DESC NULLS LAST
+          ) AS mark_rank,
+          COUNT(*) FILTER (WHERE sm.obtained_marks IS NOT NULL) OVER (
+            PARTITION BY sm.exam_id, sm.subject_id
+          ) AS ranked_count
+        FROM mark_entry_batches b
+        JOIN exams e ON e.id = b.exam_id AND e.is_published = TRUE
+        JOIN subjects su ON su.id = b.subject_id
+        JOIN student_marks sm
+          ON sm.exam_id = b.exam_id
+         AND sm.subject_id = b.subject_id
+         AND sm.verification_status = 'verified'
+        JOIN students st
+          ON st.id = sm.student_id
+        WHERE b.locked = TRUE
+          AND e.session_name = CONCAT(st.session_from::text, '-', st.session_to::text)
+      )
+      SELECT batch_id, exam_date, subject_name, full_marks,
+             obtained_marks, mark_rank, ranked_count
+      FROM published_marks
+      WHERE student_id = $1
+      ORDER BY exam_date DESC NULLS LAST, batch_id DESC
+    `, [studentId]);
+    res.json({ success: true, tests: result.rows });
+  })
+);
+
+router.get(
+  '/student/:studentId',
+
+  auth,
+
+  allow('guardian'),
+
+  asyncHandler(
+    async (req, res) => {
+
+      const studentId =
+        req.params
+          .studentId;
+
+
+      const allowed =
+        await guardianOwnsStudent(
+
+          req.user.userId,
+
+          studentId
+
+        );
+
+
+      if (!allowed) {
+
+        return res
+          .status(403)
+          .json({
+
+            success: false,
+
+            message:
+              'Not allowed',
+
+          });
+
+      }
+
+
+      const [
+
+        student,
+
+        attendance,
+
+        dues,
+
+        documents,
+
+        marks,
+
+        gatePasses,
+
+        notices,
+
+      ] =
+        await Promise.all([
+
+
+          pool.query(
+            `
+            SELECT
+              s.id,
+              s.registration_no,
+              s.admission_no,
+              s.student_name,
+              s.class_name,
+              s.roll_no,
+              r.room_name AS room_number,
+              s.date_of_birth,
+              s.gender,
+              s.father_name,
+              s.mother_name,
+              s.guardian_name,
+              s.guardian_mobile,
+              s.admission_date,
+              s.student_type,
+              s.photo_url
+
+            FROM students s
+            LEFT JOIN rooms r ON r.id=s.room_id
+
+            WHERE
+              s.id=$1
+            `,
+            [
+              studentId
+            ]
+          ),
+
+
+          pool.query(
+            `
+            SELECT *
+
+            FROM attendance
+
+            WHERE
+              student_id=$1
+
+            ORDER BY
+              attendance_date
+              DESC
+
+            LIMIT 60
+            `,
+            [
+              studentId
+            ]
+          ),
+
+
+          pool.query(
+            `
+            SELECT *
+
+            FROM student_dues
+
+            WHERE
+              student_id=$1
+
+            ORDER BY
+              created_at DESC
+            `,
+            [
+              studentId
+            ]
+          ),
+
+
+          pool.query(
+            `
+            SELECT
+              id,
+              student_id,
+              document_type,
+              document_title,
+              file_url,
+              guardian_visible,
+              guardian_download_allowed,
+              EXISTS (SELECT 1 FROM student_guardians sg2 JOIN guardian_profiles gp2 ON gp2.id=sg2.guardian_id WHERE sg2.student_id=$1 AND sg2.is_primary=TRUE AND gp2.user_id=$2) AS is_primary_guardian,
+              uploaded_at
+
+            FROM student_documents
+
+            WHERE
+              student_id=$1
+
+              AND
+              (guardian_visible=TRUE OR EXISTS (SELECT 1 FROM student_guardians sg2 JOIN guardian_profiles gp2 ON gp2.id=sg2.guardian_id WHERE sg2.student_id=$1 AND sg2.is_primary=TRUE AND gp2.user_id=$2))
+
+            ORDER BY
+              uploaded_at DESC
+            `,
+            [
+              studentId,
+              req.user.userId
+            ]
+          ),
+
+
+          pool.query(
+            `
+            WITH verified_marks AS (
+              SELECT sm.*, e.exam_name, e.exam_date, e.is_published,
+                     su.subject_name, es.full_marks,
+                     RANK() OVER (
+                       PARTITION BY sm.exam_id, sm.subject_id
+                       ORDER BY sm.obtained_marks DESC NULLS LAST
+                     ) AS mark_rank,
+                     COUNT(*) FILTER (WHERE sm.obtained_marks IS NOT NULL) OVER (
+                       PARTITION BY sm.exam_id, sm.subject_id
+                     ) AS ranked_count,
+                     MAX(sm.obtained_marks) FILTER (WHERE sm.obtained_marks IS NOT NULL) OVER (
+                       PARTITION BY sm.exam_id, sm.subject_id
+                     ) AS highest_marks
+              FROM student_marks sm
+              JOIN exams e ON e.id=sm.exam_id AND e.is_published=TRUE
+              JOIN subjects su ON su.id=sm.subject_id
+              LEFT JOIN exam_subjects es ON es.exam_id=sm.exam_id AND es.subject_id=sm.subject_id
+              WHERE sm.verification_status='verified'
+            )
+            SELECT * FROM verified_marks
+            WHERE student_id=$1
+            ORDER BY exam_date DESC NULLS LAST, subject_name
+            `,
+            [
+              studentId
+            ]
+          ),
+
+
+          pool.query(
+            `
+            SELECT gp.id,gp.token_no,gp.reason,gp.status,gp.departure_at,gp.expected_return_at,gp.returned_at,gp.printed_at,gp.created_at,
+                   to_char(gp.departure_at,'DD-MM-YYYY HH24:MI') AS departure_text,
+                   to_char(gp.expected_return_at,'DD-MM-YYYY HH24:MI') AS return_text,
+                   to_char(gp.printed_at,'DD-MM-YYYY HH24:MI') AS printed_text,
+                   to_char(gp.returned_at,'DD-MM-YYYY HH24:MI') AS returned_text,
+                   CASE WHEN gp.expected_return_at IS NULL THEN NULL
+                        WHEN gp.returned_at IS NOT NULL THEN GREATEST(gp.returned_at::date-gp.expected_return_at::date,0)
+                        WHEN gp.status='pending' THEN GREATEST(CURRENT_DATE-gp.expected_return_at::date,0)
+                        ELSE 0 END AS return_delay_days,
+                   CASE WHEN gp.expected_return_at IS NULL THEN 'No return date'
+                        WHEN gp.returned_at IS NOT NULL AND gp.returned_at::date>gp.expected_return_at::date THEN 'Returned late'
+                        WHEN gp.returned_at IS NOT NULL THEN 'Returned on time'
+                        WHEN gp.status='pending' AND CURRENT_DATE>gp.expected_return_at::date THEN 'Not returned - overdue'
+                        WHEN gp.status='pending' THEN 'Return date not reached'
+                        ELSE 'Not yet printed' END AS return_delay_note
+            FROM student_gate_passes gp
+            WHERE gp.student_id=$1 AND gp.status <> 'cancelled'
+            ORDER BY gp.created_at DESC
+            LIMIT 100
+            `,
+            [studentId]
+          ),
+
+
+          pool.query(
+            `
+            SELECT DISTINCT n.* FROM notices n
+            JOIN notice_targets nt ON nt.notice_id=n.id
+            LEFT JOIN student_gate_passes gp_notice
+              ON gp_notice.token_no = substring(n.notice_text from 'Gate pass ([^ ]+)')
+            LEFT JOIN student_visits visit_notice
+              ON visit_notice.token_no = substring(n.notice_text from 'Visit ([^:]+):')
+            WHERE n.is_active=TRUE AND n.notice_type <> 'routine'
+              AND (n.notice_type <> 'gate_pass' OR gp_notice.status IS NULL OR gp_notice.status <> 'cancelled')
+              AND (n.notice_type <> 'visit' OR visit_notice.status IS NULL OR visit_notice.status <> 'cancelled')
+              AND (
+              nt.target_type='all'
+              OR (nt.target_type='role' AND nt.target_value='guardian')
+              OR (nt.target_type='class' AND LOWER(TRIM(nt.target_value))=LOWER(TRIM((SELECT class_name FROM students WHERE id=$1))))
+              OR (nt.target_type='student' AND nt.target_value=$1::text)
+              OR (nt.target_type='guardian' AND nt.target_value IN (SELECT gp.id::text FROM guardian_profiles gp WHERE gp.user_id=$2))
+            )
+            ORDER BY n.published_at DESC LIMIT 50
+            `,
+            [studentId, req.user.userId]
+          ),
+
+        ]);
+
+
+      if (!student.rowCount) {
+
+        return res
+          .status(404)
+          .json({
+
+            success: false,
+
+            message:
+              'Student not found',
+
+          });
+
+      }
+
+
+      const safeDocuments =
+        documents.rows.map(
+          (document) => ({
+
+            ...document,
+            guardian_download_allowed: document.guardian_download_allowed || document.is_primary_guardian,
+
+            view_endpoint:
+              `/api/guardians/student/${studentId}/document/${document.id}/view`,
+
+            download_endpoint:
+              (document.guardian_download_allowed || document.is_primary_guardian)
+
+                ? `/api/guardians/student/${studentId}/document/${document.id}/download`
+
+                : null,
+
+          })
+        );
+
+
+      res.json({
+
+        success: true,
+
+        student:
+          student.rows[0],
+
+        attendance:
+          attendance.rows,
+
+        dues:
+          dues.rows,
+
+        documents:
+          safeDocuments,
+
+        marks:
+          marks.rows,
+
+        gate_passes:
+          gatePasses.rows,
+
+        notices:
+          notices.rows,
+
+      });
+
+    }
+  )
+);
+
+
+// ========================================
+// GUARDIAN VIEW DOCUMENT
+// ========================================
+
+router.get(
+  '/student/:studentId/document/:documentId/view',
+
+  auth,
+
+  allow('guardian'),
+
+  asyncHandler(
+    async (req, res) => {
+
+      const studentId =
+        req.params
+          .studentId;
+
+
+      const allowed =
+        await guardianOwnsStudent(
+
+          req.user.userId,
+
+          studentId
+
+        );
+
+
+      if (!allowed) {
+
+        return res
+          .status(403)
+          .json({
+
+            success: false,
+
+            message:
+              'Not allowed',
+
+          });
+
+      }
+
+
+      const result =
+        await pool.query(
+          `
+          SELECT *
+
+          FROM student_documents
+
+          WHERE
+            id=$1
+
+            AND
+            student_id=$2
+
+            AND
+            (guardian_visible=TRUE OR EXISTS (SELECT 1 FROM student_guardians sg2 JOIN guardian_profiles gp2 ON gp2.id=sg2.guardian_id WHERE sg2.student_id=$2 AND sg2.is_primary=TRUE AND gp2.user_id=$3))
+
+          LIMIT 1
+          `,
+          [
+
+            req.params
+              .documentId,
+
+            studentId,
+            req.user.userId,
+
+          ]
+        );
+
+
+      if (!result.rowCount) {
+
+        return res
+          .status(404)
+          .json({
+
+            success: false,
+
+            message:
+              'Document not available',
+
+          });
+
+      }
+
+
+      const document =
+        result.rows[0];
+
+      return sendGuardianDocument(res, document, false);
+
+    }
+  )
+);
+
+
+// ========================================
+// GUARDIAN DOWNLOAD DOCUMENT
+// ========================================
+
+router.get(
+  '/student/:studentId/document/:documentId/download',
+
+  auth,
+
+  allow('guardian'),
+
+  asyncHandler(
+    async (req, res) => {
+
+      const studentId =
+        req.params
+          .studentId;
+
+
+      const allowed =
+        await guardianOwnsStudent(
+
+          req.user.userId,
+
+          studentId
+
+        );
+
+
+      if (!allowed) {
+
+        return res
+          .status(403)
+          .json({
+
+            success: false,
+
+            message:
+              'Not allowed',
+
+          });
+
+      }
+
+
+      const result =
+        await pool.query(
+          `
+          SELECT *
+
+          FROM student_documents
+
+          WHERE
+            id=$1
+
+            AND
+            student_id=$2
+
+            AND
+            (guardian_visible=TRUE OR EXISTS (SELECT 1 FROM student_guardians sg2 JOIN guardian_profiles gp2 ON gp2.id=sg2.guardian_id WHERE sg2.student_id=$2 AND sg2.is_primary=TRUE AND gp2.user_id=$3))
+
+            AND
+            (guardian_download_allowed=TRUE OR EXISTS (SELECT 1 FROM student_guardians sg2 JOIN guardian_profiles gp2 ON gp2.id=sg2.guardian_id WHERE sg2.student_id=$2 AND sg2.is_primary=TRUE AND gp2.user_id=$3))
+
+          LIMIT 1
+          `,
+          [
+
+            req.params
+              .documentId,
+
+            studentId,
+            req.user.userId,
+
+          ]
+        );
+
+
+      if (!result.rowCount) {
+
+        return res
+          .status(403)
+          .json({
+
+            success: false,
+
+            message:
+              'Download is not allowed for this document',
+
+          });
+
+      }
+
+
+      const document =
+        result.rows[0];
+
+      return sendGuardianDocument(res, document, true);
+
+    }
+  )
+);
+
+// ========================================
+// GUARDIAN: STUDENT DEPOSIT FUND
+// Balance + Last 15 Transactions
+// ========================================
+
+router.get(
+  '/student/:studentId/deposit-fund',
+
+  auth,
+
+  allow('guardian'),
+
+  asyncHandler(async (req, res) => {
+
+    const studentId =
+      req.params.studentId;
+
+
+    // Check this student belongs to guardian
+    const allowed =
+      await guardianOwnsStudent(
+        req.user.userId,
+        studentId
+      );
+
+
+    if (!allowed) {
+
+      return res.status(403).json({
+        success: false,
+        message: 'Not allowed',
+      });
+
+    }
+
+
+    // ----------------------------
+    // TOTAL DEPOSIT / EXPENSE
+    // ----------------------------
+
+    const summaryResult =
+      await pool.query(
+        `
+        SELECT
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN transaction_type='deposit'
+                THEN amount
+                ELSE 0
+              END
+            ),
+            0
+          ) AS total_deposit,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN transaction_type='expense'
+                THEN amount
+                ELSE 0
+              END
+            ),
+            0
+          ) AS total_expense
+
+        FROM student_deposit_transactions
+
+        WHERE student_id=$1
+        `,
+        [studentId]
+      );
+
+
+    const totalDeposit =
+      Number(
+        summaryResult.rows[0]
+          .total_deposit || 0
+      );
+
+
+    const totalExpense =
+      Number(
+        summaryResult.rows[0]
+          .total_expense || 0
+      );
+
+    const sdfDueResult = await pool.query(
+      `SELECT id, due_title, amount, due_date, remarks, session_name
+       FROM student_dues d
+       WHERE student_id=$1 AND status='due' AND amount>0
+         AND (due_title ~* '(s[.]?d[.]?f|student development fund|bus fare|admission fee|registration fee)' OR session_name IS NOT NULL)
+         AND NOT (due_title ILIKE 'Bus fare for the third-semester examination.' AND EXISTS (SELECT 1 FROM student_dues d2 WHERE d2.student_id=d.student_id AND d2.due_title ILIKE 'Bus fare for the 3rd semester examination' AND d2.amount=d.amount AND d2.due_date IS NOT DISTINCT FROM d.due_date))
+       ORDER BY due_date NULLS LAST, created_at`,
+      [studentId]
+    );
+    const sdfDueTotal = sdfDueResult.rows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+
+    const balance =
+      totalDeposit -
+      totalExpense -
+      sdfDueTotal;
+
+
+    const due =
+      balance < 0
+        ? Math.abs(balance)
+        : 0;
+
+
+    const availableBalance =
+      balance > 0
+        ? balance
+        : 0;
+
+
+    // ----------------------------
+    // LAST 15 TRANSACTIONS
+    // WITH RUNNING BALANCE
+    // ----------------------------
+
+    const transactionResult =
+      await pool.query(
+        `
+        SELECT *
+
+        FROM (
+
+          SELECT
+
+            id,
+            student_id,
+            transaction_date,
+            transaction_type,
+            amount,
+            details,
+            reference_no,
+            created_at,
+
+            SUM(
+              CASE
+
+                WHEN transaction_type='deposit'
+                  THEN amount
+
+                WHEN transaction_type='expense'
+                  THEN -amount
+
+                ELSE 0
+
+              END
+            )
+            OVER (
+              PARTITION BY student_id
+
+              ORDER BY
+                transaction_date,
+                id
+
+              ROWS BETWEEN
+                UNBOUNDED PRECEDING
+                AND CURRENT ROW
+            )
+            AS running_balance
+
+          FROM student_deposit_transactions
+
+          WHERE student_id=$1
+
+        ) t
+
+        ORDER BY
+          transaction_date DESC,
+          id DESC
+
+        LIMIT 15
+        `,
+        [studentId]
+      );
+
+
+    res.json({
+
+      success: true,
+
+      summary: {
+
+        total_deposit:
+          totalDeposit,
+
+        total_expense:
+          totalExpense,
+
+        available_balance:
+          availableBalance,
+
+        due:
+          due,
+
+        net_balance:
+          balance,
+
+        sdf_due_total:
+          sdfDueTotal,
+
+      },
+
+      transactions:
+        transactionResult.rows,
+
+      sdf_dues:
+        sdfDueResult.rows,
+
+    });
+
+  })
+);
+
+// ADMIN / SUPER ADMIN: transaction statement by registration number and/or date
+router.get('/admin/deposit-fund-statement', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
+  const registrationNo = String(req.query.registration_no || '').trim();
+  const date = String(req.query.date || '').trim();
+  const fromDate = String(req.query.from_date || date || '').trim();
+  const toDate = String(req.query.to_date || date || '').trim();
+  if (!registrationNo && !fromDate && !toDate) return res.status(400).json({success:false,message:'Registration number or date range is required'});
+  const params=[];const filters=[];
+  if(registrationNo){params.push(registrationNo);filters.push(`s.registration_no=$${params.length}`)}
+  if(fromDate){params.push(fromDate);filters.push(`t.transaction_date>=$${params.length}::date`)}
+  if(toDate){params.push(toDate);filters.push(`t.transaction_date<=$${params.length}::date`)}
+  const rows=(await pool.query(`SELECT t.id,t.student_id,t.transaction_date,t.transaction_type,t.amount,t.details,t.reference_no,t.created_by,s.registration_no,s.student_name,s.class_name,s.roll_no, SUM(CASE WHEN t.transaction_type='deposit' THEN t.amount WHEN t.transaction_type='expense' THEN -t.amount ELSE 0 END) OVER (ORDER BY t.transaction_date,t.id ROWS UNBOUNDED PRECEDING) AS running_balance FROM student_deposit_transactions t JOIN students s ON s.id=t.student_id WHERE ${filters.join(' AND ')} ORDER BY t.transaction_date,t.id`,params)).rows;
+  const dueParams=[];const dueFilters=[`d.status='due'`,`d.amount>0`];
+  if(registrationNo){dueParams.push(registrationNo);dueFilters.push(`s.registration_no=$${dueParams.length}`)}
+  if(fromDate){dueParams.push(fromDate);dueFilters.push(`d.due_date>=$${dueParams.length}::date`)}
+  if(toDate){dueParams.push(toDate);dueFilters.push(`d.due_date<=$${dueParams.length}::date`)}
+  const dueEntries=(await pool.query(`SELECT d.id,d.student_id,d.due_date AS transaction_date,'due' AS transaction_type,d.amount,d.due_title AS details,NULL AS reference_no,d.entered_by AS created_by,s.registration_no,s.student_name,s.class_name,s.roll_no FROM student_dues d JOIN students s ON s.id=d.student_id WHERE ${dueFilters.join(' AND ')} ORDER BY d.due_date NULLS LAST,d.id`,dueParams)).rows;
+  const student=registrationNo?(await pool.query('SELECT id,registration_no,student_name,class_name,roll_no,guardian_mobile,father_mobile,mother_mobile,mobile_number FROM students WHERE registration_no=$1 LIMIT 1',[registrationNo])).rows[0]:null;
+  const summary={deposit:rows.filter(x=>x.transaction_type==='deposit').reduce((n,x)=>n+Number(x.amount||0),0),withdrawal:rows.filter(x=>x.transaction_type==='expense').reduce((n,x)=>n+Number(x.amount||0),0),due:dueEntries.reduce((n,x)=>n+Number(x.amount||0),0)};
+  summary.balance=summary.deposit-summary.withdrawal;summary.advance=Math.max(0,summary.balance);summary.due=Math.max(0,-summary.balance);
+  const balances=(await pool.query(`SELECT s.registration_no,s.student_name,s.class_name,COALESCE(SUM(CASE WHEN t.transaction_type='deposit' THEN t.amount WHEN t.transaction_type='expense' THEN -t.amount ELSE 0 END),0) AS balance FROM students s LEFT JOIN student_deposit_transactions t ON t.student_id=s.id WHERE s.is_active=TRUE ${registrationNo?'AND s.registration_no=$1':''} GROUP BY s.id ORDER BY s.class_name,s.student_name`,registrationNo?[registrationNo]:[])).rows.map(x=>({...x,balance:Number(x.balance||0),advance:Math.max(0,Number(x.balance||0)),due:Math.max(0,-Number(x.balance||0))}));
+  summary.balance=balances.reduce((total,row)=>total+Number(row.balance||0),0);summary.advance=Math.max(0,summary.balance);summary.due=Math.max(0,-summary.balance);
+  res.json({success:true,registration_no:registrationNo||null,date:fromDate&&toDate&&fromDate===toDate?fromDate:null,from_date:fromDate||null,to_date:toDate||null,student,transactions:rows,due_entries:dueEntries,balances,summary});
+}));
+
+// ADMIN / SUPER ADMIN: Check Al-Ameen Accounts portal status
+router.get('/admin/fees-portal-status', auth, allow('super_admin'), asyncHandler(async (req, res) => {
+  const creds = await getPortalCredentials();
+  res.json({
+    success: true,
+    configured: !!(creds.cookie || (creds.username && creds.password)),
+    username: creds.username ? creds.username : null,
+    has_cookie: !!creds.cookie,
+    portal_url: creds.portalUrl || FEES_REPORT_URL,
+  });
+}));
+
+// ADMIN / SUPER ADMIN: Update Al-Ameen Accounts portal credentials, URL or session cookie
+router.post('/admin/fees-portal-credentials', auth, allow('super_admin'), asyncHandler(async (req, res) => {
+  const { portal_url, portalUrl, username, password, cookie } = req.body || {};
+  const targetUrl = String(portal_url || portalUrl || '').trim();
+
+  if (cookie) {
+    await savePortalCredentials({ portalUrl: targetUrl || undefined, cookie: String(cookie).trim() });
+    return res.json({ success: true, message: 'Portal session cookie saved successfully.' });
+  }
+
+  const user = String(username || '').trim();
+  const pass = String(password || '').trim();
+  if (!user || !pass) {
+    if (targetUrl) {
+      await savePortalCredentials({ portalUrl: targetUrl });
+      return res.json({ success: true, message: 'Portal URL updated successfully.' });
+    }
+    return res.status(400).json({ success: false, message: 'Username/Email and Password are required.' });
+  }
+
+  try {
+    const sessionCookie = await loginToPortal(user, pass);
+    await savePortalCredentials({ portalUrl: targetUrl || undefined, username: user, password: pass, cookie: sessionCookie });
+    res.json({ success: true, message: 'Logged in and credentials saved successfully.' });
+  } catch (err) {
+    await savePortalCredentials({ portalUrl: targetUrl || undefined, username: user, password: pass });
+    res.status(400).json({ success: false, message: err.message || 'Login to Al-Ameen Accounts failed.' });
+  }
+}));
+
+// ADMIN / SUPER ADMIN / OFFICE: Receipt & Payment statement from Cash Book & Bank Books
+router.get('/admin/receipt-payment-report', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
+  const fromDate = String(req.query.from_date || '').trim();
+  const toDate = String(req.query.to_date || '').trim();
+
+  const validDate = value => !value || /^\d{4}-\d{2}-\d{2}$/.test(value);
+  if (!validDate(fromDate) || !validDate(toDate)) {
+    return res.status(400).json({ success: false, message: 'Dates must be in YYYY-MM-DD format' });
+  }
+  if (fromDate && toDate && fromDate > toDate) {
+    return res.status(400).json({ success: false, message: 'From Date cannot be after To Date' });
+  }
+
+  try {
+    const data = await getReceiptPaymentReportData({ fromDate, toDate });
+    return res.json(data);
+  } catch (err) {
+    console.error('Receipt payment report error:', err);
+    return res.status(502).json({
+      success: false,
+      message: err.message || 'Failed to fetch Receipt & Payment report from portal',
+    });
+  }
+}));
+
+// ADMIN / SUPER ADMIN / OFFICE: Receipt & Payment Excel Export
+router.get('/admin/receipt-payment-export', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
+  const fromDate = String(req.query.from_date || '').trim();
+  const toDate = String(req.query.to_date || '').trim();
+  const ExcelJS = require('exceljs');
+
+  const data = await getReceiptPaymentReportData({ fromDate, toDate });
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Al-Ameen Mission Memari';
+  workbook.created = new Date();
+
+  const ws = workbook.addWorksheet('Receipt & Payment');
+
+  // Title row
+  ws.addRow([`Al-Ameen Mission Accounts - Receipt & Payment Statement (${data.from_date}${data.from_date !== data.to_date ? ' to ' + data.to_date : ''})`]);
+  ws.mergeCells('A1:E1');
+  ws.getCell('A1').font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FF155724' } };
+  ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(1).height = 30;
+
+  // Header row matching screenshot (Title Case)
+  const headerRow = ws.addRow(['Cash', 'Opening Balance', 'Receipt', 'Payment', 'Closing Balance']);
+  headerRow.height = 24;
+  headerRow.eachCell((cell) => {
+    cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF000000' } };
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFFFFFFF' },
+    };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF000000' } },
+      left: { style: 'thin', color: { argb: 'FF000000' } },
+      bottom: { style: 'thin', color: { argb: 'FF000000' } },
+      right: { style: 'thin', color: { argb: 'FF000000' } },
+    };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  });
+
+  // Account rows: Zebra pattern (even index white, odd index FFF2CEEF matching screenshot)
+  data.rows.forEach((r, idx) => {
+    const isPinkRow = idx % 2 === 1;
+    const rowBg = isPinkRow ? 'FFF2CEEF' : 'FFFFFFFF';
+    const row = ws.addRow([
+      r.account_name,
+      r.opening_balance,
+      r.receipt,
+      r.payment,
+      r.closing_balance,
+    ]);
+    row.height = 22;
+    row.eachCell((cell, colNumber) => {
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF000000' } },
+        bottom: { style: 'thin', color: { argb: 'FF000000' } },
+        right: { style: 'thin', color: { argb: 'FF000000' } },
+      };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
+      if (colNumber === 1) {
+        cell.alignment = { horizontal: 'left', vertical: 'middle' };
+        cell.font = { name: 'Calibri', size: 11, bold: true };
+      } else {
+        cell.alignment = { horizontal: 'right', vertical: 'middle' };
+        cell.numFmt = '#,##0.00';
+      }
+    });
+  });
+
+  // Total row (Row 6 is odd index 5 => Pink FFF2CEEF matching screenshot)
+  const totalRow = ws.addRow([
+    'Total',
+    data.total.opening_balance,
+    data.total.receipt,
+    data.total.payment,
+    data.total.closing_balance,
+  ]);
+  totalRow.height = 24;
+  totalRow.eachCell((cell, colNumber) => {
+    cell.font = { name: 'Calibri', size: 11, bold: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2CEEF' } };
+    cell.border = {
+      top: { style: 'medium', color: { argb: 'FF000000' } },
+      left: { style: 'thin', color: { argb: 'FF000000' } },
+      bottom: { style: 'double', color: { argb: 'FF000000' } },
+      right: { style: 'thin', color: { argb: 'FF000000' } },
+    };
+    if (colNumber === 1) {
+      cell.alignment = { horizontal: 'left', vertical: 'middle' };
+    } else {
+      cell.alignment = { horizontal: 'right', vertical: 'middle' };
+      cell.numFmt = '#,##0.00';
+    }
+  });
+
+  // Column widths
+  ws.getColumn(1).width = 24;
+  ws.getColumn(2).width = 20;
+  ws.getColumn(3).width = 18;
+  ws.getColumn(4).width = 18;
+  ws.getColumn(5).width = 20;
+
+  // Sheet 2: Detailed Transactions with Excel AutoFilter
+  const wsTxn = workbook.addWorksheet('Transactions');
+  const txnHead = wsTxn.addRow(['Account', 'Date', 'Particulars / Ledger', 'Narration', 'Vch Type', 'Vch No', 'Receipt (Debit)', 'Payment (Credit)']);
+  txnHead.font = { bold: true };
+  txnHead.height = 22;
+  wsTxn.autoFilter = 'A1:H1';
+
+  data.rows.forEach(acc => {
+    (acc.transactions || []).forEach(t => {
+      wsTxn.addRow([
+        acc.account_name,
+        t.date,
+        t.particulars,
+        t.narration || '',
+        t.vch_type,
+        t.vch_no,
+        t.receipt || 0,
+        t.payment || 0
+      ]);
+    });
+  });
+
+  wsTxn.columns.forEach(col => { col.width = 18; });
+  wsTxn.getColumn(3).width = 32;
+  wsTxn.getColumn(4).width = 40;
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="receipt_payment_${fromDate || 'today'}.xlsx"`);
+  res.send(buffer);
+}));
+
+// ADMIN / SUPER ADMIN / OFFICE: Due list from Al-Ameen Accounts Portal (https://alameenmission.net/alameen/accounts/?action=due_list)
+router.get('/admin/due-list', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
+  const toDate = String(req.query.to_date || '').trim();
+  const classId = String(req.query.class_id || 'all').trim();
+  const sessionYear = String(req.query.session_year || 'last_2_sessions').trim();
+
+  try {
+    const data = await getDueListData({ toDate, classId, sessionYear });
+    return res.json(data);
+  } catch (err) {
+    console.error('Due list report error:', err);
+    return res.status(502).json({
+      success: false,
+      message: err.message || 'Failed to fetch Due list from portal',
+    });
+  }
+}));
+
+// ADMIN / SUPER ADMIN / OFFICE: Due list Excel Export
+router.get('/admin/due-list-export', auth, allow('super_admin', 'admin', 'office'), asyncHandler(async (req, res) => {
+  const toDate = String(req.query.to_date || '').trim();
+  const classId = String(req.query.class_id || 'all').trim();
+  const sessionYear = String(req.query.session_year || 'last_2_sessions').trim();
+  const ExcelJS = require('exceljs');
+
+  const data = await getDueListData({ toDate, classId, sessionYear });
+  const rows = data.rows || [];
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Al-Ameen Mission Academy Memari';
+  const sheet = workbook.addWorksheet('Fees Due List');
+
+  sheet.columns = [
+    { header: 'Sl No', key: 'sl_no', width: 8 },
+    { header: 'Reg No', key: 'reg_no', width: 14 },
+    { header: 'Student Name', key: 'name', width: 26 },
+    { header: 'Class', key: 'class_name', width: 12 },
+    { header: 'Admission Due', key: 'adm_due', width: 16 },
+    { header: 'Monthly Due', key: 'monthly_due', width: 16 },
+    { header: 'Due Month', key: 'due_month', width: 14 },
+    { header: 'Total Due', key: 'total_due', width: 16 },
+    { header: 'Phone Number', key: 'phone', width: 16 },
+    { header: 'WhatsApp Number', key: 'whatsapp', width: 16 },
+    { header: 'Father Name', key: 'father', width: 24 },
+    { header: 'Session', key: 'session', width: 12 },
+    { header: 'WhatsApp Message', key: 'message', width: 60 },
+  ];
+
+  const headerRow = sheet.getRow(1);
+  headerRow.font = { bold: true, color: { argb: 'FF1E293B' } };
+  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBAE6FD' } };
+  headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+  rows.forEach((r, idx) => {
+    sheet.addRow({
+      sl_no: idx + 1,
+      reg_no: r.registration_no,
+      name: r.student_name,
+      class_name: r.class_name,
+      adm_due: r.admission_due,
+      monthly_due: r.monthly_due,
+      due_month: r.due_month,
+      total_due: r.total_due,
+      phone: r.phone,
+      whatsapp: r.whatsapp,
+      father: r.father_name,
+      session: r.session_year,
+      message: r.whatsapp_message,
+    });
+  });
+
+  // Total summary row
+  const totalRow = sheet.addRow({
+    sl_no: '',
+    reg_no: '',
+    name: 'TOTAL',
+    class_name: '',
+    adm_due: data.total_admission_due || 0,
+    monthly_due: data.total_monthly_due || 0,
+    due_month: '',
+    total_due: data.grand_total_due || 0,
+    phone: '',
+    whatsapp: '',
+    father: '',
+    session: '',
+    message: '',
+  });
+  totalRow.font = { bold: true };
+  totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+
+  const filename = `due_fees_list_${data.to_date || 'report'}.xlsx`;
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  const buffer = await workbook.xlsx.writeBuffer();
+  res.send(buffer);
+}));
+
+// ADMIN / SUPER ADMIN: collected fees report from https://alameenmission.net/alameen/accounts/?action=fees_report
+router.get('/admin/fees-report', auth, allow('super_admin', 'admin'), asyncHandler(async (req, res) => {
+  const fromDate = String(req.query.from_date || '').trim();
+  const toDate = String(req.query.to_date || '').trim();
+  const session = String(req.query.session || '').trim();
+  const source = String(req.query.source || 'portal').trim();
+
+  const validDate = value => !value || /^\d{4}-\d{2}-\d{2}$/.test(value);
+  if (!validDate(fromDate) || !validDate(toDate)) {
+    return res.status(400).json({ success: false, message: 'Dates must be in YYYY-MM-DD format' });
+  }
+  if (fromDate && toDate && fromDate > toDate) {
+    return res.status(400).json({ success: false, message: 'From Date cannot be after To Date' });
+  }
+
+  // 1. Primary: Live fetch from Al-Ameen Accounts Portal
+  if (source !== 'local') {
+    try {
+      const portalReport = await getFeesReportData({
+        fromDate,
+        toDate,
+        session,
+        branch: 'Memari',
+      });
+      return res.json(portalReport);
+    } catch (portalErr) {
+      console.error('Fees report portal error:', portalErr);
+      return res.status(502).json({
+        success: false,
+        error: portalErr.message || 'Failed to fetch fees report from portal',
+        portal_url: FEES_REPORT_URL,
+      });
+    }
+  }
+
+  // 2. Fallback / local source
+  await depositFundSchemaReady;
+  const params = [];
+  const filters = ["t.transaction_type='deposit'"];
+  if (fromDate) { params.push(fromDate); filters.push(`t.transaction_date >= ${params.length}::date`); }
+  if (toDate) { params.push(toDate); filters.push(`t.transaction_date <= ${params.length}::date`); }
+  const rows = (await pool.query(`
+    SELECT t.id,t.student_id,t.transaction_date,t.amount,t.details,t.reference_no,
+      t.created_by,COALESCE(NULLIF(TRIM(t.bill_number),''),t.id::text) AS bill_number,
+      s.registration_no,s.student_name,s.class_name,s.roll_no,
+      CASE
+        WHEN LOWER(COALESCE(t.payment_mode,''))='cash' THEN 'cash'
+        WHEN LOWER(CONCAT_WS(' ',t.details,t.reference_no)) ~ '(^|[^a-z])cash/' THEN 'cash'
+        ELSE 'online'
+      END AS payment_mode
+    FROM student_deposit_transactions t
+    JOIN students s ON s.id=t.student_id
+    WHERE ${filters.join(' AND ')}
+    ORDER BY t.transaction_date DESC NULLS LAST,t.id DESC
+  `, params)).rows;
+
+  res.json({
+    success: true,
+    source: 'local',
+    from_date: fromDate || null,
+    to_date: toDate || null,
+    bill_count: new Set(rows.map(row => String(row.bill_number || '').trim()).filter(Boolean)).size,
+    total_amount: rows.reduce((sum, row) => sum + Number(row.amount || 0), 0),
+    online_amount: rows.filter(row => row.payment_mode === 'online').reduce((sum, row) => sum + Number(row.amount || 0), 0),
+    cash_amount: rows.filter(row => row.payment_mode === 'cash').reduce((sum, row) => sum + Number(row.amount || 0), 0),
+    fees: rows,
+  });
+}));
+// ========================================
+// ADMIN / SUPER ADMIN:
+// STUDENT DEPOSIT FUND DETAILS
+// ========================================
+
+router.get(
+  '/admin/student/:studentId/deposit-fund',
+
+  auth,
+
+  allow('super_admin', 'admin'),
+
+  asyncHandler(async (req, res) => {
+
+    await depositFundSchemaReady;
+
+    const studentId =
+      req.params.studentId;
+
+
+    // ----------------------------
+    // CHECK STUDENT
+    // ----------------------------
+
+    const studentResult =
+      await pool.query(
+        `
+        SELECT
+          id,
+          registration_no,
+          student_name,
+          class_name,
+          roll_no,
+          sdf_book_no
+        FROM students
+        WHERE id=$1
+        LIMIT 1
+        `,
+        [studentId]
+      );
+
+
+    if (!studentResult.rowCount) {
+
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found',
+      });
+
+    }
+
+
+    // ----------------------------
+    // SUMMARY
+    // ----------------------------
+
+    const summaryResult =
+      await pool.query(
+        `
+        SELECT
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN transaction_type='deposit'
+                THEN amount
+                ELSE 0
+              END
+            ),
+            0
+          ) AS total_deposit,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN transaction_type='expense'
+                THEN amount
+                ELSE 0
+              END
+            ),
+            0
+          ) AS total_expense
+
+        FROM student_deposit_transactions
+
+        WHERE student_id=$1
+        `,
+        [studentId]
+      );
+
+
+    const totalDeposit =
+      Number(
+        summaryResult.rows[0]
+          .total_deposit || 0
+      );
+
+
+    const totalExpense =
+      Number(
+        summaryResult.rows[0]
+          .total_expense || 0
+      );
+
+
+    const dueResult = await pool.query(
+      `SELECT id, due_title, amount, due_date, remarks, session_name
+       FROM student_dues d
+       WHERE student_id=$1 AND status='due' AND amount>0
+         AND (due_title ~* '(s[.]?d[.]?f|student development fund|bus fare|admission fee|registration fee)' OR session_name IS NOT NULL)
+         AND NOT (due_title ILIKE 'Bus fare for the third-semester examination.' AND EXISTS (SELECT 1 FROM student_dues d2 WHERE d2.student_id=d.student_id AND d2.due_title ILIKE 'Bus fare for the 3rd semester examination' AND d2.amount=d.amount AND d2.due_date IS NOT DISTINCT FROM d.due_date))
+       ORDER BY due_date NULLS LAST, created_at`,
+      [studentId]
+    );
+    const sdfDues = dueResult.rows;
+    const sdfDueTotal = sdfDues.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const netBalance = totalDeposit - totalExpense - sdfDueTotal;
+
+
+    // ----------------------------
+    // LAST 50 TRANSACTIONS
+    // ----------------------------
+
+    const transactionResult =
+      await pool.query(
+        `
+        SELECT *
+
+        FROM (
+
+          SELECT
+
+            id,
+            student_id,
+            transaction_date,
+            transaction_type,
+            amount,
+            details,
+            reference_no,
+            created_by,
+            created_at,
+
+            SUM(
+              CASE
+                WHEN transaction_type='deposit'
+                  THEN amount
+                WHEN transaction_type='expense'
+                  THEN -amount
+                ELSE 0
+              END
+            )
+            OVER (
+              PARTITION BY student_id
+              ORDER BY
+                transaction_date,
+                id
+              ROWS BETWEEN
+                UNBOUNDED PRECEDING
+                AND CURRENT ROW
+            )
+            AS running_balance
+
+          FROM student_deposit_transactions
+
+          WHERE student_id=$1
+
+        ) t
+
+        ORDER BY
+          transaction_date DESC,
+          id DESC
+
+        LIMIT 50
+        `,
+        [studentId]
+      );
+
+
+    res.json({
+
+      success: true,
+
+      student:
+        studentResult.rows[0],
+
+      summary: {
+
+        total_deposit:
+          totalDeposit,
+
+        total_expense:
+          totalExpense,
+
+        sdf_due:
+          sdfDueTotal,
+
+        net_balance:
+          netBalance,
+
+        available_balance:
+          netBalance > 0
+            ? netBalance
+            : 0,
+
+        due:
+          netBalance < 0
+            ? Math.abs(netBalance)
+            : 0,
+
+      },
+
+      transactions:
+        transactionResult.rows,
+
+      sdf_dues: sdfDues,
+
+    });
+
+  })
+);
+
+// Only Super Admin may permanently remove an SDF transaction.
+router.delete(
+  '/admin/student/:studentId/deposit-fund/:transactionId',
+  auth,
+  allow('super_admin'),
+  asyncHandler(async (req, res) => {
+    await depositFundSchemaReady;
+    const result = await pool.query(
+      `DELETE FROM student_deposit_transactions
+       WHERE id=$1 AND student_id=$2
+       RETURNING id, student_id, transaction_type, amount, transaction_date, details`,
+      [req.params.transactionId, req.params.studentId]
+    );
+    if (!result.rowCount) {
+      return res.status(404).json({ success: false, message: 'SDF transaction not found' });
+    }
+    res.json({ success: true, deleted: result.rows[0] });
+  })
+);
+
+
+// ========================================
+// ADMIN / SUPER ADMIN:
+// ADD DEPOSIT / EXPENSE
+// ========================================
+
+router.post(
+  '/admin/student/:studentId/deposit-fund',
+
+  auth,
+
+  allow('super_admin', 'admin'),
+
+  asyncHandler(async (req, res) => {
+
+    await depositFundSchemaReady;
+
+    const studentId =
+      req.params.studentId;
+
+
+    const {
+      transaction_type,
+      amount,
+      details,
+      reference_no,
+      transaction_date,
+      payment_mode,
+      bill_number,
+    } = req.body || {};
+
+
+    // ----------------------------
+    // VALIDATION
+    // ----------------------------
+
+    if (
+      transaction_type !== 'deposit' &&
+      transaction_type !== 'expense'
+    ) {
+
+      return res.status(400).json({
+        success: false,
+        message:
+          'Transaction type must be deposit or expense',
+      });
+
+    }
+
+
+    const numericAmount =
+      Number(amount);
+
+
+    if (
+      !numericAmount ||
+      numericAmount <= 0
+    ) {
+
+      return res.status(400).json({
+        success: false,
+        message:
+          'Amount must be greater than 0',
+      });
+
+    }
+
+
+    // ----------------------------
+    // CHECK STUDENT
+    // ----------------------------
+
+    const studentResult =
+      await pool.query(
+        `
+        SELECT
+          id,
+          registration_no,
+          student_name
+        FROM students
+        WHERE id=$1
+          AND is_active=TRUE
+        LIMIT 1
+        `,
+        [studentId]
+      );
+
+
+    if (!studentResult.rowCount) {
+
+      return res.status(404).json({
+        success: false,
+        message:
+          'Student not found',
+      });
+
+    }
+
+
+    // ----------------------------
+    // INSERT TRANSACTION
+    // ----------------------------
+
+    const result =
+      await pool.query(
+        `
+        INSERT INTO student_deposit_transactions
+        (
+          student_id,
+          transaction_date,
+          transaction_type,
+          amount,
+          details,
+          reference_no,
+          payment_mode,
+          bill_number,
+          created_by
+        )
+
+        VALUES
+        (
+          $1,
+          COALESCE($2::date, CURRENT_DATE),
+          $3,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+          $9
+        )
+
+        RETURNING *
+        `,
+        [
+          studentId,
+
+          transaction_date ||
+            null,
+
+          transaction_type,
+
+          numericAmount,
+
+          details
+            ? String(details).trim()
+            : null,
+
+          reference_no
+            ? String(reference_no).trim()
+            : null,
+
+          transaction_type === 'deposit' && ['cash','online'].includes(String(payment_mode || '').toLowerCase())
+            ? String(payment_mode).toLowerCase()
+            : null,
+
+          bill_number
+            ? String(bill_number).trim().slice(0, 50)
+            : null,
+
+          req.user.userId,
+        ]
+      );
+
+
+    res.status(201).json({
+
+      success: true,
+
+      message:
+        transaction_type === 'deposit'
+          ? 'Deposit added successfully'
+          : 'Expense added successfully',
+
+      transaction:
+        result.rows[0],
+
+    });
+
+  })
+);// ========================================
+// ADMIN / SUPER ADMIN:
+// ALL STUDENTS DEPOSIT FUND REPORT
+// ========================================
+
+router.get(
+  '/admin/deposit-fund-report',
+
+  auth,
+
+  allow('super_admin', 'admin'),
+
+  asyncHandler(async (req, res) => {
+
+    const result =
+      await pool.query(
+        `
+        SELECT
+
+          s.id,
+
+          s.registration_no,
+
+          s.student_name,
+
+          s.class_name,
+
+          s.roll_no,
+
+          r.room_name AS room_number,
+
+          s.guardian_name,
+
+          s.guardian_mobile,
+
+          s.father_name,
+
+          s.father_mobile,
+
+          s.mother_name,
+
+          s.mother_mobile,
+
+          s.mobile_number,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN t.transaction_type='deposit'
+                THEN t.amount
+                ELSE 0
+              END
+            ),
+            0
+          ) AS total_deposit,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN t.transaction_type='expense'
+                THEN t.amount
+                ELSE 0
+              END
+            ),
+            0
+          ) AS total_expense,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN t.transaction_type='deposit'
+                THEN t.amount
+
+                WHEN t.transaction_type='expense'
+                THEN -t.amount
+
+                ELSE 0
+              END
+            ),
+            0
+          ) AS net_balance,
+
+          MAX(
+            t.transaction_date
+          ) AS last_transaction_date,
+
+          (ARRAY_AGG(t.amount ORDER BY t.transaction_date DESC NULLS LAST, t.id DESC))[1] AS last_transaction_amount,
+
+          (ARRAY_AGG(t.transaction_type ORDER BY t.transaction_date DESC NULLS LAST, t.id DESC))[1] AS last_transaction_type,
+
+          COALESCE((
+            SELECT SUM(d.amount)
+            FROM student_dues d
+            WHERE d.student_id=s.id
+              AND d.status='due'
+              AND d.amount>0
+              AND (d.due_title ~* '(s[.]?d[.]?f|student development fund|bus fare|admission fee|registration fee)' OR d.session_name IS NOT NULL)
+              AND NOT (d.due_title ILIKE 'Bus fare for the third-semester examination.' AND EXISTS (
+                SELECT 1 FROM student_dues d2
+                WHERE d2.student_id=d.student_id
+                  AND d2.due_title ILIKE 'Bus fare for the 3rd semester examination'
+                  AND d2.amount=d.amount
+                  AND d2.due_date IS NOT DISTINCT FROM d.due_date
+              ))
+          ),0) AS student_due
+
+        FROM students s
+
+        LEFT JOIN student_deposit_transactions t
+          ON t.student_id=s.id
+
+        LEFT JOIN rooms r
+          ON r.id=s.room_id
+
+        WHERE
+          s.is_active=TRUE
+
+        GROUP BY
+
+          s.id,
+
+          s.registration_no,
+
+          s.student_name,
+
+          s.class_name,
+
+          s.roll_no,
+
+          r.room_name,
+
+          s.guardian_name,
+
+          s.guardian_mobile,
+
+          s.father_name,
+
+          s.father_mobile,
+
+          s.mother_name,
+
+          s.mother_mobile,
+
+          s.mobile_number
+
+        ORDER BY
+          s.class_name,
+          s.student_name
+        `
+      );
+
+
+    const students =
+      result.rows.map(
+        (row) => {
+
+          const totalDeposit =
+            Number(
+              row.total_deposit || 0
+            );
+
+          const totalExpense =
+            Number(
+              row.total_expense || 0
+            );
+
+          const netBalance =
+            Number(
+              row.net_balance || 0
+            ) - Number(row.student_due || 0);
+
+
+          let status =
+            'clear';
+
+
+          if (netBalance > 0) {
+            status = 'deposit';
+          }
+
+
+          if (netBalance < 0) {
+            status = 'due';
+          }
+
+
+          return {
+
+            ...row,
+
+            total_deposit:
+              totalDeposit,
+
+            total_expense:
+              totalExpense,
+
+            student_due:
+              Number(row.student_due || 0),
+
+            net_balance:
+              netBalance,
+
+            available_balance:
+              netBalance > 0
+                ? netBalance
+                : 0,
+
+            due:
+              netBalance < 0
+                ? Math.abs(
+                    netBalance
+                  )
+                : 0,
+
+            status,
+
+          };
+
+        }
+      );
+
+
+    // ====================================
+    // OVERALL SUMMARY
+    // ====================================
+
+    let totalDeposit = 0;
+
+    let totalDue = 0;
+
+    let grossSdfDue = 0;
+
+    let grossSdfAdvance = 0;
+
+    let dueStudents = 0;
+
+    let positiveStudents = 0;
+
+    let clearStudents = 0;
+
+
+    for (
+      const student
+      of students
+    ) {
+
+      grossSdfDue += Number(student.student_due || 0);
+      grossSdfAdvance += Math.max(0, Number(student.net_balance || 0) + Number(student.student_due || 0));
+
+
+      if (
+        student.net_balance > 0
+      ) {
+
+        totalDeposit += Number(student.net_balance || 0);
+
+        positiveStudents++;
+
+      } else if (
+        student.net_balance < 0
+      ) {
+
+        // Total Due is the outstanding amount after applying deposits.
+        totalDue += Math.abs(Number(student.net_balance || 0));
+
+        dueStudents++;
+
+      } else {
+
+        clearStudents++;
+
+      }
+
+    }
+
+    // The overall deposit/expense cards represent the complete transaction
+    // totals. Student due/advance counts above remain based on each student's
+    // current net balance.
+    const transactionTotalsResult = await pool.query(`
+      SELECT
+        COALESCE(SUM(CASE WHEN transaction_type='deposit' THEN amount ELSE 0 END), 0) AS total_deposit,
+        COALESCE(SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END), 0)
+          + COALESCE((SELECT SUM(amount) FROM student_dues WHERE status='due' AND amount>0), 0) AS total_expense
+      FROM student_deposit_transactions
+    `);
+    const overallDeposit = Number(transactionTotalsResult.rows[0]?.total_deposit || 0);
+    const overallExpense = Number(transactionTotalsResult.rows[0]?.total_expense || 0);
+
+
+    res.json({
+
+      success: true,
+
+      summary: {
+
+        total_students:
+          students.length,
+
+        // Report cards are student-level aggregates: only the nine
+        // advance students' positive balances and the 118 students' due
+        // amounts are shown here.  The net fund balance below deliberately
+        // keeps the existing transaction-level calculation.
+        total_deposit:
+          totalDeposit,
+
+        total_expense:
+          totalDue,
+
+        total_positive_balance:
+          totalDeposit,
+
+        total_due:
+          totalDue,
+
+        gross_sdf_due:
+          grossSdfDue,
+
+        gross_sdf_advance:
+          grossSdfAdvance,
+
+        net_fund_balance:
+          overallDeposit -
+          overallExpense,
+
+        positive_students:
+          positiveStudents,
+
+        due_students:
+          dueStudents,
+
+        clear_students:
+          clearStudents,
+
+      },
+
+      students,
+
+    });
+
+  })
+);// ========================================
+// GUARDIAN: COMPLETE STUDENT PROFILE
+// Student + Visitor 1 + Visitor 2
+// ========================================
+
+router.get(
+  '/student/:studentId/profile',
+
+  auth,
+
+  allow('guardian'),
+
+  asyncHandler(async (req, res) => {
+
+    const studentId =
+      req.params.studentId;
+
+
+    // Guardian can see only linked student
+    const allowed =
+      await guardianOwnsStudent(
+        req.user.userId,
+        studentId
+      );
+
+
+    if (!allowed) {
+
+      return res.status(403).json({
+        success: false,
+        message: 'Not allowed',
+      });
+
+    }
+
+
+    // ----------------------------
+    // COMPLETE STUDENT DATA
+    // ----------------------------
+
+    const studentResult =
+      await pool.query(
+        `
+        SELECT s.*, r.room_name AS room_number
+        FROM students s
+        LEFT JOIN rooms r ON r.id=s.room_id
+        WHERE s.id=$1
+          AND s.is_active=TRUE
+        LIMIT 1
+        `,
+        [studentId]
+      );
+
+
+    if (!studentResult.rowCount) {
+
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found',
+      });
+
+    }
+
+
+    // ----------------------------
+    // VISITOR 1 + VISITOR 2
+    // ----------------------------
+
+    const visitorsResult =
+      await pool.query(
+        `
+        SELECT
+          id,
+          student_id,
+          visitor_number,
+          visitor_name,
+          relation,
+          mobile_number,
+          email,
+          village,
+          police_station,
+          pin_code,
+          post_office,
+          block,
+          district,
+          state,
+          address_source
+
+        FROM student_visitors
+
+        WHERE student_id=$1
+
+        ORDER BY visitor_number
+        `,
+        [studentId]
+      );
+
+
+    const visitor1 =
+      visitorsResult.rows.find(
+        (v) =>
+          Number(v.visitor_number) === 1
+      ) || null;
+
+
+    const visitor2 =
+      visitorsResult.rows.find(
+        (v) =>
+          Number(v.visitor_number) === 2
+      ) || null;
+
+
+    res.json({
+
+      success: true,
+
+      student:
+        studentResult.rows[0],
+
+      visitor1,
+
+      visitor2,
+
+    });
+
+  })
+);// ========================================
+// MONTHLY FEES WEBSITE HELPERS
+// ========================================
+
+router.get(
+  '/student/:studentId/monthly-fee-due',
+
+  auth,
+
+  allow('guardian'),
+
+  asyncHandler(async (req, res) => {
+
+    const studentId =
+      req.params.studentId;
+
+
+    // ------------------------------------
+    // Guardian may check only own student
+    // ------------------------------------
+
+    const allowed =
+      await guardianOwnsStudent(
+        req.user.userId,
+        studentId
+      );
+
+
+    if (!allowed) {
+
+      return res.status(403).json({
+        success: false,
+        message:
+          'Not allowed',
+      });
+
+    }
+
+
+    // ------------------------------------
+    // STUDENT
+    // ------------------------------------
+
+    const studentResult =
+      await pool.query(
+        `
+        SELECT
+          id,
+          registration_no,
+          student_name,
+          class_name,
+          stream
+        FROM students
+        WHERE id=$1
+          AND is_active=TRUE
+        LIMIT 1
+        `,
+        [studentId]
+      );
+
+
+    if (
+      !studentResult.rowCount
+    ) {
+
+      return res.status(404).json({
+        success: false,
+        message:
+          'Student not found',
+      });
+
+    }
+
+
+    const student =
+      studentResult.rows[0];
+
+
+    if (
+      !student.registration_no
+    ) {
+
+      return res.status(400).json({
+        success: false,
+        message:
+          'Student Registration No is missing',
+      });
+
+    }
+
+
+    try {
+
+      // ==================================
+      // STEP 1:
+      // GET WEBSITE + CLASS LIST
+      // ==================================
+
+      return res.json(await getMonthlyFeeDue(student));
+
+    } catch (error) {
+
+      console.error(
+        'Monthly Fee Due Error:',
+        error
+      );
+
+
+      return res.status(502).json({
+
+        success: false,
+
+        message:
+          'Unable to load the monthly fee due from the website. Please try again later.',
+
+      });
+
+    }
+
+  })
+);
+
+router.get('/student/:studentId/library-loans', auth, allow('guardian'), asyncHandler(async (req, res) => {
+  if (!(await guardianOwnsStudent(req.user.userId, req.params.studentId))) return res.status(403).json({ success: false, message: 'Not allowed' });
+  const result = await pool.query(`SELECT l.id,l.issued_at,l.due_date,l.returned_at,b.accession_no,b.book_number,b.title,b.author FROM library_loans l JOIN library_books b ON b.id=l.book_id WHERE l.student_id=$1 ORDER BY l.returned_at NULLS FIRST,l.issued_at DESC`, [req.params.studentId]);
+  res.json({ success: true, loans: result.rows });
+}));
+
+router.patch(
+  '/admin/student/:studentId/deposit-fund-book',
+  auth,
+  allow('super_admin', 'admin'),
+  asyncHandler(async (req, res) => {
+    await depositFundSchemaReady;
+    const bookNo = String(req.body?.sdf_page_no ?? req.body?.sdf_book_no ?? '').trim().slice(0, 100) || null;
+    const result = await pool.query(
+      'UPDATE students SET sdf_book_no=$1, updated_at=NOW() WHERE id=$2 RETURNING id, sdf_book_no',
+      [bookNo, req.params.studentId]
+    );
+    if (!result.rowCount) return res.status(404).json({ success: false, message: 'Student not found' });
+    res.json({ success: true, sdf_page_no: result.rows[0].sdf_book_no, sdf_book_no: result.rows[0].sdf_book_no });
+  })
+);
+module.exports = router;

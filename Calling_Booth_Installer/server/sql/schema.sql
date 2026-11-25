@@ -1,0 +1,399 @@
+CREATE TABLE IF NOT EXISTS users (
+  id BIGSERIAL PRIMARY KEY,
+  login_id VARCHAR(100) UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  full_name VARCHAR(150) NOT NULL,
+  role VARCHAR(30) NOT NULL CHECK (role IN ('super_admin','admin','teacher','guardian','gateman','office','library')),
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS guardian_login_sessions (
+  id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  device_id VARCHAR(150) NOT NULL, token_jti VARCHAR(100) NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  expires_at TIMESTAMPTZ NOT NULL, last_login_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), logged_out_at TIMESTAMPTZ,
+  UNIQUE(user_id,device_id)
+);
+CREATE INDEX IF NOT EXISTS idx_guardian_login_sessions_active ON guardian_login_sessions(user_id,is_active,expires_at);
+
+CREATE TABLE IF NOT EXISTS rooms (
+  id BIGSERIAL PRIMARY KEY,
+  room_name VARCHAR(100) UNIQUE NOT NULL,
+  description TEXT,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS teachers (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  staff_id VARCHAR(100) UNIQUE NOT NULL,
+  name VARCHAR(150) NOT NULL,
+  designation VARCHAR(100), subject VARCHAR(100), mobile VARCHAR(30), whatsapp VARCHAR(30), gender VARCHAR(20), email VARCHAR(150), address TEXT,
+  date_of_birth DATE, joining_date DATE, qualification VARCHAR(200), photo_url TEXT,
+  profile_details JSONB NOT NULL DEFAULT '{}'::jsonb, education_details JSONB NOT NULL DEFAULT '[]'::jsonb,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS students (
+  id BIGSERIAL PRIMARY KEY,
+  registration_no VARCHAR(100) UNIQUE NOT NULL,
+  admission_no VARCHAR(100), student_name VARCHAR(150) NOT NULL, class_name VARCHAR(50), roll_no VARCHAR(50),
+  room_id BIGINT REFERENCES rooms(id) ON DELETE SET NULL,
+  date_of_birth DATE, gender VARCHAR(20), father_name VARCHAR(150), mother_name VARCHAR(150), guardian_name VARCHAR(150),
+  guardian_mobile VARCHAR(30), alternate_mobile VARCHAR(30), address TEXT, village VARCHAR(150), post_office VARCHAR(150),
+  police_station VARCHAR(150), district VARCHAR(150), pin_code VARCHAR(20), admission_date DATE,
+  student_type VARCHAR(30) CHECK (student_type IN ('hostel','day_scholar')), photo_url TEXT,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS teacher_room_assignments (
+  id BIGSERIAL PRIMARY KEY,
+  teacher_id BIGINT NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+  room_id BIGINT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  assigned_date DATE DEFAULT CURRENT_DATE, is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  UNIQUE(teacher_id,room_id)
+);
+
+CREATE TABLE IF NOT EXISTS guardian_profiles (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  guardian_name VARCHAR(150) NOT NULL, mobile VARCHAR(30), alternate_mobile VARCHAR(30), email VARCHAR(150), address TEXT, photo_url TEXT,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS student_guardians (
+  id BIGSERIAL PRIMARY KEY,
+  student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  guardian_id BIGINT NOT NULL REFERENCES guardian_profiles(id) ON DELETE CASCADE,
+  relation_type VARCHAR(50), is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+  UNIQUE(student_id,guardian_id)
+);
+
+CREATE TABLE IF NOT EXISTS attendance (
+  id BIGSERIAL PRIMARY KEY,
+  student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  room_id BIGINT REFERENCES rooms(id) ON DELETE SET NULL,
+  attendance_date DATE NOT NULL,
+  status VARCHAR(20) NOT NULL CHECK(status IN ('present','absent')),
+  remarks TEXT, marked_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(student_id,attendance_date)
+);
+
+CREATE TABLE IF NOT EXISTS illness_records (
+  id BIGSERIAL PRIMARY KEY,
+  student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  record_date DATE NOT NULL DEFAULT CURRENT_DATE, illness_details TEXT, action_taken TEXT,
+  reported_by BIGINT REFERENCES users(id) ON DELETE SET NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS student_behavior (
+  id BIGSERIAL PRIMARY KEY,
+  student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  record_date DATE NOT NULL DEFAULT CURRENT_DATE, behavior_type VARCHAR(100), details TEXT NOT NULL, action_taken TEXT,
+  reported_by BIGINT REFERENCES users(id) ON DELETE SET NULL, guardian_visible BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS room_problem_reports (
+  id BIGSERIAL PRIMARY KEY,
+  room_id BIGINT REFERENCES rooms(id) ON DELETE SET NULL,
+  problem_type VARCHAR(100) NOT NULL, details TEXT,
+  status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK(status IN ('open','in_progress','resolved')),
+  reported_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  reported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), resolved_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS routines (
+  id BIGSERIAL PRIMARY KEY,
+  title VARCHAR(200), routine_date DATE, routine_text TEXT, file_url TEXT,
+  published_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE, published_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS notices (
+  id BIGSERIAL PRIMARY KEY,
+  title VARCHAR(200) NOT NULL, notice_text TEXT, notice_type VARCHAR(50), attachment_url TEXT,
+  published_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE, published_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS notice_targets (
+  id BIGSERIAL PRIMARY KEY,
+  notice_id BIGINT NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
+  target_type VARCHAR(30) NOT NULL CHECK(target_type IN ('all','class','room','student','guardian','role')),
+  target_value VARCHAR(100)
+);
+
+CREATE TABLE IF NOT EXISTS subjects (
+  id BIGSERIAL PRIMARY KEY,
+  subject_name VARCHAR(100) UNIQUE NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS teacher_subjects (
+  id BIGSERIAL PRIMARY KEY,
+  teacher_id BIGINT NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+  subject_id BIGINT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  class_name VARCHAR(50), can_enter_marks BOOLEAN NOT NULL DEFAULT FALSE,
+  UNIQUE(teacher_id,subject_id,class_name)
+);
+
+CREATE TABLE IF NOT EXISTS exams (
+  id BIGSERIAL PRIMARY KEY,
+  exam_name VARCHAR(150) NOT NULL, class_name VARCHAR(50) NOT NULL, session_name VARCHAR(50), exam_date DATE,
+  is_published BOOLEAN NOT NULL DEFAULT FALSE,
+  created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS exam_subjects (
+  id BIGSERIAL PRIMARY KEY,
+  exam_id BIGINT NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
+  subject_id BIGINT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  full_marks NUMERIC(8,2) NOT NULL DEFAULT 100, pass_marks NUMERIC(8,2) DEFAULT 0,
+  UNIQUE(exam_id,subject_id)
+);
+
+CREATE TABLE IF NOT EXISTS student_marks (
+  id BIGSERIAL PRIMARY KEY,
+  exam_id BIGINT NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
+  student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  subject_id BIGINT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  obtained_marks NUMERIC(8,2), grade VARCHAR(20), remarks TEXT,
+  entered_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  verification_status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK(verification_status IN ('pending','verified','rejected')),
+  verified_by BIGINT REFERENCES users(id) ON DELETE SET NULL, verified_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(exam_id,student_id,subject_id)
+);
+
+CREATE TABLE IF NOT EXISTS student_documents (
+  id BIGSERIAL PRIMARY KEY,
+  student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  document_type VARCHAR(50) NOT NULL, document_title VARCHAR(200), file_url TEXT NOT NULL,
+  guardian_visible BOOLEAN NOT NULL DEFAULT TRUE, guardian_download_allowed BOOLEAN NOT NULL DEFAULT TRUE,
+  uploaded_by BIGINT REFERENCES users(id) ON DELETE SET NULL, uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS teacher_documents (
+  id BIGSERIAL PRIMARY KEY,
+  teacher_id BIGINT NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+  document_type VARCHAR(50) NOT NULL DEFAULT 'other',
+  document_title VARCHAR(200), file_url TEXT NOT NULL,
+  uploaded_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS document_download_logs (
+  id BIGSERIAL PRIMARY KEY,
+  document_id BIGINT NOT NULL REFERENCES student_documents(id) ON DELETE CASCADE,
+  guardian_id BIGINT NOT NULL REFERENCES guardian_profiles(id) ON DELETE CASCADE,
+  downloaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS student_visits (
+  id BIGSERIAL PRIMARY KEY,
+  student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  token_no VARCHAR(40) UNIQUE,
+  visitor_name VARCHAR(150) NOT NULL,
+  visitor_relation VARCHAR(100) NOT NULL,
+  visit_at TIMESTAMPTZ NOT NULL,
+  duration_minutes INTEGER NOT NULL DEFAULT 15,
+  purpose TEXT,
+  status VARCHAR(20) NOT NULL DEFAULT 'approved' CHECK(status IN ('approved','completed','cancelled')),
+  approved_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  completed_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  completed_at TIMESTAMPTZ,
+  cancelled_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS student_exit_records (
+  id BIGSERIAL PRIMARY KEY,
+  student_id BIGINT UNIQUE NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  dropout_date DATE NOT NULL,
+  dropout_reason TEXT NOT NULL,
+  tc_issued_at TIMESTAMPTZ,
+  tc_issued_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  reactivated_at TIMESTAMPTZ,
+  reactivated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS student_promotion_history (
+  id BIGSERIAL PRIMARY KEY, student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  from_class VARCHAR(50), to_class VARCHAR(50) NOT NULL, from_session VARCHAR(20), to_session VARCHAR(20) NOT NULL,
+  promoted_by BIGINT REFERENCES users(id) ON DELETE SET NULL, promoted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS student_reactivation_requests (
+  id BIGSERIAL PRIMARY KEY, student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  request_reason TEXT NOT NULL, request_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
+  requested_by BIGINT REFERENCES users(id) ON DELETE SET NULL, reviewed_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ, review_note TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS student_dues (
+  id BIGSERIAL PRIMARY KEY,
+  student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  due_title VARCHAR(200) NOT NULL, amount NUMERIC(12,2) NOT NULL DEFAULT 0, due_date DATE,
+  status VARCHAR(20) NOT NULL DEFAULT 'due' CHECK(status IN ('due','paid','waived')),
+  remarks TEXT, entered_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  id BIGSERIAL PRIMARY KEY,
+  setting_key VARCHAR(100) UNIQUE NOT NULL,
+  setting_value TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(attendance_date);
+CREATE INDEX IF NOT EXISTS idx_student_marks_exam ON student_marks(exam_id);
+CREATE INDEX IF NOT EXISTS idx_student_marks_student ON student_marks(student_id);
+CREATE INDEX IF NOT EXISTS idx_student_documents_student ON student_documents(student_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_documents_teacher ON teacher_documents(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_student_dues_student ON student_dues(student_id);
+CREATE INDEX IF NOT EXISTS idx_notice_targets_notice ON notice_targets(notice_id);
+
+CREATE TABLE IF NOT EXISTS attendance_submissions (
+  id BIGSERIAL PRIMARY KEY,
+  room_id BIGINT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  attendance_date DATE NOT NULL,
+  submitted_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(room_id,attendance_date)
+);
+
+CREATE TABLE IF NOT EXISTS attendance_change_logs (
+  id BIGSERIAL PRIMARY KEY,
+  submission_id BIGINT NOT NULL REFERENCES attendance_submissions(id) ON DELETE CASCADE,
+  changed_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  action VARCHAR(20) NOT NULL CHECK(action IN ('submitted','updated')),
+  snapshot JSONB NOT NULL,
+  changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_attendance_submissions_room_date ON attendance_submissions(room_id,attendance_date DESC);
+CREATE INDEX IF NOT EXISTS idx_attendance_change_logs_submission ON attendance_change_logs(submission_id,changed_at DESC);
+CREATE TABLE IF NOT EXISTS mark_entry_batches (
+  id BIGSERIAL PRIMARY KEY,
+  exam_id BIGINT UNIQUE NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
+  subject_id BIGINT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  class_name VARCHAR(50) NOT NULL,
+  full_marks NUMERIC(8,2) NOT NULL,
+  entered_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  submitted_at TIMESTAMPTZ,
+  locked BOOLEAN NOT NULL DEFAULT TRUE,
+  updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_mark_entry_batches_date ON mark_entry_batches(submitted_at DESC);
+ALTER TABLE mark_entry_batches ALTER COLUMN submitted_at DROP NOT NULL;
+
+CREATE TABLE IF NOT EXISTS terminal_exams (
+ id BIGSERIAL PRIMARY KEY, exam_name VARCHAR(150) NOT NULL, class_name VARCHAR(50) NOT NULL,
+ session_name VARCHAR(50), status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK(status IN ('open','ready','published')),
+ created_by BIGINT REFERENCES users(id) ON DELETE SET NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), published_at TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS terminal_exam_subjects (
+ id BIGSERIAL PRIMARY KEY, terminal_exam_id BIGINT NOT NULL REFERENCES terminal_exams(id) ON DELETE CASCADE,
+ subject_id BIGINT NOT NULL REFERENCES subjects(id), teacher_id BIGINT REFERENCES teachers(id),
+ full_marks NUMERIC(8,2) NOT NULL, exam_date DATE, status VARCHAR(20) NOT NULL DEFAULT 'assigned' CHECK(status IN ('assigned','submitted')),
+ submitted_at TIMESTAMPTZ, UNIQUE(terminal_exam_id,subject_id)
+);
+CREATE TABLE IF NOT EXISTS terminal_marks (
+ id BIGSERIAL PRIMARY KEY, exam_subject_id BIGINT NOT NULL REFERENCES terminal_exam_subjects(id) ON DELETE CASCADE,
+ student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE, obtained_marks NUMERIC(8,2), remarks TEXT,
+ entered_by BIGINT REFERENCES users(id), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(exam_subject_id,student_id)
+);
+
+CREATE TABLE IF NOT EXISTS routine_manager_grids (
+ id BIGSERIAL PRIMARY KEY,
+ group_name VARCHAR(20) NOT NULL CHECK(group_name IN ('v_x','xi_xii','coaching')),
+ routine_date DATE NOT NULL,
+ routine_kind VARCHAR(30) NOT NULL DEFAULT 'daily',
+ grid_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+ is_master BOOLEAN NOT NULL DEFAULT FALSE,
+ is_published BOOLEAN NOT NULL DEFAULT TRUE,
+ created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ UNIQUE(group_name,routine_date,routine_kind)
+);
+CREATE INDEX IF NOT EXISTS idx_routine_manager_group_date ON routine_manager_grids(group_name,routine_date DESC);
+
+CREATE TABLE IF NOT EXISTS routine_exam_entries (
+ id BIGSERIAL PRIMARY KEY,
+ group_name VARCHAR(20) NOT NULL CHECK(group_name IN ('v_x','xi_xii')),
+ exam_date DATE NOT NULL,
+ end_date DATE,
+ class_names JSONB NOT NULL DEFAULT '[]'::jsonb,
+ subject VARCHAR(100) NOT NULL,
+ start_time TIME NOT NULL,
+ end_time TIME NOT NULL,
+ room VARCHAR(200),
+ teacher_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+ teacher_names JSONB NOT NULL DEFAULT '[]'::jsonb,
+ suppress_regular BOOLEAN NOT NULL DEFAULT TRUE,
+ duty_final BOOLEAN NOT NULL DEFAULT FALSE,
+ created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_routine_exam_date ON routine_exam_entries(exam_date DESC);
+CREATE TABLE IF NOT EXISTS student_gate_passes (
+ id BIGSERIAL PRIMARY KEY,
+ token_no VARCHAR(30) UNIQUE,
+ student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+ reason TEXT NOT NULL,
+ departure_at TIMESTAMPTZ NOT NULL,
+ expected_return_at TIMESTAMPTZ,
+ late_note TEXT,
+ status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','pending','returned','cancelled')),
+ generated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+ executed_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+ printed_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+ printed_at TIMESTAMPTZ,
+ returned_at TIMESTAMPTZ,
+ cancelled_at TIMESTAMPTZ,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_gate_pass_status_date ON student_gate_passes(status,departure_at DESC);
+CREATE TABLE IF NOT EXISTS notification_reads (
+ user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ notice_id BIGINT NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
+ read_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ PRIMARY KEY(user_id,notice_id)
+);
+
+CREATE TABLE IF NOT EXISTS service_staff_profiles (id BIGSERIAL PRIMARY KEY,user_id BIGINT UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,staff_id VARCHAR(100) UNIQUE NOT NULL,name VARCHAR(150) NOT NULL,staff_role VARCHAR(30) NOT NULL CHECK(staff_role IN ('gateman','office','library')),mobile VARCHAR(30),created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS gate_entry_logs (id BIGSERIAL PRIMARY KEY,student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,permission_type VARCHAR(20) NOT NULL CHECK(permission_type IN ('visit','gate_pass')),permission_id BIGINT NOT NULL,entered_by BIGINT REFERENCES users(id) ON DELETE SET NULL,entered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),remarks TEXT);
+CREATE TABLE IF NOT EXISTS dining_stock (id BIGSERIAL PRIMARY KEY,item_name VARCHAR(150) UNIQUE NOT NULL,unit VARCHAR(30) NOT NULL,current_quantity NUMERIC(12,2) NOT NULL DEFAULT 0,reorder_level NUMERIC(12,2) NOT NULL DEFAULT 0,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS dining_stock_transactions (id BIGSERIAL PRIMARY KEY,stock_id BIGINT NOT NULL REFERENCES dining_stock(id) ON DELETE CASCADE,transaction_type VARCHAR(10) NOT NULL CHECK(transaction_type IN ('in','out')),quantity NUMERIC(12,2) NOT NULL CHECK(quantity>0),note TEXT,entered_by BIGINT REFERENCES users(id) ON DELETE SET NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS library_books (id BIGSERIAL PRIMARY KEY,accession_no VARCHAR(100) UNIQUE NOT NULL,title VARCHAR(250) NOT NULL,author VARCHAR(180),total_copies INTEGER NOT NULL DEFAULT 1 CHECK(total_copies>=0),available_copies INTEGER NOT NULL DEFAULT 1 CHECK(available_copies>=0),created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS library_loans (id BIGSERIAL PRIMARY KEY,book_id BIGINT NOT NULL REFERENCES library_books(id),student_id BIGINT NOT NULL REFERENCES students(id),issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),due_date DATE NOT NULL,returned_at TIMESTAMPTZ,issued_by BIGINT REFERENCES users(id) ON DELETE SET NULL,returned_by BIGINT REFERENCES users(id) ON DELETE SET NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS user_module_permissions (user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,module_key VARCHAR(80) NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),PRIMARY KEY(user_id,module_key));
+CREATE TABLE IF NOT EXISTS admin_audit_logs (id BIGSERIAL PRIMARY KEY,user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,method VARCHAR(10) NOT NULL,path TEXT NOT NULL,status_code INTEGER,details JSONB,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+
+ALTER TABLE terminal_exam_subjects ADD COLUMN IF NOT EXISTS theory_marks NUMERIC(8,2);
+ALTER TABLE terminal_exam_subjects ADD COLUMN IF NOT EXISTS oral_marks NUMERIC(8,2);
+UPDATE terminal_exam_subjects SET theory_marks=full_marks, oral_marks=0 WHERE theory_marks IS NULL;
+
+CREATE TABLE IF NOT EXISTS guardian_temporary_credentials (
+  user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  encrypted_password TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

@@ -10,6 +10,7 @@
     "migrate:cloudinary": "node scripts/migrateCloudinary.js"
   },
   "dependencies": {
+    "@breezystack/lamejs": "^1.2.7",
     "@huggingface/transformers": "^3.8.1",
     "@tesseract.js-data/eng": "^1.0.0",
     "agora-token": "^2.0.7",
