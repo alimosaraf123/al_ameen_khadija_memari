@@ -724,7 +724,7 @@ router.get('/recordings/:date/:filename', asyncHandler(async (req, res) => {
 
   const dateFolder = String(req.params.date || '');
   const fileName = String(req.params.filename || '');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFolder) || !/^[a-zA-Z0-9_.-]+\.wav$/.test(fileName)) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFolder) || !/^[a-zA-Z0-9_.-]+\.(wav|mp3)$/i.test(fileName)) {
     return res.status(400).json({ success: false, message: 'Invalid recording path' });
   }
 
@@ -737,7 +737,7 @@ router.get('/recordings/:date/:filename', asyncHandler(async (req, res) => {
   if (req.query.download === '1') {
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
   }
-  res.setHeader('Content-Type', 'audio/wav');
+  res.setHeader('Content-Type', fileName.toLowerCase().endsWith('.mp3') ? 'audio/mpeg' : 'audio/wav');
   return res.sendFile(fullPath);
 }));
 

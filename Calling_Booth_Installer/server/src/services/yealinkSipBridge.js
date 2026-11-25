@@ -247,7 +247,7 @@ function startCallRecording(session) {
     const safeReg = String(session.regNo || 'call').replace(/[^a-zA-Z0-9_-]/g, '');
     const safeRel = String(session.relation || 'Guardian').replace(/[^a-zA-Z0-9_-]/g, '');
     const stamp = Date.now();
-    const fileName = `${safeReg}_${safeRel}_${stamp}.wav`;
+    const fileName = `${safeReg}_${safeRel}_${stamp}.mp3`;
     const fullWavPath = path.join(recDir, fileName);
     const tempPcmPath = `${fullWavPath}.pcm`;
 
@@ -301,6 +301,27 @@ function pushAudioFrame(session, side, msg) {
   q.push(pcm);
 }
 
+async function encodePcmToMp3(pcmBuffer) {
+  const lameMod = await import('@breezystack/lamejs');
+  const Mp3Encoder = lameMod.Mp3Encoder || lameMod.default?.Mp3Encoder;
+  const encoder = new Mp3Encoder(1, 8000, 24);
+  const sampleCount = Math.floor(pcmBuffer.length / 2);
+  const samples = new Int16Array(sampleCount);
+  for (let i = 0; i < sampleCount; i++) {
+    samples[i] = pcmBuffer.readInt16LE(i * 2);
+  }
+  const mp3Chunks = [];
+  const blockSize = 1152;
+  for (let i = 0; i < samples.length; i += blockSize) {
+    const chunk = samples.subarray(i, i + blockSize);
+    const mp3buf = encoder.encodeBuffer(chunk);
+    if (mp3buf && mp3buf.length > 0) mp3Chunks.push(Buffer.from(mp3buf));
+  }
+  const endBuf = encoder.flush();
+  if (endBuf && endBuf.length > 0) mp3Chunks.push(Buffer.from(endBuf));
+  return Buffer.concat(mp3Chunks);
+}
+
 async function finalizeCallRecording(session) {
   if (!session || !session.recordingMeta) return null;
   if (session.recordingFinalized) return session.savedRecordingUrl || null;
@@ -329,31 +350,37 @@ async function finalizeCallRecording(session) {
       return null;
     }
 
-    // Build 44-byte RIFF/WAV header for 8000Hz, 16-bit, Mono PCM
-    const header = Buffer.alloc(44);
-    header.write('RIFF', 0);
-    header.writeUInt32LE(36 + dataSize, 4);
-    header.write('WAVE', 8);
-    header.write('fmt ', 12);
-    header.writeUInt32LE(16, 16); // PCM chunk size
-    header.writeUInt16LE(1, 20);  // AudioFormat = 1 (PCM)
-    header.writeUInt16LE(1, 22);  // NumChannels = 1 (Mono)
-    header.writeUInt32LE(8000, 24); // SampleRate = 8000
-    header.writeUInt32LE(16000, 28); // ByteRate = 8000 * 1 * 2
-    header.writeUInt16LE(2, 32);  // BlockAlign = 2
-    header.writeUInt16LE(16, 34); // BitsPerSample = 16
-    header.write('data', 36);
-    header.writeUInt32LE(dataSize, 40);
-
     const pcmData = fs.readFileSync(meta.tempPcmPath);
-    const wavOut = Buffer.concat([header, pcmData]);
-    fs.writeFileSync(meta.fullWavPath, wavOut);
+    let uploadData = null;
+    try {
+      uploadData = await encodePcmToMp3(pcmData);
+    } catch (mp3Err) {
+      console.warn('[Yealink SIP] MP3 encode failed, falling back to WAV:', mp3Err.message);
+      // Build 44-byte RIFF/WAV header for 8000Hz, 16-bit, Mono PCM
+      const header = Buffer.alloc(44);
+      header.write('RIFF', 0);
+      header.writeUInt32LE(36 + dataSize, 4);
+      header.write('WAVE', 8);
+      header.write('fmt ', 12);
+      header.writeUInt32LE(16, 16);
+      header.writeUInt16LE(1, 20);
+      header.writeUInt16LE(1, 22);
+      header.writeUInt32LE(8000, 24);
+      header.writeUInt32LE(16000, 28);
+      header.writeUInt16LE(2, 32);
+      header.writeUInt16LE(16, 34);
+      header.write('data', 36);
+      header.writeUInt32LE(dataSize, 40);
+      uploadData = Buffer.concat([header, pcmData]);
+    }
+
+    fs.writeFileSync(meta.fullWavPath, uploadData);
     fs.unlinkSync(meta.tempPcmPath);
 
     let finalUrl = meta.apiPath;
     try {
-      const publicId = meta.fileName.replace(/\.wav$/i, '');
-      const cloudRes = await uploadBuffer(wavOut, {
+      const publicId = meta.fileName.replace(/\.(wav|mp3)$/i, '');
+      const cloudRes = await uploadBuffer(uploadData, {
         resourceType: 'video',
         folder: `call-recordings/${meta.dateFolder}`,
         publicId,
@@ -367,7 +394,7 @@ async function finalizeCallRecording(session) {
     }
 
     session.savedRecordingUrl = finalUrl;
-    console.log(`[Yealink SIP] Call recording SAVED: ${meta.fullWavPath} (${(wavOut.length / 1024).toFixed(1)} KB)`);
+    console.log(`[Yealink SIP] Call recording SAVED: ${meta.fullWavPath} (${(uploadData.length / 1024).toFixed(1)} KB)`);
     return finalUrl;
   } catch (err) {
     console.error('[Yealink SIP] Failed to finalize recording WAV:', err.message);

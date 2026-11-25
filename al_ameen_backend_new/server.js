@@ -124,4 +124,9 @@ app.listen(PORT,'0.0.0.0',()=>{
   } catch (err) {
     console.warn('Yealink SIP Bridge start notice:', err.message);
   }
+  try {
+    require('./src/services/recordingCleanup').startRecordingCleanupScheduler();
+  } catch (err) {
+    console.warn('Recording cleanup scheduler notice:', err.message);
+  }
 });
