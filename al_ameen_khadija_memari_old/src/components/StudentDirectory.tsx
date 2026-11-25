@@ -4,6 +4,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
+import QRCode from 'qrcode';
 import { api, API_BASE } from '../lib/api';
 import { getToken, getUser } from '../lib/auth';
 import { STUDENT_CLASSES, isVisibleStudentClass } from '../lib/studentClasses';
@@ -376,6 +377,15 @@ export default function StudentDirectory({
   const [documentsError, setDocumentsError] = useState('');
   const [documentBusy, setDocumentBusy] = useState<string | null>(null);
   const [pendingDocuments, setPendingDocuments] = useState<Record<string, any>>({});
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrToken, setQrToken] = useState('');
+  const [qrLink, setQrLink] = useState('');
+  const [qrImageUri, setQrImageUri] = useState('');
+  const [qrTargetLabel, setQrTargetLabel] = useState('');
+  const [qrStatus, setQrStatus] = useState<'pending' | 'completed' | 'expired'>('pending');
+  const [qrCopied, setQrCopied] = useState(false);
+  const [qrError, setQrError] = useState('');
 
   const defaultSessions = useMemo(() => {
     const list: string[] = [];
@@ -428,6 +438,69 @@ export default function StudentDirectory({
       setDocumentsLoading(false);
     }
   };
+
+  const openMobileCaptureQr = async (target: string, targetLabel: string) => {
+    if (!documentStudent) return;
+    setQrModalOpen(true);
+    setQrLoading(true);
+    setQrError('');
+    setQrCopied(false);
+    setQrStatus('pending');
+    setQrTargetLabel(targetLabel);
+    setQrImageUri('');
+    setQrLink('');
+    setQrToken('');
+    try {
+      const res = await api('/api/mobile-capture/session', {
+        method: 'POST',
+        body: JSON.stringify({
+          student_id: documentStudent.id,
+          target,
+          target_label: targetLabel,
+        }),
+      });
+      const webOrigin =
+        Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin
+          ? window.location.origin
+          : 'https://aammeamri.onrender.com';
+      const captureUrl = `${webOrigin}/mobile-capture?token=${encodeURIComponent(res.token)}`;
+      const qrDataUrl = await QRCode.toDataURL(captureUrl, { width: 240, margin: 2 });
+      setQrToken(res.token);
+      setQrLink(captureUrl);
+      setQrImageUri(qrDataUrl);
+    } catch (err: any) {
+      setQrError(err.message || 'Could not generate QR code.');
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!qrModalOpen || !qrToken || qrStatus !== 'pending' || !documentStudent) return;
+    const timer = setInterval(async () => {
+      try {
+        const res = await api(`/api/mobile-capture/session/${encodeURIComponent(qrToken)}/status`);
+        if (res.status === 'completed') {
+          setQrStatus('completed');
+          clearInterval(timer);
+          const [refreshedStu, refreshedDocs] = await Promise.all([
+            api(`/api/students/${documentStudent.id}`),
+            api(`/api/documents/student/${documentStudent.id}`),
+          ]);
+          if (refreshedStu?.student) setDocumentStudent(refreshedStu.student);
+          if (refreshedDocs?.documents) setDocuments(refreshedDocs.documents);
+          onRefresh();
+          setTimeout(() => setQrModalOpen(false), 1400);
+        } else if (res.status === 'expired') {
+          setQrStatus('expired');
+          clearInterval(timer);
+        }
+      } catch {
+        // Ignore transient poll errors
+      }
+    }, 2500);
+    return () => clearInterval(timer);
+  }, [qrModalOpen, qrToken, qrStatus, documentStudent?.id]);
 
   const chooseDocument = async (type: string) => {
     const picked = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'], copyToCacheDirectory: true });
@@ -779,12 +852,74 @@ export default function StudentDirectory({
         <View style={s.documentTopBar}><TouchableOpacity style={s.documentCloseButton} onPress={() => setDocumentsOpen(false)}><Text style={s.whiteText}>Close</Text></TouchableOpacity><Text style={s.lastUpdated}>Last Updated{documents[0]?.uploaded_at ? '\n' + String(documents[0].uploaded_at).slice(0, 16).replace('T', ' ') : ''}</Text></View>
         <Text style={s.registrationLine}>Reg. No. {documentStudent?.registration_no || '-'}</Text>
         {documentsLoading ? <ActivityIndicator style={{ margin: 30 }} /> : documentsError ? <Text style={s.error}>{documentsError}</Text> : <ScrollView contentContainerStyle={s.documentGrid}>
-          <View style={s.documentTile}><Text style={s.tileTitle}>Photo</Text><View style={s.previewBox}>{documentStudent?.photo_url ? <Image source={{ uri: /^https?:/.test(documentStudent.photo_url) ? documentStudent.photo_url : API_BASE + documentStudent.photo_url }} resizeMode="contain" style={s.documentPreview} /> : <Text style={s.noPreview}>No photo</Text>}</View><TouchableOpacity disabled={documentBusy !== null} style={s.chooseButton} onPress={uploadStudentPhoto}><Text style={s.chooseText}>{documentBusy === 'photo' ? 'Uploading...' : 'Upload / Change Photo'}</Text></TouchableOpacity><View style={s.tileActions}><TouchableOpacity accessibilityLabel="View student photo" disabled={!documentStudent?.photo_url || documentBusy !== null} style={[s.iconButton, s.viewIcon, !documentStudent?.photo_url && s.disabled]} onPress={() => handleStudentPhoto('view')}><Text style={s.iconText}>{String.fromCodePoint(0x1F441)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel="Print student photo" disabled={!documentStudent?.photo_url || documentBusy !== null} style={[s.iconButton, s.printIcon, !documentStudent?.photo_url && s.disabled]} onPress={() => handleStudentPhoto('print')}><Text style={s.iconText}>{String.fromCodePoint(0x1F5A8)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel="Download student photo" disabled={!documentStudent?.photo_url || documentBusy !== null} style={[s.iconButton, s.downloadIcon, !documentStudent?.photo_url && s.disabled]} onPress={() => handleStudentPhoto('download')}><Text style={s.iconText}>{String.fromCodePoint(0x2B07)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel="Share student photo on WhatsApp" disabled={!documentStudent?.photo_url || documentBusy !== null} style={[s.iconButton, s.shareIcon, !documentStudent?.photo_url && s.disabled]} onPress={() => { if (!documentStudent?.photo_url) return; const regNo = documentStudent.registration_no || 'student'; shareDocumentJpg('Student Photo', documentStudent.photo_url, `${regNo}-photo`); }}><Image source={{ uri: WHATSAPP_ICON_BASE64 }} style={s.waIconImg} resizeMode="contain" /></TouchableOpacity></View></View>
-          {DOCUMENT_SLOTS.map(([type, label]) => { const doc = documentFor(type), pending = pendingDocuments[type], preview = pending?.uri || previewUrl(doc), displayLabel = label.replace(' Photo', '').replace('Visitor-', 'Visitor_'); return <View key={type} style={s.documentTile}><Text numberOfLines={1} style={s.tileTitle}>{displayLabel}</Text><View style={s.previewBox}>{preview ? <Image source={{ uri: preview }} resizeMode="contain" style={s.documentPreview} /> : <Text style={s.noPreview}>{doc ? 'PDF / File' : 'No document'}</Text>}</View><TouchableOpacity disabled={documentBusy !== null} style={s.chooseButton} onPress={() => chooseDocument(type)}><Text numberOfLines={1} style={s.chooseText}>{pending ? pending.name : 'Choose File'}</Text></TouchableOpacity><View style={s.tileActions}><TouchableOpacity accessibilityLabel={'View ' + displayLabel} disabled={!doc || documentBusy !== null} style={[s.iconButton, s.viewIcon, !doc && s.disabled]} onPress={() => doc && handleDocument(doc, 'view')}><Text style={s.iconText}>{String.fromCodePoint(0x1F441)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel={'Print ' + displayLabel} disabled={!doc || documentBusy !== null} style={[s.iconButton, s.printIcon, !doc && s.disabled]} onPress={() => doc && handleDocument(doc, 'print')}><Text style={s.iconText}>{String.fromCodePoint(0x1F5A8)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel={'Download ' + displayLabel} disabled={!doc || documentBusy !== null} style={[s.iconButton, s.downloadIcon, !doc && s.disabled]} onPress={() => doc && handleDocument(doc, 'download')}><Text style={s.iconText}>{String.fromCodePoint(0x2B07)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel={'Share ' + displayLabel + ' on WhatsApp'} disabled={!doc || documentBusy !== null} style={[s.iconButton, s.shareIcon, !doc && s.disabled]} onPress={() => { if (!doc) return; const regNo = documentStudent?.registration_no || 'student'; const docTitle = doc.document_title || displayLabel; const safeTitle = (doc.document_type || displayLabel).replace(/[\\/:*?"<>|]/g, '_'); const rawUrl = doc.file_url || `${API_BASE}/api/documents/${doc.id}/file`; shareDocumentJpg(docTitle, rawUrl, `${regNo}-${safeTitle}`); }}><Image source={{ uri: WHATSAPP_ICON_BASE64 }} style={s.waIconImg} resizeMode="contain" /></TouchableOpacity></View></View> })}
+          <View style={s.documentTile}><Text style={s.tileTitle}>Photo</Text><View style={s.previewBox}>{documentStudent?.photo_url ? <Image source={{ uri: /^https?:/.test(documentStudent.photo_url) ? documentStudent.photo_url : API_BASE + documentStudent.photo_url }} resizeMode="contain" style={s.documentPreview} /> : <Text style={s.noPreview}>No photo</Text>}</View><View style={s.chooseRow}><TouchableOpacity disabled={documentBusy !== null} style={[s.chooseButton, { flex: 1 }]} onPress={uploadStudentPhoto}><Text numberOfLines={1} style={s.chooseText}>{documentBusy === 'photo' ? 'Uploading...' : 'Upload / Change Photo'}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel="Capture student photo via Mobile QR" disabled={documentBusy !== null} style={s.qrButton} onPress={() => openMobileCaptureQr('photo', 'Student Photo')}><Text style={s.qrButtonText}>📷 QR</Text></TouchableOpacity></View><View style={s.tileActions}><TouchableOpacity accessibilityLabel="View student photo" disabled={!documentStudent?.photo_url || documentBusy !== null} style={[s.iconButton, s.viewIcon, !documentStudent?.photo_url && s.disabled]} onPress={() => handleStudentPhoto('view')}><Text style={s.iconText}>{String.fromCodePoint(0x1F441)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel="Print student photo" disabled={!documentStudent?.photo_url || documentBusy !== null} style={[s.iconButton, s.printIcon, !documentStudent?.photo_url && s.disabled]} onPress={() => handleStudentPhoto('print')}><Text style={s.iconText}>{String.fromCodePoint(0x1F5A8)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel="Download student photo" disabled={!documentStudent?.photo_url || documentBusy !== null} style={[s.iconButton, s.downloadIcon, !documentStudent?.photo_url && s.disabled]} onPress={() => handleStudentPhoto('download')}><Text style={s.iconText}>{String.fromCodePoint(0x2B07)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel="Share student photo on WhatsApp" disabled={!documentStudent?.photo_url || documentBusy !== null} style={[s.iconButton, s.shareIcon, !documentStudent?.photo_url && s.disabled]} onPress={() => { if (!documentStudent?.photo_url) return; const regNo = documentStudent.registration_no || 'student'; shareDocumentJpg('Student Photo', documentStudent.photo_url, `${regNo}-photo`); }}><Image source={{ uri: WHATSAPP_ICON_BASE64 }} style={s.waIconImg} resizeMode="contain" /></TouchableOpacity></View></View>
+          {DOCUMENT_SLOTS.map(([type, label]) => { const doc = documentFor(type), pending = pendingDocuments[type], preview = pending?.uri || previewUrl(doc), displayLabel = label.replace(' Photo', '').replace('Visitor-', 'Visitor_'); return <View key={type} style={s.documentTile}><Text numberOfLines={1} style={s.tileTitle}>{displayLabel}</Text><View style={s.previewBox}>{preview ? <Image source={{ uri: preview }} resizeMode="contain" style={s.documentPreview} /> : <Text style={s.noPreview}>{doc ? 'PDF / File' : 'No document'}</Text>}</View><View style={s.chooseRow}><TouchableOpacity disabled={documentBusy !== null} style={[s.chooseButton, { flex: 1 }]} onPress={() => chooseDocument(type)}><Text numberOfLines={1} style={s.chooseText}>{pending ? pending.name : 'Choose File'}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel={`Capture ${displayLabel} via Mobile QR`} disabled={documentBusy !== null} style={s.qrButton} onPress={() => openMobileCaptureQr(type, label)}><Text style={s.qrButtonText}>📷 QR</Text></TouchableOpacity></View><View style={s.tileActions}><TouchableOpacity accessibilityLabel={'View ' + displayLabel} disabled={!doc || documentBusy !== null} style={[s.iconButton, s.viewIcon, !doc && s.disabled]} onPress={() => doc && handleDocument(doc, 'view')}><Text style={s.iconText}>{String.fromCodePoint(0x1F441)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel={'Print ' + displayLabel} disabled={!doc || documentBusy !== null} style={[s.iconButton, s.printIcon, !doc && s.disabled]} onPress={() => doc && handleDocument(doc, 'print')}><Text style={s.iconText}>{String.fromCodePoint(0x1F5A8)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel={'Download ' + displayLabel} disabled={!doc || documentBusy !== null} style={[s.iconButton, s.downloadIcon, !doc && s.disabled]} onPress={() => doc && handleDocument(doc, 'download')}><Text style={s.iconText}>{String.fromCodePoint(0x2B07)}</Text></TouchableOpacity><TouchableOpacity accessibilityLabel={'Share ' + displayLabel + ' on WhatsApp'} disabled={!doc || documentBusy !== null} style={[s.iconButton, s.shareIcon, !doc && s.disabled]} onPress={() => { if (!doc) return; const regNo = documentStudent?.registration_no || 'student'; const docTitle = doc.document_title || displayLabel; const safeTitle = (doc.document_type || displayLabel).replace(/[\\/:*?"<>|]/g, '_'); const rawUrl = doc.file_url || `${API_BASE}/api/documents/${doc.id}/file`; shareDocumentJpg(docTitle, rawUrl, `${regNo}-${safeTitle}`); }}><Image source={{ uri: WHATSAPP_ICON_BASE64 }} style={s.waIconImg} resizeMode="contain" /></TouchableOpacity></View></View> })}
         </ScrollView>}
         <TouchableOpacity disabled={documentBusy !== null} onPress={uploadSelectedDocuments} style={[s.uploadAllButton, documentBusy !== null && s.disabled]}><Text style={s.whiteText}>{documentBusy === 'upload' ? 'Uploading...' : 'Upload Selected Documents'}</Text></TouchableOpacity>
         {documentBusy && documentBusy !== 'upload' && <Text style={s.busyText}>Preparing document...</Text>}
       </View></View>
+    </Modal>
+    <Modal visible={qrModalOpen} transparent animationType="fade" onRequestClose={() => setQrModalOpen(false)}>
+      <View style={s.overlay}>
+        <View style={s.qrPanel}>
+          <View style={s.modalHeader}>
+            <Text style={s.modalTitle}>Mobile Camera Upload ({qrTargetLabel})</Text>
+            <TouchableOpacity onPress={() => setQrModalOpen(false)}><Text style={s.close}>×</Text></TouchableOpacity>
+          </View>
+          <View style={{ padding: 18, alignItems: 'center', gap: 12 }}>
+            <Text style={{ fontWeight: '800', fontSize: 15, color: '#0f172a', textAlign: 'center' }}>
+              {documentStudent?.student_name} (Reg. {documentStudent?.registration_no})
+            </Text>
+            {qrLoading ? (
+              <ActivityIndicator size="large" style={{ marginVertical: 30 }} />
+            ) : qrError ? (
+              <Text style={s.error}>{qrError}</Text>
+            ) : qrStatus === 'completed' ? (
+              <View style={{ paddingVertical: 20, alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 28 }}>✅</Text>
+                <Text style={{ color: '#15803d', fontWeight: '800', fontSize: 16 }}>Photo Uploaded Successfully!</Text>
+              </View>
+            ) : (
+              <>
+                {!!qrImageUri && <Image source={{ uri: qrImageUri }} style={s.qrImage} resizeMode="contain" />}
+                <Text style={{ fontSize: 12, color: '#475569', textAlign: 'center' }}>
+                  Scan this QR code with your phone camera (or share the link) to take a photo & confirm upload.
+                </Text>
+                {!!qrLink && (
+                  <View style={s.qrLinkBox}>
+                    <Text numberOfLines={1} selectable style={{ fontSize: 11, color: '#1e293b', flex: 1 }}>{qrLink}</Text>
+                  </View>
+                )}
+                <View style={s.qrBtnRow}>
+                  <TouchableOpacity
+                    style={[s.qrActionBtn, { backgroundColor: '#1d4ed8' }]}
+                    onPress={() => {
+                      if (Platform.OS === 'web' && navigator?.clipboard && qrLink) {
+                        navigator.clipboard.writeText(qrLink).then(() => setQrCopied(true)).catch(() => {});
+                      }
+                    }}
+                  >
+                    <Text style={s.whiteText}>{qrCopied ? 'Copied!' : 'Copy Link'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[s.qrActionBtn, { backgroundColor: '#16a34a' }]}
+                    onPress={() => {
+                      if (!qrLink) return;
+                      const text = encodeURIComponent(`Upload ${qrTargetLabel} for ${documentStudent?.student_name} (Reg. ${documentStudent?.registration_no}): ${qrLink}`);
+                      Linking.openURL(`https://wa.me/?text=${text}`);
+                    }}
+                  >
+                    <Text style={s.whiteText}>WhatsApp Link</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={{ fontSize: 12, color: qrStatus === 'expired' ? '#b91c1c' : '#0284c7', fontWeight: '700' }}>
+                  {qrStatus === 'expired' ? 'QR expired. Close and generate again.' : 'Waiting for mobile upload...'}
+                </Text>
+              </>
+            )}
+          </View>
+        </View>
+      </View>
     </Modal>
     <Modal visible={detailOpen} transparent animationType="fade" onRequestClose={() => setDetailOpen(false)}><View style={s.overlay}><View style={s.detailPanel}>
       <View style={s.modalHeader}><Text style={s.modalTitle}>Student Details</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Close student details" onPress={() => setDetailOpen(false)}><Text style={s.close}>-</Text></TouchableOpacity></View>
@@ -891,7 +1026,7 @@ const s = StyleSheet.create({
   print: { backgroundColor: '#475569' },
   whiteText: { color: '#fff', fontWeight: '700' },
   busyText: { textAlign: 'center', color: '#1565c0', fontWeight: '700', padding: 8 },
-  documentTopBar: { minHeight: 44, marginHorizontal: 14, marginTop: 12, backgroundColor: '#eef6fc', borderWidth: 1, borderColor: '#64748b', borderRadius: 5, padding: 5, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, documentCloseButton: { backgroundColor: '#dc3545', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 4 }, lastUpdated: { fontSize: 9, textAlign: 'right', color: '#475569' }, registrationLine: { paddingHorizontal: 16, paddingTop: 8, color: '#475569', fontSize: 16 }, documentGrid: { padding: 14, flexDirection: 'row', flexWrap: 'wrap', gap: 18, justifyContent: 'space-around', alignItems: 'flex-start' }, documentTile: { width: 210, minHeight: 270, borderWidth: 1, borderColor: '#aeb7c1', borderRadius: 7, backgroundColor: '#f8fafc', overflow: 'hidden' }, tileTitle: { textAlign: 'center', fontSize: 17, paddingVertical: 4, color: '#111827', backgroundColor: '#fff' }, previewBox: { height: 172, marginHorizontal: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }, documentPreview: { width: '100%', height: '100%' }, noPreview: { color: '#94a3b8', fontSize: 12 }, chooseButton: { height: 29, backgroundColor: '#60a5fa', justifyContent: 'center', paddingHorizontal: 6 }, chooseText: { fontSize: 11, color: '#0f172a' }, tileActions: { minHeight: 43, backgroundColor: '#d1d5db', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', padding: 4 }, iconButton: { minWidth: 36, height: 32, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 4 }, viewIcon: { backgroundColor: '#0d6efd' }, printIcon: { backgroundColor: '#059669' }, downloadIcon: { backgroundColor: '#06b6d4' }, shareIcon: { backgroundColor: '#25D366' }, waIconImg: { width: 19, height: 19 }, iconText: { color: '#fff', fontSize: 19, fontWeight: '800', lineHeight: 21 }, uploadAllButton: { alignSelf: 'center', backgroundColor: '#0d6efd', paddingHorizontal: 18, paddingVertical: 11, borderRadius: 6, marginBottom: 14 },
+  documentTopBar: { minHeight: 44, marginHorizontal: 14, marginTop: 12, backgroundColor: '#eef6fc', borderWidth: 1, borderColor: '#64748b', borderRadius: 5, padding: 5, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, documentCloseButton: { backgroundColor: '#dc3545', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 4 }, lastUpdated: { fontSize: 9, textAlign: 'right', color: '#475569' }, registrationLine: { paddingHorizontal: 16, paddingTop: 8, color: '#475569', fontSize: 16 }, documentGrid: { padding: 14, flexDirection: 'row', flexWrap: 'wrap', gap: 18, justifyContent: 'space-around', alignItems: 'flex-start' }, documentTile: { width: 210, minHeight: 270, borderWidth: 1, borderColor: '#aeb7c1', borderRadius: 7, backgroundColor: '#f8fafc', overflow: 'hidden' }, tileTitle: { textAlign: 'center', fontSize: 17, paddingVertical: 4, color: '#111827', backgroundColor: '#fff' }, previewBox: { height: 172, marginHorizontal: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }, documentPreview: { width: '100%', height: '100%' }, noPreview: { color: '#94a3b8', fontSize: 12 }, chooseButton: { height: 29, backgroundColor: '#60a5fa', justifyContent: 'center', paddingHorizontal: 6 }, chooseRow: { flexDirection: 'row', alignItems: 'center', height: 29 }, qrButton: { height: 29, backgroundColor: '#1e293b', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8 }, qrButtonText: { color: '#fff', fontSize: 11, fontWeight: '800' }, qrPanel: { backgroundColor: '#fff', borderRadius: 12, width: '100%', maxWidth: 400, overflow: 'hidden' }, qrImage: { width: 210, height: 210, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8 }, qrLinkBox: { width: '100%', backgroundColor: '#f1f5f9', padding: 8, borderRadius: 6, borderWidth: 1, borderColor: '#cbd5e1', flexDirection: 'row', alignItems: 'center' }, qrBtnRow: { flexDirection: 'row', gap: 10, width: '100%' }, qrActionBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center' }, chooseText: { fontSize: 11, color: '#0f172a' }, tileActions: { minHeight: 43, backgroundColor: '#d1d5db', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', padding: 4 }, iconButton: { minWidth: 36, height: 32, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 4 }, viewIcon: { backgroundColor: '#0d6efd' }, printIcon: { backgroundColor: '#059669' }, downloadIcon: { backgroundColor: '#06b6d4' }, shareIcon: { backgroundColor: '#25D366' }, waIconImg: { width: 19, height: 19 }, iconText: { color: '#fff', fontSize: 19, fontWeight: '800', lineHeight: 21 }, uploadAllButton: { alignSelf: 'center', backgroundColor: '#0d6efd', paddingHorizontal: 18, paddingVertical: 11, borderRadius: 6, marginBottom: 14 },
   modalHeader: { backgroundColor: '#11101e', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, modalTitle: { color: '#fff', fontSize: 16, fontWeight: '700' }, close: { color: '#fff', fontSize: 28, paddingHorizontal: 8 }, detailRow: { flexDirection: 'row', gap: 12, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }, detailLabel: { width: '42%', color: '#475569', fontWeight: '600' },
 
   // Global Student Directory Search (Image 2 style)
