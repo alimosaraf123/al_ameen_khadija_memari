@@ -1,4 +1,5 @@
 const express = require('express');
+const os = require('os');
 const crypto = require('crypto');
 const multer = require('multer');
 const sharp = require('sharp');
@@ -106,6 +107,7 @@ router.post(
       expires_at: expiresAt.toISOString(),
       target,
       target_label: targetLabel,
+      lan_ip: Object.values(os.networkInterfaces()).flat().find((i) => i && i.family === 'IPv4' && !i.internal)?.address || null,
       student,
     });
   })
