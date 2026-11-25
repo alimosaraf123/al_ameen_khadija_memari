@@ -38,6 +38,24 @@ async function checkStudentCallingSchedule(studentId, regNo) {
 
   const student = stuRes.rows[0];
 
+  // 1b. Gate Pass Away Check (students listed in Execute Return / status='pending' cannot call while away)
+  const outPass = await pool.query(
+    `SELECT token_no, departure_at
+     FROM student_gate_passes
+     WHERE student_id = $1 AND status = 'pending'
+     LIMIT 1`,
+    [student.id]
+  );
+
+  if (outPass.rowCount) {
+    return {
+      allowed: false,
+      reason: 'student_on_gate_pass',
+      message: 'Student is currently away on Gate Pass. Calling is disabled until Return is executed.',
+      message_bn: 'ছাত্র/ছাত্রী বর্তমানে গেট পাস নিয়ে বাড়িতে আছে। হোস্টেলে ফিরে Return না করা পর্যন্ত কল বন্ধ থাকবে।'
+    };
+  }
+
   // 2. Emergency Override Check (from student_calling_access)
   const emergencyCheck = await pool.query(
     `SELECT is_emergency_call, emergency_until 
