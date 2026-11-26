@@ -5,6 +5,8 @@ import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import {
   ScrollView,
   Text,
+  TextInput,
+  Image,
   View,
   Alert,
   TouchableOpacity,
@@ -282,6 +284,15 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
   const [exitBusy, setExitBusy] = useState(false);
   const [sameAsPresent, setSameAsPresent] = useState(false);
   const [ifscMessage, setIfscMessage] = useState('');
+  const [scanningForm, setScanningForm] = useState(false);
+  const [scanPreviewUrl, setScanPreviewUrl] = useState('');
+  const [scanShowPreview, setScanShowPreview] = useState(true);
+  const [scanStatusMsg, setScanStatusMsg] = useState('');
+  const [scanWarning, setScanWarning] = useState('');
+  const [geminiConfigured, setGeminiConfigured] = useState<boolean | null>(null);
+  const [showGeminiConfig, setShowGeminiConfig] = useState(false);
+  const [geminiKeyInput, setGeminiKeyInput] = useState('');
+  const [savingGeminiKey, setSavingGeminiKey] = useState(false);
 
   const { width: windowWidth } = useWindowDimensions();
   const isTwoCol = windowWidth >= 640;
@@ -308,7 +319,101 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     setExitClearance(null);
     setSameAsPresent(false);
     setIfscMessage('');
+    setScanPreviewUrl('');
+    setScanStatusMsg('');
+    setScanWarning('');
     setExitForm({ dropout_date: new Date().toISOString().slice(0, 10), dropout_reason: '' });
+  };
+
+  useEffect(() => {
+    if (screen !== 'entry') return;
+    api('/api/students/scan-admission-form/status')
+      .then((res: any) => setGeminiConfigured(Boolean(res?.gemini_configured)))
+      .catch(() => {});
+  }, [screen]);
+
+  const handleSaveGeminiKey = async () => {
+    if (!geminiKeyInput.trim()) return Alert.alert('API Key', 'Please enter a valid Gemini API Key.');
+    setSavingGeminiKey(true);
+    try {
+      await api('/api/students/scan-admission-form/key', {
+        method: 'POST',
+        body: JSON.stringify({ api_key: geminiKeyInput.trim() }),
+      });
+      setGeminiConfigured(true);
+      setGeminiKeyInput('');
+      setShowGeminiConfig(false);
+      Alert.alert('Saved', 'AI Handwriting Scanner Key saved! Now scan any Admission Form for high accuracy.');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not save API Key.');
+    } finally {
+      setSavingGeminiKey(false);
+    }
+  };
+
+  const handleScanAdmissionForm = async () => {
+    const picked = await DocumentPicker.getDocumentAsync({ type: ['image/*'], copyToCacheDirectory: true });
+    if (picked.canceled || !picked.assets?.[0]) return;
+    const asset: any = picked.assets[0];
+    setScanningForm(true);
+    setScanStatusMsg('');
+    setScanWarning('');
+    try {
+      const body = new FormData();
+      if (Platform.OS === 'web' && asset.file) {
+        body.append('file', asset.file, asset.name || 'admission_form.jpg');
+      } else {
+        body.append('file', {
+          uri: asset.uri,
+          name: asset.name || 'admission_form.jpg',
+          type: asset.mimeType || 'image/jpeg',
+        } as any);
+      }
+
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/students/scan-admission-form`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Could not scan admission form');
+      }
+
+      const ext = data.extracted || {};
+      let filledCount = 0;
+      const nextForm: any = { ...form };
+      Object.keys(EMPTY_FORM).forEach((k) => {
+        if (ext[k] !== undefined && ext[k] !== '' && ext[k] !== false) {
+          nextForm[k] = ext[k];
+          filledCount++;
+        }
+      });
+      if (ext.bank_branch_name) nextForm.bank_branch_name = ext.bank_branch_name;
+      if (ext.bank_branch_address) nextForm.bank_branch_address = ext.bank_branch_address;
+      setForm(nextForm);
+
+      if (ext.visitor1 && Object.values(ext.visitor1).some((v) => Boolean(v))) {
+        setVisitor1((prev: any) => ({ ...prev, ...ext.visitor1 }));
+        filledCount += Object.values(ext.visitor1).filter(Boolean).length;
+      }
+      if (ext.visitor2 && Object.values(ext.visitor2).some((v) => Boolean(v))) {
+        setVisitor2((prev: any) => ({ ...prev, ...ext.visitor2 }));
+        filledCount += Object.values(ext.visitor2).filter(Boolean).length;
+      }
+
+      setScanPreviewUrl(data.preview_data_url || asset.uri || '');
+      setScanShowPreview(true);
+      setScanWarning(data.warning || '');
+      setScanStatusMsg(
+        `Scanned (${data.engine === 'gemini_vision' ? 'AI Vision' : 'Offline OCR'}): ${filledCount} fields auto-filled! Please check spelling & correct any field before clicking Save.`
+      );
+    } catch (err: any) {
+      Alert.alert('Scan Failed', err.message || 'Could not read Admission Form.');
+    } finally {
+      setScanningForm(false);
+    }
   };
 
   useEffect(() => {
@@ -930,6 +1035,82 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
           {editingId !== null && (
             <Text style={styles.editing}>Editing Student</Text>
           )}
+
+          <View style={styles.scanCard}>
+            <View style={styles.scanHeader}>
+              <View style={{ flex: 1, minWidth: 220 }}>
+                <Text style={styles.scanTitle}>Scan Admission Form (Auto-Fill)</Text>
+                <Text style={styles.scanSub}>
+                  Upload scanned form photo to auto-fill Student, Parent, Address, Visitor &amp; Bank fields. Review &amp; correct before Save.
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <TouchableOpacity
+                  disabled={scanningForm}
+                  style={[styles.scanBtn, scanningForm && { opacity: 0.6 }]}
+                  onPress={handleScanAdmissionForm}
+                >
+                  <Text style={styles.scanBtnText}>
+                    {scanningForm ? 'Reading Form...' : 'Scan / Upload Admission Form'}
+                  </Text>
+                </TouchableOpacity>
+                {userRole === 'super_admin' && (
+                  <TouchableOpacity
+                    style={styles.scanKeyBtn}
+                    onPress={() => setShowGeminiConfig((v) => !v)}
+                  >
+                    <Text style={styles.scanKeyBtnText}>
+                      {geminiConfigured ? 'AI Ready' : 'Set AI Key'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {showGeminiConfig && userRole === 'super_admin' && (
+              <View style={styles.scanKeyBox}>
+                <Text style={{ fontSize: 12, color: '#334155', fontWeight: '600' }}>
+                  Paste free Gemini API Key (from aistudio.google.com) for 98% handwritten accuracy:
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                  <TextInput
+                    value={geminiKeyInput}
+                    onChangeText={setGeminiKeyInput}
+                    placeholder="AIzaSy..."
+                    secureTextEntry
+                    style={styles.scanKeyInput}
+                  />
+                  <TouchableOpacity
+                    disabled={savingGeminiKey}
+                    style={[styles.scanBtn, { backgroundColor: '#16a34a' }]}
+                    onPress={handleSaveGeminiKey}
+                  >
+                    <Text style={styles.scanBtnText}>{savingGeminiKey ? 'Saving...' : 'Save Key'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {!!scanStatusMsg && <Text style={styles.scanSuccess}>{scanStatusMsg}</Text>}
+            {!!scanWarning && <Text style={styles.scanWarn}>{scanWarning}</Text>}
+
+            {!!scanPreviewUrl && (
+              <View style={{ marginTop: 10 }}>
+                <TouchableOpacity onPress={() => setScanShowPreview((v) => !v)}>
+                  <Text style={{ color: '#1d4ed8', fontWeight: '700', fontSize: 13 }}>
+                    {scanShowPreview ? 'Hide Scanned Form Image' : 'Show Scanned Form Image (for checking)'}
+                  </Text>
+                </TouchableOpacity>
+                {scanShowPreview && (
+                  <Image
+                    source={{ uri: scanPreviewUrl }}
+                    resizeMode="contain"
+                    style={{ width: '100%', height: 420, marginTop: 8, backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1' }}
+                  />
+                )}
+              </View>
+            )}
+          </View>
 
           <SectionTitle>Student Necessary Details</SectionTitle>
 
@@ -1815,4 +1996,56 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
   },
+
+  scanCard: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1.5,
+    borderColor: '#93c5fd',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+  },
+  scanHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  scanTitle: { fontSize: 16, fontWeight: '800', color: '#1e3a8a' },
+  scanSub: { fontSize: 12, color: '#475569', marginTop: 2 },
+  scanBtn: {
+    backgroundColor: '#1d4ed8',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  scanBtnText: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  scanKeyBtn: {
+    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  scanKeyBtnText: { color: '#1e293b', fontWeight: '700', fontSize: 12 },
+  scanKeyBox: {
+    marginTop: 10,
+    backgroundColor: '#fff',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  scanKeyInput: {
+    flex: 1,
+    minWidth: 220,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: '#f8fafc',
+  },
+  scanSuccess: { color: '#15803d', fontWeight: '700', fontSize: 13, marginTop: 8 },
+  scanWarn: { color: '#b45309', fontWeight: '700', fontSize: 12, marginTop: 4 },
 });
