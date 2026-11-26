@@ -285,6 +285,9 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
   const [sameAsPresent, setSameAsPresent] = useState(false);
   const [ifscMessage, setIfscMessage] = useState('');
   const [scanningForm, setScanningForm] = useState(false);
+  const [scanPhaseLabel, setScanPhaseLabel] = useState('');
+  const [localScanners, setLocalScanners] = useState<{ id: string; name: string }[]>([]);
+  const [selectedScannerId, setSelectedScannerId] = useState('');
   const [scanStatusMsg, setScanStatusMsg] = useState('');
   const [scanWarning, setScanWarning] = useState('');
   const [geminiConfigured, setGeminiConfigured] = useState<boolean | null>(null);
@@ -348,11 +351,9 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     }
   };
 
-  const handleScanAdmissionForm = async () => {
-    const picked = await DocumentPicker.getDocumentAsync({ type: ['image/*'], copyToCacheDirectory: true });
-    if (picked.canceled || !picked.assets?.[0]) return;
-    const asset: any = picked.assets[0];
+  const uploadAssetForAdmissionScan = async (asset: any, sourceLabel?: string) => {
     setScanningForm(true);
+    setScanPhaseLabel('Reading Form with AI...');
     setScanStatusMsg('');
     setScanWarning('');
     try {
@@ -402,13 +403,100 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
 
       setEntryDocuments((old) => ({ ...old, other_3: asset }));
       setScanWarning(data.warning || '');
+      const srcNote = sourceLabel ? ` from ${sourceLabel}` : '';
       setScanStatusMsg(
-        `Scanned (${data.engine === 'gemini_vision' ? 'AI Vision' : 'Offline OCR'}): ${filledCount} fields auto-filled & form attached to Others-3! Please check spelling & correct any field before clicking Save.`
+        `Scanned${srcNote} (${data.engine === 'gemini_vision' ? 'AI Vision' : 'Offline OCR'}): ${filledCount} fields auto-filled & form attached to Others-3! Please check spelling & correct any field before clicking Save.`
       );
     } catch (err: any) {
       Alert.alert('Scan Failed', err.message || 'Could not read Admission Form.');
     } finally {
       setScanningForm(false);
+      setScanPhaseLabel('');
+    }
+  };
+
+  const handleScanAdmissionForm = async () => {
+    const picked = await DocumentPicker.getDocumentAsync({ type: ['image/*'], copyToCacheDirectory: true });
+    if (picked.canceled || !picked.assets?.[0]) return;
+    await uploadAssetForAdmissionScan(picked.assets[0]);
+  };
+
+  const handleDirectScannerScan = async () => {
+    if (Platform.OS !== 'web') {
+      await handleScanAdmissionForm();
+      return;
+    }
+    const HELPER_URL = 'http://127.0.0.1:4789';
+    setScanningForm(true);
+    setScanPhaseLabel('Checking Local Scanner...');
+    setScanStatusMsg('');
+    setScanWarning('');
+
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 2500);
+      let health: any = null;
+      try {
+        const hRes = await fetch(`${HELPER_URL}/health`, { signal: ctrl.signal });
+        health = await hRes.json();
+      } catch {
+        const msg =
+          'Local Scanner Helper is not running on this PC. Open "scanner-helper\\Start-Scanner-Helper.bat" (or run "Install-AutoStart.bat" once) on this PC, then click Direct Scan again — or use "Upload Form Image".';
+        setScanWarning(msg);
+        Alert.alert('Scanner Helper Not Running', msg);
+        setScanningForm(false);
+        setScanPhaseLabel('');
+        return;
+      } finally {
+        clearTimeout(timer);
+      }
+
+      const scanners: { id: string; name: string }[] = Array.isArray(health?.scanners) ? health.scanners : [];
+      setLocalScanners(scanners);
+      if (scanners.length === 0 && !health?.naps2_available) {
+        const msg = 'No scanner detected on this PC. Check USB/power cable and scanner driver, or use "Upload Form Image".';
+        setScanWarning(msg);
+        Alert.alert('No Scanner Found', msg);
+        setScanningForm(false);
+        setScanPhaseLabel('');
+        return;
+      }
+
+      const targetId =
+        selectedScannerId && scanners.some((s) => s.id === selectedScannerId)
+          ? selectedScannerId
+          : scanners[0]?.id || '';
+      if (targetId && !selectedScannerId) setSelectedScannerId(targetId);
+
+      setScanPhaseLabel('Scanning from Hardware Scanner...');
+      const scanRes = await fetch(`${HELPER_URL}/scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: targetId, dpi: 200 }),
+      });
+      const scanData = await scanRes.json().catch(() => ({}));
+      if (!scanRes.ok || !scanData?.success || !scanData?.dataUrl) {
+        throw new Error(scanData?.message || 'Hardware scanner did not return an image.');
+      }
+
+      const b64Part = String(scanData.dataUrl).split(',')[1] || '';
+      const bin = atob(b64Part);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const fileName = scanData.fileName || 'scanned_admission_form.jpg';
+      const mimeType = scanData.mimeType || 'image/jpeg';
+      const blob = new Blob([bytes], { type: mimeType });
+      const fileObj = typeof File !== 'undefined' ? new File([blob], fileName, { type: mimeType }) : blob;
+
+      await uploadAssetForAdmissionScan(
+        { file: fileObj, uri: scanData.dataUrl, name: fileName, mimeType },
+        scanData.scannerName || 'Scanner'
+      );
+    } catch (err: any) {
+      setScanWarning(err.message || 'Direct hardware scan failed.');
+      Alert.alert('Direct Scan Error', err.message || 'Could not acquire image from scanner.');
+      setScanningForm(false);
+      setScanPhaseLabel('');
     }
   };
 
@@ -1041,13 +1129,24 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                {Platform.OS === 'web' && (
+                  <TouchableOpacity
+                    disabled={scanningForm}
+                    style={[styles.scanBtn, { backgroundColor: '#0f766e' }, scanningForm && { opacity: 0.6 }]}
+                    onPress={handleDirectScannerScan}
+                  >
+                    <Text style={styles.scanBtnText}>
+                      {scanningForm && scanPhaseLabel ? scanPhaseLabel : 'Direct Scan (Scanner)'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   disabled={scanningForm}
                   style={[styles.scanBtn, scanningForm && { opacity: 0.6 }]}
                   onPress={handleScanAdmissionForm}
                 >
                   <Text style={styles.scanBtnText}>
-                    {scanningForm ? 'Reading Form...' : 'Scan / Upload Admission Form'}
+                    {scanningForm ? (scanPhaseLabel || 'Reading Form...') : (Platform.OS === 'web' ? 'Upload Form Image' : 'Scan / Upload Admission Form')}
                   </Text>
                 </TouchableOpacity>
                 {userRole === 'super_admin' && geminiConfigured === false && (
@@ -1060,6 +1159,30 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
                 )}
               </View>
             </View>
+
+            {Platform.OS === 'web' && localScanners.length > 1 && (
+              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+                <Text style={{ fontSize: 12, color: '#334155', fontWeight: '700' }}>Scanner:</Text>
+                {localScanners.map((sc) => (
+                  <TouchableOpacity
+                    key={sc.id}
+                    onPress={() => setSelectedScannerId(sc.id)}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 6,
+                      borderWidth: 1,
+                      borderColor: selectedScannerId === sc.id ? '#0f766e' : '#cbd5e1',
+                      backgroundColor: selectedScannerId === sc.id ? '#ccfbf1' : '#fff',
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: selectedScannerId === sc.id ? '#0f766e' : '#334155' }}>
+                      {sc.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
 
             {showGeminiConfig && userRole === 'super_admin' && (
               <View style={styles.scanKeyBox}>
