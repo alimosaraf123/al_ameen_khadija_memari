@@ -1050,14 +1050,12 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
                     {scanningForm ? 'Reading Form...' : 'Scan / Upload Admission Form'}
                   </Text>
                 </TouchableOpacity>
-                {userRole === 'super_admin' && (
+                {userRole === 'super_admin' && geminiConfigured === false && (
                   <TouchableOpacity
                     style={styles.scanKeyBtn}
                     onPress={() => setShowGeminiConfig((v) => !v)}
                   >
-                    <Text style={styles.scanKeyBtnText}>
-                      {geminiConfigured ? 'AI Ready' : 'Set AI Key'}
-                    </Text>
+                    <Text style={styles.scanKeyBtnText}>Set AI Key</Text>
                   </TouchableOpacity>
                 )}
               </View>
