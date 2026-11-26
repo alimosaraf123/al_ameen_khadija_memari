@@ -9,8 +9,9 @@ const formScanUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 15 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const ok = String(file.mimetype || '').startsWith('image/');
-    cb(ok ? null : new Error('Please upload a JPG or PNG image of the Admission Form'), ok);
+    const mime = String(file.mimetype || '').toLowerCase();
+    const ok = mime.startsWith('image/') || mime === 'application/pdf';
+    cb(ok ? null : new Error('Please upload an Image (JPG/PNG) or PDF of the Admission Form'), ok);
   },
 });
 
@@ -937,8 +938,8 @@ router.post(
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'Admission form image is required' });
     }
-    const result = await scanAdmissionFormBuffer(req.file.buffer);
-    console.log(`[AdmissionScan] bytes=${req.file.size} engine=${result.engine} student=${result.extracted?.student_name || '-'} reg=${result.extracted?.registration_no || '-'}`);
+    const result = await scanAdmissionFormBuffer(req.file.buffer, req.file.mimetype);
+    console.log(`[AdmissionScan] mime=${req.file.mimetype} bytes=${req.file.size} engine=${result.engine} student=${result.extracted?.student_name || '-'} reg=${result.extracted?.registration_no || '-'}`);
     res.json({ success: true, ...result });
   })
 );

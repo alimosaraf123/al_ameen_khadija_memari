@@ -210,6 +210,7 @@ while ($listener.IsListening) {
 
       $scanOut = Invoke-ScannerAcquire -RequestedDeviceId $devId -Dpi $dpi -ShowDialog $showDlg
       $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
+      Write-Host "Scanned $($scanOut.scannerName) -> admission_form_$ts.jpg ($([Math]::Round($scanOut.base64.Length * 0.75 / 1024)) KB)"
       Send-JsonResponse $ctx 200 @{
         success = $true
         scannerName = $scanOut.scannerName

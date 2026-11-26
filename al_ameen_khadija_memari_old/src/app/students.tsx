@@ -358,14 +358,18 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     setScanWarning('');
     try {
       const body = new FormData();
-      if (Platform.OS === 'web' && asset.file) {
-        body.append('file', asset.file, asset.name || 'admission_form.jpg');
+      if (Platform.OS === 'web') {
+        if (asset.file) {
+          body.append('file', asset.file, asset.name || 'admission_form.jpg');
+        } else if (asset.uri) {
+          const fileRes = await fetch(asset.uri);
+          body.append('file', await fileRes.blob(), asset.name || 'admission_form.jpg');
+        } else {
+          throw new Error('Could not read the selected file from browser.');
+        }
       } else {
-        body.append('file', {
-          uri: asset.uri,
-          name: asset.name || 'admission_form.jpg',
-          type: asset.mimeType || 'image/jpeg',
-        } as any);
+        const nativeFile = new ExpoFile(asset.uri);
+        body.append('file', nativeFile as any);
       }
 
       const token = await getToken();
@@ -376,7 +380,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Could not scan admission form');
+        throw new Error(data.message || `Could not scan admission form (HTTP ${res.status})`);
       }
 
       const ext = data.extracted || {};
@@ -405,7 +409,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
       setScanWarning(data.warning || '');
       const srcNote = sourceLabel ? ` from ${sourceLabel}` : '';
       setScanStatusMsg(
-        `Scanned${srcNote} (${data.engine === 'gemini_vision' ? 'AI Vision' : 'Offline OCR'}): ${filledCount} fields auto-filled & form attached to Others-3! Please check spelling & correct any field before clicking Save.`
+        `Scanned${srcNote} (${data.engine === 'gemini_vision' ? 'AI Vision' : 'Offline OCR'}): ${filledCount} fields auto-filled & file attached to Others-3! Please check spelling & correct any field before clicking Save.`
       );
     } catch (err: any) {
       const msg = err?.message || 'Could not read Admission Form.';
@@ -418,9 +422,43 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
   };
 
   const handleScanAdmissionForm = async () => {
-    const picked = await DocumentPicker.getDocumentAsync({ type: ['image/*'], copyToCacheDirectory: true });
-    if (picked.canceled || !picked.assets?.[0]) return;
-    await uploadAssetForAdmissionScan(picked.assets[0]);
+    try {
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const pickedFile = await new Promise<File | null>((resolve) => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = 'image/*,.pdf,application/pdf';
+          input.style.display = 'none';
+          let settled = false;
+          const finish = (file: File | null) => {
+            if (settled) return;
+            settled = true;
+            input.remove();
+            resolve(file);
+          };
+          input.onchange = () => finish(input.files?.[0] || null);
+          window.addEventListener('focus', () => setTimeout(() => finish(input.files?.[0] || null), 400), { once: true });
+          document.body.appendChild(input);
+          input.click();
+        });
+        if (!pickedFile) return;
+        const asset = {
+          file: pickedFile,
+          uri: URL.createObjectURL(pickedFile),
+          name: pickedFile.name || 'admission_form.jpg',
+          mimeType: pickedFile.type || 'image/jpeg',
+        };
+        await uploadAssetForAdmissionScan(asset);
+        return;
+      }
+      const picked = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'], copyToCacheDirectory: true });
+      if (picked.canceled || !picked.assets?.[0]) return;
+      await uploadAssetForAdmissionScan(picked.assets[0]);
+    } catch (err: any) {
+      const msg = err?.message || 'Could not open selected file.';
+      setScanWarning(msg);
+      Alert.alert('Upload Failed', msg);
+    }
   };
 
   const handleDirectScannerScan = async () => {

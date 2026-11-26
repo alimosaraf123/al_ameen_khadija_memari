@@ -239,12 +239,15 @@ async function scanWithTesseractFallback(jpegBuffer) {
   });
 }
 
-async function scanAdmissionFormBuffer(fileBuffer) {
-  const preparedJpeg = await sharp(fileBuffer, { failOn: 'error' })
-    .rotate()
-    .resize({ width: 2000, height: 2600, fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 92 })
-    .toBuffer();
+async function scanAdmissionFormBuffer(fileBuffer, mimeType = 'image/jpeg') {
+  const isPdf = String(mimeType || '').toLowerCase() === 'application/pdf';
+  const preparedJpeg = isPdf
+    ? null
+    : await sharp(fileBuffer, { failOn: 'ignore' })
+      .rotate()
+      .resize({ width: 2000, height: 2600, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 92 })
+      .toBuffer();
 
   const apiKey = await getGeminiApiKey();
   let engine = 'gemini_vision';
@@ -252,12 +255,14 @@ async function scanAdmissionFormBuffer(fileBuffer) {
   let warning = '';
 
   if (apiKey) {
+    const inlineMime = isPdf ? 'application/pdf' : 'image/jpeg';
+    const inlineData = isPdf ? fileBuffer.toString('base64') : preparedJpeg.toString('base64');
     const body = {
       contents: [
         {
           parts: [
             { text: ADMISSION_FORM_PROMPT },
-            { inline_data: { mime_type: 'image/jpeg', data: preparedJpeg.toString('base64') } },
+            { inline_data: { mime_type: inlineMime, data: inlineData } },
           ],
         },
       ],
@@ -311,6 +316,9 @@ async function scanAdmissionFormBuffer(fileBuffer) {
     if (!parsed) throw new Error(lastErr || 'Gemini API call failed');
     extracted = normalizeExtractedData(parsed);
   } else {
+    if (isPdf) {
+      throw new Error('GEMINI_API_KEY is required to read PDF admission forms.');
+    }
     engine = 'tesseract_basic';
     extracted = await scanWithTesseractFallback(preparedJpeg);
     warning = 'GEMINI_API_KEY not configured: used offline basic OCR (numbers/dates only). Add GEMINI_API_KEY in .env for full handwriting extraction.';
@@ -329,7 +337,7 @@ async function scanAdmissionFormBuffer(fileBuffer) {
     engine,
     warning,
     extracted,
-    preview_data_url: `data:image/jpeg;base64,${preparedJpeg.toString('base64')}`,
+    preview_data_url: preparedJpeg ? `data:image/jpeg;base64,${preparedJpeg.toString('base64')}` : '',
   };
 }
 
