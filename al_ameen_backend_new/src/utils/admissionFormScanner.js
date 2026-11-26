@@ -252,7 +252,6 @@ async function scanAdmissionFormBuffer(fileBuffer) {
   let warning = '';
 
   if (apiKey) {
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
     const body = {
       contents: [
         {
@@ -267,17 +266,43 @@ async function scanAdmissionFormBuffer(fileBuffer) {
         responseMimeType: 'application/json',
       },
     };
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(json?.error?.message || `Gemini API failed (${res.status})`);
+
+    const callModel = async (modelId) => {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json().catch(() => ({}));
+      return { res, json };
+    };
+
+    let candidates = ['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'];
+    try {
+      const mRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+      const mJson = await mRes.json().catch(() => ({}));
+      const flashModels = (mJson.models || [])
+        .filter((m) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent') && /flash/i.test(m.name) && !/thinking|image|audio|tts/i.test(m.name))
+        .map((m) => String(m.name).replace(/^models\//, ''))
+        .sort()
+        .reverse();
+      if (flashModels.length) candidates = [...new Set([...flashModels, ...candidates])];
+    } catch {}
+
+    let lastErr = '';
+    let parsed = null;
+    for (const modelId of candidates) {
+      const { res, json } = await callModel(modelId);
+      if (res.ok) {
+        const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+        parsed = JSON.parse(rawText);
+        break;
+      }
+      lastErr = json?.error?.message || `Gemini API failed (${res.status})`;
+      if (res.status === 401 || res.status === 403) break;
     }
-    const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-    const parsed = JSON.parse(rawText);
+    if (!parsed) throw new Error(lastErr || 'Gemini API call failed');
     extracted = normalizeExtractedData(parsed);
   } else {
     engine = 'tesseract_basic';
