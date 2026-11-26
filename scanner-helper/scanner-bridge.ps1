@@ -21,7 +21,7 @@ function Get-WiaScanners {
       }
     }
   } catch {}
-  return ,$list
+  return $list
 }
 
 function Find-Naps2Path {
