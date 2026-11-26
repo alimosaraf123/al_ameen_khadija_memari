@@ -285,6 +285,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
   const [sameAsPresent, setSameAsPresent] = useState(false);
   const [ifscMessage, setIfscMessage] = useState('');
   const [scanningForm, setScanningForm] = useState(false);
+  const [scanSource, setScanSource] = useState<'scanner' | 'upload' | ''>('');
   const [scanPhaseLabel, setScanPhaseLabel] = useState('');
   const [localScanners, setLocalScanners] = useState<{ id: string; name: string }[]>([]);
   const [selectedScannerId, setSelectedScannerId] = useState('');
@@ -418,6 +419,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     } finally {
       setScanningForm(false);
       setScanPhaseLabel('');
+      setScanSource('');
     }
   };
 
@@ -448,11 +450,13 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
           name: pickedFile.name || 'admission_form.jpg',
           mimeType: pickedFile.type || 'image/jpeg',
         };
+        setScanSource('upload');
         await uploadAssetForAdmissionScan(asset);
         return;
       }
       const picked = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'], copyToCacheDirectory: true });
       if (picked.canceled || !picked.assets?.[0]) return;
+      setScanSource('upload');
       await uploadAssetForAdmissionScan(picked.assets[0]);
     } catch (err: any) {
       const msg = err?.message || 'Could not open selected file.';
@@ -467,6 +471,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
       return;
     }
     const HELPER_URL = 'http://127.0.0.1:4789';
+    setScanSource('scanner');
     setScanningForm(true);
     setScanPhaseLabel('Checking Local Scanner...');
     setScanStatusMsg('');
@@ -486,6 +491,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
         Alert.alert('Scanner Helper Not Running', msg);
         setScanningForm(false);
         setScanPhaseLabel('');
+        setScanSource('');
         return;
       } finally {
         clearTimeout(timer);
@@ -499,6 +505,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
         Alert.alert('No Scanner Found', msg);
         setScanningForm(false);
         setScanPhaseLabel('');
+        setScanSource('');
         return;
       }
 
@@ -537,6 +544,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
       Alert.alert('Direct Scan Error', err.message || 'Could not acquire image from scanner.');
       setScanningForm(false);
       setScanPhaseLabel('');
+      setScanSource('');
     }
   };
 
@@ -1176,7 +1184,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
                     onPress={handleDirectScannerScan}
                   >
                     <Text style={styles.scanBtnText}>
-                      {scanningForm && scanPhaseLabel ? scanPhaseLabel : 'Direct Scan (Scanner)'}
+                      {scanningForm && scanSource === 'scanner' ? (scanPhaseLabel || 'Scanning...') : 'Direct Scan (Scanner)'}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -1186,7 +1194,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
                   onPress={handleScanAdmissionForm}
                 >
                   <Text style={styles.scanBtnText}>
-                    {scanningForm ? (scanPhaseLabel || 'Reading Form...') : (Platform.OS === 'web' ? 'Upload Form Image' : 'Scan / Upload Admission Form')}
+                    {scanningForm && scanSource === 'upload' ? (scanPhaseLabel || 'Reading Form...') : (Platform.OS === 'web' ? 'Upload Form Image' : 'Scan / Upload Admission Form')}
                   </Text>
                 </TouchableOpacity>
                 {userRole === 'super_admin' && geminiConfigured === false && (
