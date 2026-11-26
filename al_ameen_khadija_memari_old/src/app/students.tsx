@@ -403,11 +403,12 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
         filledCount += Object.values(ext.visitor2).filter(Boolean).length;
       }
 
+      setEntryDocuments((old) => ({ ...old, other_3: asset }));
       setScanPreviewUrl(data.preview_data_url || asset.uri || '');
       setScanShowPreview(true);
       setScanWarning(data.warning || '');
       setScanStatusMsg(
-        `Scanned (${data.engine === 'gemini_vision' ? 'AI Vision' : 'Offline OCR'}): ${filledCount} fields auto-filled! Please check spelling & correct any field before clicking Save.`
+        `Scanned (${data.engine === 'gemini_vision' ? 'AI Vision' : 'Offline OCR'}): ${filledCount} fields auto-filled & form attached to Others-3! Please check spelling & correct any field before clicking Save.`
       );
     } catch (err: any) {
       Alert.alert('Scan Failed', err.message || 'Could not read Admission Form.');
