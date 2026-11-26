@@ -243,7 +243,7 @@ async function scanAdmissionFormBuffer(fileBuffer, mimeType = 'image/jpeg') {
   const isPdf = String(mimeType || '').toLowerCase() === 'application/pdf';
   const preparedJpeg = isPdf
     ? null
-    : await sharp(fileBuffer, { failOn: 'ignore' })
+    : await sharp(fileBuffer, { failOn: 'none' })
       .rotate()
       .resize({ width: 2000, height: 2600, fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: 92 })
