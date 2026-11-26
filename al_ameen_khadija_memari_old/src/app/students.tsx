@@ -285,8 +285,6 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
   const [sameAsPresent, setSameAsPresent] = useState(false);
   const [ifscMessage, setIfscMessage] = useState('');
   const [scanningForm, setScanningForm] = useState(false);
-  const [scanPreviewUrl, setScanPreviewUrl] = useState('');
-  const [scanShowPreview, setScanShowPreview] = useState(true);
   const [scanStatusMsg, setScanStatusMsg] = useState('');
   const [scanWarning, setScanWarning] = useState('');
   const [geminiConfigured, setGeminiConfigured] = useState<boolean | null>(null);
@@ -319,7 +317,6 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     setExitClearance(null);
     setSameAsPresent(false);
     setIfscMessage('');
-    setScanPreviewUrl('');
     setScanStatusMsg('');
     setScanWarning('');
     setExitForm({ dropout_date: new Date().toISOString().slice(0, 10), dropout_reason: '' });
@@ -404,8 +401,6 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
       }
 
       setEntryDocuments((old) => ({ ...old, other_3: asset }));
-      setScanPreviewUrl(data.preview_data_url || asset.uri || '');
-      setScanShowPreview(true);
       setScanWarning(data.warning || '');
       setScanStatusMsg(
         `Scanned (${data.engine === 'gemini_vision' ? 'AI Vision' : 'Offline OCR'}): ${filledCount} fields auto-filled & form attached to Others-3! Please check spelling & correct any field before clicking Save.`
@@ -1094,23 +1089,6 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
 
             {!!scanStatusMsg && <Text style={styles.scanSuccess}>{scanStatusMsg}</Text>}
             {!!scanWarning && <Text style={styles.scanWarn}>{scanWarning}</Text>}
-
-            {!!scanPreviewUrl && (
-              <View style={{ marginTop: 10 }}>
-                <TouchableOpacity onPress={() => setScanShowPreview((v) => !v)}>
-                  <Text style={{ color: '#1d4ed8', fontWeight: '700', fontSize: 13 }}>
-                    {scanShowPreview ? 'Hide Scanned Form Image' : 'Show Scanned Form Image (for checking)'}
-                  </Text>
-                </TouchableOpacity>
-                {scanShowPreview && (
-                  <Image
-                    source={{ uri: scanPreviewUrl }}
-                    resizeMode="contain"
-                    style={{ width: '100%', height: 420, marginTop: 8, backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1' }}
-                  />
-                )}
-              </View>
-            )}
           </View>
 
           <SectionTitle>Student Necessary Details</SectionTitle>
