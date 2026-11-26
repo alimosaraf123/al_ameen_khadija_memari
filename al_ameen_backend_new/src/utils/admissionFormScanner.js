@@ -85,8 +85,8 @@ Return ONLY a JSON object with these exact keys:
 async function getGeminiApiKey() {
   if (process.env.GEMINI_API_KEY) return String(process.env.GEMINI_API_KEY).trim();
   try {
-    const r = await pool.query(`SELECT value FROM app_settings WHERE key = 'gemini_api_key' LIMIT 1`);
-    if (r.rowCount && r.rows[0].value) return String(r.rows[0].value).trim();
+    const r = await pool.query(`SELECT setting_value FROM app_settings WHERE setting_key = 'gemini_api_key' LIMIT 1`);
+    if (r.rowCount && r.rows[0].setting_value) return String(r.rows[0].setting_value).trim();
   } catch {
     // app_settings table may not exist yet
   }

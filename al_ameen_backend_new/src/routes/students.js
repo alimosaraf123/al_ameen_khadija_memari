@@ -900,9 +900,9 @@ router.get(
   asyncHandler(async (req, res) => {
     let dbKey = '';
     try {
-      await pool.query(`CREATE TABLE IF NOT EXISTS app_settings (key VARCHAR(120) PRIMARY KEY, value TEXT, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
-      const q = await pool.query(`SELECT value FROM app_settings WHERE key = 'gemini_api_key' LIMIT 1`);
-      if (q.rowCount) dbKey = String(q.rows[0].value || '').trim();
+      await pool.query(`CREATE TABLE IF NOT EXISTS app_settings (id BIGSERIAL PRIMARY KEY, setting_key VARCHAR(120) UNIQUE NOT NULL, setting_value TEXT, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+      const q = await pool.query(`SELECT setting_value FROM app_settings WHERE setting_key = 'gemini_api_key' LIMIT 1`);
+      if (q.rowCount) dbKey = String(q.rows[0].setting_value || '').trim();
     } catch {}
     const configured = Boolean(process.env.GEMINI_API_KEY || dbKey);
     res.json({ success: true, gemini_configured: configured });
@@ -918,10 +918,10 @@ router.post(
     if (!key || key.length < 15) {
       return res.status(400).json({ success: false, message: 'Valid Gemini API Key is required' });
     }
-    await pool.query(`CREATE TABLE IF NOT EXISTS app_settings (key VARCHAR(120) PRIMARY KEY, value TEXT, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS app_settings (id BIGSERIAL PRIMARY KEY, setting_key VARCHAR(120) UNIQUE NOT NULL, setting_value TEXT, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
     await pool.query(
-      `INSERT INTO app_settings (key, value, updated_at) VALUES ('gemini_api_key', $1, NOW())
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      `INSERT INTO app_settings (setting_key, setting_value, updated_at) VALUES ('gemini_api_key', $1, NOW())
+       ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()`,
       [key]
     );
     res.json({ success: true, message: 'Gemini Vision API Key saved!' });
