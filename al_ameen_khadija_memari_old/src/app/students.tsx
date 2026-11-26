@@ -408,7 +408,9 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
         `Scanned${srcNote} (${data.engine === 'gemini_vision' ? 'AI Vision' : 'Offline OCR'}): ${filledCount} fields auto-filled & form attached to Others-3! Please check spelling & correct any field before clicking Save.`
       );
     } catch (err: any) {
-      Alert.alert('Scan Failed', err.message || 'Could not read Admission Form.');
+      const msg = err?.message || 'Could not read Admission Form.';
+      setScanWarning(msg);
+      Alert.alert('Scan Failed', msg);
     } finally {
       setScanningForm(false);
       setScanPhaseLabel('');

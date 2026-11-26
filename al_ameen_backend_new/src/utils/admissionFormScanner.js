@@ -295,7 +295,13 @@ async function scanAdmissionFormBuffer(fileBuffer) {
     for (const modelId of candidates) {
       const { res, json } = await callModel(modelId);
       if (res.ok) {
-        const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+        let rawText = String(json?.candidates?.[0]?.content?.parts?.[0]?.text || '{}').trim();
+        rawText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+        const firstBrace = rawText.indexOf('{');
+        const lastBrace = rawText.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+          rawText = rawText.slice(firstBrace, lastBrace + 1);
+        }
         parsed = JSON.parse(rawText);
         break;
       }

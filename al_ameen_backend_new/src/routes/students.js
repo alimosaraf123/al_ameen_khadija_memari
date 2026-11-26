@@ -938,6 +938,7 @@ router.post(
       return res.status(400).json({ success: false, message: 'Admission form image is required' });
     }
     const result = await scanAdmissionFormBuffer(req.file.buffer);
+    console.log(`[AdmissionScan] bytes=${req.file.size} engine=${result.engine} student=${result.extracted?.student_name || '-'} reg=${result.extracted?.registration_no || '-'}`);
     res.json({ success: true, ...result });
   })
 );

@@ -21,7 +21,7 @@ function Get-WiaScanners {
       }
     }
   } catch {}
-  return $list
+  return ,$list
 }
 
 function Find-Naps2Path {
@@ -70,7 +70,7 @@ function Set-WiaProp($Item, [string]$PropId, $Value) {
 }
 
 function Invoke-ScannerAcquire([string]$RequestedDeviceId, [int]$Dpi = 200, [bool]$ShowDialog = $false) {
-  $scanners = Get-WiaScanners
+  $scanners = @(Get-WiaScanners)
   if ($scanners.Count -eq 0) {
     $naps2 = Find-Naps2Path
     if ($naps2) {
