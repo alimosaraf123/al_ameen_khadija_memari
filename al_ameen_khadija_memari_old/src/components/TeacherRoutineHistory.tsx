@@ -45,6 +45,7 @@ export function RoutineCard({ item }: { item: any }) {
 
   const zoomRef = useRef(1);
   const panRef = useRef({ x: 0, y: 0 });
+  const rotationRef = useRef(0);
   const initialTouchDistance = useRef<number | null>(null);
   const initialTouchZoom = useRef(1);
   const dragStart = useRef({ x: 0, y: 0 });
@@ -93,7 +94,7 @@ export function RoutineCard({ item }: { item: any }) {
           setZoom(next);
         } else if (touches.length === 1) {
           // 1-finger drag/pan
-          if (zoomRef.current > 1 || rotation !== 0) {
+          if (zoomRef.current > 1 || rotationRef.current !== 0) {
             const nextX = Math.round(dragStart.current.x + gesture.dx);
             const nextY = Math.round(dragStart.current.y + gesture.dy);
             panRef.current = { x: nextX, y: nextY };
@@ -103,7 +104,7 @@ export function RoutineCard({ item }: { item: any }) {
       },
       onPanResponderRelease: () => {
         initialTouchDistance.current = null;
-        if (zoomRef.current <= 1 && rotation === 0) {
+        if (zoomRef.current <= 1 && rotationRef.current === 0) {
           panRef.current = { x: 0, y: 0 };
           setPan({ x: 0, y: 0 });
         }
@@ -114,6 +115,7 @@ export function RoutineCard({ item }: { item: any }) {
   const openPreview = () => {
     zoomRef.current = 1;
     panRef.current = { x: 0, y: 0 };
+    rotationRef.current = 0;
     setZoom(1);
     setPan({ x: 0, y: 0 });
     setRotation(0);
@@ -129,7 +131,7 @@ export function RoutineCard({ item }: { item: any }) {
   const zoomOut = () => {
     const next = Math.max(1, Number((zoomRef.current - 0.35).toFixed(2)));
     zoomRef.current = next;
-    if (next === 1 && rotation === 0) {
+    if (next === 1 && rotationRef.current === 0) {
       panRef.current = { x: 0, y: 0 };
       setPan({ x: 0, y: 0 });
     }
@@ -139,13 +141,16 @@ export function RoutineCard({ item }: { item: any }) {
   const resetZoom = () => {
     zoomRef.current = 1;
     panRef.current = { x: 0, y: 0 };
+    rotationRef.current = 0;
     setZoom(1);
     setPan({ x: 0, y: 0 });
     setRotation(0);
   };
 
   const toggleRotate = () => {
-    setRotation((r) => (r === 0 ? 90 : 0));
+    const nextRot = rotationRef.current === 0 ? 90 : 0;
+    rotationRef.current = nextRot;
+    setRotation(nextRot);
     panRef.current = { x: 0, y: 0 };
     setPan({ x: 0, y: 0 });
   };
