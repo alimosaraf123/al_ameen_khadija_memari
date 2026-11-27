@@ -13,7 +13,7 @@ async function auth(req,res,next){
    if(!q.rowCount)return res.status(401).json({success:false,message:'This device session is no longer active. Please login again.'});
   }
   const bypass=['/me','/change-password','/logout','/login','/api/me','/api/change-password','/api/logout','/api/login'];
-  if(!bypass.includes(req.path)&&account.rows[0].password_change_required)return res.status(428).json({success:false,message:'Password change required',password_change_required:true});
+  if(account.rows[0].role!=='guardian'&&!bypass.includes(req.path)&&account.rows[0].password_change_required)return res.status(428).json({success:false,message:'Password change required',password_change_required:true});
   req.user={...user, loginId: account.rows[0]?.login_id || user.loginId};next();
  }catch(e){return res.status(401).json({success:false,message:'Invalid or expired token'});}
 }

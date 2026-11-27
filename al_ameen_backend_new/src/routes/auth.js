@@ -91,7 +91,7 @@ router.post(
         COALESCE(sp.name, tp.name, gp.guardian_name, u.full_name) AS full_name,
         u.role,
         u.is_active,
-        u.password_change_required,
+        CASE WHEN u.role = 'guardian' THEN FALSE ELSE u.password_change_required END AS password_change_required,
         COALESCE(u.photo_url, sp.photo_url, tp.photo_url, gp.photo_url) AS photo_url,
         tp.id AS teacher_id,
         tp.staff_id
@@ -196,7 +196,7 @@ router.post(
         full_name: user.full_name,
         role: user.role,
         photo_url: user.photo_url || null,
-        password_change_required: !!user.password_change_required,
+        password_change_required: user.role === 'guardian' ? false : !!user.password_change_required,
         teacher_id: user.teacher_id || null,
         staff_id: user.staff_id || null,
       },
@@ -223,7 +223,7 @@ router.get(
         COALESCE(sp.name, tp.name, gp.guardian_name, u.full_name) AS full_name,
         u.role,
         u.is_active,
-        u.password_change_required,
+        CASE WHEN u.role = 'guardian' THEN FALSE ELSE u.password_change_required END AS password_change_required,
         COALESCE(u.photo_url, sp.photo_url, tp.photo_url, gp.photo_url) AS photo_url,
         tp.id AS teacher_id,
         tp.staff_id
