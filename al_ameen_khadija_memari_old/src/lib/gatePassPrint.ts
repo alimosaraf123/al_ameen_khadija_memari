@@ -28,7 +28,7 @@ export async function printImageDataUri(url:string){
   if(!response.ok)return url;
   const blob=await response.blob();
   return await new Promise<string>(resolve=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>resolve(url);reader.readAsDataURL(blob);});
- }finally{clearTimeout(timer);}
+ }catch{return url;}finally{clearTimeout(timer);}
 }
 export async function waitForPrintImages(doc:Document){
  await Promise.all(Array.from(doc.images).map(image=>new Promise<void>(resolve=>{
