@@ -61,6 +61,10 @@ const STUDENT_DOCUMENT_TYPES = [
   { key: 'other', label: 'Others' },
   { key: 'other_2', label: 'Others-2' },
   { key: 'other_3', label: 'Others-3' },
+  { key: 'father_aadhaar', label: 'Father Aadhaar' },
+  { key: 'mother_aadhaar', label: 'Mother Aadhaar' },
+  { key: 'father_voter', label: 'Father Voter' },
+  { key: 'mother_voter', label: 'Mother Voter' },
 ];
 
 const LabeledField = ({

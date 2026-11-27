@@ -314,6 +314,8 @@ const DOCUMENT_SLOTS = [
   ['ph_certificate', 'P.H. Certificate'], ['xi_marksheet', 'XI Marksheet'],
   ['hs_marksheet', 'H.S Marksheet'], ['hs_certificate', 'H.S Certificate'], ['admission_slip', 'Admission Slip'], ['other', 'Others'],
   ['other_2', 'Others-2'], ['other_3', 'Others-3'],
+  ['father_aadhaar', 'Father Aadhaar'], ['mother_aadhaar', 'Mother Aadhaar'],
+  ['father_voter', 'Father Voter'], ['mother_voter', 'Mother Voter'],
 ] as const;
 
 const columns: [string, string, number][] = [
