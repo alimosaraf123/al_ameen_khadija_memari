@@ -522,9 +522,12 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     const mimeType = scanData.mimeType || 'image/jpeg';
     const blob = new Blob([bytes], { type: mimeType });
     const fileObj = typeof File !== 'undefined' ? new File([blob], fileName, { type: mimeType }) : blob;
+    const objectUrl = typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
+      ? URL.createObjectURL(blob)
+      : scanData.dataUrl;
 
     return {
-      asset: { file: fileObj, uri: scanData.dataUrl, name: fileName, mimeType },
+      asset: { file: fileObj, uri: objectUrl, name: fileName, mimeType },
       scannerName: scanData.scannerName || 'Scanner',
     };
   };
@@ -1926,7 +1929,18 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
                   {Platform.OS === 'web' && previewDoc?.uri && (
                     <TouchableOpacity
                       style={[styles.documentButton, { backgroundColor: '#0284c7' }]}
-                      onPress={() => window.open(previewDoc.uri, '_blank', 'noopener,noreferrer')}
+                      onPress={() => {
+                        let targetUrl = previewDoc.uri;
+                        if (targetUrl.startsWith('data:')) {
+                          const [hdr, b64] = targetUrl.split(',');
+                          const mime = (hdr.match(/data:([^;]+)/) || [])[1] || 'application/octet-stream';
+                          const bin = atob(b64 || '');
+                          const arr = new Uint8Array(bin.length);
+                          for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+                          targetUrl = URL.createObjectURL(new Blob([arr], { type: mime }));
+                        }
+                        window.open(targetUrl, '_blank');
+                      }}
                     >
                       <Text style={styles.documentButtonText}>Open Tab</Text>
                     </TouchableOpacity>
