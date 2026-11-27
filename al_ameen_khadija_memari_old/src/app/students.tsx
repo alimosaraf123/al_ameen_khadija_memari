@@ -588,23 +588,106 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
         img.src = src;
       });
 
+    // Auto-trim empty white scanner bed around small cards (Aadhaar, Voter, etc.)
+    const getContentBounds = (img: HTMLImageElement) => {
+      const iw = img.naturalWidth || 1;
+      const ih = img.naturalHeight || 1;
+      const scale = Math.min(1, 400 / Math.max(iw, ih));
+      const sw = Math.max(1, Math.round(iw * scale));
+      const sh = Math.max(1, Math.round(ih * scale));
+      const probe = document.createElement('canvas');
+      probe.width = sw;
+      probe.height = sh;
+      const pctx = probe.getContext('2d');
+      if (!pctx) return { sx: 0, sy: 0, sw: iw, sh: ih };
+      pctx.drawImage(img, 0, 0, sw, sh);
+      const { data } = pctx.getImageData(0, 0, sw, sh);
+
+      const marginEdge = 3;
+      const isDarkPixel = (idx: number) => data[idx] < 235 || data[idx + 1] < 235 || data[idx + 2] < 235;
+      const minRowHits = Math.max(3, Math.floor(sw * 0.01));
+      const minColHits = Math.max(3, Math.floor(sh * 0.01));
+
+      let minY = sh, maxY = -1, minX = sw, maxX = -1;
+      for (let y = marginEdge; y < sh - marginEdge; y++) {
+        let hits = 0;
+        for (let x = marginEdge; x < sw - marginEdge; x++) {
+          if (isDarkPixel((y * sw + x) * 4)) hits++;
+        }
+        if (hits >= minRowHits) {
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+      for (let x = marginEdge; x < sw - marginEdge; x++) {
+        let hits = 0;
+        for (let y = marginEdge; y < sh - marginEdge; y++) {
+          if (isDarkPixel((y * sw + x) * 4)) hits++;
+        }
+        if (hits >= minColHits) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+        }
+      }
+
+      if (maxX <= minX || maxY <= minY) {
+        return { sx: 0, sy: 0, sw: iw, sh: ih };
+      }
+      const pad = 24;
+      const sx = Math.max(0, Math.floor(minX / scale) - pad);
+      const sy = Math.max(0, Math.floor(minY / scale) - pad);
+      const ex = Math.min(iw, Math.ceil((maxX + 1) / scale) + pad);
+      const ey = Math.min(ih, Math.ceil((maxY + 1) / scale) + pad);
+      const cw = ex - sx;
+      const ch = ey - sy;
+      if (cw < 100 || ch < 60) {
+        return { sx: 0, sy: 0, sw: iw, sh: ih };
+      }
+      return { sx, sy, sw: cw, sh: ch };
+    };
+
     const [img1, img2] = await Promise.all([loadImg(frontAsset), loadImg(backAsset)]);
-    const targetW = Math.min(Math.max(img1.naturalWidth || 1000, img2.naturalWidth || 1000), 1600);
-    const h1 = Math.round(((img1.naturalHeight || 1) / (img1.naturalWidth || 1)) * targetW);
-    const h2 = Math.round(((img2.naturalHeight || 1) / (img2.naturalWidth || 1)) * targetW);
-    const gap = 24;
+    const c1 = getContentBounds(img1);
+    const c2 = getContentBounds(img2);
+
+    // Pack both Front & Back cleanly onto 1 single portrait A4 page (1240 x 1754 @ 150 DPI)
+    const A4_W = 1240;
+    const A4_H = 1754;
+    const padX = 56;
+    const padY = 56;
+    const gap = 44;
+    const maxW = A4_W - padX * 2;
+    const maxTotalH = A4_H - padY * 2 - gap;
+
+    let w1 = Math.min(maxW, Math.max(c1.sw, Math.round(maxW * 0.88)));
+    let h1 = Math.round((c1.sh / c1.sw) * w1);
+    let w2 = Math.min(maxW, Math.max(c2.sw, Math.round(maxW * 0.88)));
+    let h2 = Math.round((c2.sh / c2.sw) * w2);
+
+    if (h1 + h2 > maxTotalH) {
+      const fitScale = maxTotalH / (h1 + h2);
+      w1 = Math.max(1, Math.round(w1 * fitScale));
+      h1 = Math.max(1, Math.round(h1 * fitScale));
+      w2 = Math.max(1, Math.round(w2 * fitScale));
+      h2 = Math.max(1, Math.round(h2 * fitScale));
+    }
 
     const canvas = document.createElement('canvas');
-    canvas.width = targetW;
-    canvas.height = h1 + gap + h2;
+    canvas.width = A4_W;
+    canvas.height = A4_H;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas not supported in this browser');
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img1, 0, 0, targetW, h1);
-    ctx.fillStyle = '#e2e8f0';
-    ctx.fillRect(0, h1 + Math.floor(gap / 2) - 1, targetW, 2);
-    ctx.drawImage(img2, 0, h1 + gap, targetW, h2);
+    ctx.fillRect(0, 0, A4_W, A4_H);
+
+    const startY = Math.round((A4_H - (h1 + gap + h2)) / 2);
+    const x1 = Math.round((A4_W - w1) / 2);
+    const x2 = Math.round((A4_W - w2) / 2);
+
+    ctx.drawImage(img1, c1.sx, c1.sy, c1.sw, c1.sh, x1, startY, w1, h1);
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillRect(padX, startY + h1 + Math.floor(gap / 2), maxW, 2);
+    ctx.drawImage(img2, c2.sx, c2.sy, c2.sw, c2.sh, x2, startY + h1 + gap, w2, h2);
 
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not create merged image'))), 'image/jpeg', 0.92);
