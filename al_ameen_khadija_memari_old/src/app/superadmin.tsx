@@ -777,14 +777,6 @@ export default function Dashboard() {
           )}
 
           <TouchableOpacity
-            style={[s.navBtn, { borderColor: '#10b981', backgroundColor: '#ecfdf5' }]}
-            onPress={() => openCallingModal('all', '')}
-          >
-            <Text style={s.navBtnIcon}>📞</Text>
-            <Text style={[s.navBtnText, { color: '#047857', fontWeight: '800' }]}>Calling</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
             style={[s.navBtn, { borderColor: '#047857', backgroundColor: '#ecfdf5' }]}
             onPress={() => setPrayerModal(true)}
           >
