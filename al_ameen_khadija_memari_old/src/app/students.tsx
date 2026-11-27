@@ -67,6 +67,23 @@ const STUDENT_DOCUMENT_TYPES = [
   { key: 'mother_voter', label: 'Mother Voter' },
 ];
 
+const TWO_SIDED_DOCUMENT_KEYS = new Set([
+  'aadhaar',
+  'father_aadhaar',
+  'mother_aadhaar',
+  'father_voter',
+  'mother_voter',
+  'bank_passbook',
+  'obc_certificate',
+  'ph_certificate',
+  'mp_marksheet',
+  'xi_marksheet',
+  'hs_marksheet',
+  'other',
+  'other_2',
+  'other_3',
+]);
+
 const LabeledField = ({
   label,
   field,
@@ -560,16 +577,63 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     }
   };
 
-  const directScanEntryDocument = async (documentType: string) => {
+  const mergeImageAssetsVertically = async (frontAsset: any, backAsset: any, outputPrefix: string) => {
+    const loadImg = (asset: any) =>
+      new Promise<HTMLImageElement>((resolve, reject) => {
+        const src = asset?.uri || (asset?.file ? URL.createObjectURL(asset.file) : '');
+        if (!src) return reject(new Error('Invalid image for merging'));
+        const img = new window.Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Could not load image to merge Front & Back'));
+        img.src = src;
+      });
+
+    const [img1, img2] = await Promise.all([loadImg(frontAsset), loadImg(backAsset)]);
+    const targetW = Math.min(Math.max(img1.naturalWidth || 1000, img2.naturalWidth || 1000), 1600);
+    const h1 = Math.round(((img1.naturalHeight || 1) / (img1.naturalWidth || 1)) * targetW);
+    const h2 = Math.round(((img2.naturalHeight || 1) / (img2.naturalWidth || 1)) * targetW);
+    const gap = 24;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = h1 + gap + h2;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas not supported in this browser');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img1, 0, 0, targetW, h1);
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillRect(0, h1 + Math.floor(gap / 2) - 1, targetW, 2);
+    ctx.drawImage(img2, 0, h1 + gap, targetW, h2);
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not create merged image'))), 'image/jpeg', 0.92);
+    });
+    const fileName = `${outputPrefix}_front_back.jpg`;
+    const fileObj = typeof File !== 'undefined' ? new File([blob], fileName, { type: 'image/jpeg' }) : blob;
+    return {
+      file: fileObj,
+      uri: URL.createObjectURL(blob),
+      name: fileName,
+      mimeType: 'image/jpeg',
+    };
+  };
+
+  const directScanEntryDocument = async (documentType: string, appendBack = false) => {
     if (Platform.OS !== 'web') {
       await chooseEntryDocument(documentType);
       return;
     }
     setDocScanError('');
-    setScanningDocKey(documentType);
+    setScanningDocKey(appendBack ? `${documentType}:back` : documentType);
     try {
-      const { asset } = await acquireFromLocalScanner(documentType);
-      setEntryDocuments((old) => ({ ...old, [documentType]: asset }));
+      const { asset } = await acquireFromLocalScanner(appendBack ? `${documentType}_back` : documentType);
+      if (appendBack && entryDocuments[documentType]) {
+        const merged = await mergeImageAssetsVertically(entryDocuments[documentType], asset, documentType);
+        setEntryDocuments((old) => ({ ...old, [documentType]: merged }));
+      } else {
+        setEntryDocuments((old) => ({ ...old, [documentType]: asset }));
+      }
     } catch (err: any) {
       const msg = err?.message || 'Direct hardware scan failed.';
       setDocScanError(msg);
@@ -683,12 +747,28 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
   }, [form.bank_ifsc_code]);
 
   const chooseEntryDocument = async (documentType: string) => {
+    const allowMultiple = Platform.OS === 'web' && TWO_SIDED_DOCUMENT_KEYS.has(documentType);
     const picked = await DocumentPicker.getDocumentAsync({
       type: ['image/*', 'application/pdf'],
-      multiple: false,
+      multiple: allowMultiple,
       copyToCacheDirectory: true,
     });
-    if (picked.canceled) return;
+    if (picked.canceled || !picked.assets?.length) return;
+    if (Platform.OS === 'web' && picked.assets.length >= 2) {
+      const [first, second] = picked.assets;
+      const isAnyPdf = [first, second].some(
+        (a: any) => /pdf/i.test(String(a?.mimeType || '')) || /\.pdf$/i.test(String(a?.name || ''))
+      );
+      if (!isAnyPdf) {
+        try {
+          const merged = await mergeImageAssetsVertically(first, second, documentType);
+          setEntryDocuments((old) => ({ ...old, [documentType]: merged }));
+          return;
+        } catch (err: any) {
+          setDocScanError(err?.message || 'Could not merge Front & Back images');
+        }
+      }
+    }
     setEntryDocuments((old) => ({ ...old, [documentType]: picked.assets[0] }));
   };
 
@@ -1817,7 +1897,16 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
             {STUDENT_DOCUMENT_TYPES.map((item) => {
               const selected = entryDocuments[item.key];
               const isRowScanning = scanningDocKey === item.key;
+              const isBackScanning = scanningDocKey === `${item.key}:back`;
               const isAnyScanning = scanningForm || Boolean(scanningDocKey);
+              const selectedIsPdf = Boolean(
+                selected && (/pdf/i.test(String(selected.mimeType || '')) || /\.pdf$/i.test(String(selected.name || '')))
+              );
+              const canScanBack =
+                Platform.OS === 'web' &&
+                Boolean(selected) &&
+                !selectedIsPdf &&
+                TWO_SIDED_DOCUMENT_KEYS.has(item.key);
               return (
                 <View key={item.key} style={[styles.documentCol, !isTwoCol && styles.documentColMobile]}>
                   <View style={styles.documentRow}>
@@ -1836,10 +1925,21 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
                         <Text style={styles.documentButtonText}>View</Text>
                       </TouchableOpacity>
                     )}
+                    {canScanBack && (
+                      <TouchableOpacity
+                        style={[styles.documentScanBackButton, isAnyScanning && { opacity: 0.6 }]}
+                        onPress={() => directScanEntryDocument(item.key, true)}
+                        disabled={saving || isAnyScanning}
+                      >
+                        <Text style={styles.documentButtonText}>
+                          {isBackScanning ? 'Scanning...' : '+ Scan Back'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                     {Platform.OS === 'web' && (
                       <TouchableOpacity
                         style={[styles.documentScanButton, isAnyScanning && { opacity: 0.6 }]}
-                        onPress={() => directScanEntryDocument(item.key)}
+                        onPress={() => directScanEntryDocument(item.key, false)}
                         disabled={saving || isAnyScanning}
                       >
                         <Text style={styles.documentButtonText}>
@@ -2200,6 +2300,13 @@ const styles = StyleSheet.create({
 
   documentViewButton: {
     backgroundColor: '#0284c7',
+    borderRadius: 7,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+
+  documentScanBackButton: {
+    backgroundColor: '#7c3aed',
     borderRadius: 7,
     paddingVertical: 8,
     paddingHorizontal: 10,
