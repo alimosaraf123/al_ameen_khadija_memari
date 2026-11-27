@@ -151,6 +151,21 @@ router.post('/', auth, staffRoles, asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Session and Class are required' });
   }
 
+  const dup = await pool.query(
+    `SELECT id FROM calling_schedules
+     WHERE LOWER(TRIM(class_name)) = LOWER(TRIM($1))
+       AND LOWER(TRIM(session_name)) = LOWER(TRIM($2))
+       AND LOWER(TRIM(gender)) = LOWER(TRIM($3))
+     LIMIT 1`,
+    [String(class_name), String(session_name), String(gender)]
+  );
+  if (dup.rowCount) {
+    return res.status(409).json({
+      success: false,
+      message: 'একটি ক্লাসে কেবল ১টি শিডিউলই রাখা যাবে। একই ক্লাসের জন্য ২য় শিডিউল তৈরি করা যাবে না—আগের শিডিউলটি Edit করুন। (Only 1 schedule per class is allowed; please edit the existing schedule.)'
+    });
+  }
+
   const query = `
     INSERT INTO calling_schedules (
       branch_name, session_name, class_name, section, gender,
@@ -201,6 +216,30 @@ router.put('/:id', auth, staffRoles, asyncHandler(async (req, res) => {
   } = req.body || {};
 
   const daysJson = days ? JSON.stringify(Array.isArray(days) ? days : [days]) : undefined;
+
+  const currentRes = await pool.query(`SELECT class_name, session_name, gender FROM calling_schedules WHERE id = $1`, [id]);
+  if (!currentRes.rowCount) {
+    return res.status(404).json({ success: false, message: 'Schedule not found' });
+  }
+  const cur = currentRes.rows[0];
+  const nextClass = class_name ? String(class_name).trim() : cur.class_name;
+  const nextSession = session_name ? String(session_name).trim() : cur.session_name;
+  const nextGender = gender || cur.gender;
+  const dup = await pool.query(
+    `SELECT id FROM calling_schedules
+     WHERE id <> $1
+       AND LOWER(TRIM(class_name)) = LOWER(TRIM($2))
+       AND LOWER(TRIM(session_name)) = LOWER(TRIM($3))
+       AND LOWER(TRIM(gender)) = LOWER(TRIM($4))
+     LIMIT 1`,
+    [id, nextClass, nextSession, nextGender]
+  );
+  if (dup.rowCount) {
+    return res.status(409).json({
+      success: false,
+      message: 'একটি ক্লাসে কেবল ১টি শিডিউলই রাখা যাবে। একই ক্লাসের জন্য ২য় শিডিউল রাখা যাবে না। (Only 1 schedule per class is allowed.)'
+    });
+  }
 
   const query = `
     UPDATE calling_schedules

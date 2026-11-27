@@ -105,12 +105,12 @@ async function checkStudentCallingSchedule(studentId, regNo) {
   const allowedTalkTimeMinutes = schedule.allowed_talk_time || 8;
   const maxAllowedSeconds = allowedTalkTimeMinutes * 60;
 
-  // 4. Weekly Talk Time Quota Check (Calculates talk time used this week)
+  // 4. Scheduled-Day Talk Time Quota Check (Resets per scheduled day so 2+ days in a week work independently)
   const quotaRes = await pool.query(
     `SELECT COALESCE(SUM(call_duration_seconds), 0) AS used_seconds
      FROM hostel_call_logs
      WHERE (student_id = $1 OR registration_no = $2)
-       AND started_at >= (date_trunc('week', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata' + INTERVAL '1 day') - INTERVAL '1 day')
+       AND started_at >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date::timestamp AT TIME ZONE 'Asia/Kolkata')
        AND call_status = 'completed'
        AND call_duration_seconds > 0`,
     [student.id, student.registration_no]
@@ -123,8 +123,8 @@ async function checkStudentCallingSchedule(studentId, regNo) {
     return {
       allowed: false,
       reason: 'quota_exhausted',
-      message: `Your weekly ${allowedTalkTimeMinutes}-minute talk time limit has ended.`,
-      message_bn: `আপনার এই সপ্তাহের ${allowedTalkTimeMinutes} মিনিটের টকটাইম সমাপ্ত হয়েছে।`,
+      message: `Your ${allowedTalkTimeMinutes}-minute talk time limit for today's schedule has ended.`,
+      message_bn: `আজকের শিডিউলের ${allowedTalkTimeMinutes} মিনিটের টকটাইম সমাপ্ত হয়েছে।`,
       student,
       used_seconds: usedSeconds,
       allowed_talk_time: allowedTalkTimeMinutes

@@ -734,12 +734,17 @@ export default function CallingScheduleScreen() {
       if (res && res.success) {
         setShowScheduleModal(false);
         fetchSchedules();
-        Alert.alert('Success', 'Calling schedule saved successfully!');
+        if (Platform.OS === 'web') window.alert('Calling schedule saved successfully!');
+        else Alert.alert('Success', 'Calling schedule saved successfully!');
       } else {
-        Alert.alert('Error', res?.message || 'Failed to save schedule');
+        const msg = res?.message || 'Failed to save schedule';
+        if (Platform.OS === 'web') window.alert(msg);
+        else Alert.alert('Error', msg);
       }
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Server connection error');
+      const msg = err?.message || 'Server connection error';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Error', msg);
     }
   };
 
