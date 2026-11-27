@@ -5,6 +5,9 @@ import ScrollNavigationButtons from '../components/ScrollNavigationButtons';
 import {
   ScrollView,
   Text,
+  TextInput,
+  Image,
+  Modal,
   View,
   Alert,
   TouchableOpacity,
@@ -58,7 +61,28 @@ const STUDENT_DOCUMENT_TYPES = [
   { key: 'other', label: 'Others' },
   { key: 'other_2', label: 'Others-2' },
   { key: 'other_3', label: 'Others-3' },
+  { key: 'father_aadhaar', label: 'Father Aadhaar' },
+  { key: 'mother_aadhaar', label: 'Mother Aadhaar' },
+  { key: 'father_voter', label: 'Father Voter' },
+  { key: 'mother_voter', label: 'Mother Voter' },
 ];
+
+const TWO_SIDED_DOCUMENT_KEYS = new Set([
+  'aadhaar',
+  'father_aadhaar',
+  'mother_aadhaar',
+  'father_voter',
+  'mother_voter',
+  'bank_passbook',
+  'obc_certificate',
+  'ph_certificate',
+  'mp_marksheet',
+  'xi_marksheet',
+  'hs_marksheet',
+  'other',
+  'other_2',
+  'other_3',
+]);
 
 const LabeledField = ({
   label,
@@ -282,6 +306,20 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
   const [exitBusy, setExitBusy] = useState(false);
   const [sameAsPresent, setSameAsPresent] = useState(false);
   const [ifscMessage, setIfscMessage] = useState('');
+  const [scanningForm, setScanningForm] = useState(false);
+  const [scanSource, setScanSource] = useState<'scanner' | 'upload' | ''>('');
+  const [scanPhaseLabel, setScanPhaseLabel] = useState('');
+  const [scanningDocKey, setScanningDocKey] = useState<string | null>(null);
+  const [docScanError, setDocScanError] = useState('');
+  const [previewDoc, setPreviewDoc] = useState<{ title: string; name: string; uri: string; isPdf: boolean } | null>(null);
+  const [localScanners, setLocalScanners] = useState<{ id: string; name: string }[]>([]);
+  const [selectedScannerId, setSelectedScannerId] = useState('');
+  const [scanStatusMsg, setScanStatusMsg] = useState('');
+  const [scanWarning, setScanWarning] = useState('');
+  const [geminiConfigured, setGeminiConfigured] = useState<boolean | null>(null);
+  const [showGeminiConfig, setShowGeminiConfig] = useState(false);
+  const [geminiKeyInput, setGeminiKeyInput] = useState('');
+  const [savingGeminiKey, setSavingGeminiKey] = useState(false);
 
   const { width: windowWidth } = useWindowDimensions();
   const isTwoCol = windowWidth >= 640;
@@ -308,7 +346,317 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     setExitClearance(null);
     setSameAsPresent(false);
     setIfscMessage('');
+    setScanStatusMsg('');
+    setScanWarning('');
     setExitForm({ dropout_date: new Date().toISOString().slice(0, 10), dropout_reason: '' });
+  };
+
+  useEffect(() => {
+    if (screen !== 'entry') return;
+    api('/api/students/scan-admission-form/status')
+      .then((res: any) => setGeminiConfigured(Boolean(res?.gemini_configured)))
+      .catch(() => {});
+  }, [screen]);
+
+  const handleSaveGeminiKey = async () => {
+    if (!geminiKeyInput.trim()) return Alert.alert('API Key', 'Please enter a valid Gemini API Key.');
+    setSavingGeminiKey(true);
+    try {
+      await api('/api/students/scan-admission-form/key', {
+        method: 'POST',
+        body: JSON.stringify({ api_key: geminiKeyInput.trim() }),
+      });
+      setGeminiConfigured(true);
+      setGeminiKeyInput('');
+      setShowGeminiConfig(false);
+      Alert.alert('Saved', 'AI Handwriting Scanner Key saved! Now scan any Admission Form for high accuracy.');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not save API Key.');
+    } finally {
+      setSavingGeminiKey(false);
+    }
+  };
+
+  const uploadAssetForAdmissionScan = async (asset: any, sourceLabel?: string) => {
+    setScanningForm(true);
+    setScanPhaseLabel('Reading Form with AI...');
+    setScanStatusMsg('');
+    setScanWarning('');
+    try {
+      const body = new FormData();
+      if (Platform.OS === 'web') {
+        if (asset.file) {
+          body.append('file', asset.file, asset.name || 'admission_form.jpg');
+        } else if (asset.uri) {
+          const fileRes = await fetch(asset.uri);
+          body.append('file', await fileRes.blob(), asset.name || 'admission_form.jpg');
+        } else {
+          throw new Error('Could not read the selected file from browser.');
+        }
+      } else {
+        const nativeFile = new ExpoFile(asset.uri);
+        body.append('file', nativeFile as any);
+      }
+
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/students/scan-admission-form`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || `Could not scan admission form (HTTP ${res.status})`);
+      }
+
+      const ext = data.extracted || {};
+      let filledCount = 0;
+      const nextForm: any = { ...form };
+      Object.keys(EMPTY_FORM).forEach((k) => {
+        if (ext[k] !== undefined && ext[k] !== '' && ext[k] !== false) {
+          nextForm[k] = ext[k];
+          filledCount++;
+        }
+      });
+      if (ext.bank_branch_name) nextForm.bank_branch_name = ext.bank_branch_name;
+      if (ext.bank_branch_address) nextForm.bank_branch_address = ext.bank_branch_address;
+      setForm(nextForm);
+
+      if (ext.visitor1 && Object.values(ext.visitor1).some((v) => Boolean(v))) {
+        setVisitor1((prev: any) => ({ ...prev, ...ext.visitor1 }));
+        filledCount += Object.values(ext.visitor1).filter(Boolean).length;
+      }
+      if (ext.visitor2 && Object.values(ext.visitor2).some((v) => Boolean(v))) {
+        setVisitor2((prev: any) => ({ ...prev, ...ext.visitor2 }));
+        filledCount += Object.values(ext.visitor2).filter(Boolean).length;
+      }
+
+      setEntryDocuments((old) => ({ ...old, other_3: asset }));
+      setScanWarning(data.warning || '');
+      const srcNote = sourceLabel ? ` from ${sourceLabel}` : '';
+      setScanStatusMsg(
+        `Scanned${srcNote} (${data.engine === 'gemini_vision' ? 'AI Vision' : 'Offline OCR'}): ${filledCount} fields auto-filled & file attached to Others-3! Please check spelling & correct any field before clicking Save.`
+      );
+    } catch (err: any) {
+      const msg = err?.message || 'Could not read Admission Form.';
+      setScanWarning(msg);
+      Alert.alert('Scan Failed', msg);
+    } finally {
+      setScanningForm(false);
+      setScanPhaseLabel('');
+      setScanSource('');
+    }
+  };
+
+  const handleScanAdmissionForm = async () => {
+    try {
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const pickedFile = await new Promise<File | null>((resolve) => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = 'image/*,.pdf,application/pdf';
+          input.style.display = 'none';
+          let settled = false;
+          const finish = (file: File | null) => {
+            if (settled) return;
+            settled = true;
+            input.remove();
+            resolve(file);
+          };
+          input.onchange = () => finish(input.files?.[0] || null);
+          window.addEventListener('focus', () => setTimeout(() => finish(input.files?.[0] || null), 400), { once: true });
+          document.body.appendChild(input);
+          input.click();
+        });
+        if (!pickedFile) return;
+        const asset = {
+          file: pickedFile,
+          uri: URL.createObjectURL(pickedFile),
+          name: pickedFile.name || 'admission_form.jpg',
+          mimeType: pickedFile.type || 'image/jpeg',
+        };
+        setScanSource('upload');
+        await uploadAssetForAdmissionScan(asset);
+        return;
+      }
+      const picked = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'], copyToCacheDirectory: true });
+      if (picked.canceled || !picked.assets?.[0]) return;
+      setScanSource('upload');
+      await uploadAssetForAdmissionScan(picked.assets[0]);
+    } catch (err: any) {
+      const msg = err?.message || 'Could not open selected file.';
+      setScanWarning(msg);
+      Alert.alert('Upload Failed', msg);
+    }
+  };
+
+  const acquireFromLocalScanner = async (
+    filePrefix: string,
+    onPhase?: (phase: string) => void
+  ): Promise<{ asset: any; scannerName: string }> => {
+    const HELPER_URL = 'http://127.0.0.1:4789';
+    onPhase?.('Checking Local Scanner...');
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 2500);
+    let health: any = null;
+    try {
+      const hRes = await fetch(`${HELPER_URL}/health`, { signal: ctrl.signal });
+      health = await hRes.json();
+    } catch {
+      throw new Error(
+        'Local Scanner Helper is not running on this PC. Open "scanner-helper\\Start-Scanner-Helper.bat" (or run "Install-AutoStart.bat" once) on this PC, then try Direct Scan again.'
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+
+    const scanners: { id: string; name: string }[] = Array.isArray(health?.scanners) ? health.scanners : [];
+    setLocalScanners(scanners);
+    if (scanners.length === 0 && !health?.naps2_available) {
+      throw new Error('No scanner detected on this PC. Please power on the scanner and check USB/driver.');
+    }
+
+    const targetId =
+      selectedScannerId && scanners.some((s) => s.id === selectedScannerId)
+        ? selectedScannerId
+        : scanners[0]?.id || '';
+    if (targetId && !selectedScannerId) setSelectedScannerId(targetId);
+
+    onPhase?.('Scanning from Hardware Scanner...');
+    const scanRes = await fetch(`${HELPER_URL}/scan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: targetId, dpi: 200 }),
+    });
+    const scanData = await scanRes.json().catch(() => ({}));
+    if (!scanRes.ok || !scanData?.success || !scanData?.dataUrl) {
+      throw new Error(scanData?.message || 'Hardware scanner did not return an image.');
+    }
+
+    const b64Part = String(scanData.dataUrl).split(',')[1] || '';
+    const bin = atob(b64Part);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const rawName = String(scanData.fileName || 'scanned.jpg');
+    const fileName = `${filePrefix}_${rawName.replace(/^admission_form_/, '')}`;
+    const mimeType = scanData.mimeType || 'image/jpeg';
+    const blob = new Blob([bytes], { type: mimeType });
+    const fileObj = typeof File !== 'undefined' ? new File([blob], fileName, { type: mimeType }) : blob;
+    const objectUrl = typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
+      ? URL.createObjectURL(blob)
+      : scanData.dataUrl;
+
+    return {
+      asset: { file: fileObj, uri: objectUrl, name: fileName, mimeType },
+      scannerName: scanData.scannerName || 'Scanner',
+    };
+  };
+
+  const handleDirectScannerScan = async () => {
+    if (Platform.OS !== 'web') {
+      await handleScanAdmissionForm();
+      return;
+    }
+    setScanSource('scanner');
+    setScanningForm(true);
+    setScanPhaseLabel('Checking Local Scanner...');
+    setScanStatusMsg('');
+    setScanWarning('');
+
+    try {
+      const { asset, scannerName } = await acquireFromLocalScanner('admission_form', setScanPhaseLabel);
+      await uploadAssetForAdmissionScan(asset, scannerName);
+    } catch (err: any) {
+      const msg = err?.message || 'Direct hardware scan failed.';
+      setScanWarning(msg);
+      Alert.alert('Direct Scan Error', msg);
+      setScanningForm(false);
+      setScanPhaseLabel('');
+      setScanSource('');
+    }
+  };
+
+  const mergeImageAssetsVertically = async (frontAsset: any, backAsset: any, outputPrefix: string) => {
+    const loadImg = (asset: any) =>
+      new Promise<HTMLImageElement>((resolve, reject) => {
+        const src = asset?.uri || (asset?.file ? URL.createObjectURL(asset.file) : '');
+        if (!src) return reject(new Error('Invalid image for merging'));
+        const img = new window.Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Could not load image to merge Front & Back'));
+        img.src = src;
+      });
+
+    const [img1, img2] = await Promise.all([loadImg(frontAsset), loadImg(backAsset)]);
+    const targetW = Math.min(Math.max(img1.naturalWidth || 1000, img2.naturalWidth || 1000), 1600);
+    const h1 = Math.round(((img1.naturalHeight || 1) / (img1.naturalWidth || 1)) * targetW);
+    const h2 = Math.round(((img2.naturalHeight || 1) / (img2.naturalWidth || 1)) * targetW);
+    const gap = 24;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = h1 + gap + h2;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas not supported in this browser');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img1, 0, 0, targetW, h1);
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillRect(0, h1 + Math.floor(gap / 2) - 1, targetW, 2);
+    ctx.drawImage(img2, 0, h1 + gap, targetW, h2);
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not create merged image'))), 'image/jpeg', 0.92);
+    });
+    const fileName = `${outputPrefix}_front_back.jpg`;
+    const fileObj = typeof File !== 'undefined' ? new File([blob], fileName, { type: 'image/jpeg' }) : blob;
+    return {
+      file: fileObj,
+      uri: URL.createObjectURL(blob),
+      name: fileName,
+      mimeType: 'image/jpeg',
+    };
+  };
+
+  const directScanEntryDocument = async (documentType: string, appendBack = false) => {
+    if (Platform.OS !== 'web') {
+      await chooseEntryDocument(documentType);
+      return;
+    }
+    setDocScanError('');
+    setScanningDocKey(appendBack ? `${documentType}:back` : documentType);
+    try {
+      const { asset } = await acquireFromLocalScanner(appendBack ? `${documentType}_back` : documentType);
+      if (appendBack && entryDocuments[documentType]) {
+        const merged = await mergeImageAssetsVertically(entryDocuments[documentType], asset, documentType);
+        setEntryDocuments((old) => ({ ...old, [documentType]: merged }));
+      } else {
+        setEntryDocuments((old) => ({ ...old, [documentType]: asset }));
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Direct hardware scan failed.';
+      setDocScanError(msg);
+      Alert.alert('Direct Scan Error', msg);
+    } finally {
+      setScanningDocKey(null);
+    }
+  };
+
+  const viewEntryDocument = (label: string, asset: any) => {
+    if (!asset) return;
+    const uri = asset.uri || (Platform.OS === 'web' && asset.file ? URL.createObjectURL(asset.file) : '');
+    if (!uri) {
+      setDocScanError('Preview is not available for this selected file.');
+      return;
+    }
+    const isPdf = /pdf/i.test(String(asset.mimeType || '')) || /\.pdf$/i.test(String(asset.name || ''));
+    setPreviewDoc({
+      title: label,
+      name: asset.name || 'Document',
+      uri,
+      isPdf,
+    });
   };
 
   useEffect(() => {
@@ -399,12 +747,28 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
   }, [form.bank_ifsc_code]);
 
   const chooseEntryDocument = async (documentType: string) => {
+    const allowMultiple = Platform.OS === 'web' && TWO_SIDED_DOCUMENT_KEYS.has(documentType);
     const picked = await DocumentPicker.getDocumentAsync({
       type: ['image/*', 'application/pdf'],
-      multiple: false,
+      multiple: allowMultiple,
       copyToCacheDirectory: true,
     });
-    if (picked.canceled) return;
+    if (picked.canceled || !picked.assets?.length) return;
+    if (Platform.OS === 'web' && picked.assets.length >= 2) {
+      const [first, second] = picked.assets;
+      const isAnyPdf = [first, second].some(
+        (a: any) => /pdf/i.test(String(a?.mimeType || '')) || /\.pdf$/i.test(String(a?.name || ''))
+      );
+      if (!isAnyPdf) {
+        try {
+          const merged = await mergeImageAssetsVertically(first, second, documentType);
+          setEntryDocuments((old) => ({ ...old, [documentType]: merged }));
+          return;
+        } catch (err: any) {
+          setDocScanError(err?.message || 'Could not merge Front & Back images');
+        }
+      }
+    }
     setEntryDocuments((old) => ({ ...old, [documentType]: picked.assets[0] }));
   };
 
@@ -931,6 +1295,98 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
             <Text style={styles.editing}>Editing Student</Text>
           )}
 
+          <View style={styles.scanCard}>
+            <View style={styles.scanHeader}>
+              <View style={{ flex: 1, minWidth: 220 }}>
+                <Text style={styles.scanTitle}>Scan Admission Form (Auto-Fill)</Text>
+                <Text style={styles.scanSub}>
+                  Upload scanned form photo to auto-fill Student, Parent, Address, Visitor &amp; Bank fields. Review &amp; correct before Save.
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                {Platform.OS === 'web' && (
+                  <TouchableOpacity
+                    disabled={scanningForm}
+                    style={[styles.scanBtn, { backgroundColor: '#0f766e' }, scanningForm && { opacity: 0.6 }]}
+                    onPress={handleDirectScannerScan}
+                  >
+                    <Text style={styles.scanBtnText}>
+                      {scanningForm && scanSource === 'scanner' ? (scanPhaseLabel || 'Scanning...') : 'Direct Scan (Scanner)'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  disabled={scanningForm}
+                  style={[styles.scanBtn, scanningForm && { opacity: 0.6 }]}
+                  onPress={handleScanAdmissionForm}
+                >
+                  <Text style={styles.scanBtnText}>
+                    {scanningForm && scanSource === 'upload' ? (scanPhaseLabel || 'Reading Form...') : (Platform.OS === 'web' ? 'Upload Form Image' : 'Scan / Upload Admission Form')}
+                  </Text>
+                </TouchableOpacity>
+                {userRole === 'super_admin' && geminiConfigured === false && (
+                  <TouchableOpacity
+                    style={styles.scanKeyBtn}
+                    onPress={() => setShowGeminiConfig((v) => !v)}
+                  >
+                    <Text style={styles.scanKeyBtnText}>Set AI Key</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {Platform.OS === 'web' && localScanners.length > 1 && (
+              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+                <Text style={{ fontSize: 12, color: '#334155', fontWeight: '700' }}>Scanner:</Text>
+                {localScanners.map((sc) => (
+                  <TouchableOpacity
+                    key={sc.id}
+                    onPress={() => setSelectedScannerId(sc.id)}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 6,
+                      borderWidth: 1,
+                      borderColor: selectedScannerId === sc.id ? '#0f766e' : '#cbd5e1',
+                      backgroundColor: selectedScannerId === sc.id ? '#ccfbf1' : '#fff',
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: selectedScannerId === sc.id ? '#0f766e' : '#334155' }}>
+                      {sc.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {showGeminiConfig && userRole === 'super_admin' && (
+              <View style={styles.scanKeyBox}>
+                <Text style={{ fontSize: 12, color: '#334155', fontWeight: '600' }}>
+                  Paste free Gemini API Key (from aistudio.google.com) for 98% handwritten accuracy:
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                  <TextInput
+                    value={geminiKeyInput}
+                    onChangeText={setGeminiKeyInput}
+                    placeholder="AIzaSy..."
+                    secureTextEntry
+                    style={styles.scanKeyInput}
+                  />
+                  <TouchableOpacity
+                    disabled={savingGeminiKey}
+                    style={[styles.scanBtn, { backgroundColor: '#16a34a' }]}
+                    onPress={handleSaveGeminiKey}
+                  >
+                    <Text style={styles.scanBtnText}>{savingGeminiKey ? 'Saving...' : 'Save Key'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {!!scanStatusMsg && <Text style={styles.scanSuccess}>{scanStatusMsg}</Text>}
+            {!!scanWarning && <Text style={styles.scanWarn}>{scanWarning}</Text>}
+          </View>
+
           <SectionTitle>Student Necessary Details</SectionTitle>
 
           <FormRow>
@@ -1432,11 +1888,25 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
 
           <SectionTitle>Student Documents (Optional)</SectionTitle>
           <Text style={styles.documentHint}>
-            Select an image or PDF. It will upload when the student is saved.
+            Select an image/PDF or click Direct Scan on any row. It will upload when the student is saved.
           </Text>
+          {!!docScanError && (
+            <Text style={[styles.scanWarn, { marginBottom: 8 }]}>{docScanError}</Text>
+          )}
           <View style={styles.documentGrid}>
             {STUDENT_DOCUMENT_TYPES.map((item) => {
               const selected = entryDocuments[item.key];
+              const isRowScanning = scanningDocKey === item.key;
+              const isBackScanning = scanningDocKey === `${item.key}:back`;
+              const isAnyScanning = scanningForm || Boolean(scanningDocKey);
+              const selectedIsPdf = Boolean(
+                selected && (/pdf/i.test(String(selected.mimeType || '')) || /\.pdf$/i.test(String(selected.name || '')))
+              );
+              const canScanBack =
+                Platform.OS === 'web' &&
+                Boolean(selected) &&
+                !selectedIsPdf &&
+                TWO_SIDED_DOCUMENT_KEYS.has(item.key);
               return (
                 <View key={item.key} style={[styles.documentCol, !isTwoCol && styles.documentColMobile]}>
                   <View style={styles.documentRow}>
@@ -1446,10 +1916,41 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
                         {selected ? selected.name : 'No file selected'}
                       </Text>
                     </View>
+                    {selected && (
+                      <TouchableOpacity
+                        style={styles.documentViewButton}
+                        onPress={() => viewEntryDocument(item.label, selected)}
+                        disabled={saving}
+                      >
+                        <Text style={styles.documentButtonText}>View</Text>
+                      </TouchableOpacity>
+                    )}
+                    {canScanBack && (
+                      <TouchableOpacity
+                        style={[styles.documentScanBackButton, isAnyScanning && { opacity: 0.6 }]}
+                        onPress={() => directScanEntryDocument(item.key, true)}
+                        disabled={saving || isAnyScanning}
+                      >
+                        <Text style={styles.documentButtonText}>
+                          {isBackScanning ? 'Scanning...' : '+ Scan Back'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    {Platform.OS === 'web' && (
+                      <TouchableOpacity
+                        style={[styles.documentScanButton, isAnyScanning && { opacity: 0.6 }]}
+                        onPress={() => directScanEntryDocument(item.key, false)}
+                        disabled={saving || isAnyScanning}
+                      >
+                        <Text style={styles.documentButtonText}>
+                          {isRowScanning ? 'Scanning...' : 'Direct Scan'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity
-                      style={styles.documentButton}
+                      style={[styles.documentButton, isAnyScanning && { opacity: 0.6 }]}
                       onPress={() => chooseEntryDocument(item.key)}
-                      disabled={saving}
+                      disabled={saving || isAnyScanning}
                     >
                       <Text style={styles.documentButtonText}>
                         {selected ? 'Change' : 'Choose'}
@@ -1514,6 +2015,72 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
 
         </ScrollView>
         <ScrollNavigationButtons scrollRef={entryScrollRef} />
+
+        <Modal
+          visible={Boolean(previewDoc)}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setPreviewDoc(null)}
+        >
+          <View style={styles.docModalBackdrop}>
+            <View style={styles.docModalCard}>
+              <View style={styles.docModalHeader}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text numberOfLines={1} style={styles.docModalTitle}>{previewDoc?.title}</Text>
+                  <Text numberOfLines={1} style={styles.docModalSub}>{previewDoc?.name}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {Platform.OS === 'web' && previewDoc?.uri && (
+                    <TouchableOpacity
+                      style={[styles.documentButton, { backgroundColor: '#0284c7' }]}
+                      onPress={() => {
+                        let targetUrl = previewDoc.uri;
+                        if (targetUrl.startsWith('data:')) {
+                          const [hdr, b64] = targetUrl.split(',');
+                          const mime = (hdr.match(/data:([^;]+)/) || [])[1] || 'application/octet-stream';
+                          const bin = atob(b64 || '');
+                          const arr = new Uint8Array(bin.length);
+                          for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+                          targetUrl = URL.createObjectURL(new Blob([arr], { type: mime }));
+                        }
+                        window.open(targetUrl, '_blank');
+                      }}
+                    >
+                      <Text style={styles.documentButtonText}>Open Tab</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={[styles.documentButton, { backgroundColor: '#dc2626' }]}
+                    onPress={() => setPreviewDoc(null)}
+                  >
+                    <Text style={styles.documentButtonText}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <View style={styles.docModalBody}>
+                {previewDoc?.isPdf ? (
+                  Platform.OS === 'web' ? (
+                    React.createElement('iframe', {
+                      src: previewDoc.uri,
+                      title: previewDoc.name,
+                      style: { width: '100%', height: '100%', border: 'none', backgroundColor: '#fff' },
+                    })
+                  ) : (
+                    <Text style={{ color: '#334155', fontWeight: '600' }}>PDF attached: {previewDoc.name}</Text>
+                  )
+                ) : (
+                  !!previewDoc?.uri && (
+                    <Image
+                      source={{ uri: previewDoc.uri }}
+                      resizeMode="contain"
+                      style={{ width: '100%', height: '100%' }}
+                    />
+                  )
+                )}
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </StudentFormContext.Provider>
   );
@@ -1731,6 +2298,27 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+  documentViewButton: {
+    backgroundColor: '#0284c7',
+    borderRadius: 7,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+
+  documentScanBackButton: {
+    backgroundColor: '#7c3aed',
+    borderRadius: 7,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+
+  documentScanButton: {
+    backgroundColor: '#0f766e',
+    borderRadius: 7,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+
   documentButton: {
     backgroundColor: '#1565c0',
     borderRadius: 7,
@@ -1814,5 +2402,91 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#fff',
     fontWeight: '700',
+  },
+
+  scanCard: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1.5,
+    borderColor: '#93c5fd',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+  },
+  scanHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  scanTitle: { fontSize: 16, fontWeight: '800', color: '#1e3a8a' },
+  scanSub: { fontSize: 12, color: '#475569', marginTop: 2 },
+  scanBtn: {
+    backgroundColor: '#1d4ed8',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  scanBtnText: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  scanKeyBtn: {
+    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  scanKeyBtnText: { color: '#1e293b', fontWeight: '700', fontSize: 12 },
+  scanKeyBox: {
+    marginTop: 10,
+    backgroundColor: '#fff',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  scanKeyInput: {
+    flex: 1,
+    minWidth: 220,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: '#f8fafc',
+  },
+  scanSuccess: { color: '#15803d', fontWeight: '700', fontSize: 13, marginTop: 8 },
+  scanWarn: { color: '#b45309', fontWeight: '700', fontSize: 12, marginTop: 4 },
+  docModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  docModalCard: {
+    width: '100%',
+    maxWidth: 920,
+    height: '86%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  docModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+  },
+  docModalTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  docModalSub: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  docModalBody: {
+    flex: 1,
+    padding: 12,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

@@ -1,7 +1,19 @@
 const express = require('express');
+const multer = require('multer');
 const pool = require('../db');
 const { auth, allow } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
+const { scanAdmissionFormBuffer } = require('../utils/admissionFormScanner');
+
+const formScanUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const mime = String(file.mimetype || '').toLowerCase();
+    const ok = mime.startsWith('image/') || mime === 'application/pdf';
+    cb(ok ? null : new Error('Please upload an Image (JPG/PNG) or PDF of the Admission Form'), ok);
+  },
+});
 
 const router = express.Router();
 pool.query(`
@@ -879,6 +891,56 @@ router.delete(
       message:
         'Student deleted successfully',
     });
+  })
+);
+
+router.get(
+  '/scan-admission-form/status',
+  auth,
+  allow('super_admin', 'admin', 'office'),
+  asyncHandler(async (req, res) => {
+    let dbKey = '';
+    try {
+      await pool.query(`CREATE TABLE IF NOT EXISTS app_settings (id BIGSERIAL PRIMARY KEY, setting_key VARCHAR(120) UNIQUE NOT NULL, setting_value TEXT, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+      const q = await pool.query(`SELECT setting_value FROM app_settings WHERE setting_key = 'gemini_api_key' LIMIT 1`);
+      if (q.rowCount) dbKey = String(q.rows[0].setting_value || '').trim();
+    } catch {}
+    const configured = Boolean(process.env.GEMINI_API_KEY || dbKey);
+    res.json({ success: true, gemini_configured: configured });
+  })
+);
+
+router.post(
+  '/scan-admission-form/key',
+  auth,
+  allow('super_admin'),
+  asyncHandler(async (req, res) => {
+    const key = String(req.body?.api_key || '').trim();
+    if (!key || key.length < 15) {
+      return res.status(400).json({ success: false, message: 'Valid Gemini API Key is required' });
+    }
+    await pool.query(`CREATE TABLE IF NOT EXISTS app_settings (id BIGSERIAL PRIMARY KEY, setting_key VARCHAR(120) UNIQUE NOT NULL, setting_value TEXT, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+    await pool.query(
+      `INSERT INTO app_settings (setting_key, setting_value, updated_at) VALUES ('gemini_api_key', $1, NOW())
+       ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()`,
+      [key]
+    );
+    res.json({ success: true, message: 'Gemini Vision API Key saved!' });
+  })
+);
+
+router.post(
+  '/scan-admission-form',
+  auth,
+  allow('super_admin', 'admin', 'office'),
+  formScanUpload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Admission form image is required' });
+    }
+    const result = await scanAdmissionFormBuffer(req.file.buffer, req.file.mimetype);
+    console.log(`[AdmissionScan] mime=${req.file.mimetype} bytes=${req.file.size} engine=${result.engine} student=${result.extracted?.student_name || '-'} reg=${result.extracted?.registration_no || '-'}`);
+    res.json({ success: true, ...result });
   })
 );
 
