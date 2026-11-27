@@ -287,6 +287,8 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
   const [scanningForm, setScanningForm] = useState(false);
   const [scanSource, setScanSource] = useState<'scanner' | 'upload' | ''>('');
   const [scanPhaseLabel, setScanPhaseLabel] = useState('');
+  const [scanningDocKey, setScanningDocKey] = useState<string | null>(null);
+  const [docScanError, setDocScanError] = useState('');
   const [localScanners, setLocalScanners] = useState<{ id: string; name: string }[]>([]);
   const [selectedScannerId, setSelectedScannerId] = useState('');
   const [scanStatusMsg, setScanStatusMsg] = useState('');
@@ -465,12 +467,71 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     }
   };
 
+  const acquireFromLocalScanner = async (
+    filePrefix: string,
+    onPhase?: (phase: string) => void
+  ): Promise<{ asset: any; scannerName: string }> => {
+    const HELPER_URL = 'http://127.0.0.1:4789';
+    onPhase?.('Checking Local Scanner...');
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 2500);
+    let health: any = null;
+    try {
+      const hRes = await fetch(`${HELPER_URL}/health`, { signal: ctrl.signal });
+      health = await hRes.json();
+    } catch {
+      throw new Error(
+        'Local Scanner Helper is not running on this PC. Open "scanner-helper\\Start-Scanner-Helper.bat" (or run "Install-AutoStart.bat" once) on this PC, then try Direct Scan again.'
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+
+    const scanners: { id: string; name: string }[] = Array.isArray(health?.scanners) ? health.scanners : [];
+    setLocalScanners(scanners);
+    if (scanners.length === 0 && !health?.naps2_available) {
+      throw new Error('No scanner detected on this PC. Please power on the scanner and check USB/driver.');
+    }
+
+    const targetId =
+      selectedScannerId && scanners.some((s) => s.id === selectedScannerId)
+        ? selectedScannerId
+        : scanners[0]?.id || '';
+    if (targetId && !selectedScannerId) setSelectedScannerId(targetId);
+
+    onPhase?.('Scanning from Hardware Scanner...');
+    const scanRes = await fetch(`${HELPER_URL}/scan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: targetId, dpi: 200 }),
+    });
+    const scanData = await scanRes.json().catch(() => ({}));
+    if (!scanRes.ok || !scanData?.success || !scanData?.dataUrl) {
+      throw new Error(scanData?.message || 'Hardware scanner did not return an image.');
+    }
+
+    const b64Part = String(scanData.dataUrl).split(',')[1] || '';
+    const bin = atob(b64Part);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const rawName = String(scanData.fileName || 'scanned.jpg');
+    const fileName = `${filePrefix}_${rawName.replace(/^admission_form_/, '')}`;
+    const mimeType = scanData.mimeType || 'image/jpeg';
+    const blob = new Blob([bytes], { type: mimeType });
+    const fileObj = typeof File !== 'undefined' ? new File([blob], fileName, { type: mimeType }) : blob;
+
+    return {
+      asset: { file: fileObj, uri: scanData.dataUrl, name: fileName, mimeType },
+      scannerName: scanData.scannerName || 'Scanner',
+    };
+  };
+
   const handleDirectScannerScan = async () => {
     if (Platform.OS !== 'web') {
       await handleScanAdmissionForm();
       return;
     }
-    const HELPER_URL = 'http://127.0.0.1:4789';
     setScanSource('scanner');
     setScanningForm(true);
     setScanPhaseLabel('Checking Local Scanner...');
@@ -478,73 +539,34 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     setScanWarning('');
 
     try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 2500);
-      let health: any = null;
-      try {
-        const hRes = await fetch(`${HELPER_URL}/health`, { signal: ctrl.signal });
-        health = await hRes.json();
-      } catch {
-        const msg =
-          'Local Scanner Helper is not running on this PC. Open "scanner-helper\\Start-Scanner-Helper.bat" (or run "Install-AutoStart.bat" once) on this PC, then click Direct Scan again — or use "Upload Form Image".';
-        setScanWarning(msg);
-        Alert.alert('Scanner Helper Not Running', msg);
-        setScanningForm(false);
-        setScanPhaseLabel('');
-        setScanSource('');
-        return;
-      } finally {
-        clearTimeout(timer);
-      }
-
-      const scanners: { id: string; name: string }[] = Array.isArray(health?.scanners) ? health.scanners : [];
-      setLocalScanners(scanners);
-      if (scanners.length === 0 && !health?.naps2_available) {
-        const msg = 'No scanner detected on this PC. Check USB/power cable and scanner driver, or use "Upload Form Image".';
-        setScanWarning(msg);
-        Alert.alert('No Scanner Found', msg);
-        setScanningForm(false);
-        setScanPhaseLabel('');
-        setScanSource('');
-        return;
-      }
-
-      const targetId =
-        selectedScannerId && scanners.some((s) => s.id === selectedScannerId)
-          ? selectedScannerId
-          : scanners[0]?.id || '';
-      if (targetId && !selectedScannerId) setSelectedScannerId(targetId);
-
-      setScanPhaseLabel('Scanning from Hardware Scanner...');
-      const scanRes = await fetch(`${HELPER_URL}/scan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId: targetId, dpi: 200 }),
-      });
-      const scanData = await scanRes.json().catch(() => ({}));
-      if (!scanRes.ok || !scanData?.success || !scanData?.dataUrl) {
-        throw new Error(scanData?.message || 'Hardware scanner did not return an image.');
-      }
-
-      const b64Part = String(scanData.dataUrl).split(',')[1] || '';
-      const bin = atob(b64Part);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const fileName = scanData.fileName || 'scanned_admission_form.jpg';
-      const mimeType = scanData.mimeType || 'image/jpeg';
-      const blob = new Blob([bytes], { type: mimeType });
-      const fileObj = typeof File !== 'undefined' ? new File([blob], fileName, { type: mimeType }) : blob;
-
-      await uploadAssetForAdmissionScan(
-        { file: fileObj, uri: scanData.dataUrl, name: fileName, mimeType },
-        scanData.scannerName || 'Scanner'
-      );
+      const { asset, scannerName } = await acquireFromLocalScanner('admission_form', setScanPhaseLabel);
+      await uploadAssetForAdmissionScan(asset, scannerName);
     } catch (err: any) {
-      setScanWarning(err.message || 'Direct hardware scan failed.');
-      Alert.alert('Direct Scan Error', err.message || 'Could not acquire image from scanner.');
+      const msg = err?.message || 'Direct hardware scan failed.';
+      setScanWarning(msg);
+      Alert.alert('Direct Scan Error', msg);
       setScanningForm(false);
       setScanPhaseLabel('');
       setScanSource('');
+    }
+  };
+
+  const directScanEntryDocument = async (documentType: string) => {
+    if (Platform.OS !== 'web') {
+      await chooseEntryDocument(documentType);
+      return;
+    }
+    setDocScanError('');
+    setScanningDocKey(documentType);
+    try {
+      const { asset } = await acquireFromLocalScanner(documentType);
+      setEntryDocuments((old) => ({ ...old, [documentType]: asset }));
+    } catch (err: any) {
+      const msg = err?.message || 'Direct hardware scan failed.';
+      setDocScanError(msg);
+      Alert.alert('Direct Scan Error', msg);
+    } finally {
+      setScanningDocKey(null);
     }
   };
 
@@ -1761,11 +1783,16 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
 
           <SectionTitle>Student Documents (Optional)</SectionTitle>
           <Text style={styles.documentHint}>
-            Select an image or PDF. It will upload when the student is saved.
+            Select an image/PDF or click Direct Scan on any row. It will upload when the student is saved.
           </Text>
+          {!!docScanError && (
+            <Text style={[styles.scanWarn, { marginBottom: 8 }]}>{docScanError}</Text>
+          )}
           <View style={styles.documentGrid}>
             {STUDENT_DOCUMENT_TYPES.map((item) => {
               const selected = entryDocuments[item.key];
+              const isRowScanning = scanningDocKey === item.key;
+              const isAnyScanning = scanningForm || Boolean(scanningDocKey);
               return (
                 <View key={item.key} style={[styles.documentCol, !isTwoCol && styles.documentColMobile]}>
                   <View style={styles.documentRow}>
@@ -1775,10 +1802,21 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
                         {selected ? selected.name : 'No file selected'}
                       </Text>
                     </View>
+                    {Platform.OS === 'web' && (
+                      <TouchableOpacity
+                        style={[styles.documentScanButton, isAnyScanning && { opacity: 0.6 }]}
+                        onPress={() => directScanEntryDocument(item.key)}
+                        disabled={saving || isAnyScanning}
+                      >
+                        <Text style={styles.documentButtonText}>
+                          {isRowScanning ? 'Scanning...' : 'Direct Scan'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity
-                      style={styles.documentButton}
+                      style={[styles.documentButton, isAnyScanning && { opacity: 0.6 }]}
                       onPress={() => chooseEntryDocument(item.key)}
-                      disabled={saving}
+                      disabled={saving || isAnyScanning}
                     >
                       <Text style={styles.documentButtonText}>
                         {selected ? 'Change' : 'Choose'}
@@ -2058,6 +2096,13 @@ const styles = StyleSheet.create({
     color: '#607d8b',
     fontSize: 12,
     marginTop: 3,
+  },
+
+  documentScanButton: {
+    backgroundColor: '#0f766e',
+    borderRadius: 7,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
   },
 
   documentButton: {
