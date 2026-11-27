@@ -7,6 +7,7 @@ import {
   Text,
   TextInput,
   Image,
+  Modal,
   View,
   Alert,
   TouchableOpacity,
@@ -289,6 +290,7 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
   const [scanPhaseLabel, setScanPhaseLabel] = useState('');
   const [scanningDocKey, setScanningDocKey] = useState<string | null>(null);
   const [docScanError, setDocScanError] = useState('');
+  const [previewDoc, setPreviewDoc] = useState<{ title: string; name: string; uri: string; isPdf: boolean } | null>(null);
   const [localScanners, setLocalScanners] = useState<{ id: string; name: string }[]>([]);
   const [selectedScannerId, setSelectedScannerId] = useState('');
   const [scanStatusMsg, setScanStatusMsg] = useState('');
@@ -568,6 +570,22 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
     } finally {
       setScanningDocKey(null);
     }
+  };
+
+  const viewEntryDocument = (label: string, asset: any) => {
+    if (!asset) return;
+    const uri = asset.uri || (Platform.OS === 'web' && asset.file ? URL.createObjectURL(asset.file) : '');
+    if (!uri) {
+      setDocScanError('Preview is not available for this selected file.');
+      return;
+    }
+    const isPdf = /pdf/i.test(String(asset.mimeType || '')) || /\.pdf$/i.test(String(asset.name || ''));
+    setPreviewDoc({
+      title: label,
+      name: asset.name || 'Document',
+      uri,
+      isPdf,
+    });
   };
 
   useEffect(() => {
@@ -1802,6 +1820,15 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
                         {selected ? selected.name : 'No file selected'}
                       </Text>
                     </View>
+                    {selected && (
+                      <TouchableOpacity
+                        style={styles.documentViewButton}
+                        onPress={() => viewEntryDocument(item.label, selected)}
+                        disabled={saving}
+                      >
+                        <Text style={styles.documentButtonText}>View</Text>
+                      </TouchableOpacity>
+                    )}
                     {Platform.OS === 'web' && (
                       <TouchableOpacity
                         style={[styles.documentScanButton, isAnyScanning && { opacity: 0.6 }]}
@@ -1881,6 +1908,61 @@ export default function Students({ initialScreen }: { initialScreen?: 'details' 
 
         </ScrollView>
         <ScrollNavigationButtons scrollRef={entryScrollRef} />
+
+        <Modal
+          visible={Boolean(previewDoc)}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setPreviewDoc(null)}
+        >
+          <View style={styles.docModalBackdrop}>
+            <View style={styles.docModalCard}>
+              <View style={styles.docModalHeader}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text numberOfLines={1} style={styles.docModalTitle}>{previewDoc?.title}</Text>
+                  <Text numberOfLines={1} style={styles.docModalSub}>{previewDoc?.name}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {Platform.OS === 'web' && previewDoc?.uri && (
+                    <TouchableOpacity
+                      style={[styles.documentButton, { backgroundColor: '#0284c7' }]}
+                      onPress={() => window.open(previewDoc.uri, '_blank', 'noopener,noreferrer')}
+                    >
+                      <Text style={styles.documentButtonText}>Open Tab</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={[styles.documentButton, { backgroundColor: '#dc2626' }]}
+                    onPress={() => setPreviewDoc(null)}
+                  >
+                    <Text style={styles.documentButtonText}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <View style={styles.docModalBody}>
+                {previewDoc?.isPdf ? (
+                  Platform.OS === 'web' ? (
+                    React.createElement('iframe', {
+                      src: previewDoc.uri,
+                      title: previewDoc.name,
+                      style: { width: '100%', height: '100%', border: 'none', backgroundColor: '#fff' },
+                    })
+                  ) : (
+                    <Text style={{ color: '#334155', fontWeight: '600' }}>PDF attached: {previewDoc.name}</Text>
+                  )
+                ) : (
+                  !!previewDoc?.uri && (
+                    <Image
+                      source={{ uri: previewDoc.uri }}
+                      resizeMode="contain"
+                      style={{ width: '100%', height: '100%' }}
+                    />
+                  )
+                )}
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </StudentFormContext.Provider>
   );
@@ -2098,6 +2180,13 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+  documentViewButton: {
+    backgroundColor: '#0284c7',
+    borderRadius: 7,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+
   documentScanButton: {
     backgroundColor: '#0f766e',
     borderRadius: 7,
@@ -2241,4 +2330,38 @@ const styles = StyleSheet.create({
   },
   scanSuccess: { color: '#15803d', fontWeight: '700', fontSize: 13, marginTop: 8 },
   scanWarn: { color: '#b45309', fontWeight: '700', fontSize: 12, marginTop: 4 },
+  docModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  docModalCard: {
+    width: '100%',
+    maxWidth: 920,
+    height: '86%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  docModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+  },
+  docModalTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  docModalSub: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  docModalBody: {
+    flex: 1,
+    padding: 12,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
