@@ -235,10 +235,228 @@ export default function Marks() {
     });
   },[tests,canManage,resultSession,weeklyTestClassFilter,weeklyTestSearch]);
 
-  const print=async()=>{const pages:string[]=[];for(let i=0;i<students.length;i+=25){const rows=students.slice(i,i+25).map((student,index)=>`<tr><td>${i+index+1}</td><td>${student.registration_no}</td><td class="name">${student.student_name}</td><td>${student.absent?'Absent':student.obtained_marks}</td></tr>`).join('');pages.push(`<section><h2>Al-Ameen Mission Academy Memari</h2><h3>${form.examName}  -  Class ${form.className}</h3><table><thead><tr><th>Sl</th><th>Reg.</th><th>Name</th><th>${form.subjectName}<br>F.M.-${form.fullMarks}<br>${form.examDate.split('-').reverse().join('-')}</th></tr></thead><tbody>${rows}</tbody></table></section>`);}const html=`<style>@page{size:A4 portrait;margin:10mm}body{font-family:Arial;color:#111}section{page-break-after:always}section:last-child{page-break-after:auto}h2,h3{text-align:center;margin:3px}table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border:1px solid #222;padding:5px;text-align:center;height:22px}th{font-weight:700}.name{text-align:left}</style>${pages.join('')}`;await Print.printAsync({html});};
+  const printMarksheet = async (
+    meta: { examName: string; className: string; sessionName?: string; examDate?: string; fullMarks?: string | number; subjectName?: string },
+    studentRows: any[]
+  ) => {
+    const formattedDate = meta.examDate ? String(meta.examDate).slice(0, 10).split('-').reverse().join('-') : '';
+    const pages: string[] = [];
+    for (let i = 0; i < studentRows.length; i += 35) {
+      const rows = studentRows
+        .slice(i, i + 35)
+        .map(
+          (student, index) =>
+            `<tr>
+              <td>${i + index + 1}</td>
+              <td>${student.registration_no ?? ''}</td>
+              <td class="name">${student.student_name ?? ''}</td>
+              <td class="${student.absent ? 'absent' : ''}">${student.absent ? 'Absent' : (student.obtained_marks ?? '')}</td>
+            </tr>`
+        )
+        .join('');
+
+      pages.push(`
+        <section>
+          <h2>Al-Ameen Mission Academy Memari</h2>
+          <h3>${meta.examName || 'Weekly Test'} &mdash; Class ${meta.className}${meta.sessionName ? ` (${meta.sessionName})` : ''}${formattedDate ? ` | Date: ${formattedDate}` : ''}</h3>
+          <table>
+            <thead>
+              <tr>
+                <th rowspan="2" style="width:55px;">Sl.<br>No.</th>
+                <th rowspan="2" style="width:105px;">AAM Reg.<br>No.</th>
+                <th rowspan="2">Name of Students</th>
+                <th style="width:110px;">F.M. ${meta.fullMarks || '-'}</th>
+              </tr>
+              <tr>
+                <th>${meta.subjectName || 'Marks'}</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </section>
+      `);
+    }
+
+    const style = `
+      <style>
+        @page { size: A4 portrait; margin: 10mm; }
+        body { font-family: Calibri, Arial, sans-serif; color: #111; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        section { page-break-after: always; }
+        section:last-child { page-break-after: auto; }
+        h2 { text-align: center; margin: 0 0 2px; font-size: 18px; font-weight: 700; }
+        h3 { text-align: center; margin: 0 0 8px; font-size: 13px; font-weight: 600; color: #222; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { border: 1px solid #111; padding: 4px 8px; text-align: center; height: 22px; }
+        thead th { background: #e6eef8; font-weight: 700; color: #111; }
+        .name { text-align: left; }
+        .absent { color: #b91c1c; font-weight: 700; }
+      </style>
+    `;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${meta.examName || 'Weekly Test'} - Class ${meta.className}</title>${style}</head><body>${pages.join('')}</body></html>`;
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+      const doc = iframe.contentWindow?.document;
+      if (doc) {
+        doc.open();
+        doc.write(html);
+        doc.close();
+        iframe.contentWindow?.focus();
+        setTimeout(() => {
+          iframe.contentWindow?.print();
+          setTimeout(() => document.body.removeChild(iframe), 1000);
+        }, 300);
+        return;
+      }
+    }
+    await Print.printAsync({ html });
+  };
+
+  const print = async () => {
+    await printMarksheet(form, students);
+  };
+
+  const mapTestStudents = (rows: any[]) =>
+    (rows || []).map((student: any) => ({
+      ...student,
+      id: student.student_id,
+      absent: student.obtained_marks === null && student.remarks === 'Absent',
+      obtained_marks: student.obtained_marks === null ? '' : String(student.obtained_marks),
+    }));
+
+  const printTest = async (testId: number) => {
+    try {
+      const data = await api(`/api/marks/weekly-tests/${testId}`);
+      const t = data.test || {};
+      await printMarksheet(
+        {
+          examName: t.exam_name || 'Weekly Test',
+          className: t.class_name || '',
+          sessionName: t.session_name || '',
+          examDate: String(t.exam_date || '').slice(0, 10),
+          fullMarks: t.full_marks ?? '',
+          subjectName: t.subject_name || '',
+        },
+        mapTestStudents(data.students)
+      );
+    } catch (error: any) {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') window.alert(error?.message || 'Print failed');
+      else Alert.alert('Print', error.message);
+    }
+  };
   const publish=async(test:any)=>{if(!await confirmAction(test.is_published?'Unpublish result':'Publish result',test.is_published?'Reopen this result for correction?':'Publish this result to guardians?'))return;try{await api(`/api/marks/exams/${test.exam_id}/publish`,{method:'PATCH',body:JSON.stringify({is_published:!test.is_published})});successMessage('Success',test.is_published?'Result unpublished.':'Result published and Guardian notification sent.');await loadTests();}catch(error:any){Alert.alert('Error',error.message);}};
   const deleteTest=async(test:any)=>{if(!await confirmAction('Delete Weekly Test',`Are you sure you want to delete ${test.exam_name} (${test.class_name} - ${test.subject_name})? This will permanently remove the test and all student marks.`))return;try{await api(`/api/marks/weekly-tests/${test.id}`,{method:'DELETE'});successMessage('Deleted','Weekly test deleted successfully.');if(editingId===Number(test.id)){newEntry();}await loadTests();}catch(error:any){Alert.alert('Error',error.message);}};
-  const downloadExcel=async()=>{if(!editingId)return;try{const token=await getToken();const response=await fetch(`${API_BASE}/api/marks/published-results/${editingId}/excel`,{headers:{Authorization:`Bearer ${token}`}});if(!response.ok)throw new Error('Publish the result before downloading Excel.');if(Platform.OS==='web'){const blob=await response.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`class-result-${editingId}.xlsx`;a.click();URL.revokeObjectURL(url);}else Alert.alert('Excel ready','Mobile sharing will be enabled in the app package.');}catch(error:any){Alert.alert('Excel',error.message);}};
+  const downloadExcelMarksheet = async (
+    meta: { examName: string; className: string; examDate?: string; fullMarks?: string | number; subjectName?: string },
+    studentRows: any[],
+    testId?: number | null,
+    isPublished?: boolean
+  ) => {
+    try {
+      if (Platform.OS === 'web') {
+        if (testId && isPublished) {
+          const token = await getToken();
+          const response = await fetch(`${API_BASE}/api/marks/published-results/${testId}/excel`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (response.ok) {
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${meta.examName || 'weekly-test'}-${meta.className || 'class'}-${meta.subjectName || 'subject'}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            return;
+          }
+        }
+        const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const formattedDate = meta.examDate ? String(meta.examDate).slice(0, 10).split('-').reverse().join('-') : '';
+        const rows = studentRows
+          .map(
+            (student, index) => `
+              <tr>
+                <td style="text-align:center;">${index + 1}</td>
+                <td style="text-align:center;">${esc(student.registration_no)}</td>
+                <td style="text-align:left;">${esc(student.student_name)}</td>
+                <td style="text-align:center;${student.absent ? 'color:#b91c1c;font-weight:bold;' : ''}">${student.absent ? 'Absent' : esc(student.obtained_marks)}</td>
+              </tr>`
+          )
+          .join('');
+        const tableHtml = `<!doctype html><html><head><meta charset="utf-8"><style>
+          table { border-collapse: collapse; font-family: Calibri, Arial, sans-serif; font-size: 12pt; }
+          th, td { border: 1px solid #111; padding: 4px 8px; }
+          th { background-color: #e6eef8; font-weight: bold; text-align: center; }
+        </style></head><body>
+          <table>
+            <thead>
+              <tr><th colspan="4">${esc(meta.examName || 'Weekly Test')} - Class ${esc(meta.className)}${formattedDate ? ` (${esc(formattedDate)})` : ''}</th></tr>
+              <tr>
+                <th rowspan="2">Sl. No.</th>
+                <th rowspan="2">AAM Reg. No.</th>
+                <th rowspan="2">Name of Students</th>
+                <th>F.M. ${esc(meta.fullMarks || '-')}</th>
+              </tr>
+              <tr>
+                <th>${esc(meta.subjectName || 'Marks')}</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </body></html>`;
+        const blob = new Blob(['\ufeff', tableHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${(meta.examName || 'weekly-test').replace(/\s+/g, '_')}_Class_${meta.className || 'X'}_${(meta.subjectName || 'subject').replace(/\s+/g, '_')}.xls`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        return;
+      }
+      Alert.alert('Excel ready', 'Mobile sharing will be enabled in the app package.');
+    } catch (error: any) {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') window.alert(error?.message || 'Excel download failed');
+      else Alert.alert('Excel', error.message);
+    }
+  };
+
+  const downloadExcel = async () => {
+    if (!editingId && !students.length) return;
+    await downloadExcelMarksheet(form, students, editingId, !!editingTest?.is_published);
+  };
+
+  const downloadTestExcel = async (test: any) => {
+    try {
+      const data = await api(`/api/marks/weekly-tests/${test.id}`);
+      const t = data.test || test;
+      await downloadExcelMarksheet(
+        {
+          examName: t.exam_name || 'Weekly Test',
+          className: t.class_name || '',
+          examDate: String(t.exam_date || '').slice(0, 10),
+          fullMarks: t.full_marks ?? '',
+          subjectName: t.subject_name || '',
+        },
+        mapTestStudents(data.students),
+        Number(test.id),
+        !!test.is_published
+      );
+    } catch (error: any) {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') window.alert(error?.message || 'Excel download failed');
+      else Alert.alert('Excel', error.message);
+    }
+  };
   const lockedForTeacher=editingId!==null&&!canManage&&!!editingTest?.locked;
 
   return <SafeAreaView style={s.page}><ScrollView ref={scrollRef} contentContainerStyle={s.content}>
@@ -553,7 +771,7 @@ export default function Marks() {
       </View>
     </View>
 
-    {displayedWeeklyTests.map(test=><View key={test.id} style={s.testCard}><View style={{flex:1}}><Text style={s.testTitle}>{test.exam_name}  -  {test.class_name}</Text><Text style={s.meta}>Session {test.session_name||'Not set'}  -  {test.subject_name}  -  Full {test.full_marks}  -  {String(test.exam_date).slice(0,10)}</Text><Text style={s.meta}>{test.student_count} students</Text><Text style={{marginTop:6,fontWeight:'900',color:test.locked?'#167447':'#a56700'}}>{test.locked?'Submitted':'Draft'}</Text><Text style={s.meta}>{test.locked?'Submitted by: ':'Draft saved by: '}{test.entered_by_name||'User'}</Text></View>{canManage&&test.locked&&<TouchableOpacity onPress={()=>publish(test)} style={[s.viewButton,test.is_published&&{backgroundColor:'#dff3e5'}]}><Text style={s.viewText}>{test.is_published?'Published':'Publish'}</Text></TouchableOpacity>}<TouchableOpacity onPress={()=>openTest(test.id)} style={s.viewButton}><Text style={s.viewText}>{canManage||!test.locked?'Edit':'View'}</Text></TouchableOpacity>{(canManage||!test.locked)&&<TouchableOpacity onPress={()=>deleteTest(test)} style={[s.viewButton,s.deleteButton]}><Text style={[s.viewText,s.deleteText]}>Delete</Text></TouchableOpacity>}</View>)}
+    {displayedWeeklyTests.map(test=><View key={test.id} style={s.testCard}><View style={{flex:1}}><Text style={s.testTitle}>{test.exam_name}  -  {test.class_name}</Text><Text style={s.meta}>Session {test.session_name||'Not set'}  -  {test.subject_name}  -  Full {test.full_marks}  -  {String(test.exam_date).slice(0,10)}</Text><Text style={s.meta}>{test.student_count} students</Text><Text style={{marginTop:6,fontWeight:'900',color:test.locked?'#167447':'#a56700'}}>{test.locked?'Submitted':'Draft'}</Text><Text style={s.meta}>{test.locked?'Submitted by: ':'Draft saved by: '}{test.entered_by_name||'User'}</Text></View><TouchableOpacity onPress={()=>printTest(test.id)} style={s.viewButton}><Text style={s.viewText}>Print</Text></TouchableOpacity><TouchableOpacity onPress={()=>downloadTestExcel(test)} style={s.viewButton}><Text style={s.viewText}>Download</Text></TouchableOpacity>{canManage&&test.locked&&<TouchableOpacity onPress={()=>publish(test)} style={[s.viewButton,test.is_published&&{backgroundColor:'#dff3e5'}]}><Text style={s.viewText}>{test.is_published?'Published':'Publish'}</Text></TouchableOpacity>}<TouchableOpacity onPress={()=>openTest(test.id)} style={s.viewButton}><Text style={s.viewText}>{canManage||!test.locked?'Edit':'View'}</Text></TouchableOpacity>{(canManage||!test.locked)&&<TouchableOpacity onPress={()=>deleteTest(test)} style={[s.viewButton,s.deleteButton]}><Text style={[s.viewText,s.deleteText]}>Delete</Text></TouchableOpacity>}</View>)}
     {displayedWeeklyTests.length===0&&<View style={s.emptyRow}><Text style={s.emptyRowText}>No weekly tests found.</Text></View>}
     {loading&&<ActivityIndicator color="#1d5fa7" style={{margin:15}}/>}
   </ScrollView>
